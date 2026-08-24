@@ -1,0 +1,22 @@
+# Local Python environment
+.venv/
+
+# macOS
+.DS_Store
+
+# dbt generated files
+**/target/
+**/logs/
+**/dbt_packages/
+
+# Local databases
+**/*.duckdb
+**/*.duckdb.wal
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Secrets
+.env
