@@ -20,3 +20,13 @@ __pycache__/
 
 # Secrets
 .env
+
+# Generated analytics data
+data/raw/
+data/generated/
+generation_manifest.json
+
+# Python packaging and test caches
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
