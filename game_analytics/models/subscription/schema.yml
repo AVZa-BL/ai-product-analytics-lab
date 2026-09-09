@@ -99,3 +99,90 @@ models:
               arguments:
                 to: ref('stg_subscription__users')
                 field: user_id
+
+  - name: int_subscription__activation_events
+    description: First canonical activation timestamp for each activated user.
+    config:
+      tags: [subscription]
+    columns:
+      - name: user_id
+        data_tests: [not_null, unique]
+      - name: activation_at
+        data_tests: [not_null]
+
+  - name: int_subscription__subscription_periods
+    description: Non-overlapping trial and paid entitlement intervals reconstructed by effective time.
+    config:
+      tags: [subscription]
+    columns:
+      - name: subscription_id
+        data_tests: [not_null]
+      - name: user_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_subscription__users')
+                field: user_id
+      - name: period_start_at
+        data_tests: [not_null]
+      - name: period_end_at
+        data_tests: [not_null]
+      - name: lifecycle_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [trial, paid]
+
+  - name: int_subscription__trial_cohorts
+    description: Trial cohorts with an explicit 21-day maturity cutoff.
+    config:
+      tags: [subscription]
+    columns:
+      - name: subscription_id
+        data_tests: [not_null, unique]
+      - name: cohort_date
+        data_tests: [not_null]
+      - name: maturity_cutoff_date
+        data_tests: [not_null]
+
+  - name: int_subscription__paid_cohorts
+    description: First paid-entitlement cohort for each converted subscription.
+    config:
+      tags: [subscription]
+    columns:
+      - name: subscription_id
+        data_tests: [not_null, unique]
+      - name: cohort_date
+        data_tests: [not_null]
+
+  - name: int_subscription__campaign_attribution
+    description: Signup attribution with missing campaigns contained in an explicit unknown bucket.
+    config:
+      tags: [subscription]
+    columns:
+      - name: user_id
+        data_tests: [not_null, unique]
+      - name: campaign_id
+        data_tests: [not_null]
+      - name: attribution_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [attributed, missing_campaign]
+
+  - name: int_subscription__quality_audit
+    description: One-row audit of the five deliberately injected data-quality incident categories.
+    config:
+      tags: [subscription]
+    columns:
+      - name: duplicate_webhook_rows
+        data_tests: [not_null]
+      - name: late_cancellation_rows
+        data_tests: [not_null]
+      - name: missing_campaign_users
+        data_tests: [not_null]
+      - name: unmapped_activation_events
+        data_tests: [not_null]
+      - name: local_time_trial_end_rows
+        data_tests: [not_null]
