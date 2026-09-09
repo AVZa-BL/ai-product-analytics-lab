@@ -1,0 +1,26 @@
+selectors:
+  - name: shared
+    definition:
+      method: tag
+      value: shared
+  - name: live_strategy
+    definition:
+      union:
+        - method: tag
+          value: shared
+        - method: tag
+          value: live_strategy
+  - name: subscription
+    definition:
+      union:
+        - method: tag
+          value: shared
+        - method: tag
+          value: subscription
+  - name: hybrid_subscription
+    definition:
+      union:
+        - method: tag
+          value: shared
+        - method: tag
+          value: hybrid_subscription
