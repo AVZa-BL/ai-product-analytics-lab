@@ -1,0 +1,82 @@
+version: 2
+
+sources:
+  - name: subscription_raw
+    description: Immutable synthetic subscription evidence, including designed data failures.
+    meta:
+      external_location: "{{ var('raw_data_root') }}/subscription/{name}.parquet"
+    tables:
+      - name: subscription_users
+        description: Synthetic signup records; campaign_id is deliberately missing for some users.
+        columns:
+          - {name: user_id, description: Synthetic user identifier.}
+          - {name: signup_at, description: UTC signup timestamp.}
+          - {name: country_code, description: Synthetic acquisition country.}
+          - {name: platform, description: Signup platform.}
+          - {name: campaign_id, description: Raw campaign identifier; intentional nulls are retained.}
+          - {name: acquisition_channel, description: Raw acquisition channel.}
+
+      - name: subscription_onboarding_events
+        description: Raw onboarding evidence with occurrence and ingestion timestamps.
+        columns:
+          - {name: onboarding_event_id, description: Synthetic onboarding event identifier.}
+          - {name: user_id, description: Synthetic user identifier.}
+          - {name: event_name, description: Raw onboarding event name.}
+          - {name: occurred_at, description: UTC event occurrence timestamp.}
+          - {name: ingested_at, description: UTC ingestion timestamp.}
+
+      - name: subscription_product_events
+        description: Raw product evidence containing intentional activation-name aliases.
+        columns:
+          - {name: product_event_id, description: Synthetic product event identifier.}
+          - {name: user_id, description: Synthetic user identifier.}
+          - {name: event_name, description: Raw event name before canonicalization.}
+          - {name: occurred_at, description: UTC event occurrence timestamp.}
+          - {name: ingested_at, description: UTC ingestion timestamp.}
+
+      - name: subscription_lifecycle_events
+        description: Raw lifecycle webhooks with deliberate duplicates and late cancellations.
+        columns:
+          - {name: webhook_id, description: Source webhook identifier; duplicates are expected raw evidence.}
+          - {name: subscription_id, description: Synthetic subscription identifier.}
+          - {name: user_id, description: Synthetic user identifier.}
+          - {name: event_type, description: Raw lifecycle transition type.}
+          - {name: occurred_at, description: UTC source occurrence timestamp.}
+          - {name: effective_at, description: Effective lifecycle transition timestamp.}
+          - {name: ingested_at, description: Ingestion timestamp used to measure lateness and deduplicate.}
+          - {name: plan_id, description: Synthetic product plan identifier.}
+          - {name: billing_period, description: Monthly or annual billing cadence.}
+          - {name: trial_end_at_reported_utc, description: Local wall-clock trial end falsely labelled as UTC.}
+          - {name: trial_timezone, description: Source timezone required to normalize the trial end.}
+
+      - name: subscription_payments
+        description: Raw successful and deliberately failed payment attempts.
+        columns:
+          - {name: payment_id, description: Synthetic payment identifier.}
+          - {name: subscription_id, description: Synthetic subscription identifier.}
+          - {name: user_id, description: Synthetic user identifier.}
+          - {name: payment_at, description: UTC payment attempt timestamp.}
+          - {name: amount_local, description: Payment amount in source currency.}
+          - {name: currency_code, description: ISO-like synthetic source currency code.}
+          - {name: amount_usd, description: Synthetic normalized USD amount.}
+          - {name: payment_status, description: Raw succeeded or failed status.}
+          - {name: refund_at, description: UTC refund timestamp when present.}
+
+      - name: subscription_marketing_spend
+        description: Synthetic daily campaign spend.
+        columns:
+          - {name: spend_id, description: Synthetic spend record identifier.}
+          - {name: spend_date, description: Calendar date of spend.}
+          - {name: campaign_id, description: Synthetic campaign identifier.}
+          - {name: channel, description: Marketing channel.}
+          - {name: country_code, description: Spend country.}
+          - {name: spend_usd, description: Synthetic spend in USD.}
+
+      - name: subscription_support_tickets
+        description: Synthetic support contacts linked to subscription users.
+        columns:
+          - {name: ticket_id, description: Synthetic support ticket identifier.}
+          - {name: user_id, description: Synthetic user identifier.}
+          - {name: created_at, description: UTC ticket creation timestamp.}
+          - {name: ticket_category, description: Synthetic support reason.}
+          - {name: ticket_status, description: Open or resolved state.}

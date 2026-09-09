@@ -1,0 +1,6 @@
+raw_event_name,canonical_event_name,is_activation_event
+activation_completed,activation_completed,true
+activated,activation_completed,true
+onboarding_complete,activation_completed,true
+screen_view,screen_view,false
+feature_used,feature_used,false
