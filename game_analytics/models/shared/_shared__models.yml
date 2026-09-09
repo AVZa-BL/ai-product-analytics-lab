@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: dim_dates
+    description: One row per UTC calendar date used by all scenarios.
+    columns:
+      - name: date_day
+        description: Primary calendar date.
+        data_tests:
+          - unique
+          - not_null
+      - name: day_of_week_number
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7]
