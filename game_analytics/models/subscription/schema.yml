@@ -186,3 +186,89 @@ models:
         data_tests: [not_null]
       - name: local_time_trial_end_rows
         data_tests: [not_null]
+
+  - name: dim_subscription__users
+    description: Conformed subscription user dimension with acquisition, trial, paid, and activation milestones.
+    config:
+      tags: [subscription]
+    columns:
+      - name: user_id
+        data_tests: [not_null, unique]
+      - name: signup_date
+        data_tests: [not_null]
+      - name: campaign_id
+        data_tests: [not_null]
+
+  - name: dim_subscription__campaigns
+    description: Conformed campaign dimension including the explicit unknown campaign.
+    config:
+      tags: [subscription]
+    columns:
+      - name: campaign_id
+        data_tests: [not_null, unique]
+
+  - name: fct_subscription__daily_user_state
+    description: One row per signed-up user and UTC calendar date with governed trial, paid, and activation state.
+    config:
+      tags: [subscription]
+    columns:
+      - name: user_id
+        data_tests: [not_null]
+      - name: calendar_date
+        data_tests: [not_null]
+      - name: monthly_recurring_revenue_usd
+        data_tests: [not_null]
+
+  - name: fct_subscription__payments
+    description: One row per payment attempt with explicit success, failure, refund, and recognized-revenue fields.
+    config:
+      tags: [subscription]
+    columns:
+      - name: payment_id
+        data_tests: [not_null, unique]
+      - name: user_id
+        data_tests: [not_null]
+
+  - name: fct_subscription__marketing_spend_daily
+    description: Daily marketing spend by campaign and country.
+    config:
+      tags: [subscription]
+    columns:
+      - name: spend_date
+        data_tests: [not_null]
+      - name: campaign_id
+        data_tests: [not_null]
+      - name: country_code
+        data_tests: [not_null]
+
+  - name: mart_subscription__kpis_daily
+    description: Governed daily subscription KPI mart with maturity, quality, and attribution context.
+    config:
+      tags: [subscription]
+    columns:
+      - name: metric_date
+        data_tests: [not_null, unique]
+      - name: data_quality_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [passed, review_required]
+
+  - name: mart_subscription__trial_conversion_diagnostic
+    description: Mature trial conversion outcomes segmented by acquisition, plan, and activation state.
+    config:
+      tags: [subscription]
+    columns:
+      - name: cohort_date
+        data_tests: [not_null]
+      - name: campaign_id
+        data_tests: [not_null]
+      - name: plan_id
+        data_tests: [not_null]
+      - name: activation_segment
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [activated_before_trial_end, not_activated_before_trial_end]
+      - name: maturity_cutoff_date
+        data_tests: [not_null]
