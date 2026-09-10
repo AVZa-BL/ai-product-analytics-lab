@@ -167,11 +167,46 @@ def test_duplicate_pair_id_is_rejected(matched_pairs: pd.DataFrame) -> None:
         engagement_summary(duplicate)
 
 
+@pytest.mark.parametrize(
+    "column",
+    ["pair_id", "subscriber_player_id", "control_player_id"],
+)
+def test_empty_pair_identity_values_are_rejected(
+    matched_pairs: pd.DataFrame, column: str
+) -> None:
+    malformed = matched_pairs.copy()
+    malformed.loc[0, column] = ""
+
+    with pytest.raises(ValueError, match="pair identity"):
+        engagement_summary(malformed)
+
+
+def test_pair_id_must_match_arm_identity(matched_pairs: pd.DataFrame) -> None:
+    malformed = matched_pairs.copy()
+    malformed.loc[0, "pair_id"] = "invented-pair"
+
+    with pytest.raises(ValueError, match="pair identity"):
+        engagement_summary(malformed)
+
+
 def test_disagreeing_matching_covariates_are_rejected(
     matched_pairs: pd.DataFrame,
 ) -> None:
     malformed = matched_pairs.copy()
     malformed.loc[0, "control_platform"] = "mobile"
+
+    with pytest.raises(ValueError, match="matching covariates"):
+        revenue_summary(malformed)
+
+
+@pytest.mark.parametrize("arm", ["subscriber", "control"])
+def test_missing_matching_covariates_are_rejected(
+    matched_pairs: pd.DataFrame, arm: str
+) -> None:
+    malformed = matched_pairs.copy()
+    for column in ("subscriber_platform", "control_platform"):
+        malformed[column] = malformed[column].astype("string")
+    malformed.loc[0, f"{arm}_platform"] = pd.NA
 
     with pytest.raises(ValueError, match="matching covariates"):
         revenue_summary(malformed)

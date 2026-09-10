@@ -35,6 +35,7 @@ MATCHED_PAIR_COLUMNS = {
     *ENGAGEMENT_DIFFERENCE_COLUMNS,
     *REVENUE_DIFFERENCE_COLUMNS,
 }
+PAIR_IDENTITY_COLUMNS = ("pair_id", "subscriber_player_id", "control_player_id")
 PAIR_NUMERIC_COLUMNS = (
     "matched_pair_count",
     *ENGAGEMENT_DIFFERENCE_COLUMNS,
@@ -95,10 +96,26 @@ def _validated_pairs(frame: pd.DataFrame) -> pd.DataFrame:
     _require_columns(frame, MATCHED_PAIR_COLUMNS, "matched incrementality")
     if frame.empty:
         raise ValueError("matched incrementality has no matched pairs")
-    if frame["pair_id"].isna().any() or frame["pair_id"].duplicated().any():
+    identity = frame.loc[:, PAIR_IDENTITY_COLUMNS].astype("string")
+    if identity.isna().any().any() or identity.apply(
+        lambda values: values.str.strip().eq("").any()
+    ).any():
+        raise ValueError("matched incrementality must have valid pair identity")
+    expected_pair_id = (
+        identity["subscriber_player_id"] + "__" + identity["control_player_id"]
+    )
+    if not identity["pair_id"].eq(expected_pair_id).all():
+        raise ValueError("matched incrementality must have valid pair identity")
+    if frame["pair_id"].duplicated().any():
         raise ValueError("matched incrementality must have unique pair_id")
     for column in MATCHING_COVARIATES:
-        if not frame[f"subscriber_{column}"].eq(frame[f"control_{column}"]).all():
+        subscriber_values = frame[f"subscriber_{column}"]
+        control_values = frame[f"control_{column}"]
+        if (
+            subscriber_values.isna().any()
+            or control_values.isna().any()
+            or not subscriber_values.eq(control_values).fillna(False).all()
+        ):
             raise ValueError("matched pair matching covariates disagree")
     try:
         numeric_values = frame.loc[:, PAIR_NUMERIC_COLUMNS].apply(
