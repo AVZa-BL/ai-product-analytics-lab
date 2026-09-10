@@ -46,17 +46,38 @@ models:
         data_tests: [not_null]
 
   - name: int_hybrid_subscription__analysis_population
-    description: Subscriber and non-subscriber population with explicit 28-day index timestamps.
+    description: Player population indexed at first eligible exposure with deterministic observation-window exclusions.
     config:
       tags: [hybrid_subscription]
     columns:
       - name: player_id
         data_tests: [not_null, unique]
       - name: index_at_utc
+        description: First eligible exposure timestamp; null when the player has no eligible exposure.
+      - name: eligible_exposure_at_utc
+        description: First incrementality-eligible marketing exposure timestamp.
+      - name: observation_start_at_utc
+        description: Earliest governed session, store-transaction, or LiveOps timestamp.
+        data_tests: [not_null]
+      - name: observation_end_at_utc
+        description: Latest governed session, store-transaction, or LiveOps timestamp.
+        data_tests: [not_null]
+      - name: exclusion_reason
+        description: Mutually exclusive reason the player is excluded from mature pre/post analysis.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - no_eligible_exposure
+                  - subscription_not_after_exposure
+                  - immature_pre_window
+                  - immature_post_window
+      - name: is_population_eligible
+        description: True only when exposure ordering and both 28-day observation windows are valid.
         data_tests: [not_null]
 
   - name: int_hybrid_subscription__player_28d_behavior
-    description: One player-period row with pre/post engagement, LiveOps, and net-revenue measures.
+    description: Two mature pre/post behavior rows per eligible player with governed engagement, LiveOps, and separated cash categories.
     config:
       tags: [hybrid_subscription]
     columns:
@@ -68,6 +89,20 @@ models:
           - accepted_values:
               arguments:
                 values: [pre, post]
+      - name: index_at_utc
+        data_tests: [not_null]
+      - name: eligible_exposure_at_utc
+        data_tests: [not_null]
+      - name: is_population_eligible
+        data_tests: [not_null]
+      - name: is_window_mature
+        data_tests: [not_null]
+      - name: reward_track_net_revenue_usd
+        data_tests: [not_null]
+      - name: standalone_transaction_count
+        data_tests: [not_null]
+      - name: discounted_standalone_transaction_count
+        data_tests: [not_null]
 
   - name: int_hybrid_subscription__quality_audit
     description: Counts of designed defects preserved through the governed intermediate layer.

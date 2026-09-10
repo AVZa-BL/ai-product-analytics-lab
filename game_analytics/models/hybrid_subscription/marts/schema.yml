@@ -105,7 +105,7 @@ models:
                 field: player_id
 
   - name: fct_hybrid_subscription__player_behavior_28d
-    description: One pre/post row per player with engagement, LiveOps, and separated revenue measures.
+    description: Two mature pre/post rows per eligible player indexed at first eligible exposure with separated cash categories.
     config:
       tags: [hybrid_subscription]
     columns:
@@ -124,6 +124,20 @@ models:
           - accepted_values:
               arguments:
                 values: [pre, post]
+      - name: index_at_utc
+        data_tests: [not_null]
+      - name: eligible_exposure_at_utc
+        data_tests: [not_null]
+      - name: is_population_eligible
+        data_tests: [not_null]
+      - name: is_window_mature
+        data_tests: [not_null]
+      - name: reward_track_net_revenue_usd
+        data_tests: [not_null]
+      - name: standalone_transaction_count
+        data_tests: [not_null]
+      - name: discounted_standalone_transaction_count
+        data_tests: [not_null]
 
   - name: fct_hybrid_subscription__sessions
     description: Canonical session fact at the staged unique session grain.
