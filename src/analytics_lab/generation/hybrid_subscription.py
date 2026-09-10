@@ -242,7 +242,7 @@ def _subscription_events(
     frame.insert(0, "subscription_event_id", _ids("subevt", len(frame)))
     frame = frame.assign(
         **_timestamp_evidence("occurred_at", occurred, "UTC"),
-        ingested_at_utc=occurred + pd.Timedelta(minutes=3),
+        ingested_at_utc=occurred + pd.to_timedelta(3, unit="min"),
     )
     return _finish(frame, run_id)
 
@@ -291,7 +291,7 @@ def _sessions(
     frame.insert(0, "session_id", _ids("session", len(frame)))
     frame = frame.assign(
         **_timestamp_evidence("started_at", times, "America/Los_Angeles"),
-        ingested_at_utc=times + pd.Timedelta(minutes=5),
+        ingested_at_utc=times + pd.to_timedelta(5, unit="min"),
     )
     return _finish(frame, run_id)
 
@@ -361,13 +361,13 @@ def _store_transactions(
     frame = frame.assign(
         currency_code="USD",
         **_timestamp_evidence("transaction_at", times, "Europe/Berlin"),
-        ingested_at_utc=times + pd.Timedelta(minutes=2),
+        ingested_at_utc=times + pd.to_timedelta(2, unit="min"),
     )
 
     duplicate_count = max(1, round(len(frame) * 0.015))
     duplicate_indexes = rng.choice(frame.index, duplicate_count, replace=False)
     duplicates = frame.loc[duplicate_indexes].copy()
-    duplicates["ingested_at_utc"] += pd.Timedelta(minutes=15)
+    duplicates["ingested_at_utc"] += pd.to_timedelta(15, unit="min")
     frame = pd.concat([frame, duplicates], ignore_index=True).sort_values(
         ["transaction_id", "ingested_at_utc"], kind="stable"
     )
@@ -414,7 +414,7 @@ def _currency_ledger(
     frame.insert(0, "ledger_entry_id", _ids("ledger", len(frame)))
     frame = frame.assign(
         **_timestamp_evidence("occurred_at", times, "UTC"),
-        ingested_at_utc=times + pd.Timedelta(minutes=4),
+        ingested_at_utc=times + pd.to_timedelta(4, unit="min"),
     )
     return _finish(frame, run_id)
 
@@ -453,7 +453,7 @@ def _live_event_participation(
     frame.insert(0, "participation_id", _ids("participation", len(frame)))
     frame = frame.assign(
         **_timestamp_evidence("participated_at", times, "UTC"),
-        ingested_at_utc=times + pd.Timedelta(minutes=6),
+        ingested_at_utc=times + pd.to_timedelta(6, unit="min"),
     )
     return _finish(frame, run_id)
 
@@ -474,8 +474,8 @@ def _marketing_exposures(
             delta = 1 if player_id in late_subscribers else -2
             exposed_at = start_map[player_id] + pd.to_timedelta(delta, unit="D")
         else:
-            exposed_at = launch_at - pd.Timedelta(
-                days=int(rng.integers(1, 15))
+            exposed_at = launch_at - pd.to_timedelta(
+                int(rng.integers(1, 15)), unit="D"
             )
         rows.append(
             {
@@ -492,7 +492,7 @@ def _marketing_exposures(
     frame.insert(0, "exposure_id", _ids("exposure", len(frame)))
     frame = frame.assign(
         **_timestamp_evidence("exposed_at", times, "UTC"),
-        ingested_at_utc=times + pd.Timedelta(minutes=7),
+        ingested_at_utc=times + pd.to_timedelta(7, unit="min"),
     )
     return _finish(frame, run_id)
 
