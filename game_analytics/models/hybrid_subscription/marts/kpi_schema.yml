@@ -17,37 +17,122 @@ models:
               arguments:
                 values: [prior_payer, prior_nonpayer]
 
+  - name: mart_hybrid_subscription__matched_incrementality
+    description: >-
+      One row per deterministic subscriber-control pair. Publishes explicit pre and
+      post values, within-player changes, and subscriber-minus-control
+      difference-in-differences for 28-day sessions, LiveOps participation, and
+      standalone, subscription, and total net revenue. Matching is observational
+      and does not by itself establish a causal effect.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: pair_id
+        description: Stable subscriber-control pair identifier and model grain.
+        data_tests: [not_null, unique]
+      - name: subscriber_player_id
+        data_tests: [not_null, unique]
+      - name: control_player_id
+        data_tests: [not_null, unique]
+      - name: subscriber_prior_payer_status
+        data_tests: [not_null]
+      - name: control_prior_payer_status
+        data_tests: [not_null]
+      - name: subscriber_platform
+        data_tests: [not_null]
+      - name: control_platform
+        data_tests: [not_null]
+      - name: subscriber_acquisition_channel
+        data_tests: [not_null]
+      - name: control_acquisition_channel
+        data_tests: [not_null]
+      - name: matched_pair_count
+        description: Total actual matched pairs, sourced from the one-row population summary.
+        data_tests: [not_null]
+      - name: session_count_difference_in_differences
+        description: Subscriber session change minus matched-control session change.
+        data_tests: [not_null]
+      - name: liveops_participation_count_difference_in_differences
+        description: Subscriber LiveOps change minus matched-control LiveOps change.
+        data_tests: [not_null]
+      - name: standalone_store_net_revenue_usd_difference_in_differences
+        description: Subscriber standalone-store revenue change minus matched-control change.
+        data_tests: [not_null]
+      - name: subscription_net_revenue_usd_difference_in_differences
+        description: Subscriber subscription revenue change minus matched-control change.
+        data_tests: [not_null]
+      - name: total_net_revenue_usd_difference_in_differences
+        description: Subscriber total cash-revenue change minus matched-control change.
+        data_tests: [not_null]
+
   - name: mart_hybrid_subscription__engagement_lift_inputs
-    description: Segmented pre/post engagement inputs for descriptive lift diagnostics; not a causal estimate.
+    description: >-
+      Matched-pair session and LiveOps change summaries by the exact matching
+      covariates. Component sums and matched-pair denominators support safe
+      reaggregation; published means remain observational diagnostics.
     config:
       tags: [hybrid_subscription]
     columns:
       - name: engagement_segment_id
         data_tests: [not_null, unique]
-      - name: analysis_period
-        data_tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: [pre, post]
-      - name: eligible_player_count
+      - name: matched_pair_count
+        description: Number of actual pairs in this exact-match stratum; denominator for all means.
+        data_tests: [not_null]
+      - name: matched_subscriber_count
+        data_tests: [not_null]
+      - name: matched_control_count
+        data_tests: [not_null]
+      - name: subscriber_session_count_change_sum
+        data_tests: [not_null]
+      - name: control_session_count_change_sum
+        data_tests: [not_null]
+      - name: session_count_difference_in_differences_sum
+        data_tests: [not_null]
+      - name: subscriber_liveops_participation_count_change_sum
+        data_tests: [not_null]
+      - name: control_liveops_participation_count_change_sum
+        data_tests: [not_null]
+      - name: liveops_participation_count_difference_in_differences_sum
         data_tests: [not_null]
 
   - name: mart_hybrid_subscription__cannibalization_inputs
-    description: Prior-payer pre/post store, subscription, and total-value inputs for descriptive cannibalization analysis.
+    description: >-
+      Matched prior-payer pair summaries for standalone-store displacement,
+      subscription revenue, and total cash value. Component sums and the
+      matched-pair denominator make every published mean recomputable.
     config:
       tags: [hybrid_subscription]
     columns:
       - name: cannibalization_segment_id
         data_tests: [not_null, unique]
-      - name: analysis_period
+      - name: prior_payer_status
         data_tests:
           - not_null
           - accepted_values:
               arguments:
-                values: [pre, post]
-      - name: prior_payer_status
-        data_tests:
-          - accepted_values:
-              arguments:
                 values: [prior_payer]
+      - name: matched_pair_count
+        description: Number of pairs with both arms prior payers; denominator for all means.
+        data_tests: [not_null]
+      - name: matched_subscriber_count
+        data_tests: [not_null]
+      - name: matched_control_count
+        data_tests: [not_null]
+      - name: subscriber_standalone_store_net_revenue_usd_change_sum
+        data_tests: [not_null]
+      - name: control_standalone_store_net_revenue_usd_change_sum
+        data_tests: [not_null]
+      - name: standalone_store_net_revenue_usd_difference_in_differences_sum
+        data_tests: [not_null]
+      - name: subscriber_subscription_net_revenue_usd_change_sum
+        data_tests: [not_null]
+      - name: control_subscription_net_revenue_usd_change_sum
+        data_tests: [not_null]
+      - name: subscription_net_revenue_usd_difference_in_differences_sum
+        data_tests: [not_null]
+      - name: subscriber_total_net_revenue_usd_change_sum
+        data_tests: [not_null]
+      - name: control_total_net_revenue_usd_change_sum
+        data_tests: [not_null]
+      - name: total_net_revenue_usd_difference_in_differences_sum
+        data_tests: [not_null]
