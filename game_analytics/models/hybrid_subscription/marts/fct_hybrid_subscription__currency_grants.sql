@@ -1,4 +1,4 @@
-select
+select
     ledger.ledger_entry_id,
     ledger.player_id,
     ledger.entry_type,
