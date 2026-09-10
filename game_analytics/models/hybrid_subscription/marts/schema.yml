@@ -1,0 +1,126 @@
+version: 2
+
+models:
+  - name: dim_hybrid_subscription__players
+    description: Governed player dimension with prior-payer and subscription status.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: player_id
+        data_tests: [not_null, unique]
+      - name: prior_payer_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [prior_payer, prior_nonpayer]
+
+  - name: dim_hybrid_subscription__products
+    description: Governed product catalogue for subscription and standalone store SKUs.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: sku
+        data_tests: [not_null, unique]
+      - name: product_type
+        data_tests: [not_null]
+
+  - name: fct_hybrid_subscription__subscription_entitlements
+    description: One reconstructed contractual entitlement window per subscription.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: subscription_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_hybrid_subscription__players')
+                field: player_id
+      - name: entitlement_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [active, canceling, ended]
+
+  - name: fct_hybrid_subscription__store_transactions
+    description: Canonical transaction fact with duplicate evidence and recognized net revenue.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: transaction_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_hybrid_subscription__players')
+                field: player_id
+      - name: sku
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_hybrid_subscription__products')
+                field: sku
+
+  - name: fct_hybrid_subscription__currency_grants
+    description: Currency ledger fact that exposes missing links and gates reconciled subscription grants.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: ledger_entry_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_hybrid_subscription__players')
+                field: player_id
+      - name: grant_link_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [not_applicable, linked, missing_link, orphaned_link]
+
+  - name: fct_hybrid_subscription__marketing_exposures
+    description: Exposure fact retaining rejected evidence while publishing gated incrementality fields.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: exposure_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_hybrid_subscription__players')
+                field: player_id
+
+  - name: fct_hybrid_subscription__player_behavior_28d
+    description: One pre/post row per player with engagement, LiveOps, and separated revenue measures.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: player_period_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_hybrid_subscription__players')
+                field: player_id
+      - name: analysis_period
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [pre, post]
