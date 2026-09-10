@@ -13,11 +13,11 @@ months as (
     select distinct cast(date_trunc('month', d.date_day) as date) as metric_month,
         o.as_of_at_utc
     from {{ ref('dim_dates') }} d cross join observation o
-    where d.date_day >= cast(date_trunc('month', o.first_observed_at_utc) as date)
-      and d.date_day <= cast(o.as_of_at_utc as date)
+    where d.date_day >= cast(date_trunc('month', timezone('UTC', o.first_observed_at_utc)) as date)
+      and d.date_day <= cast(timezone('UTC', o.as_of_at_utc) as date)
 ),
 active_players as (
-    select distinct cast(date_trunc('month', started_at_utc) as date) as metric_month, player_id
+    select distinct cast(date_trunc('month', timezone('UTC', started_at_utc)) as date) as metric_month, player_id
     from {{ ref('fct_hybrid_subscription__sessions') }}
 ),
 activity as (
@@ -28,11 +28,11 @@ liveops as (
     from active_players a
     join {{ ref('stg_hybrid_subscription__live_event_participation') }} p
         on p.player_id = a.player_id
-        and cast(date_trunc('month', p.participated_at_utc) as date) = a.metric_month
+        and cast(date_trunc('month', timezone('UTC', p.participated_at_utc)) as date) = a.metric_month
     group by a.metric_month
 ),
 revenue as (
-    select cast(date_trunc('month', transaction_at_utc) as date) as metric_month,
+    select cast(date_trunc('month', timezone('UTC', transaction_at_utc)) as date) as metric_month,
         sum(case when is_standalone_store_revenue then recognized_net_revenue_usd else 0 end)
             as standalone_store_net_revenue_usd,
         sum(case when is_subscription_revenue then recognized_net_revenue_usd else 0 end)
@@ -42,14 +42,14 @@ revenue as (
         count(*) filter (where is_standalone_store_revenue and transaction_status in ('succeeded', 'refunded')
             and discount_amount_usd > 0) as discounted_standalone_transaction_count
     from {{ ref('fct_hybrid_subscription__store_transactions') }}
-    group by cast(date_trunc('month', transaction_at_utc) as date)
+    group by cast(date_trunc('month', timezone('UTC', transaction_at_utc)) as date)
 ),
 start_subscribers as (
     -- Opening instant, not subscribers who join later on day one.
     select m.metric_month, count(distinct e.player_id) as month_start_active_subscriber_count
     from months m left join {{ ref('fct_hybrid_subscription__subscription_entitlements') }} e
-        on e.entitlement_start_at_utc <= m.metric_month::timestamptz
-        and e.entitlement_end_at_utc > m.metric_month::timestamptz
+        on e.entitlement_start_at_utc <= timezone('UTC', cast(m.metric_month as timestamp))
+        and e.entitlement_end_at_utc > timezone('UTC', cast(m.metric_month as timestamp))
     group by m.metric_month
 ),
 end_subscribers as (
@@ -60,18 +60,18 @@ end_subscribers as (
 ),
 churn as (
     -- The governed terminal timestamp comes only from expiry/revocation, never cancellation.
-    select cast(date_trunc('month', e.terminal_event_at_utc) as date) as metric_month,
+    select cast(date_trunc('month', timezone('UTC', e.terminal_event_at_utc)) as date) as metric_month,
         count(distinct e.subscription_id) as expired_or_revoked_entitlement_count
     from {{ ref('fct_hybrid_subscription__subscription_entitlements') }} e cross join observation o
     where e.terminal_event_at_utc <= o.as_of_at_utc
-    group by cast(date_trunc('month', e.terminal_event_at_utc) as date)
+    group by cast(date_trunc('month', timezone('UTC', e.terminal_event_at_utc)) as date)
 ),
 components as (
     select m.metric_month, m.as_of_at_utc,
-        m.metric_month + interval '1 month' <= m.as_of_at_utc as is_month_complete,
+        m.metric_month + interval '1 month' <= timezone('UTC', m.as_of_at_utc) as is_month_complete,
         coalesce(a.mau, 0) as mau,
         s.month_start_active_subscriber_count,
-        case when m.metric_month + interval '1 month' <= m.as_of_at_utc
+        case when m.metric_month + interval '1 month' <= timezone('UTC', m.as_of_at_utc)
             then e.month_end_active_subscriber_count end as month_end_active_subscriber_count,
         coalesce(c.expired_or_revoked_entitlement_count, 0) as expired_or_revoked_entitlement_count,
         coalesce(r.standalone_store_net_revenue_usd, 0) as standalone_store_net_revenue_usd,

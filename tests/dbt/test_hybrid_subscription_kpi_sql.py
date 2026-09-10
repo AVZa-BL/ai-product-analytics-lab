@@ -250,6 +250,73 @@ def test_partial_month_and_month_opening_instant(facts):
     assert march["month_end_active_subscriber_count"] is None
 
 
+@pytest.mark.parametrize("zone", ["America/Los_Angeles", "Europe/Berlin"])
+@pytest.mark.parametrize("name", ["daily_kpis", "monthly_kpis", "subscription_cohorts"])
+def test_kpi_dates_and_maturity_do_not_depend_on_connection_timezone(facts, zone, name):
+    sql = render(ROOT / "models/hybrid_subscription/marts" / f"{MART}{name}.sql")
+
+    # JSON serializes timestamptz instants consistently; compare epochs for them.
+    def values():
+        result = facts.sql(sql)
+        columns = result.columns
+        types = result.types
+        projection = ",".join(
+            f"epoch({column}) as {column}" if str(dtype) == "TIMESTAMP WITH TIME ZONE" else column
+            for column, dtype in zip(columns, types, strict=True)
+        )
+        return facts.sql(f"select {projection} from ({sql}) order by 1").fetchall()
+
+    expected = values()
+    facts.execute(f"set timezone='{zone}'")
+    assert values() == expected
+
+
+@pytest.mark.parametrize(
+    "column,mutation",
+    [
+        ("is_month_complete", "not is_month_complete"),
+        ("as_of_at_utc", "as_of_at_utc + interval '1 hour'"),
+        ("is_month_complete", "null"),
+        ("as_of_at_utc", "null"),
+    ],
+)
+def test_monthly_reconciliation_rejects_corrupted_maturity(facts, column, mutation):
+    for name in ["daily_kpis", "monthly_kpis", "subscription_cohorts"]:
+        build(facts, name)
+    facts.execute(f"update {MART}monthly_kpis set {column}={mutation}")
+    check = render(ROOT / "tests/hybrid_subscription/assert_hybrid_kpis_reconcile.sql")
+    assert facts.sql(check).fetchall()
+
+
+def test_d30_uses_elapsed_utc_time_across_dst(facts):
+    facts.execute("""
+        insert into fct_hybrid_subscription__sessions values
+        ('d30-boundary','c','2026-03-31 00:00:00+00',1);
+        insert into fct_hybrid_subscription__subscription_entitlements values
+        ('c1','c','2026-03-01 00:00:00+00','2026-03-30 23:30:00+00',null,null);
+        set timezone='America/Los_Angeles';
+    """)
+    build(facts, "subscription_cohorts")
+    cohort = row(
+        facts,
+        "subscription_cohorts",
+        "cohort_type='subscription_start' and cohort_date=date '2026-03-01'",
+    )
+    assert cohort["is_d30_mature"] is True
+    assert cohort["mature_subscription_starter_count"] == 1
+    assert cohort["retained_at_d30_player_count"] == 0
+
+
+def test_subscriber_daily_fact_uses_utc_dates_independent_of_connection(facts):
+    sql = render(
+        ROOT / "models/hybrid_subscription/marts/fct_hybrid_subscription__subscriber_daily.sql"
+    )
+    expected = facts.sql(f"select player_date_id from ({sql}) order by 1").fetchall()
+    for zone in ["America/Los_Angeles", "Europe/Berlin"]:
+        facts.execute(f"set timezone='{zone}'")
+        assert facts.sql(f"select player_date_id from ({sql}) order by 1").fetchall() == expected
+
+
 def test_cohort_maturity_waits_for_latest_member_on_same_date(facts):
     facts.execute("""
         insert into fct_hybrid_subscription__sessions values

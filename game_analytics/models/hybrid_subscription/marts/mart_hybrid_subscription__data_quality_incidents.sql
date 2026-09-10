@@ -18,6 +18,7 @@ select
         when 'missing_subscription_grant_link' then 'grant_reconciliation'
         when 'post_subscription_exposure' then 'experiment_eligibility'
         when 'cancellation_pending_expiry' then 'entitlement_semantics'
+        when 'analysis_population_exclusion' then 'analysis_eligibility'
     end as incident_category,
     case incident_code
         when 'missing_subscription_grant_link' then 'high'
@@ -32,6 +33,7 @@ select
         when 'missing_subscription_grant_link' then 'reconciled_subscription_currency_amount'
         when 'post_subscription_exposure' then 'incrementality_eligibility'
         when 'cancellation_pending_expiry' then 'active_subscription_entitlement'
+        when 'analysis_population_exclusion' then 'matched_outcome_estimates'
     end as affected_metric,
     case incident_code
         when 'duplicate_store_webhook'
@@ -44,6 +46,8 @@ select
             then 'Null approved exposure fields and exclude the row from incrementality analysis.'
         when 'cancellation_pending_expiry'
             then 'Preserve access through contractual period end; cancellation disables renewal only.'
+        when 'analysis_population_exclusion'
+            then 'Exclude invalid identity/covariates, ineligible exposure and incomplete source windows; retain all exclusion reasons and counts in population summary.'
     end as containment_rule,
     case
         when affected_rows > 0 then 'contained'

@@ -63,6 +63,25 @@ expected_matches as (
     from stratum_counts
 ),
 violations as (
+    select 'incorrect_exclusion_totals' as violation, null::varchar as pair_id
+    from published_summary summary
+    where summary.candidate_player_count is distinct from (
+            select count(*) from {{ ref('int_hybrid_subscription__analysis_population') }}
+        )
+       or summary.excluded_player_count is distinct from (
+            select count(*) from {{ ref('int_hybrid_subscription__analysis_population') }}
+            where not is_population_eligible
+        )
+       or summary.candidate_player_count is distinct from summary.excluded_player_count
+            + summary.eligible_subscriber_count + summary.eligible_control_count
+       or summary.excluded_player_count is distinct from
+            summary.invalid_player_identity_count + summary.invalid_matching_covariates_count
+            + summary.no_eligible_exposure_count + summary.subscription_not_after_exposure_count
+            + summary.missing_or_invalid_source_watermark_count + summary.immature_pre_window_count
+            + summary.immature_post_window_count + summary.ingestion_watermark_not_mature_count
+
+    union all
+
     select 'invalid_summary_cardinality' as violation, null::varchar as pair_id
     from summary_cardinality
     where summary_row_count != 1

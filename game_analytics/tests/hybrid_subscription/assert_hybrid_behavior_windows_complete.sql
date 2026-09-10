@@ -28,9 +28,9 @@ having count(behavior.player_id) != 2
     or population.index_at_utc is null
     or population.observation_start_at_utc is null
     or population.observation_end_at_utc is null
-    or population.index_at_utc - interval '28 days'
+    or population.index_at_utc - interval '672 hours'
         < population.observation_start_at_utc
-    or population.index_at_utc + interval '28 days'
+    or population.index_at_utc + interval '672 hours'
         > population.observation_end_at_utc
     or count(*) filter (
         where behavior.player_id is not null
@@ -46,7 +46,7 @@ having count(behavior.player_id) != 2
                 behavior.analysis_period = 'pre'
                 and (
                     behavior.period_start_at_utc is distinct from
-                        population.index_at_utc - interval '28 days'
+                        population.index_at_utc - interval '672 hours'
                     or behavior.period_end_at_utc
                         is distinct from population.index_at_utc
                 )
@@ -57,7 +57,7 @@ having count(behavior.player_id) != 2
                     behavior.period_start_at_utc
                         is distinct from population.index_at_utc
                     or behavior.period_end_at_utc is distinct from
-                        population.index_at_utc + interval '28 days'
+                        population.index_at_utc + interval '672 hours'
                 )
             )
             or behavior.period_start_at_utc

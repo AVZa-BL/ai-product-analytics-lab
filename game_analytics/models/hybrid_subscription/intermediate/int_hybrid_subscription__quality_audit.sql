@@ -28,3 +28,9 @@ select
     'post_subscription_exposure' as incident_code,
     count(*) filter (where ineligibility_reason = 'exposure_after_subscription') as affected_rows
 from {{ ref('int_hybrid_subscription__marketing_exposure_eligibility') }}
+
+union all
+
+select 'analysis_population_exclusion' as incident_code,
+    count(*) filter (where not is_population_eligible) as affected_rows
+from {{ ref('int_hybrid_subscription__analysis_population') }}

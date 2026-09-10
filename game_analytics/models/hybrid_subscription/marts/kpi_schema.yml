@@ -1,6 +1,23 @@
 version: 2
 
 models:
+  - name: mart_hybrid_subscription__match_population_summary
+    description: One governed row even for an empty panel. Publishes candidate, eligible, excluded-by-reason, matched and unmatched counts plus per-source event/ingestion evidence. Null estimates never imply zero observed effects.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: population_summary_id
+        data_tests: [not_null, unique]
+      - name: candidate_player_count
+        data_tests: [not_null]
+      - name: excluded_player_count
+        data_tests: [not_null]
+      - name: matched_pair_count
+        data_tests: [not_null]
+      - name: source_watermarks_json
+        description: UTC source bounds, empirical ingestion-lag allowances and validity. Evidence is a snapshot proxy, not an operational completeness SLA.
+        data_tests: [not_null]
+
   - name: mart_hybrid_subscription__daily_kpis
     description: Daily descriptive KPIs at UTC metric_date by prior_payer_status grain; active subscribers are distinct players from governed daily entitlement state, never eventual-subscriber groups.
     config:

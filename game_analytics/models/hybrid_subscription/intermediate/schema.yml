@@ -46,21 +46,24 @@ models:
         data_tests: [not_null]
 
   - name: int_hybrid_subscription__analysis_population
-    description: Player population indexed at first eligible exposure with deterministic observation-window exclusions.
+    description: All candidate rows with valid-identity, matching-covariate, eligible-exposure and per-source event/ingestion maturity exclusions.
     config:
       tags: [hybrid_subscription]
     columns:
       - name: player_id
-        data_tests: [not_null, unique]
+        description: May be null or blank only on an explicitly excluded candidate.
       - name: index_at_utc
         description: First eligible exposure timestamp; null when the player has no eligible exposure.
       - name: eligible_exposure_at_utc
         description: First incrementality-eligible marketing exposure timestamp.
       - name: observation_start_at_utc
-        description: Earliest governed session, store-transaction, or LiveOps timestamp.
-        data_tests: [not_null]
+        description: Latest of the per-source first event timestamps; sources must all cover the pre-window.
       - name: observation_end_at_utc
-        description: Latest governed session, store-transaction, or LiveOps timestamp.
+        description: Earliest of the per-source last event timestamps; sources must all cover the post-window.
+      - name: ingestion_mature_through_at_utc
+        description: Minimum across sources of max ingestion time minus maximum observed nonnegative lag; empirical allowance, not an operational completeness SLA.
+      - name: are_source_watermarks_valid
+        description: All three relevant sources are present and contain only finite non-null event/ingestion timestamps with nonnegative lag.
         data_tests: [not_null]
       - name: exclusion_reason
         description: Mutually exclusive reason the player is excluded from mature pre/post analysis.
@@ -70,9 +73,12 @@ models:
                 values:
                   - no_eligible_exposure
                   - subscription_not_after_exposure
-                  - missing_observation_bounds
+                  - invalid_player_identity
+                  - invalid_matching_covariates
+                  - missing_or_invalid_source_watermark
                   - immature_pre_window
                   - immature_post_window
+                  - ingestion_watermark_not_mature
       - name: is_population_eligible
         description: True only when exposure ordering and both 28-day observation windows are valid.
         data_tests: [not_null]
@@ -195,4 +201,20 @@ models:
       - name: incident_code
         data_tests: [not_null, unique]
       - name: affected_rows
+        data_tests: [not_null]
+
+  - name: int_hybrid_subscription__source_watermarks
+    description: Three fail-closed per-source completeness proxy rows. Uses only observed event and ingestion timestamps, never a wall-clock or invented telemetry watermark.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: source_name
+        data_tests: [not_null, unique]
+      - name: source_row_count
+        data_tests: [not_null]
+      - name: invalid_timestamp_row_count
+        data_tests: [not_null]
+      - name: post_window_allowance_seconds
+        description: Maximum observed nonnegative ingestion lag in elapsed seconds, including latest canonical webhook arrival. Null when no valid observations exist.
+      - name: is_source_valid
         data_tests: [not_null]

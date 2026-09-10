@@ -26,3 +26,9 @@ def test_selectors_cover_shared_and_all_scenarios() -> None:
         "subscription",
         "hybrid_subscription",
     }
+
+
+def test_governed_dbt_connections_enforce_utc():
+    profiles = yaml.safe_load((ROOT / "game_analytics/profiles.yml").read_text())
+    for output in profiles["game_analytics"]["outputs"].values():
+        assert output.get("settings", {}).get("TimeZone") == "UTC"

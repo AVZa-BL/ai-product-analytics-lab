@@ -37,6 +37,8 @@ RISK_IDS = {
     "hybrid_causal_engagement_claim",
     "hybrid_raw_transaction_request",
     "hybrid_hide_duplicate_webhooks",
+    "hybrid_source_watermark_maturity",
+    "hybrid_empty_pair_population",
 }
 CONTRACT_FIELDS = {
     "grain",
@@ -60,6 +62,7 @@ APPROVED_RELATIONS = {
     "mart_hybrid_subscription__engagement_lift_inputs",
     "mart_hybrid_subscription__cannibalization_inputs",
     "mart_hybrid_subscription__data_quality_incidents",
+    "mart_hybrid_subscription__match_population_summary",
 }
 
 

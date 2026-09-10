@@ -15,25 +15,13 @@ eligible_exposure as (
     from {{ ref('int_hybrid_subscription__marketing_exposure_eligibility') }}
     group by player_id
 ),
-observation_timestamps as (
-    select started_at_utc as observed_at_utc
-    from {{ ref('fct_hybrid_subscription__sessions') }}
-
-    union all
-
-    select transaction_at_utc as observed_at_utc
-    from {{ ref('fct_hybrid_subscription__store_transactions') }}
-
-    union all
-
-    select participated_at_utc as observed_at_utc
-    from {{ ref('stg_hybrid_subscription__live_event_participation') }}
-),
 observation_bounds as (
     select
-        min(observed_at_utc) as observation_start_at_utc,
-        max(observed_at_utc) as observation_end_at_utc
-    from observation_timestamps
+        count(*) = 3 and bool_and(is_source_valid) as are_source_watermarks_valid,
+        max(observation_start_at_utc) as observation_start_at_utc,
+        min(observation_end_at_utc) as observation_end_at_utc,
+        min(ingestion_mature_through_at_utc) as ingestion_mature_through_at_utc
+    from {{ ref('int_hybrid_subscription__source_watermarks') }}
 ),
 classified_population as (
     select
@@ -50,22 +38,36 @@ classified_population as (
         eligible_exposure.eligible_exposure_at_utc,
         observation_bounds.observation_start_at_utc,
         observation_bounds.observation_end_at_utc,
+        observation_bounds.are_source_watermarks_valid,
+        observation_bounds.ingestion_mature_through_at_utc,
         case
+            when nullif(trim(player.player_id), '') is null
+                then 'invalid_player_identity'
+            when nullif(trim(player.prior_payer_status), '') is null
+                or player.prior_payer_status not in ('prior_payer', 'prior_nonpayer')
+                or nullif(trim(player.platform), '') is null
+                or nullif(trim(player.acquisition_channel), '') is null
+                then 'invalid_matching_covariates'
             when eligible_exposure.eligible_exposure_at_utc is null
                 then 'no_eligible_exposure'
             when first_subscription.first_subscription_at_utc is not null
                 and first_subscription.first_subscription_at_utc
                     <= eligible_exposure.eligible_exposure_at_utc
                 then 'subscription_not_after_exposure'
-            when observation_bounds.observation_start_at_utc is null
+            when not coalesce(observation_bounds.are_source_watermarks_valid, false)
+                or observation_bounds.observation_start_at_utc is null
                 or observation_bounds.observation_end_at_utc is null
-                then 'missing_observation_bounds'
-            when eligible_exposure.eligible_exposure_at_utc - interval '28 days'
+                or observation_bounds.ingestion_mature_through_at_utc is null
+                then 'missing_or_invalid_source_watermark'
+            when eligible_exposure.eligible_exposure_at_utc - interval '672 hours'
                 < observation_bounds.observation_start_at_utc
                 then 'immature_pre_window'
-            when eligible_exposure.eligible_exposure_at_utc + interval '28 days'
+            when eligible_exposure.eligible_exposure_at_utc + interval '672 hours'
                 > observation_bounds.observation_end_at_utc
                 then 'immature_post_window'
+            when eligible_exposure.eligible_exposure_at_utc + interval '672 hours'
+                > observation_bounds.ingestion_mature_through_at_utc
+                then 'ingestion_watermark_not_mature'
             else null
         end as exclusion_reason
     from {{ ref('stg_hybrid_subscription__players') }} player

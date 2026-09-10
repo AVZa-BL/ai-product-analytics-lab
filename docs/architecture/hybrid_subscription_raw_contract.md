@@ -7,6 +7,8 @@ are synthetic and contain no personal information.
 
 All monetary values use USD. Version 1 performs no foreign-exchange conversion.
 
+Event tables also carry `ingested_at_utc`. The matched diagnostic derives source-specific event bounds, maximum ingestion timestamps and empirical maximum observed nonnegative ingestion lag from session, canonical transaction and LiveOps staging rows. Every source must cover both UTC windows and advance ingestion through the post endpoint plus this allowance. Missing/invalid/stale sources exclude candidates. No external source-completeness telemetry or operational watermark SLA is available; this conservative snapshot proxy cannot rule out unseen delayed events or player-level gaps. Source evidence and excluded-candidate counts are published in `mart_hybrid_subscription__match_population_summary`.
+
 | Table | Grain and key | Required relationships | Time evidence |
 | --- | --- | --- | --- |
 | `players` | One player; `player_id` | None | `acquired_at_utc` |

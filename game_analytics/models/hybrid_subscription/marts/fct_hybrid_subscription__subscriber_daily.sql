@@ -7,5 +7,5 @@ select
     entitlement.entitlement_end_at_utc
 from {{ ref('fct_hybrid_subscription__subscription_entitlements') }} entitlement
 join {{ ref('dim_dates') }} date
-  on date.date_day >= cast(entitlement.entitlement_start_at_utc as date)
- and date.date_day < cast(entitlement.entitlement_end_at_utc as date)
+  on date.date_day >= cast(timezone('UTC', entitlement.entitlement_start_at_utc) as date)
+ and date.date_day < cast(timezone('UTC', entitlement.entitlement_end_at_utc) as date)

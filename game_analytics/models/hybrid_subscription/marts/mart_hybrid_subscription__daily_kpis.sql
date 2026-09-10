@@ -1,6 +1,6 @@
 with metric_rows as (
     select
-        cast(session.started_at_utc as date) as metric_date,
+        cast(timezone('UTC', session.started_at_utc) as date) as metric_date,
         player.prior_payer_status,
         null::varchar as active_subscriber_player_id,
         1 as session_count,
@@ -20,7 +20,7 @@ with metric_rows as (
     union all
 
     select
-        cast(participation.participated_at_utc as date),
+        cast(timezone('UTC', participation.participated_at_utc) as date),
         player.prior_payer_status,
         null::varchar as active_subscriber_player_id,
         0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0
@@ -30,7 +30,7 @@ with metric_rows as (
     union all
 
     select
-        cast(transaction.transaction_at_utc as date),
+        cast(timezone('UTC', transaction.transaction_at_utc) as date),
         transaction.prior_payer_status,
         null::varchar as active_subscriber_player_id,
         0, 0, 0,
@@ -52,7 +52,7 @@ with metric_rows as (
     union all
 
     select
-        cast(entitlement.entitlement_start_at_utc as date),
+        cast(timezone('UTC', entitlement.entitlement_start_at_utc) as date),
         player.prior_payer_status,
         null::varchar as active_subscriber_player_id,
         0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0
@@ -62,7 +62,7 @@ with metric_rows as (
     union all
 
     select
-        cast(exposure.exposed_at_utc as date),
+        cast(timezone('UTC', exposure.exposed_at_utc) as date),
         player.prior_payer_status,
         null::varchar as active_subscriber_player_id,
         0, 0, 0, 0, 0, 0, 0,
@@ -75,7 +75,7 @@ with metric_rows as (
     union all
 
     select
-        cast(grant.occurred_at_utc as date),
+        cast(timezone('UTC', grant.occurred_at_utc) as date),
         player.prior_payer_status,
         null::varchar as active_subscriber_player_id,
         0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -124,7 +124,7 @@ aggregated as (
         sum(reconciled_subscription_grant_count) as reconciled_subscription_grant_count
     from metric_rows
     cross join observation
-    where metric_date <= cast(as_of_at_utc as date)
+    where metric_date <= cast(timezone('UTC', as_of_at_utc) as date)
     group by metric_date, prior_payer_status
 )
 select

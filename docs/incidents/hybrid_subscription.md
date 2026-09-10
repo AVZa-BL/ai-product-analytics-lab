@@ -13,6 +13,7 @@ This register documents known defects and semantic risks in the hybrid subscript
 | `missing_subscription_grant_link` | Prevents reliable attribution of granted currency to subscription payment. | Publish the ledger row, but set reconciled subscription currency to zero until linked. | Do not include unreconciled grants in subscription-value claims. |
 | `post_subscription_exposure` | Creates reverse-timing bias in incrementality analysis. | Retain the raw exposure, mark it ineligible, and null approved exposure fields. | Only `is_incrementality_eligible` rows may enter exposure comparisons. |
 | `cancellation_pending_expiry` | A cancellation event can be mistaken for immediate loss of access. | Preserve entitlement through contractual period end; cancellation only disables renewal. | Active-access metrics must use entitlement windows, not cancellation timestamps. |
+| `analysis_population_exclusion` | Invalid matching identity/covariates, exposure timing or incomplete source coverage can invalidate matched outcomes. | Exclude before behavior/matching; retain candidate and per-reason counts plus event/ingestion watermark evidence in the one-row population summary mart. | Every outcome source must cover the windows and pass its empirical ingestion allowance; no completeness SLA or causal claim follows. |
 
 ## Ownership and response
 

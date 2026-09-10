@@ -7,13 +7,13 @@ population_periods as (
         periods.analysis_period,
         case
             when periods.analysis_period = 'pre'
-                then population.index_at_utc - interval '28 days'
+                then population.index_at_utc - interval '672 hours'
             else population.index_at_utc
         end as period_start_at_utc,
         case
             when periods.analysis_period = 'pre'
                 then population.index_at_utc
-            else population.index_at_utc + interval '28 days'
+            else population.index_at_utc + interval '672 hours'
         end as period_end_at_utc
     from {{ ref('int_hybrid_subscription__analysis_population') }} population
     cross join period_spine periods
@@ -24,6 +24,8 @@ windowed_population_periods as (
         *,
         period_start_at_utc >= observation_start_at_utc
             and period_end_at_utc <= observation_end_at_utc
+            and are_source_watermarks_valid
+            and period_end_at_utc <= ingestion_mature_through_at_utc
             as is_window_mature
     from population_periods
 ),

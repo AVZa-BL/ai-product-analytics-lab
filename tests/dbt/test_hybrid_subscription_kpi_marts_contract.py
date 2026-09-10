@@ -9,6 +9,7 @@ EXPECTED_MODELS = {
     "mart_hybrid_subscription__monthly_kpis",
     "mart_hybrid_subscription__subscription_cohorts",
     "mart_hybrid_subscription__matched_incrementality",
+    "mart_hybrid_subscription__match_population_summary",
     "mart_hybrid_subscription__engagement_lift_inputs",
     "mart_hybrid_subscription__cannibalization_inputs",
 }

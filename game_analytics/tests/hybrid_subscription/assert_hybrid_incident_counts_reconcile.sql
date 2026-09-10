@@ -36,6 +36,11 @@ with expected as (
         'cancellation_pending_expiry',
         count(*) filter (where is_canceled_pending_expiry)
     from {{ ref('fct_hybrid_subscription__subscription_entitlements') }}
+
+    union all
+
+    select 'analysis_population_exclusion', count(*) filter (where not is_population_eligible)
+    from {{ ref('int_hybrid_subscription__analysis_population') }}
 )
 select
     coalesce(expected.incident_code, actual.incident_code) as incident_code,

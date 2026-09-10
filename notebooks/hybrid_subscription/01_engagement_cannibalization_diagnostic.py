@@ -58,6 +58,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from analytics_lab.analysis.hybrid_subscription_diagnostic import (  # noqa: E402
     bootstrap_intervals,
     engagement_summary,
+    population_summary,
     reconcile_published_inputs,
     revenue_summary,
 )
@@ -71,6 +72,9 @@ BOOTSTRAP_SEED = 42
 BOOTSTRAP_DRAWS = 2_000
 INPUT_RELATIONS = {
     "pairs": "main_hybrid_subscription.mart_hybrid_subscription__matched_incrementality",
+    "population_summary": (
+        "main_hybrid_subscription.mart_hybrid_subscription__match_population_summary"
+    ),
     "engagement": "main_hybrid_subscription.mart_hybrid_subscription__engagement_lift_inputs",
     "cannibalization": "main_hybrid_subscription.mart_hybrid_subscription__cannibalization_inputs",
     "monthly_kpis": "main_hybrid_subscription.mart_hybrid_subscription__monthly_kpis",
@@ -100,9 +104,13 @@ ELIGIBILITY_RULES = {
     "index": "earliest incrementality-eligible exposure in UTC",
     "subscriber": "first subscription start exists and is strictly after index",
     "control": "no observed subscription start",
-    "maturity": "index - 28 days >= global observation start and index + 28 days "
-    "<= global observation end; one complete row per player per period",
-    "observation_bounds": "minimum/maximum governed session, transaction, and LiveOps timestamps",
+    "identity": "nonblank player_id, prior_payer_status, platform and acquisition_channel; "
+    "prior_payer_status in prior_payer/prior_nonpayer",
+    "maturity": "each session, transaction and LiveOps source must have valid timestamps, "
+    "cover both UTC windows, and have max ingestion timestamp >= post endpoint plus "
+    "its maximum observed nonnegative ingestion lag; one row per player per period",
+    "observation_bounds": "intersection of per-source event coverage; missing or stale "
+    "sources fail closed; empirical ingestion-lag allowance is not a completeness SLA",
     "pre_window": "[index - 28 days, index)",
     "post_window": "[index, index + 28 days)",
     "engagement_population": "all matched eligible subscriber/control pairs",
@@ -160,7 +168,7 @@ print(f"Source commit: {code_version}")
 # %% [markdown]
 # ## Data
 #
-# Only the six declared governed marts are queried. Pair rows must reconcile
+# Only the seven declared governed marts are queried. Pair rows must reconcile
 # to both aggregate-control marts before any estimate, interval, or plot.
 # Monthly and cohort context retain their own denominators and maturity flags.
 
@@ -168,6 +176,7 @@ print(f"Source commit: {code_version}")
 if not DB_PATH.is_file():
     raise FileNotFoundError(f"Missing governed database: {DB_PATH}")
 queries = {
+    "population_summary": f"select * from {INPUT_RELATIONS['population_summary']}",
     "pairs": f"select * from {INPUT_RELATIONS['pairs']} order by subscriber_sequence, pair_id",
     "engagement": f"select * from {INPUT_RELATIONS['engagement']} "
     "order by prior_payer_status, platform, acquisition_channel",
@@ -182,34 +191,14 @@ original_directory = Path.cwd()
 os.chdir(DB_PATH.parent)
 try:
     with duckdb.connect(str(DB_PATH), read_only=True) as connection:
+        connection.execute("SET TimeZone = 'UTC'")
         inputs = {name: connection.sql(query).df() for name, query in queries.items()}
 finally:
     os.chdir(original_directory)
 pairs = inputs["pairs"]
 reconcile_published_inputs(pairs, inputs["engagement"], inputs["cannibalization"])
 
-count_columns = [
-    "eligible_subscriber_count",
-    "eligible_control_count",
-    "matched_pair_count",
-    "unmatched_subscriber_count",
-    "unmatched_control_count",
-]
-if pairs[count_columns].isna().any().any() or not pairs[count_columns].nunique().eq(1).all():
-    raise ValueError("Matched population totals must be present and constant")
-totals = pairs[count_columns].iloc[0]
-if (totals < 0).any() or not totals.eq(totals.astype(int)).all():
-    raise ValueError("Matched population totals must be nonnegative integers")
-population = {column: int(totals[column]) for column in count_columns}
-if any(
-    pairs[column].duplicated().any() for column in ["subscriber_player_id", "control_player_id"]
-):
-    raise ValueError("One-to-one matching cannot reuse subscribers or controls")
-if population["matched_pair_count"] != len(pairs):
-    raise ValueError("Matched pair count differs from row count")
-for arm in ["subscriber", "control"]:
-    if population[f"eligible_{arm}_count"] != len(pairs) + population[f"unmatched_{arm}_count"]:
-        raise ValueError(f"Eligible/matched/unmatched {arm} counts do not reconcile")
+population = population_summary(pairs, inputs["population_summary"])
 prior_payer_pairs = pairs.loc[pairs["subscriber_prior_payer_status"].eq("prior_payer")]
 population["matched_prior_payer_pair_count"] = len(prior_payer_pairs)
 display(pd.DataFrame([population]).T.rename(columns={0: "Players or pairs"}))
@@ -251,51 +240,58 @@ for label, mean, bounds in [
         {
             "28-day matched observational difference": label,
             "Mean": mean,
-            "95% lower": bounds[0],
-            "95% upper": bounds[1],
+            "95% lower": bounds[0] if bounds is not None else None,
+            "95% upper": bounds[1] if bounds is not None else None,
+            "Availability": "available" if mean is not None else "unavailable: no eligible pairs",
         }
     )
 display(pd.DataFrame(estimate_rows).round(3))
 
 # %%
-FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-figure, axis = plt.subplots(figsize=(10, 4.8))
-axis.hist(
-    pairs["session_count_difference_in_differences"],
-    bins="auto",
-    color="#3366A0",
-    edgecolor="white",
-)
-axis.axvline(0, color="#333333", linewidth=1)
-axis.set_title(f"Pair session differences | {len(pairs):,} matched pairs")
-axis.set_xlabel("28-day matched observational difference in sessions (subscriber minus control)")
-axis.set_ylabel("Pair count\n28-day matched\nobservational difference bins")
-axis.grid(axis="y", alpha=0.2)
-figure.tight_layout()
-figure.savefig(FIGURE_DIR / "matched_pair_session_differences.png", dpi=150)
-plt.show()
-plt.close(figure)
-
-# %%
-components = ["standalone_store", "subscription", "total"]
-figure, axes = plt.subplots(3, 1, figsize=(10, 11), sharex=True)
-revenue_columns = [
-    f"{component}_net_revenue_usd_difference_in_differences" for component in components
-]
-bins = np.histogram_bin_edges(prior_payer_pairs[revenue_columns].to_numpy().ravel(), bins="auto")
-for axis, column, label in zip(
-    axes, revenue_columns, ["Standalone store", "Subscription", "Total"], strict=True
-):
-    axis.hist(prior_payer_pairs[column], bins=bins, color="#3366A0", edgecolor="white")
+if not pairs.empty:
+    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
+    figure, axis = plt.subplots(figsize=(10, 4.8))
+    axis.hist(
+        pairs["session_count_difference_in_differences"],
+        bins="auto",
+        color="#3366A0",
+        edgecolor="white",
+    )
     axis.axvline(0, color="#333333", linewidth=1)
-    axis.set_title(f"{label} revenue | {len(prior_payer_pairs):,} matched prior-payer pairs")
-    axis.set_xlabel("28-day matched observational difference in net revenue (USD)")
+    axis.set_title(f"Pair session differences | {len(pairs):,} matched pairs")
+    axis.set_xlabel(
+        "28-day matched observational difference in sessions (subscriber minus control)"
+    )
     axis.set_ylabel("Pair count\n28-day matched\nobservational difference bins")
     axis.grid(axis="y", alpha=0.2)
-figure.tight_layout()
-figure.savefig(FIGURE_DIR / "matched_pair_revenue_differences.png", dpi=150)
-plt.show()
-plt.close(figure)
+    figure.tight_layout()
+    figure.savefig(FIGURE_DIR / "matched_pair_session_differences.png", dpi=150)
+    plt.show()
+    plt.close(figure)
+
+# %%
+if not prior_payer_pairs.empty:
+    components = ["standalone_store", "subscription", "total"]
+    figure, axes = plt.subplots(3, 1, figsize=(10, 11), sharex=True)
+    revenue_columns = [
+        f"{component}_net_revenue_usd_difference_in_differences" for component in components
+    ]
+    bins = np.histogram_bin_edges(
+        prior_payer_pairs[revenue_columns].to_numpy().ravel(), bins="auto"
+    )
+    for axis, column, label in zip(
+        axes, revenue_columns, ["Standalone store", "Subscription", "Total"], strict=True
+    ):
+        axis.hist(prior_payer_pairs[column], bins=bins, color="#3366A0", edgecolor="white")
+        axis.axvline(0, color="#333333", linewidth=1)
+        axis.set_title(f"{label} revenue | {len(prior_payer_pairs):,} matched prior-payer pairs")
+        axis.set_xlabel("28-day matched observational difference in net revenue (USD)")
+        axis.set_ylabel("Pair count\n28-day matched\nobservational difference bins")
+        axis.grid(axis="y", alpha=0.2)
+    figure.tight_layout()
+    figure.savefig(FIGURE_DIR / "matched_pair_revenue_differences.png", dpi=150)
+    plt.show()
+    plt.close(figure)
 
 # %% [markdown]
 # ### Calendar-month and cohort context
@@ -337,14 +333,30 @@ observed_facts = [
     f"{population['eligible_control_count']} eligible controls yielded {len(pairs)} pairs; "
     f"{population['unmatched_subscriber_count']} subscribers and "
     f"{population['unmatched_control_count']} controls remained unmatched.",
-    "The mean 28-day matched observational difference in sessions was "
-    f"{engagement['engagement_difference_in_differences']:+.3f} per pair.",
-    f"Among {len(prior_payer_pairs)} matched prior-payer pairs, the mean 28-day matched "
-    "observational difference in standalone-store net revenue was "
-    f"${revenue['standalone_store_difference_in_differences']:+.3f}, subscription net "
-    f"revenue ${revenue['subscription_difference_in_differences']:+.3f}, and total net "
-    f"revenue ${revenue['total_revenue_difference_in_differences']:+.3f} per pair.",
 ]
+if pairs.empty:
+    observed_facts.append(
+        "No matched pairs: estimates and intervals are unavailable; no bootstrap "
+        "resampling or matched-outcome plots were produced."
+    )
+else:
+    observed_facts.append(
+        "The mean 28-day matched observational difference in sessions was "
+        f"{engagement['engagement_difference_in_differences']:+.3f} per pair."
+    )
+if prior_payer_pairs.empty:
+    observed_facts.append(
+        "No matched prior-payer pairs: revenue estimates and intervals are "
+        "unavailable; revenue bootstrap resampling and plots were skipped."
+    )
+else:
+    observed_facts.append(
+        f"Among {len(prior_payer_pairs)} matched prior-payer pairs, the mean 28-day matched "
+        "observational difference in standalone-store net revenue was "
+        f"${revenue['standalone_store_difference_in_differences']:+.3f}, subscription net "
+        f"revenue ${revenue['subscription_difference_in_differences']:+.3f}, and total net "
+        f"revenue ${revenue['total_revenue_difference_in_differences']:+.3f} per pair."
+    )
 inferences = [
     "Store displacement and total net revenue answer different questions; neither "
     "component accounting nor matching identifies the effect of subscription.",
@@ -357,8 +369,9 @@ limitations = [
     "Matching does not establish exchangeability, parallel trends, or causality.",
     "Matching is greedy and order-dependent; residual baseline imbalance and unmeasured "
     "confounding can remain within exact strata.",
-    "Global timestamp bounds define maturity, not proof of individual telemetry completeness; "
-    "eligible-exposure filtering can introduce selection.",
+    "Source-specific event coverage and ingestion watermarks use the maximum observed ingestion "
+    "lag as an empirical allowance, not a completeness SLA or proof of individual telemetry "
+    "completeness; unseen delayed events remain possible and eligibility can introduce selection.",
     "The 28-day window does not establish profitability or lifetime value; costs, long-term "
     "renewal outcomes, and lifetime cash flows are not estimated.",
     "Pair-bootstrap intervals condition on selected pairs; they quantify resampling variation, "
@@ -390,6 +403,10 @@ results = {
         "queries": queries,
         "input_row_counts": {name: len(frame) for name, frame in inputs.items()},
         "filters": ELIGIBILITY_RULES,
+        "query_timezone": "UTC",
+        "source_watermarks": json.loads(
+            inputs["population_summary"]["source_watermarks_json"].iloc[0]
+        ),
         "pairing_rule": PAIRING_RULE,
         "code_version": code_version,
         "code_version_source": code_version_source,
