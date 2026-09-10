@@ -1,4 +1,4 @@
-select *
+select *
 from {{ ref('fct_hybrid_subscription__subscription_entitlements') }}
 where entitlement_start_at_utc >= entitlement_end_at_utc
     or canceled_at_utc < entitlement_start_at_utc
