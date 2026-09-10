@@ -10,7 +10,7 @@ The shared Python, DuckDB, dbt, governance, and evaluation foundation is complet
 | --- | --- | --- |
 | Live strategy game | Retention and progression diagnostic | Complete |
 | Subscription product | Conversion and lifecycle diagnostic | Complete |
-| Hybrid game subscription | Cannibalization and entitlement diagnostic | In progress |
+| Hybrid game subscription | Cannibalization and entitlement diagnostic | Governed matched evidence published; owner-run execution validation pending |
 
 ## Live Strategy case study
 
@@ -18,7 +18,7 @@ The Live Strategy case study publishes a governed [metric catalogue](docs/metric
 
 ## Hybrid subscription case study
 
-The Hybrid Subscription case study publishes a governed [metric catalogue](docs/metrics/hybrid_subscription.md), [incident register](docs/incidents/hybrid_subscription.md), executable [engagement and cannibalization diagnostic](notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py), [decision memo](reports/hybrid_subscription/engagement_cannibalization_decision_memo.md), and [trusted evaluation cases](docs/ai-audit/hybrid_subscription_questions.yaml) with a deterministic [score report](reports/hybrid_subscription/agent_evaluation.json). It is backed by deterministic source generation, tested dbt staging/intermediate/mart layers, entitlement reconstruction, revenue reconciliation, explicit causal boundaries, approved-relation enforcement, and refusal of unsupported or adversarial requests.
+The Hybrid Subscription case study publishes a governed [metric catalogue](docs/metrics/hybrid_subscription.md), [incident register](docs/incidents/hybrid_subscription.md), executable [engagement and cannibalization diagnostic](notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py), [decision memo](reports/hybrid_subscription/engagement_cannibalization_decision_memo.md), and [trusted evaluation cases](docs/ai-audit/hybrid_subscription_questions.yaml) with a deterministic [score report](reports/hybrid_subscription/agent_evaluation.json). The [regenerated results JSON](reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json) publishes matched/unmatched population counts, reconciled engagement and separate standalone/subscription/total cash evidence, monthly KPIs, and conversion/D30 context. The catalogue covers all ten approved KPI contracts. Deterministic matching remains observational and does not establish causality. Direct exact-source execution succeeded; Jupyter kernel execution and real-checkout HEAD equivalence remain owner-run validations, as detailed in the [AI audit](docs/ai-audit/hybrid_subscription.md). The score report evaluates canonical recorded fixtures, not live-agent reasoning or autonomous decisions.
 
 ## Requirements
 

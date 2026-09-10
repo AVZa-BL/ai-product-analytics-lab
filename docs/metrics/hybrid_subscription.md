@@ -1,129 +1,187 @@
 # Hybrid Subscription metric catalogue
 
-This catalogue governs the decision metrics for the hybrid game subscription scenario. Calendar dates and timestamps use UTC. All 28-day behavior windows are half-open intervals `[window_start_at_utc, window_end_at_utc)`. Rates and per-player metrics must be recomputed from published numerators and denominators when segments are combined; do not average precomputed rates. A zero denominator produces `null`, not zero.
+The ten approved KPI contracts below are governed by [dbt KPI metadata](../../game_analytics/models/hybrid_subscription/marts/kpi_schema.yml). All dates and timestamps are UTC. Calendar-month KPIs, exposure/start cohorts, and matched 28-day diagnostics have different populations and must not be substituted for one another. Product Analytics owns activity/cohort definitions; Monetization Analytics owns cash-value definitions; Data Platform owns canonicalization and incident containment.
 
-## 28-day engagement lift
+## Shared population, matching, and accounting rules
 
-**Source relation:** `mart_hybrid_subscription__engagement_lift_inputs`
+The analysis index is the earliest incrementality-eligible exposure, not a fallback boundary for unexposed players. Governed exposure eligibility precedes the first observed subscription start; post-subscription exposures remain visible for incident reporting but their approved exposure fields are NULL. Subscriber candidates have a first start strictly after the index; controls have no observed subscription start.
 
-**Grain:** One row per analysis period, eventual-subscriber flag, prior-payer status, platform, and acquisition channel.
+Matching is deterministic greedy one-to-one nearest-control matching without replacement, exact on prior_payer_status, platform, and acquisition_channel. Subscribers sort by those strata, pre_session_count, then player_id. Within the same stratum, available controls sort by absolute pre_session_count distance, control pre_session_count, then control player_id. No rank-to-rank substitute or cross-stratum fallback is allowed. Unmatched subscribers and controls remain reported in the population summary but are excluded from pair estimates; never pad missing controls, reuse controls, or treat unmatched outcomes as zero.
 
-**Population:** Governed players with complete pre- and post-index 28-day observation windows. The index is the first eligible marketing exposure, or the documented scenario boundary for unexposed players.
+The global observation bounds are the minimum/maximum governed session, transaction, and LiveOps timestamps, not the wall clock or ingestion watermark. Both half-open 28-day windows must be complete; one complete player-period row per window is required. These bounds do not prove player-level telemetry completeness. Matching does not establish causality, exchangeability, or parallel trends.
 
-**Formula:** Absolute lift is the weighted post-period mean sessions per player minus the weighted pre-period mean sessions per player. Relative lift is the absolute lift divided by the weighted pre-period mean. Weight segment means by `eligible_player_count` when aggregating.
+Recognized cash revenue comes from canonical succeeded/refunded transactions, with refunds netted; failed transactions contribute zero. Standalone-store excludes subscription and reward-track products. Total net revenue is standalone-store plus subscription revenue, excluding reward-track revenue and non-cash currency grants. Do not subtract discounts or refunds again. Ratios return NULL on a zero denominator; counts may legitimately be zero. Reaggregate ratios from summed numerators and denominators, not unweighted means of rates. Do not sum population-summary counts repeated on pair rows. Empty matched strata remain absent, not zero effects.
 
-**Maturity rule:** Publish only after both 28-day windows are complete for every included player and the session ingestion watermark has passed the post-window end.
+## MAU
 
-**Exclusions:** Invalid players, sessions outside governed windows, sessions failing canonical timestamp rules, and players without both mature periods.
+**Source model:** mart_hybrid_subscription__monthly_kpis
 
-**Owner:** Product Analytics.
+**Grain:** One row per UTC calendar month.
 
-**Interpretation boundary:** This is descriptive unless computed on a pre-specified randomized, incrementality-eligible exposure population. Eventual-subscriber segmentation is post-treatment and must not be interpreted as a causal subscription effect.
+**Numerator:** mau: count of distinct players with at least one canonical session in the month.
 
-## Standalone-store net revenue per player
+**Denominator:** Not applicable: distinct-player count, not a rate.
 
-**Source relation:** `mart_hybrid_subscription__cannibalization_inputs`
+**Exclusions:** Players with no canonical session in the month; duplicate session rows do not create additional active players.
 
-**Grain:** One row per analysis period and subscriber status among prior payers.
+**Maturity:** Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark.
 
-**Population:** Governed prior payers with complete 28-day windows.
+**Interpretation boundary:** Descriptive monthly activity, not daily active users summed across days and not evidence of a subscription effect.
 
-**Formula:** `standalone_store_net_revenue / eligible_player_count`, using canonical succeeded transactions net of linked refunds and excluding subscription and reward-track products.
+## Active subscribers
 
-**Maturity rule:** Publish after the full 28-day window and documented transaction/refund-lag allowance have elapsed.
+**Source model:** mart_hybrid_subscription__daily_kpis; mart_hybrid_subscription__monthly_kpis; fct_hybrid_subscription__subscriber_daily; fct_hybrid_subscription__subscription_entitlements
 
-**Exclusions:** Duplicate store webhooks, failed transactions, transactions outside the analysis window, subscription products, reward-track products, and rows failing product or player integrity checks.
+**Grain:** UTC metric_date by prior_payer_status for daily counts; calendar month for opening and closing balances.
 
-**Owner:** Monetization Analytics.
+**Numerator:** Distinct entitled players: active_subscriber_count from subscriber_daily; month_start_active_subscriber_count at exactly 00:00 UTC on the first day; month_end_active_subscriber_count on the last calendar date.
 
-**Interpretation boundary:** A decline measures displacement of standalone-store revenue only. It does not establish a decline in total player value or prove subscription cannibalization.
+**Denominator:** Not applicable: distinct-player count, not entitlement-record count.
 
-## Subscription net revenue per player
+**Exclusions:** Players outside governed entitlement state; never use eventual-subscriber status. Opening balance excludes starts later on the first day. Cancellation alone does not remove access before expiry/revocation.
 
-**Source relation:** `mart_hybrid_subscription__cannibalization_inputs`
+**Maturity:** Daily state follows governed date-grain entitlement coverage. The opening balance is point-in-time; month-end balance is NULL until as_of_at_utc reaches the next month.
 
-**Grain:** One row per analysis period and subscriber status among prior payers.
+**Interpretation boundary:** A stock of active access, not starts, billed customers, or a sum across dates. The daily fact uses start-date inclusive/end-date exclusive coverage; use exact entitlement timestamps for the monthly opening balance.
 
-**Population:** Governed prior payers with complete 28-day windows.
+## Subscription conversion
 
-**Formula:** `subscription_net_revenue / eligible_player_count`, using canonical subscription-product transactions net of linked refunds.
+**Source model:** mart_hybrid_subscription__subscription_cohorts
 
-**Maturity rule:** Publish after the full 28-day window and documented transaction/refund-lag allowance have elapsed.
+**Grain:** cohort_type = eligible_exposure and UTC date of each player's earliest incrementality-eligible exposure.
 
-**Exclusions:** Duplicate store webhooks, failed transactions, non-subscription products, transactions outside the analysis window, and rows failing product or player integrity checks.
+**Numerator:** converted_within_28d_player_count: distinct exposed players whose first entitlement starts strictly after exposure and before exposure plus 28 days, observed by as_of_at_utc.
 
-**Owner:** Subscription Analytics.
+**Denominator:** eligible_exposed_player_count: distinct eligible exposed players; no matching or mature pre-window requirement.
 
-**Interpretation boundary:** This is recognized subscription revenue inside the governed 28-day window, not recurring lifetime value, bookings, or currency-grant value.
+**Exclusions:** Ineligible exposures, starts at/before exposure or at/after exposure plus 28 days; subscription_start cohort rows are non-applicable.
 
-## Total net revenue per player
+**Maturity:** Rate is NULL until every member is mature: latest exact exposure in the date cohort plus 28 days <= as_of_at_utc; NULL for zero denominator and non-exposure rows.
 
-**Source relation:** `mart_hybrid_subscription__cannibalization_inputs`
+**Interpretation boundary:** Observed forward conversion among eligible exposed players, not matched engagement lift or causal marketing incrementality.
 
-**Grain:** One row per analysis period and subscriber status among prior payers.
+## Subscriber churn
 
-**Population:** Governed prior payers with complete 28-day windows.
+**Source model:** mart_hybrid_subscription__monthly_kpis
 
-**Formula:** `(standalone_store_net_revenue + subscription_net_revenue) / eligible_player_count`. Recompute from summed revenue and player counts when combining rows.
+**Grain:** One row per UTC calendar month.
 
-**Maturity rule:** Publish after the full 28-day window and documented transaction/refund-lag allowance have elapsed.
+**Numerator:** expired_or_revoked_entitlement_count: distinct subscription_id values with an observed terminal expiry/revocation timestamp in the month.
 
-**Exclusions:** Duplicate store webhooks, failed transactions, reward-track products, transactions outside the analysis window, and rows failing product or player integrity checks. Currency grants are non-cash and excluded.
+**Denominator:** month_start_active_subscriber_count: distinct players entitled at exactly the opening instant.
 
-**Owner:** Monetization Analytics.
+**Exclusions:** Cancellation alone is not churn; ignore cancellation as a terminal event and exclude terminal timestamps after as_of_at_utc.
 
-**Interpretation boundary:** This is the primary value guardrail for store displacement. It describes 28-day net revenue and does not identify causal lift, profitability, or lifetime value.
+**Maturity:** Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero opening denominator.
 
-## Prior-payer standalone-store cannibalization
+**Interpretation boundary:** An entitlement-event rate, not a capped player-loss probability: numerator counts entitlements and denominator counts opening players, so the rate may exceed one. Do not silently redefine it as distinct lost players.
 
-**Source relation:** `mart_hybrid_subscription__cannibalization_inputs`
+## D30 subscriber retention
 
-**Grain:** A comparison across pre/post analysis periods and subscriber status for prior payers.
+**Source model:** mart_hybrid_subscription__subscription_cohorts
 
-**Population:** Governed prior payers with mature pre- and post-index 28-day windows.
+**Grain:** cohort_type = subscription_start and UTC first-entitlement-start date.
 
-**Formula:** Difference-in-differences: `(subscriber post standalone-store revenue per player - subscriber pre) - (non-subscriber post - non-subscriber pre)`. Report the subscriber pre/post change separately and pair the result with total net revenue per player.
+**Numerator:** retained_at_d30_player_count: distinct mature starters entitled at exact start plus 30 days.
 
-**Maturity rule:** All four comparison cells must contain eligible players with complete 28-day windows and mature transaction/refund data.
+**Denominator:** mature_subscription_starter_count: distinct starters whose exact start plus 30 days <= as_of_at_utc.
 
-**Exclusions:** Players outside the governed prior-payer population and all transaction exclusions defined for standalone-store net revenue per player.
+**Exclusions:** Immature starters from the denominator; eligible_exposure rows are non-applicable. Entitlements are half-open: expiry exactly at D30 is not retained.
 
-**Owner:** Monetization Analytics.
+**Maturity:** Rate is NULL until every member of the date cohort is mature (latest exact start plus 30 days <= as_of_at_utc); NULL for zero denominator and non-start rows.
 
-**Interpretation boundary:** Subscriber status is self-selected and the comparison remains observational. The estimate can indicate displacement risk but cannot prove that the subscription caused cannibalization.
+**Interpretation boundary:** Entitlement retention at an exact time, not activity retention, renewal intent, lifetime value, or a partial-cohort rate.
 
-## Subscription-grant reconciliation rate
+## ARPMAU
 
-**Source relation:** `mart_hybrid_subscription__daily_kpis`
+**Source model:** mart_hybrid_subscription__monthly_kpis
 
-**Grain:** One row per UTC metric date and prior-payer status.
+**Grain:** One row per UTC calendar month.
 
-**Population:** Governed subscription-grant ledger entries expected from eligible subscription transactions or entitlements.
+**Numerator:** total_net_revenue_usd = standalone_store_net_revenue_usd + subscription_net_revenue_usd, from canonical recognized transaction revenue net of refunds.
 
-**Formula:** `reconciled_subscription_grant_count / subscription_grant_count`. Aggregate by summing both counts before division.
+**Denominator:** mau: distinct monthly active players.
 
-**Maturity rule:** The ledger and transaction ingestion watermarks must be later than the measurement window end plus the documented four-minute fixture latency.
+**Exclusions:** Reward-track revenue (reward-track products) and non-cash grants are excluded; failed transactions contribute zero recognized revenue; canonicalization contains duplicate webhooks.
 
-**Exclusions:** Non-subscription grant types, orphaned or duplicate ledger rows, transactions outside governed status rules, and entries outside the reporting window.
+**Maturity:** Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero MAU.
 
-**Owner:** Data Platform Analytics.
+**Interpretation boundary:** Descriptive cash revenue per MAU, not ARPPU, profit, causal value, or LTV. Revenue is not restricted to session-active payers even though the denominator is MAU.
 
-**Interpretation boundary:** This is a delivery-integrity control, not a revenue or engagement KPI. A low rate blocks grant-dependent interpretation until reconciliation is restored.
+## Incremental net revenue
 
-## Incrementality-eligible exposure rate
+**Source model:** mart_hybrid_subscription__matched_incrementality; mart_hybrid_subscription__cannibalization_inputs
 
-**Source relation:** `fct_hybrid_subscription__marketing_exposures`
+**Grain:** One row per subscriber-control pair in matched_incrementality; prior_payer aggregate in cannibalization_inputs for the decision estimate.
 
-**Grain:** One row per canonical marketing exposure; report aggregates by UTC date and experiment arm.
+**Numerator:** Sum of total_net_revenue_usd_difference_in_differences: each subscriber's post-minus-pre standalone-store plus subscription revenue change, minus the matched control's change.
 
-**Population:** All governed subscription marketing exposures with a valid experiment arm and player identity.
+**Denominator:** Actual matched_pair_count for pairs where both arms are prior_payer. Use component sums divided by summed pair counts; never sum repeated population totals on pair rows.
 
-**Formula:** `count(exposures where is_incrementality_eligible) / count(all governed exposures)`. Sum eligible and total exposure counts before division.
+**Exclusions:** Unmatched and immature players; pairs not prior_payer in both arms for this revenue decision; reward-track revenue and non-cash grants; failed cash transactions contribute zero.
 
-**Maturity rule:** Publish after the exposure ingestion watermark passes the reporting-window end and eligibility can be evaluated against entitlement state at exposure time.
+**Maturity:** Complete pre [index - 28 days, index) and post [index, index + 28 days) windows within global observation bounds, with one complete behavior row per player per period. Global bounds do not prove individual telemetry completeness. A zero pair denominator returns NULL; an absent stratum is not zero effect.
 
-**Exclusions:** Duplicate exposures, missing experiment arms, invalid players, and exposures that occur after subscription entitlement begins are ineligible for incrementality analysis.
+**Interpretation boundary:** The approved name denotes a matched observational difference-in-differences diagnostic and does not establish causality. Standalone displacement and total net value are separate; not profit or lifetime value.
 
-**Owner:** CRM Analytics.
+## Discount utilization
 
-**Interpretation boundary:** This is an experiment-readiness and data-quality rate, not a treatment effect. Only eligible randomized exposures may support an incremental subscription or engagement claim.
+**Source model:** mart_hybrid_subscription__monthly_kpis
+
+**Grain:** One row per UTC calendar month.
+
+**Numerator:** discounted_standalone_transaction_count: canonical succeeded/refunded standalone-store transaction rows with discount_amount_usd > 0.
+
+**Denominator:** eligible_standalone_transaction_count: all canonical succeeded/refunded standalone-store transaction rows.
+
+**Exclusions:** Failed transactions, subscription and reward-track products; duplicate webhooks contained by canonicalization.
+
+**Maturity:** Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero eligible transaction denominator.
+
+**Interpretation boundary:** Transaction utilization rate, not discount dollars divided by revenue and not distinct discounted customers. Refunded eligible transactions remain in both applicable counts.
+
+## Engagement lift
+
+**Source model:** mart_hybrid_subscription__matched_incrementality; mart_hybrid_subscription__engagement_lift_inputs
+
+**Grain:** One row per subscriber-control pair; exact prior_payer_status/platform/acquisition_channel stratum in engagement_lift_inputs.
+
+**Numerator:** Sum of session_count_difference_in_differences: subscriber post-minus-pre session_count minus matched-control post-minus-pre session_count.
+
+**Denominator:** Actual matched_pair_count across all eligible matched pairs, including prior payers and prior nonpayers.
+
+**Exclusions:** Unmatched players, immature windows, ineligible exposure indexes, and sessions outside half-open windows.
+
+**Maturity:** Complete pre [index - 28 days, index) and post [index, index + 28 days) windows within global observation bounds, with one complete behavior row per player per period. Global bounds do not prove individual telemetry completeness. NULL for zero pair denominator; an absent stratum is not zero lift.
+
+**Interpretation boundary:** A matched observational 28-day session-count difference, not relative lift or an unpaired pre/post average. Self-selection remains; does not establish causality.
+
+## LiveOps participation
+
+**Source model:** mart_hybrid_subscription__monthly_kpis
+
+**Grain:** One row per UTC calendar month.
+
+**Numerator:** liveops_participant_count: distinct MAU players with at least one governed LiveOps participation in the same calendar month.
+
+**Denominator:** mau: distinct players with at least one canonical session in that month.
+
+**Exclusions:** Participants without a same-month canonical session and participations outside the month.
+
+**Maturity:** Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero MAU.
+
+**Interpretation boundary:** Participant rate among MAU, not daily event counts or matched 28-day participation-count change; does not identify a causal engagement effect.
+
+## Supporting diagnostics and quality controls
+
+These support the ten KPIs; they do not replace their denominators.
+
+| Diagnostic | Governed source and grain | Numerator / denominator | Boundary |
+| --- | --- | --- | --- |
+| Standalone-store displacement | `mart_hybrid_subscription__cannibalization_inputs`, matched prior-payer stratum | `standalone_store_net_revenue_usd_difference_in_differences_sum / matched_pair_count` | Mature pairs only; excludes subscription and reward-track revenue. Displacement is not total value or causal loss. |
+| Subscription revenue contribution | Same prior-payer matched stratum | `subscription_net_revenue_usd_difference_in_differences_sum / matched_pair_count` | Recognized subscription cash only, net of refunds; excludes non-cash grants. Not LTV. |
+| Total net value guardrail | Same prior-payer matched stratum | `total_net_revenue_usd_difference_in_differences_sum / matched_pair_count` | Store plus subscription, reward-track excluded. Observational, not profitability. |
+| Subscription-grant reconciliation rate | `mart_hybrid_subscription__daily_kpis`, UTC metric_date by prior_payer_status | `reconciled_subscription_grant_count / subscription_grant_count` | Canonical subscription-grant rows only; zero denominator is NULL. Missing transaction links remain incidents and reconciled currency is zero until linked. Non-cash delivery integrity, not revenue loss. |
+| Incrementality-eligible exposure rate | `fct_hybrid_subscription__marketing_exposures`, canonical exposure | Eligible exposure count / all canonical exposure count | Ineligible rows stay in denominator and incident reporting, not analysis indexes. Exposure readiness, not a treatment effect. |
+
+Quality controls describe the observed governed snapshot; no unimplemented refund-lag or ingestion-watermark guarantee is asserted. Consult the [incident register](../incidents/hybrid_subscription.md) and [regenerated evidence](../../reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json) before decisions.

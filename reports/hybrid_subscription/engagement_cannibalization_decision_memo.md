@@ -1,93 +1,89 @@
-# Engagement rose, but current subscription economics do not justify expansion
+# Hybrid Subscription: engagement and cannibalization decision memo
 
 ## Decision
 
-Do not use the current observational result to expand the subscription offer globally. The engagement signal is favorable, but the measured prior-payer total-net-revenue association remains materially negative after subscription revenue is included. Preserve a holdout-compatible population and make the next rollout decision from a pre-registered randomized experiment.
-
-This is a provisional product decision under uncertainty. The analysis **does not establish causality**: subscriber status is self-selected, and the parallel-trends assumption required for a causal difference-in-differences interpretation has not been demonstrated.
+Withhold broad expansion pending a randomized, pre-exposure intent-to-treat experiment. The synthetic matched diagnostic shows a favorable engagement association alongside a negative prior-payer total-net-revenue association. This is a risk-management recommendation, not a claim that subscription caused harm.
 
 ## Executive summary
 
-- Across 200 paired players, mean 28-day engagement increased by **+1.85 sessions per player**. Subscribers increased by **+2.97**, compared with **+1.09** among non-subscribers.
-- Among 70 prior payers, the standalone-store difference-in-differences was **-$24.66 per player**. Subscription revenue recovered **+$9.99**, leaving a total-net-revenue difference-in-differences of **-$14.67 per player**.
-- The player-cluster bootstrap 95% interval for the total-net-revenue estimate was **[-$19.56, -$9.82]**. This interval measures sampling variation in the synthetic population; it does not remove selection bias or validate causality.
-- Engagement improvement is therefore insufficient evidence for expansion. The commercial decision should be governed by randomized total net revenue, with engagement as a secondary outcome and store displacement as a guardrail.
+Use the [regenerated diagnostic JSON](engagement_cannibalization_diagnostic_results.json) as the numerical authority. The tables below copy its fields verbatim; no prose-only recalculation or obsolete unpaired estimate is used. Distinguish standalone displacement from total net value: the standalone-store difference excludes subscription revenue, while total net revenue includes it. Neither quantity is profit or lifetime value. This observational analysis does not establish causality.
 
 ## Observed facts
 
-The governed player-period fact contains **200 players** with complete pre and post 28-day windows. The prior-payer revenue population contains **70 players**.
+Population counts come from `population` in the JSON:
 
-Mean sessions per paired player moved from **6.685** before the index to **8.530** after it, a change of **+1.845 sessions** (**+27.60% relative**). The subscriber group moved from **8.000** to **10.975** sessions per player; the non-subscriber group moved from **5.808** to **6.900**. The descriptive difference between those changes is **+1.883 sessions per player**.
+| JSON field | Value |
+| --- | --- |
+| eligible_control_count | 157 |
+| eligible_subscriber_count | 280 |
+| matched_pair_count | 157 |
+| matched_prior_payer_pair_count | 53 |
+| unmatched_control_count | 0 |
+| unmatched_subscriber_count | 123 |
 
-For prior payers, the subscriber standalone-store change was **-$21.00 per player**, while the non-subscriber change was **+$3.66**. Their difference-in-differences was **-$24.66**, with a bootstrap 95% interval of **[-$29.55, -$19.81]**.
+Engagement uses all matched eligible subscriber/control pairs. Revenue uses only pairs where both players are prior payers. The unmatched subscribers and controls remain disclosed but do not contribute to either matched estimate; do not substitute unmatched players, pad controls, or interpret omitted outcomes as zero.
 
-Subscription revenue contributed a **+$9.99 per-player** difference-in-differences. That did not offset the standalone-store movement: the total-net-revenue difference-in-differences was **-$14.67 per player**, with a bootstrap 95% interval of **[-$19.56, -$9.82]**.
+The following means are 28-day subscriber post-minus-pre changes minus the matched control's corresponding change. Session differences are sessions per pair; revenue differences are USD per pair.
 
-The notebook reconciled the player-level facts to both published diagnostic marts before calculating results. The complete hybrid dbt selector build passed **176 of 176** nodes and tests before notebook execution.
+| JSON field | Value |
+| --- | --- |
+| engagement_difference_in_differences | 3.337579617834395 |
+| standalone_store_difference_in_differences | -17.627547169811322 |
+| subscription_difference_in_differences | 9.99 |
+| total_revenue_difference_in_differences | -7.637547169811319 |
+
+Whole-pair bootstrap intervals are copied from `results.bootstrap_intervals`:
+
+| JSON field | Interval |
+| --- | --- |
+| engagement_change_ci_95 | [2.9426751592356686, 3.700796178343948] |
+| standalone_store_difference_in_differences_ci_95 | [-22.009778301886797, -13.06145754716981] |
+| total_revenue_difference_in_differences_ci_95 | [-12.01977830188679, -3.0714575471698127] |
+
+The JSON contains calendar-month KPIs and separate exposure-conversion / subscription-start retention cohorts under `context`. Those denominators are not the matched-pair population and their rates are not substitutes for these differences.
 
 ## Interpretation
 
-The observed engagement movement is directionally favorable. It supports testing whether the offer can create incremental engagement, but it does not show that the subscription produced the increase. Subscribers were already more engaged in the pre period, and their eventual subscriber status is a post-index classification.
+The engagement association supports testing the proposition that a subscription can improve engagement. Standalone displacement identifies substitution risk; total net value, after including subscription cash, is the relevant revenue guardrail. Reward-track products and non-cash grants are excluded from both the total-value definition and its component accounting.
 
-The standalone-store result is evidence of a serious displacement risk, not proof that the subscription caused cannibalization. More importantly for the rollout decision, the subscription-revenue contribution did not restore total 28-day net revenue in this comparison. Store cannibalization and total value remain separate metrics: the former diagnoses substitution; the latter determines whether the measured substitution is economically offset.
-
-The negative total-value interval makes immediate expansion a poor risk-adjusted choice even though causality is unresolved. Randomization could weaken, remove, or strengthen the estimate; until then, broader exposure would scale an unquantified downside.
+The matched comparison is not an established counterfactual. Subscriber status is self-selected and post-index; exact-strata matching on prior-payer status, platform, and acquisition channel does not remove unmeasured confounding. The negative total-revenue association motivates an experiment, not a causal-loss estimate.
 
 ## Assumptions and uncertainty
 
-- The data is deterministic and synthetic. The figures demonstrate a governed analytical workflow rather than real commercial performance.
-- Pre and post periods are complete, half-open 28-day windows, and only paired players are included.
-- Revenue is recognized from canonical transactions net of linked refunds; currency grants are non-cash and excluded from revenue.
-- The difference-in-differences calculation assumes the non-subscriber movement is a useful counterfactual. Parallel trends were not established, so the estimate remains descriptive.
-- Subscriber self-selection, acquisition mix, platform, prior payer behavior, and unobserved player quality can confound the comparison.
-- Bootstrap intervals resample players within subscriber strata. They quantify sampling variation but not confounding, measurement bias, or model-specification risk.
-- The observation window excludes renewal value, longer-term retention, profitability, and lifetime value.
+The index is each player's earliest incrementality-eligible exposure. A subscriber's first observed start must be strictly after index; a control has no observed subscription start. Unexposed or ineligible-index players are not assigned a fallback index.
+
+Matching is deterministic greedy one-to-one nearest control without replacement. Subscribers sort by prior_payer_status, platform, acquisition_channel, pre_session_count, then player_id. Available exact-stratum controls sort by absolute pre_session_count distance, control pre_session_count, then control player_id. The order is part of the contract; unmatched handling is part of the population disclosure.
+
+Pre windows are `[index - 28 days, index)`; post windows are `[index, index + 28 days)`. Both must lie within the global minimum/maximum governed session, transaction, and LiveOps timestamps, with one complete behavior row per player per period. Global maturity does not prove individual telemetry completeness. Cohort conversion and D30 rates are withheld until every date-cohort member's forward window matures; ratio denominators of zero produce NULL.
+
+Bootstrap seed `42` and draws `2000` are the committed metadata. Whole-pair resampling conditions on selected matches: intervals quantify resampling variation, not confounding bias, rematching uncertainty, or proof of exchangeability/parallel trends. All inputs are deterministic synthetic lab data. The horizon does not establish real-product effects, profitability, or lifetime value.
 
 ## Data-quality qualification
 
-The analysis reads only governed relations, led by `main_hybrid_subscription.fct_hybrid_subscription__player_behavior_28d`, and reconciles them to `mart_hybrid_subscription__engagement_lift_inputs` and `mart_hybrid_subscription__cannibalization_inputs`.
+The governed incident mart retains defects and containment decisions; containment does not prove absence of residual bias.
 
-The governed incident mart reports four detected-and-contained issues:
+| Incident code | Affected rows | Decision status | Containment |
+| --- | --- | --- | --- |
+| cancellation_pending_expiry | 48 | contained | Preserve access through contractual period end; cancellation disables renewal only. |
+| duplicate_store_webhook | 55 | contained | Use the latest ingested webhook per transaction and retain duplicate evidence. |
+| missing_subscription_grant_link | 32 | contained | Set reconciled subscription currency to zero until a transaction link is present. |
+| mixed_timestamp_mismatch | 0 | clear | Derive UTC from local timestamp plus named time zone and retain the source mismatch flag. |
+| post_subscription_exposure | 20 | contained | Null approved exposure fields and exclude the row from incrementality analysis. |
 
-- `duplicate_store_webhook`: **11 rows**; deterministic canonicalization prevents duplicated revenue.
-- `missing_subscription_grant_link`: **6 rows**; unreconciled subscription currency is set to zero.
-- `post_subscription_exposure`: **4 rows**; these exposures are excluded from incrementality analysis.
-- `cancellation_pending_expiry`: **10 rows**; access is preserved through contractual period end.
-
-`mixed_timestamp_mismatch` reports **0 affected rows** and is correctly classified as `clear`. Incident containment protects the governed measures but does not turn the observational comparison into an experiment.
+Duplicate webhooks are canonicalized with evidence retained; cancellation alone preserves entitlement until expiry/revocation. Missing grant links are delivery-integrity defects, not direct cash-revenue losses. Ineligible post-subscription exposures stay visible for quality reporting while approved exposure fields are NULL.
 
 ## Recommended experiment
 
-1. **Randomize before exposure.** Assign incrementality-eligible players to offer and control before any subscription marketing exposure. Keep assignment stable through the outcome window.
-2. **Use player-level intent-to-treat.** Analyze every assigned player in the original arm, regardless of subscription conversion. Do not segment the primary estimate by eventual subscriber status.
-3. **Pre-register the primary decision metric.** Use 28-day total net revenue per eligible player. Require its lower confidence bound to exceed a business-approved non-inferiority margin before expansion.
-4. **Keep engagement secondary.** Measure sessions per player and live-event participation, but do not trade away material total value solely for engagement without an explicit, approved valuation model.
-5. **Enforce guardrails.** Monitor standalone-store net revenue, refund-adjusted subscription revenue, entitlement correctness, grant reconciliation, and incrementality-eligible exposure rate.
-6. **Balance important strata.** Block or stratify by prior-payer status, platform, and acquisition channel. Report heterogeneous effects without replacing the pre-registered overall estimate.
-7. **Wait for maturity.** Decide only after every included player completes the 28-day window and the documented refund and grant-ingestion allowances have elapsed.
+Randomize eligible players before exposure and analyse by assignment (intent-to-treat), not eventual subscription. Pre-specify stratification, allocation, sample size, minimum detectable effect, observation horizon, and a mature reporting boundary before launch. Use total net revenue as the primary value guardrail, session frequency as engagement evidence, standalone-store revenue as a substitution diagnostic, and cohort conversion/churn/retention as separately governed secondary outcomes.
+
+Keep reward-track exclusion and refund accounting fixed; monitor exposure eligibility, webhook duplicates, grant reconciliation, and entitlement transitions. An expansion decision should require a pre-specified, practically meaningful total-value result without unacceptable quality or engagement guardrail breaches. No unsupported numerical launch threshold is inferred from this synthetic diagnostic.
 
 ## Reproducibility
 
-- Player-level input: `main_hybrid_subscription.fct_hybrid_subscription__player_behavior_28d`
-- Engagement control: `main_hybrid_subscription.mart_hybrid_subscription__engagement_lift_inputs`
-- Revenue control: `main_hybrid_subscription.mart_hybrid_subscription__cannibalization_inputs`
-- Incident context: `main_hybrid_subscription.mart_hybrid_subscription__data_quality_incidents`
-- Results artifact: `reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json`
-- Executable analysis: `notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py`
-- Generated notebook: `notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.ipynb`
-- Execution timestamp: `2026-09-10T15:47:28.570410Z`
-- Code version: `f5e3288a3c1a519c2d5716de0d61f091020a1320`
-- Runtime: Python 3.12.14, pandas 2.3.3, DuckDB 1.5.5, NumPy 2.5.3
-- Bootstrap: seed 42, 2,000 player-cluster draws stratified by subscriber status
-- Metric definitions: [`docs/metrics/hybrid_subscription.md`](../../docs/metrics/hybrid_subscription.md)
-- Incident register: [`docs/incidents/hybrid_subscription.md`](../../docs/incidents/hybrid_subscription.md)
+The [tracked notebook source](../../notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py) queries `mart_hybrid_subscription__matched_incrementality` and reconciles it to the engagement/cannibalization aggregate marts before calculation. Pair lineage includes `fct_hybrid_subscription__player_behavior_28d`; the notebook does not reconstruct business metrics from raw or staging data.
 
-Regenerate the results and executed notebook from the repository root with:
+The executed source version is `632094ba0a1f1eb085cb7e416e1c85e6f4431159`; execution time is `2026-09-10T21:14:23.916094Z`, both copied from the JSON metadata. The JSON is published by results commit `9932fe2e947d9eb7062e3e68dde719ddb6dae15a`.
 
-```bash
-./.venv/bin/python -m jupytext \
-  --to notebook \
-  --execute \
-  notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py \
-  --output notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.ipynb
-```
+The direct exact-source execution succeeded using a locally reconstructed governed snapshot with verified source blobs and an explicit remote-source SHA override. This is not a claim of a full dbt invocation or a real Git checkout. Jupyter kernel execution and real-checkout HEAD equivalence remain owner-run validations. The locally converted notebook is unexecuted; generated notebooks and figures are not published evidence and are not linked here.
+
+Use the [audit](../../docs/ai-audit/hybrid_subscription.md), [metric catalogue](../../docs/metrics/hybrid_subscription.md), and JSON execution provenance for the exact validation boundary.

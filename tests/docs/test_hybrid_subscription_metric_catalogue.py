@@ -1,37 +1,65 @@
+import re
 from pathlib import Path
 
-CATALOGUE = Path("docs/metrics/hybrid_subscription.md")
+import pytest
+
 EXPECTED_METRICS = [
-    "28-day engagement lift",
-    "Standalone-store net revenue per player",
-    "Subscription net revenue per player",
-    "Total net revenue per player",
-    "Prior-payer standalone-store cannibalization",
-    "Subscription-grant reconciliation rate",
-    "Incrementality-eligible exposure rate",
+    "MAU",
+    "Active subscribers",
+    "Subscription conversion",
+    "Subscriber churn",
+    "D30 subscriber retention",
+    "ARPMAU",
+    "Incremental net revenue",
+    "Discount utilization",
+    "Engagement lift",
+    "LiveOps participation",
 ]
 REQUIRED_FIELDS = [
-    "Source relation",
+    "Source model",
     "Grain",
-    "Population",
-    "Formula",
-    "Maturity rule",
+    "Numerator",
+    "Denominator",
+    "Maturity",
     "Exclusions",
-    "Owner",
     "Interpretation boundary",
 ]
 
 
-def test_every_hybrid_metric_has_a_complete_semantic_contract() -> None:
-    text = CATALOGUE.read_text()
+@pytest.mark.parametrize("metric", EXPECTED_METRICS)
+def test_every_approved_kpi_has_a_complete_contract(metric: str) -> None:
+    text = Path("docs/metrics/hybrid_subscription.md").read_text()
+    sections = dict(re.findall(r"^## ([^\n]+)\n(.*?)(?=^## |\Z)", text, re.M | re.S))
+    assert metric in sections, f"Missing approved KPI: {metric}"
+    for field in REQUIRED_FIELDS:
+        assert re.search(rf"\*\*{field}:\*\*\s+\S", sections[metric]), (metric, field)
 
-    for metric in EXPECTED_METRICS:
-        section = text.split(f"## {metric}", 1)[1].split("## ", 1)[0]
-        for field in REQUIRED_FIELDS:
-            assert f"**{field}:**" in section, f"{metric}: {field}"
+
+def test_catalogue_preserves_population_and_accounting_boundaries() -> None:
+    text = Path("docs/metrics/hybrid_subscription.md").read_text().lower()
+    for boundary in [
+        "earliest incrementality-eligible exposure",
+        "without replacement",
+        "pre_session_count",
+        "unmatched",
+        "reward-track",
+        "null",
+        "global observation",
+        "does not establish causality",
+        "cancellation alone",
+        "entitlement-event rate",
+        "exact start plus 30 days",
+    ]:
+        assert boundary in text
 
 
-def test_readme_links_to_hybrid_metric_catalogue() -> None:
+def test_readme_links_only_committed_hybrid_evidence() -> None:
     readme = Path("README.md").read_text()
-
-    assert "docs/metrics/hybrid_subscription.md" in readme
+    for artifact in [
+        "docs/metrics/hybrid_subscription.md",
+        "engagement_cannibalization_diagnostic.py",
+        "engagement_cannibalization_diagnostic_results.json",
+        "engagement_cannibalization_decision_memo.md",
+    ]:
+        assert artifact in readme
+    assert not re.search(r"\]\([^)]*hybrid_subscription[^)]*(?:\.ipynb|figures/)", readme)
