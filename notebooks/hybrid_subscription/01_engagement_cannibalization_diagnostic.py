@@ -108,13 +108,26 @@ ELIGIBILITY_RULES = {
     "engagement_population": "all matched eligible subscriber/control pairs",
     "revenue_population": "matched pairs where both players are prior_payer",
 }
-code_version = subprocess.run(
-    ["git", "rev-parse", "HEAD"],
-    cwd=REPO_ROOT,
-    check=True,
-    capture_output=True,
-    text=True,
-).stdout.strip()
+
+
+def resolve_code_version(repo_root: Path) -> tuple[str, str]:
+    """Label verified remote snapshots explicitly; real checkouts default to Git."""
+    override = os.environ.get("ANALYTICS_SOURCE_COMMIT")
+    if override:
+        if len(override) != 40 or any(char not in "0123456789abcdef" for char in override):
+            raise ValueError("ANALYTICS_SOURCE_COMMIT must be a full lowercase commit SHA")
+        return override, "explicit remote snapshot override"
+    version = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    return version, "local git HEAD"
+
+
+code_version, code_version_source = resolve_code_version(REPO_ROOT)
 executed_at_utc = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 package_versions = {
     "python": platform.python_version(),
@@ -379,6 +392,7 @@ results = {
         "filters": ELIGIBILITY_RULES,
         "pairing_rule": PAIRING_RULE,
         "code_version": code_version,
+        "code_version_source": code_version_source,
         "executed_at_utc": executed_at_utc,
         "package_versions": package_versions,
         "bootstrap_seed": BOOTSTRAP_SEED,
