@@ -1,0 +1,193 @@
+version: 2
+
+models:
+  - name: dim_live_strategy__players
+    description: One governed row per installed player.
+    columns:
+      - name: player_id
+        data_tests: [not_null, unique]
+
+  - name: dim_live_strategy__config_versions
+    description: One row per effective-dated game configuration.
+    columns:
+      - name: config_version_id
+        data_tests: [not_null, unique]
+
+  - name: fct_live_strategy__player_activity_daily
+    description: One row per active player and UTC calendar date, using robust activity evidence.
+    columns:
+      - name: activity_date_utc
+        data_tests: [not_null]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_live_strategy__players')
+                field: player_id
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "(cast(activity_date_utc as varchar) || '|' || player_id)"
+
+  - name: fct_live_strategy__sessions
+    description: One row per session with completed-session quality made explicit.
+    columns:
+      - name: session_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_live_strategy__players')
+                field: player_id
+
+  - name: fct_live_strategy__purchases
+    description: One row per reconciled store purchase, including refunds and install dimensions.
+    columns:
+      - name: purchase_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_live_strategy__players')
+                field: player_id
+
+  - name: mart_live_strategy__daily_kpis
+    description: Governed daily KPIs at UTC date, platform, country, and acquisition-channel grain.
+    columns:
+      - name: activity_date_utc
+        data_tests: [not_null]
+      - name: platform
+        data_tests: [not_null]
+      - name: country_code
+        data_tests: [not_null]
+      - name: acquisition_channel
+        data_tests: [not_null]
+    data_tests:
+      - unique:
+          arguments:
+            column_name: >-
+              (cast(activity_date_utc as varchar) || '|' || platform || '|' ||
+              country_code || '|' || acquisition_channel)
+      - accepted_values:
+          name: daily_kpi_rates_are_bounded
+          arguments:
+            column_name: >-
+              (coalesce(d1_retention between 0 and 1, true)
+              and coalesce(d7_retention between 0 and 1, true)
+              and coalesce(payer_conversion between 0 and 1, true)
+              and coalesce(event_participation_rate between 0 and 1, true)
+              and coalesce(alliance_adoption_rate between 0 and 1, true))
+            values: [true]
+            quote: false
+      - accepted_values:
+          name: daily_kpi_null_semantics_are_explicit
+          arguments:
+            column_name: >-
+              (((eligible_d1_players = 0 and d1_retention is null)
+              or (eligible_d1_players > 0 and d1_retention is not null))
+              and ((eligible_d7_players = 0 and d7_retention is null)
+              or (eligible_d7_players > 0 and d7_retention is not null))
+              and ((dau = 0 and session_frequency is null and payer_conversion is null
+              and arpdau is null and event_participation_rate is null
+              and alliance_adoption_rate is null)
+              or (dau > 0 and session_frequency is not null and payer_conversion is not null
+              and arpdau is not null and event_participation_rate is not null
+              and alliance_adoption_rate is not null)))
+            values: [true]
+            quote: false
+
+  - name: mart_live_strategy__retention_cohorts
+    description: >-
+      Install cohorts with independently summed mature D1 and D7 numerators and denominators.
+      Immature rates are null rather than zero.
+    columns:
+      - name: install_date_utc
+        data_tests: [not_null]
+      - name: period
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [pre_update, post_update]
+      - name: platform
+        data_tests: [not_null]
+      - name: country_code
+        data_tests: [not_null]
+      - name: acquisition_channel
+        data_tests: [not_null]
+      - name: config_version_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_live_strategy__config_versions')
+                field: config_version_id
+    data_tests:
+      - unique:
+          arguments:
+            column_name: >-
+              (cast(install_date_utc as varchar) || '|' || period || '|' || platform ||
+              '|' || country_code || '|' || acquisition_channel || '|' || config_version_id)
+      - accepted_values:
+          name: retention_cohort_rates_are_bounded
+          arguments:
+            column_name: >-
+              (coalesce(d1_retention between 0 and 1, true)
+              and coalesce(d7_retention between 0 and 1, true))
+            values: [true]
+            quote: false
+      - accepted_values:
+          name: retention_cohort_null_semantics_are_explicit
+          arguments:
+            column_name: >-
+              (((eligible_d1_players = 0 and d1_retention is null)
+              or (eligible_d1_players > 0 and d1_retention is not null))
+              and ((eligible_d7_players = 0 and d7_retention is null)
+              or (eligible_d7_players > 0 and d7_retention is not null)))
+            values: [true]
+            quote: false
+
+  - name: mart_live_strategy__d7_diagnostic_inputs
+    description: >-
+      Mature D7 cohort inputs with governed robust activity and completed-session sensitivity
+      signals kept as separate rows.
+    columns:
+      - name: install_date_utc
+        data_tests: [not_null]
+      - name: period
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [pre_update, post_update]
+      - name: platform
+        data_tests: [not_null]
+      - name: country_code
+        data_tests: [not_null]
+      - name: acquisition_channel
+        data_tests: [not_null]
+      - name: config_version_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_live_strategy__config_versions')
+                field: config_version_id
+      - name: retention_signal
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [robust_activity, completed_session]
+    data_tests:
+      - unique:
+          arguments:
+            column_name: >-
+              (cast(install_date_utc as varchar) || '|' || period || '|' || platform ||
+              '|' || country_code || '|' || acquisition_channel || '|' ||
+              config_version_id || '|' || retention_signal)
