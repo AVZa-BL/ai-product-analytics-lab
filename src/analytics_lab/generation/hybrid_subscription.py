@@ -68,7 +68,7 @@ def generate(config: GenerationConfig) -> dict[str, pd.DataFrame]:
 
     rng = np.random.default_rng(config.seed)
     start = pd.Timestamp(config.start_date, tz="UTC")
-    end = start + pd.Timedelta(days=config.days)
+    end = start + pd.to_timedelta(config.days, unit="D")
     run_key = (
         f"{config.scenario}:{config.seed}:{config.start_date}:"
         f"{config.days}:{config.scale}"
@@ -90,11 +90,11 @@ def generate(config: GenerationConfig) -> dict[str, pd.DataFrame]:
         subscriber_ids.extend(rng.choice(candidates, count, replace=False))
     subscriber_ids = sorted(subscriber_ids)
 
-    launch_at = start + pd.Timedelta(days=max(1, config.days // 2))
+    launch_at = start + pd.to_timedelta(max(1, config.days // 2), unit="D")
     max_jitter = max(1, min(5, config.days // 10))
     start_map = {
         player_id: launch_at
-        + pd.Timedelta(days=int(rng.integers(-max_jitter, max_jitter + 1)))
+        + pd.to_timedelta(int(rng.integers(-max_jitter, max_jitter + 1)), unit="D")
         for player_id in subscriber_ids
     }
     catalogue = _product_catalogue(run_id)
@@ -138,7 +138,7 @@ def _players(
 ) -> pd.DataFrame:
     count = len(player_ids)
     acquired = _spread_times(
-        rng, start - pd.Timedelta(days=120), start - pd.Timedelta(days=30), count
+        rng, start - pd.to_timedelta(120, unit="D"), start - pd.to_timedelta(30, unit="D"), count
     )
     frame = pd.DataFrame(
         {
@@ -196,7 +196,7 @@ def _subscription_events(
 
     for player_id in subscriber_ids:
         started_at = start_map[player_id]
-        period_end = started_at + pd.Timedelta(days=30)
+        period_end = started_at + pd.to_timedelta(30, unit="D")
         rows.append(
             {
                 "player_id": player_id,
@@ -213,7 +213,7 @@ def _subscription_events(
                     "event_type": "canceled",
                     "current_period_end_at_utc": period_end,
                     "auto_renew_enabled": False,
-                    "occurred_at": started_at + pd.Timedelta(days=18),
+                    "occurred_at": started_at + pd.to_timedelta(18, unit="D"),
                 }
             )
             if period_end < end:
@@ -231,7 +231,7 @@ def _subscription_events(
                 {
                     "player_id": player_id,
                     "event_type": "renewed",
-                    "current_period_end_at_utc": period_end + pd.Timedelta(days=30),
+                    "current_period_end_at_utc": period_end + pd.to_timedelta(30, unit="D"),
                     "auto_renew_enabled": True,
                     "occurred_at": period_end,
                 }
@@ -252,7 +252,7 @@ def _window_bounds(
     start: pd.Timestamp,
     end: pd.Timestamp,
 ) -> tuple[pd.Timestamp, pd.Timestamp, pd.Timestamp, pd.Timestamp]:
-    window = min(pd.Timedelta(days=28), (end - start) / 3)
+    window = min(pd.to_timedelta(28, unit="D"), (end - start) / 3)
     pre_start = max(start, anchor - window)
     post_end = min(end, anchor + window)
     return pre_start, anchor, anchor, post_end
@@ -472,7 +472,7 @@ def _marketing_exposures(
     for player_id in players.player_id:
         if player_id in start_map:
             delta = 1 if player_id in late_subscribers else -2
-            exposed_at = start_map[player_id] + pd.Timedelta(days=delta)
+            exposed_at = start_map[player_id] + pd.to_timedelta(delta, unit="D")
         else:
             exposed_at = launch_at - pd.Timedelta(
                 days=int(rng.integers(1, 15))
