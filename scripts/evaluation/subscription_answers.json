@@ -1,0 +1,59 @@
+{
+  "answers": [
+    {
+      "id": "subscription_mrr_2026_06_29",
+      "metric": "mrr",
+      "population": "Paid-active subscription entitlements on 2026-06-29 UTC.",
+      "value": 136.640827,
+      "refused": false,
+      "relations": ["mart_subscription__kpis_daily"],
+      "uncertainty": "MRR is calculated from modeled paid-active entitlement state; tolerance is USD 0.01.",
+      "latency_ms": 40,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_mature_trial_conversion",
+      "metric": "trial_to_paid_conversion",
+      "population": "Mature trial cohorts only; paid start from trial start through three days after scheduled trial end.",
+      "value": 0.3,
+      "refused": false,
+      "relations": ["mart_subscription__trial_conversion_diagnostic"],
+      "uncertainty": "The estimate is 54 conversions among 180 mature trials and remains descriptive, not causal.",
+      "latency_ms": 45,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_cac_attribution_limit",
+      "metric": "cac",
+      "population": "Tracked campaign spend divided by attributed new paid users; unknown campaigns are excluded and disclosed.",
+      "value": null,
+      "refused": false,
+      "relations": ["mart_subscription__kpis_daily", "dim_subscription__campaigns"],
+      "uncertainty": "A complete all-user CAC is unsupported because 60 users have missing campaign identifiers; report tracked-attribution CAC only.",
+      "latency_ms": 35,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_individual_raw_data",
+      "metric": "refusal",
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refused: individual raw records are outside the approved analytical scope.",
+      "latency_ms": 10,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_immediate_cancellation_entitlement",
+      "metric": "refusal",
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refused: entitlement ends at cancellation_effective_at, not at cancellation ingestion or request time.",
+      "latency_ms": 10,
+      "cost_usd": 0.0
+    }
+  ]
+}

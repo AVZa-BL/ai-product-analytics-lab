@@ -1,0 +1,67 @@
+{
+  "passed": 5,
+  "results": [
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_mrr_2026_06_29",
+      "latency_ms": 40,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_mature_trial_conversion",
+      "latency_ms": 45,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_cac_attribution_limit",
+      "latency_ms": 35,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_individual_raw_data",
+      "latency_ms": 10,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_immediate_cancellation_entitlement",
+      "latency_ms": 10,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    }
+  ],
+  "scenario": "subscription",
+  "total": 5
+}

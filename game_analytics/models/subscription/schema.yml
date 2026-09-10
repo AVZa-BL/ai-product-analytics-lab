@@ -213,7 +213,12 @@ models:
       tags: [subscription]
     columns:
       - name: user_id
-        data_tests: [not_null]
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_subscription__users')
+                field: user_id
       - name: calendar_date
         data_tests: [not_null]
       - name: monthly_recurring_revenue_usd
@@ -226,8 +231,15 @@ models:
     columns:
       - name: payment_id
         data_tests: [not_null, unique]
-      - name: user_id
+      - name: subscription_id
         data_tests: [not_null]
+      - name: user_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_subscription__users')
+                field: user_id
 
   - name: fct_subscription__marketing_spend_daily
     description: Daily marketing spend by campaign and country.
@@ -237,7 +249,12 @@ models:
       - name: spend_date
         data_tests: [not_null]
       - name: campaign_id
-        data_tests: [not_null]
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_subscription__campaigns')
+                field: campaign_id
       - name: country_code
         data_tests: [not_null]
 
@@ -262,7 +279,12 @@ models:
       - name: cohort_date
         data_tests: [not_null]
       - name: campaign_id
-        data_tests: [not_null]
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_subscription__campaigns')
+                field: campaign_id
       - name: plan_id
         data_tests: [not_null]
       - name: activation_segment
