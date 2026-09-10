@@ -1,4 +1,4 @@
-select
+select
     player_id || '__' || analysis_period as player_period_id,
     player_id,
     analysis_period,
