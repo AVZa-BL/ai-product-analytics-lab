@@ -1,4 +1,4 @@
-select
+select
     exposure_id,
     player_id,
     campaign_id,
