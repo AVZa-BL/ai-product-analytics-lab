@@ -6,14 +6,21 @@ MODEL_DIR = Path("game_analytics/models/hybrid_subscription/marts")
 TEST_DIR = Path("game_analytics/tests/hybrid_subscription")
 EXPECTED_MODELS = {
     "mart_hybrid_subscription__daily_kpis",
+    "mart_hybrid_subscription__monthly_kpis",
+    "mart_hybrid_subscription__subscription_cohorts",
+    "mart_hybrid_subscription__matched_incrementality",
     "mart_hybrid_subscription__engagement_lift_inputs",
     "mart_hybrid_subscription__cannibalization_inputs",
 }
 EXPECTED_TESTS = {
-    "assert_hybrid_diagnostic_periods_are_complete.sql",
-    "assert_hybrid_kpi_grains_are_unique.sql",
-    "assert_hybrid_cannibalization_reconciles.sql",
-    "assert_hybrid_diagnostic_segments_are_populated.sql",
+    "assert_hybrid_analysis_population_eligible.sql",
+    "assert_hybrid_behavior_windows_complete.sql",
+    "assert_hybrid_matched_pairs_valid.sql",
+    "assert_hybrid_matched_population_reconciles.sql",
+    "assert_hybrid_reward_track_excluded.sql",
+    "assert_hybrid_kpis_reconcile.sql",
+    "assert_hybrid_zero_denominators_are_null.sql",
+    "assert_hybrid_cohort_maturity.sql",
 }
 
 

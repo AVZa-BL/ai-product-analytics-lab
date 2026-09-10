@@ -11,6 +11,7 @@ EXPECTED_MODELS = {
     "int_hybrid_subscription__analysis_population",
     "int_hybrid_subscription__player_28d_behavior",
     "int_hybrid_subscription__quality_audit",
+    "int_hybrid_subscription__matched_pairs",
 }
 EXPECTED_TESTS = {
     "assert_cancellation_preserves_entitlement.sql",

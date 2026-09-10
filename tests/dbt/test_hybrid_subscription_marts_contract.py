@@ -12,6 +12,8 @@ EXPECTED_MODELS = {
     "fct_hybrid_subscription__currency_grants",
     "fct_hybrid_subscription__marketing_exposures",
     "fct_hybrid_subscription__player_behavior_28d",
+    "fct_hybrid_subscription__sessions",
+    "fct_hybrid_subscription__subscriber_daily",
 }
 EXPECTED_TESTS = {
     "assert_fact_entitlements_have_valid_windows.sql",
