@@ -1,4 +1,4 @@
-with fact_total as (
+with fact_total as (
     select coalesce(sum(recognized_net_revenue_usd), 0) as amount
     from {{ ref('fct_hybrid_subscription__store_transactions') }}
 ),
