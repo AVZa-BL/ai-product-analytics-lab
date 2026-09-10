@@ -10,11 +10,15 @@ The shared Python, DuckDB, dbt, governance, and evaluation foundation is complet
 | --- | --- | --- |
 | Live strategy game | Retention and progression diagnostic | Complete |
 | Subscription product | Conversion and lifecycle diagnostic | Complete |
-| Hybrid game subscription | Cannibalization and entitlement diagnostic | Planned |
+| Hybrid game subscription | Cannibalization and entitlement diagnostic | In progress |
 
 ## Live Strategy case study
 
 The Live Strategy case study publishes a governed [metric catalogue](docs/metrics/live_strategy.md), [incident register](docs/incidents/live_strategy.md), executable [D7 diagnostic notebook](notebooks/live_strategy/01_d7_retention_diagnostic.py), [decision memo](reports/live_strategy/d7_retention_diagnostic.md), and [trusted evaluation cases](docs/ai-audit/live_strategy_questions.yaml). Together they demonstrate metric contracts, explicit data-defect containment, reproducible observational analysis, causal boundaries, and refusal of requests outside approved marts.
+
+## Hybrid subscription case study
+
+The Hybrid Subscription case study publishes a governed [metric catalogue](docs/metrics/hybrid_subscription.md) and [incident register](docs/incidents/hybrid_subscription.md), backed by deterministic source generation, tested dbt staging/intermediate/mart layers, entitlement reconstruction, revenue reconciliation, and explicit causal boundaries for engagement-lift and store-cannibalization analysis.
 
 ## Requirements
 
