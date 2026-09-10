@@ -1,0 +1,1524 @@
+{
+  "metadata": {
+    "input_relations": [
+      "main_hybrid_subscription.mart_hybrid_subscription__matched_incrementality",
+      "main_hybrid_subscription.mart_hybrid_subscription__engagement_lift_inputs",
+      "main_hybrid_subscription.mart_hybrid_subscription__cannibalization_inputs",
+      "main_hybrid_subscription.mart_hybrid_subscription__monthly_kpis",
+      "main_hybrid_subscription.mart_hybrid_subscription__subscription_cohorts",
+      "main_hybrid_subscription.mart_hybrid_subscription__data_quality_incidents"
+    ],
+    "queries": {
+      "pairs": "select * from main_hybrid_subscription.mart_hybrid_subscription__matched_incrementality order by subscriber_sequence, pair_id",
+      "engagement": "select * from main_hybrid_subscription.mart_hybrid_subscription__engagement_lift_inputs order by prior_payer_status, platform, acquisition_channel",
+      "cannibalization": "select * from main_hybrid_subscription.mart_hybrid_subscription__cannibalization_inputs order by prior_payer_status",
+      "monthly_kpis": "select * from main_hybrid_subscription.mart_hybrid_subscription__monthly_kpis order by metric_month",
+      "cohorts": "select * from main_hybrid_subscription.mart_hybrid_subscription__subscription_cohorts order by cohort_type, cohort_date",
+      "incidents": "select * from main_hybrid_subscription.mart_hybrid_subscription__data_quality_incidents order by incident_code"
+    },
+    "input_row_counts": {
+      "pairs": 157,
+      "engagement": 12,
+      "cannibalization": 1,
+      "monthly_kpis": 4,
+      "cohorts": 29,
+      "incidents": 5
+    },
+    "filters": {
+      "index": "earliest incrementality-eligible exposure in UTC",
+      "subscriber": "first subscription start exists and is strictly after index",
+      "control": "no observed subscription start",
+      "maturity": "index - 28 days >= global observation start and index + 28 days <= global observation end; one complete row per player per period",
+      "observation_bounds": "minimum/maximum governed session, transaction, and LiveOps timestamps",
+      "pre_window": "[index - 28 days, index)",
+      "post_window": "[index, index + 28 days)",
+      "engagement_population": "all matched eligible subscriber/control pairs",
+      "revenue_population": "matched pairs where both players are prior_payer"
+    },
+    "pairing_rule": {
+      "method": "greedy one-to-one nearest control without replacement",
+      "exact_strata": [
+        "prior_payer_status",
+        "platform",
+        "acquisition_channel"
+      ],
+      "subscriber_order": [
+        "prior_payer_status ASC",
+        "platform ASC",
+        "acquisition_channel ASC",
+        "pre_session_count ASC",
+        "player_id ASC"
+      ],
+      "control_order_within_stratum": [
+        "abs(control.pre_session_count - subscriber.pre_session_count) ASC",
+        "control.pre_session_count ASC",
+        "control.player_id ASC"
+      ],
+      "reuse_controls": false,
+      "source_model": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__matched_pairs.sql"
+    },
+    "code_version": "632094ba0a1f1eb085cb7e416e1c85e6f4431159",
+    "code_version_source": "explicit remote snapshot override",
+    "executed_at_utc": "2026-09-10T21:14:23.916094Z",
+    "package_versions": {
+      "python": "3.12.14",
+      "pandas": "3.0.5",
+      "duckdb": "1.5.5",
+      "numpy": "2.5.3",
+      "matplotlib": "3.11.1"
+    },
+    "bootstrap_seed": 42,
+    "bootstrap_draws": 2000,
+    "bootstrap_method": "whole matched-pair resampling with replacement; percentile 95%; all pairs for engagement, prior-payer pairs for revenue",
+    "execution_provenance": {
+      "mode": "local reconstruction from governed branch generator and SQL; not a downloaded DuckDB",
+      "repository": "AVZa-BL/ai-product-analytics-lab",
+      "source_commit": "632094ba0a1f1eb085cb7e416e1c85e6f4431159",
+      "source_verification": "Git blob SHA-1 checked for each materialized branch file against remote commit tree. Explicit remote-source override, not local git HEAD. GitHub metadata did not reproduce the raw commit object, so local git rev-parse HEAD equivalence could not be established. Owner-run real-checkout re-execution remains required.",
+      "verified_source_files": [
+        {
+          "path": "README.md",
+          "sha": "4a553b6e4181ecc2d38715d5041924aeec279e5b"
+        },
+        {
+          "path": "docs/superpowers/plans/2026-08-27-hybrid-subscription-scenario.md",
+          "sha": "117f38d815aad4c138a3835266ad1d6659672606"
+        },
+        {
+          "path": "game_analytics/dbt_project.yml",
+          "sha": "de9589313ab628bb31b47dbc70b13d73faea42d5"
+        },
+        {
+          "path": "game_analytics/macros/raw_parquet.sql",
+          "sha": "78aef24f4a83cc18f3648512e1873e29a20fe5cf"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/.gitkeep",
+          "sha": "4aaf43de3b75b670ba4d5dc761df0b0b6174fa10"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__analysis_population.sql",
+          "sha": "7e335bcaa3a09e3976eb77b79c938d3b007cf8aa"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__grant_reconciliation.sql",
+          "sha": "e1a70c9a867e1b6f4e5a8bbf53dab1ce51bd8a43"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__marketing_exposure_eligibility.sql",
+          "sha": "1246c0afe0b5c8a712ce2210bc7b3989a6e4df22"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__match_population_summary.sql",
+          "sha": "a82d031ea8cb848d1fbb41ad87f64f9b00a5b653"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__matched_pairs.sql",
+          "sha": "1e91591b1c58abb7d965d181bb891ddee550085c"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__player_28d_behavior.sql",
+          "sha": "bf9cf59bb98496fbe98b5433508d4e54e2cab8d4"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__quality_audit.sql",
+          "sha": "b1fefa522dddda3c6a6301b726a8b9972b24ecd4"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__subscription_entitlements.sql",
+          "sha": "ce613057e81041f25b36bccf54dfc9e4cf198560"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/schema.yml",
+          "sha": "4a60ef6781beac724f85c028ca1a0acf99cb0b9b"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/dim_hybrid_subscription__players.sql",
+          "sha": "bd8c582cde9edb982ca1591ec4433e4c21790654"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/dim_hybrid_subscription__products.sql",
+          "sha": "21d6402079100dee6c4d7b49ca84ad76cb22ec75"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__currency_grants.sql",
+          "sha": "846ca9f2e431f7ddb458f3695cd2bd61389070ea"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__marketing_exposures.sql",
+          "sha": "078b4d876f9b09076c5d93269e3710151c1f73ee"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__player_behavior_28d.sql",
+          "sha": "5188ae2ebd695ee6f95f79a2e5237197b3cc96b2"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__sessions.sql",
+          "sha": "4a6b5d752326b9bb2d946937cd5a0e1699ed8f86"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__store_transactions.sql",
+          "sha": "b1c965a1f517e044698ef4746319b721ce687049"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__subscriber_daily.sql",
+          "sha": "5b6e850117a8678c1a8ae55a15cf6ee67789d61e"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__subscription_entitlements.sql",
+          "sha": "42e171dcf5b9e20ce2df69776fb83835c29136db"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/incident_schema.yml",
+          "sha": "4650275782316e6c89a77cb072e8291ac96816d2"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/kpi_schema.yml",
+          "sha": "df0086b7251eb917ad21447afcd62f71b2f6e027"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__cannibalization_inputs.sql",
+          "sha": "b4e91120de1b8c164e4ac11781cc923473afe735"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__daily_kpis.sql",
+          "sha": "278b51b82c4d77ba6aaa062721f67e64abc5f04f"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__data_quality_incidents.sql",
+          "sha": "b0cd2122f1620d0d7bd54af72ae43ddf98285c94"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__engagement_lift_inputs.sql",
+          "sha": "1c675800d1899ed4e42415678a0e734f9a9694c5"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__matched_incrementality.sql",
+          "sha": "6552937ae96f12064600b37062c9ab859ce869a7"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__monthly_kpis.sql",
+          "sha": "31efb7b77352973d26fe5e21f86988c6608a0fcd"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__subscription_cohorts.sql",
+          "sha": "fd7467dc3a55077abdc0ae0a6303a5b50e9259e3"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/schema.yml",
+          "sha": "60c2c4f61561ff7941ed67e1ac73ac4bf68ec819"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/sources.yml",
+          "sha": "3b72d0d35517467dd9942f3ced137b7f14364920"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/schema.yml",
+          "sha": "379898f5a5fa7202664be8ae60cf698d603c9871"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__currency_ledger.sql",
+          "sha": "c78a522e5bbb049303544091ac261366b06e675a"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__live_event_participation.sql",
+          "sha": "1a6afb48543468862db6dca9e1343e5ed4432aa1"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__marketing_exposures.sql",
+          "sha": "b10b8e5d232c3adbebeb9a0ad694d23e09ed57b5"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__players.sql",
+          "sha": "28be4967b53818fb9bd31219b5108983fe1399f6"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__product_catalogue.sql",
+          "sha": "44723673814a03ef4e51f9aa89e8ce956e4f3dc9"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__sessions.sql",
+          "sha": "347aad7dfadb2206fb9286aa07af4694fbb3fbc3"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__store_transactions.sql",
+          "sha": "b5a95e3091e0a09d3ae4a6a58a6335a7ffa807e8"
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__subscription_events.sql",
+          "sha": "1f65c93ce445253fc4a6c050a9906250393bc6b2"
+        },
+        {
+          "path": "game_analytics/models/shared/dim_dates.sql",
+          "sha": "33b5fd636756f21e7422d2bb7e0cca29c6c70a45"
+        },
+        {
+          "path": "game_analytics/profiles.yml",
+          "sha": "f4daadf13e33c0f2f927c1c44f0a41b0938f4fa7"
+        },
+        {
+          "path": "notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py",
+          "sha": "2bd5673b5f2ff24f1fc5a3a581bccc31cc34e1c7"
+        },
+        {
+          "path": "pyproject.toml",
+          "sha": "939e292105fc845ad3757efa0eb98c7ed0419969"
+        },
+        {
+          "path": "src/analytics_lab/__init__.py",
+          "sha": "3dc1f76bc69e3f559bee6253b24fc93acee9e1f9"
+        },
+        {
+          "path": "src/analytics_lab/analysis/__init__.py",
+          "sha": "3d945a57007d7525fb08c90e46ce7dd6c92df72e"
+        },
+        {
+          "path": "src/analytics_lab/analysis/hybrid_subscription_diagnostic.py",
+          "sha": "fdea137d2caf54fe7b3edd96d43c7b2eca5b8545"
+        },
+        {
+          "path": "src/analytics_lab/analysis/live_strategy_retention.py",
+          "sha": "5e1feefe18d172226fdb2b2c6386826141f08065"
+        },
+        {
+          "path": "src/analytics_lab/evaluate.py",
+          "sha": "2ca7690648b93e8d612f5c2db4c073f46227ccd9"
+        },
+        {
+          "path": "src/analytics_lab/evaluation.py",
+          "sha": "4a323888175c2c70a54954cefdbabbd656da8eba"
+        },
+        {
+          "path": "src/analytics_lab/generate.py",
+          "sha": "46abe147c00da18a69b023374a6d708997c790cd"
+        },
+        {
+          "path": "src/analytics_lab/generation/base.py",
+          "sha": "d677a6054a04a1544569843cbb5eb5636ea65ac0"
+        },
+        {
+          "path": "src/analytics_lab/generation/hybrid_subscription.py",
+          "sha": "cfd049cbabaa002cd2af5433be0f81fa9e3128d7"
+        },
+        {
+          "path": "src/analytics_lab/generation/io.py",
+          "sha": "5eff007bb38e9a38d666b1c27120954fe78dc1d3"
+        },
+        {
+          "path": "src/analytics_lab/generation/live_strategy.py",
+          "sha": "6794a0d4a890584ef07472f49187416f9012d19e"
+        },
+        {
+          "path": "src/analytics_lab/generation/subscription.py",
+          "sha": "19f652d282b856477593f306642b939a64a32f4d"
+        },
+        {
+          "path": "tests/dbt/test_hybrid_subscription_dependency_graph.py",
+          "sha": "cd15ecbd827a8ebfd788c742c9e90df36c6ea4a1"
+        }
+      ],
+      "generation_command": "PYTHONPATH=src python -m analytics_lab.generate --scenario hybrid_subscription --seed 42 --start-date 2026-01-01 --days 180 --scale 1000 --output-dir data/raw",
+      "generation_command_source": "docs/superpowers/plans/2026-08-27-hybrid-subscription-scenario.md",
+      "generation_package_versions": {
+        "python": "3.12.14",
+        "pandas": "3.0.5",
+        "numpy": "2.5.3",
+        "duckdb": "1.5.5"
+      },
+      "generation_manifest": {
+        "days": 180,
+        "scale": 1000,
+        "scenario": "hybrid_subscription",
+        "seed": 42,
+        "start_date": "2026-01-01",
+        "tables": {
+          "currency_ledger": {
+            "rows": 3660,
+            "sha256": "7217c2b3e408c062627ec18fb652be652dd2b016ef91273b22a3264c4aca4777"
+          },
+          "live_event_participation": {
+            "rows": 2800,
+            "sha256": "6dd1e8dcf887ce1e507f247d3ada256b1e1651eb01ea7b61e59fd42be36d5a6d"
+          },
+          "marketing_exposures": {
+            "rows": 1000,
+            "sha256": "cd22c00ec05be92ba985b1e3c6f901cf1b146d45cb99a94315e096f7194d5863"
+          },
+          "players": {
+            "rows": 1000,
+            "sha256": "e744d02168f5eb37025565aa64eb0fc88c64b0d523663fefd689b3248fd4a029"
+          },
+          "product_catalogue": {
+            "rows": 4,
+            "sha256": "dd0d3a0fa5b87e6ee0cf71510468fd08bd7a459ebb8140e45dfef467b1d53de1"
+          },
+          "sessions": {
+            "rows": 16000,
+            "sha256": "f0613dc4544fffb6458f9d15f45e7953f0cb1672dafeca34f427ea84aa5428ee"
+          },
+          "store_transactions": {
+            "rows": 3715,
+            "sha256": "24397e98099d3de813d34fde6ee53899fde72858c55b3b49158c8ef3fa03a0d5"
+          },
+          "subscription_events": {
+            "rows": 848,
+            "sha256": "0461a1296d12ca1b54d2349edf8ff6c49ea2a8baf45fd47974fb3562d82ab5d1"
+          }
+        }
+      },
+      "sql_execution": "Dependency-ordered unchanged SQL with literal dbt ref/source substitution; materialized tables in main_hybrid_subscription and shared dim_dates in main_shared; no substitute metric calculations.",
+      "sql_model_manifest": [
+        {
+          "path": "game_analytics/models/shared/dim_dates.sql",
+          "sha256": "8a9842b0b95f38e9b6850df1e23c631a6e011b461bd407dddec3655bc3bf5f66",
+          "relation": "main_shared.dim_dates",
+          "rows": 1095
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__players.sql",
+          "sha256": "85383456b60b55587ff240ed2fb3165583d47d4872b25b3bd0eb1f90f20f2db8",
+          "relation": "main_hybrid_subscription.stg_hybrid_subscription__players",
+          "rows": 1000
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__subscription_events.sql",
+          "sha256": "b654844ca1235b7797e0a486fccbdad29cf10f586d2453b28425bb175b0cfc16",
+          "relation": "main_hybrid_subscription.stg_hybrid_subscription__subscription_events",
+          "rows": 848
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__marketing_exposures.sql",
+          "sha256": "9eb4a5f5a548cdf8836b8b232ceaf50de49f2b69d527098b24811a30012b88ee",
+          "relation": "main_hybrid_subscription.stg_hybrid_subscription__marketing_exposures",
+          "rows": 1000
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__marketing_exposure_eligibility.sql",
+          "sha256": "b702a5038512bf9b9a9426ba4451ca9e4573b3783366f0df469870ea9345ff8e",
+          "relation": "main_hybrid_subscription.int_hybrid_subscription__marketing_exposure_eligibility",
+          "rows": 1000
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__sessions.sql",
+          "sha256": "7b71ae30d70f6d13c7ae819873a5c6097e3f64f81277f9fb654a499ec7c80676",
+          "relation": "main_hybrid_subscription.stg_hybrid_subscription__sessions",
+          "rows": 16000
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__sessions.sql",
+          "sha256": "dddf2e0acc67c6e0e874a59b0f4c1819445cb8ce40eee21f3ed2a1e88535ca3f",
+          "relation": "main_hybrid_subscription.fct_hybrid_subscription__sessions",
+          "rows": 16000
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__store_transactions.sql",
+          "sha256": "309a63317ffc41a39a6de5810063b3dcf233be3fa763504d3148cc51619953c4",
+          "relation": "main_hybrid_subscription.stg_hybrid_subscription__store_transactions",
+          "rows": 3660
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__store_transactions.sql",
+          "sha256": "c3e49a551787167d1037d1f9b4109e49e287f7d3a58ddd0d7a680026d3a5a692",
+          "relation": "main_hybrid_subscription.fct_hybrid_subscription__store_transactions",
+          "rows": 3660
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__live_event_participation.sql",
+          "sha256": "8d13bed8db48dab9edba91ad67b11d6efbae8db33433b399a138d1ebad6073af",
+          "relation": "main_hybrid_subscription.stg_hybrid_subscription__live_event_participation",
+          "rows": 2800
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__analysis_population.sql",
+          "sha256": "b250b248eb35dc6fbb210e321998ee3cd989a1f4832120446be02cb3949645a5",
+          "relation": "main_hybrid_subscription.int_hybrid_subscription__analysis_population",
+          "rows": 1000
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/dim_hybrid_subscription__players.sql",
+          "sha256": "3b421ce050d9b24af8b396c8a0105ca77b605f321106657ebf2dd6b0028cca98",
+          "relation": "main_hybrid_subscription.dim_hybrid_subscription__players",
+          "rows": 1000
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__product_catalogue.sql",
+          "sha256": "39d286c8a533c830a5aa862a54b7be6794bd75baa50fd2fc2eb5f8475e609a0e",
+          "relation": "main_hybrid_subscription.stg_hybrid_subscription__product_catalogue",
+          "rows": 4
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/dim_hybrid_subscription__products.sql",
+          "sha256": "3728e3135c5d84e919928eae36b8d169e01f371f4ecff1275e471bf0330132c4",
+          "relation": "main_hybrid_subscription.dim_hybrid_subscription__products",
+          "rows": 4
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/staging/stg_hybrid_subscription__currency_ledger.sql",
+          "sha256": "e07b445831c18c050ed7afb535d98e1e37e9faacbf15988d8087563fa0e137fc",
+          "relation": "main_hybrid_subscription.stg_hybrid_subscription__currency_ledger",
+          "rows": 3660
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__grant_reconciliation.sql",
+          "sha256": "1236a6f0f21042420b50415ed28fae340ba1abe75cf2b45d976003179c750eaa",
+          "relation": "main_hybrid_subscription.int_hybrid_subscription__grant_reconciliation",
+          "rows": 400
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__currency_grants.sql",
+          "sha256": "63cc90b3f2513d11ff8ba583b198f141867a2282ea2d9a559d5c6af3c2c37a04",
+          "relation": "main_hybrid_subscription.fct_hybrid_subscription__currency_grants",
+          "rows": 3660
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__marketing_exposures.sql",
+          "sha256": "4b9481c72451c5df9aa54a1b5ad8e7ae01e915a8feb86256afe4c20144945d4c",
+          "relation": "main_hybrid_subscription.fct_hybrid_subscription__marketing_exposures",
+          "rows": 1000
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__player_28d_behavior.sql",
+          "sha256": "4d65e1efb6922e70162bacac17c543dbb78b663f3d4c73510203882a77f3539f",
+          "relation": "main_hybrid_subscription.int_hybrid_subscription__player_28d_behavior",
+          "rows": 874
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__player_behavior_28d.sql",
+          "sha256": "1d18ebc87a82592db0ab67e7a5c7642d3cf78c6e0813c82f82efea845d1a648e",
+          "relation": "main_hybrid_subscription.fct_hybrid_subscription__player_behavior_28d",
+          "rows": 874
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__subscription_entitlements.sql",
+          "sha256": "930ac8e52a613a529e86a2de1ad5b59f01d21cf34589004fad1f532af64bac30",
+          "relation": "main_hybrid_subscription.int_hybrid_subscription__subscription_entitlements",
+          "rows": 400
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__subscription_entitlements.sql",
+          "sha256": "321e153fed6f3a35d2281c3a7a29461251f7d1eecb67691f1a1e3dbf725ec27b",
+          "relation": "main_hybrid_subscription.fct_hybrid_subscription__subscription_entitlements",
+          "rows": 400
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/fct_hybrid_subscription__subscriber_daily.sql",
+          "sha256": "bf055b64849033d5241613db75959a7d1b898035bb327d05be51e00b5d70c163",
+          "relation": "main_hybrid_subscription.fct_hybrid_subscription__subscriber_daily",
+          "rows": 22560
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__matched_pairs.sql",
+          "sha256": "ee307bab1d1b2850b4ef415bf71c1df8edffd19b36ed77000f842ab5c99b72bc",
+          "relation": "main_hybrid_subscription.int_hybrid_subscription__matched_pairs",
+          "rows": 157
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__match_population_summary.sql",
+          "sha256": "dbb0eff635844ee667c0d905967c03d4501423ca75c9bf8fab9e67695f092a6d",
+          "relation": "main_hybrid_subscription.int_hybrid_subscription__match_population_summary",
+          "rows": 1
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__quality_audit.sql",
+          "sha256": "b0ec8f3b52437f09a8cc27dde9fa6cc29f47defb2671df83562e3083d2f5ea56",
+          "relation": "main_hybrid_subscription.int_hybrid_subscription__quality_audit",
+          "rows": 4
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__matched_incrementality.sql",
+          "sha256": "22f882432bc95f563ebeab26cfcc75bc7d1d533108e789d2dd2124f40dfd826e",
+          "relation": "main_hybrid_subscription.mart_hybrid_subscription__matched_incrementality",
+          "rows": 157
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__cannibalization_inputs.sql",
+          "sha256": "fc7462646c9d090c013a020e1b73c9bfa47e5c0eda7ad22b06883b2885bbb937",
+          "relation": "main_hybrid_subscription.mart_hybrid_subscription__cannibalization_inputs",
+          "rows": 1
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__daily_kpis.sql",
+          "sha256": "27bafbcc3654a6f487c99973d21a6aea549098f898a8d1c7cfab8333b6812a47",
+          "relation": "main_hybrid_subscription.mart_hybrid_subscription__daily_kpis",
+          "rows": 134
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__data_quality_incidents.sql",
+          "sha256": "980aabafe53572e25154b8ab884636877d5abeeeedfafb274b7fd085b32599e5",
+          "relation": "main_hybrid_subscription.mart_hybrid_subscription__data_quality_incidents",
+          "rows": 5
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__engagement_lift_inputs.sql",
+          "sha256": "ba64a62d24ee1e32ed1e71fbc58ff54b5de63072b471d404c108aac9730210d0",
+          "relation": "main_hybrid_subscription.mart_hybrid_subscription__engagement_lift_inputs",
+          "rows": 12
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__monthly_kpis.sql",
+          "sha256": "9298e8e62faa45cb2a5a0ae447cf36061ba5d641587c65c51bfd00c28ccff7b7",
+          "relation": "main_hybrid_subscription.mart_hybrid_subscription__monthly_kpis",
+          "rows": 4
+        },
+        {
+          "path": "game_analytics/models/hybrid_subscription/marts/mart_hybrid_subscription__subscription_cohorts.sql",
+          "sha256": "d3310be5cf3a97f0b22b4c63af0ea2d36c02651253ec9ff893f681c18553d784",
+          "relation": "main_hybrid_subscription.mart_hybrid_subscription__subscription_cohorts",
+          "rows": 29
+        }
+      ],
+      "notebook_execution": "Direct percent-format Python execution top-to-bottom at verified source SHA via ANALYTICS_SOURCE_COMMIT. Jupytext --execute failed: ModuleNotFoundError: No module named nbconvert. nbclient failed: Operation not permitted (src/ip_resolver.cpp:542); RuntimeError: Kernel died before replying to kernel_info. No permission bypass attempted. Generated ipynb is conversion-only and unexecuted; owner-run Jupytext execution in real checkout remains required."
+    },
+    "database_sha256": "91c2be105be308c351c816f3a964144866ed76b8b029f4959fba55386f2407c4"
+  },
+  "population": {
+    "eligible_subscriber_count": 280,
+    "eligible_control_count": 157,
+    "matched_pair_count": 157,
+    "unmatched_subscriber_count": 123,
+    "unmatched_control_count": 0,
+    "matched_prior_payer_pair_count": 53
+  },
+  "control_totals": {
+    "reconciliation_status": "passed before calculation",
+    "engagement": [
+      {
+        "engagement_segment_id": "prior_nonpayer__android__organic",
+        "prior_payer_status": "prior_nonpayer",
+        "platform": "android",
+        "acquisition_channel": "organic",
+        "matched_pair_count": 22,
+        "matched_subscriber_count": 22,
+        "matched_control_count": 22,
+        "subscriber_session_count_change_sum": 88.0,
+        "control_session_count_change_sum": 17.0,
+        "session_count_difference_in_differences_sum": 71.0,
+        "mean_subscriber_session_count_change": 4.0,
+        "mean_control_session_count_change": 0.772727272727273,
+        "mean_session_count_difference_in_differences": 3.227272727272727,
+        "subscriber_liveops_participation_count_change_sum": 42.0,
+        "control_liveops_participation_count_change_sum": 1.0,
+        "liveops_participation_count_difference_in_differences_sum": 41.0,
+        "mean_subscriber_liveops_participation_count_change": 1.909090909090909,
+        "mean_control_liveops_participation_count_change": 0.045454545454545,
+        "mean_liveops_participation_count_difference_in_differences": 1.863636363636364
+      },
+      {
+        "engagement_segment_id": "prior_nonpayer__android__paid_social",
+        "prior_payer_status": "prior_nonpayer",
+        "platform": "android",
+        "acquisition_channel": "paid_social",
+        "matched_pair_count": 18,
+        "matched_subscriber_count": 18,
+        "matched_control_count": 18,
+        "subscriber_session_count_change_sum": 76.0,
+        "control_session_count_change_sum": 6.0,
+        "session_count_difference_in_differences_sum": 70.0,
+        "mean_subscriber_session_count_change": 4.222222222222222,
+        "mean_control_session_count_change": 0.333333333333333,
+        "mean_session_count_difference_in_differences": 3.888888888888889,
+        "subscriber_liveops_participation_count_change_sum": 37.0,
+        "control_liveops_participation_count_change_sum": 2.0,
+        "liveops_participation_count_difference_in_differences_sum": 35.0,
+        "mean_subscriber_liveops_participation_count_change": 2.055555555555555,
+        "mean_control_liveops_participation_count_change": 0.111111111111111,
+        "mean_liveops_participation_count_difference_in_differences": 1.944444444444444
+      },
+      {
+        "engagement_segment_id": "prior_nonpayer__android__search",
+        "prior_payer_status": "prior_nonpayer",
+        "platform": "android",
+        "acquisition_channel": "search",
+        "matched_pair_count": 12,
+        "matched_subscriber_count": 12,
+        "matched_control_count": 12,
+        "subscriber_session_count_change_sum": 48.0,
+        "control_session_count_change_sum": 8.0,
+        "session_count_difference_in_differences_sum": 40.0,
+        "mean_subscriber_session_count_change": 4.0,
+        "mean_control_session_count_change": 0.666666666666667,
+        "mean_session_count_difference_in_differences": 3.333333333333334,
+        "subscriber_liveops_participation_count_change_sum": 22.0,
+        "control_liveops_participation_count_change_sum": 5.0,
+        "liveops_participation_count_difference_in_differences_sum": 17.0,
+        "mean_subscriber_liveops_participation_count_change": 1.833333333333333,
+        "mean_control_liveops_participation_count_change": 0.416666666666667,
+        "mean_liveops_participation_count_difference_in_differences": 1.416666666666667
+      },
+      {
+        "engagement_segment_id": "prior_nonpayer__ios__organic",
+        "prior_payer_status": "prior_nonpayer",
+        "platform": "ios",
+        "acquisition_channel": "organic",
+        "matched_pair_count": 18,
+        "matched_subscriber_count": 18,
+        "matched_control_count": 18,
+        "subscriber_session_count_change_sum": 80.0,
+        "control_session_count_change_sum": -1.0,
+        "session_count_difference_in_differences_sum": 81.0,
+        "mean_subscriber_session_count_change": 4.444444444444445,
+        "mean_control_session_count_change": -0.055555555555556,
+        "mean_session_count_difference_in_differences": 4.5,
+        "subscriber_liveops_participation_count_change_sum": 32.0,
+        "control_liveops_participation_count_change_sum": 1.0,
+        "liveops_participation_count_difference_in_differences_sum": 31.0,
+        "mean_subscriber_liveops_participation_count_change": 1.777777777777778,
+        "mean_control_liveops_participation_count_change": 0.055555555555556,
+        "mean_liveops_participation_count_difference_in_differences": 1.722222222222222
+      },
+      {
+        "engagement_segment_id": "prior_nonpayer__ios__paid_social",
+        "prior_payer_status": "prior_nonpayer",
+        "platform": "ios",
+        "acquisition_channel": "paid_social",
+        "matched_pair_count": 17,
+        "matched_subscriber_count": 17,
+        "matched_control_count": 17,
+        "subscriber_session_count_change_sum": 70.0,
+        "control_session_count_change_sum": 19.0,
+        "session_count_difference_in_differences_sum": 51.0,
+        "mean_subscriber_session_count_change": 4.117647058823529,
+        "mean_control_session_count_change": 1.117647058823529,
+        "mean_session_count_difference_in_differences": 3.0,
+        "subscriber_liveops_participation_count_change_sum": 36.0,
+        "control_liveops_participation_count_change_sum": 2.0,
+        "liveops_participation_count_difference_in_differences_sum": 34.0,
+        "mean_subscriber_liveops_participation_count_change": 2.117647058823529,
+        "mean_control_liveops_participation_count_change": 0.117647058823529,
+        "mean_liveops_participation_count_difference_in_differences": 2.0
+      },
+      {
+        "engagement_segment_id": "prior_nonpayer__ios__search",
+        "prior_payer_status": "prior_nonpayer",
+        "platform": "ios",
+        "acquisition_channel": "search",
+        "matched_pair_count": 17,
+        "matched_subscriber_count": 17,
+        "matched_control_count": 17,
+        "subscriber_session_count_change_sum": 58.0,
+        "control_session_count_change_sum": 20.0,
+        "session_count_difference_in_differences_sum": 38.0,
+        "mean_subscriber_session_count_change": 3.411764705882353,
+        "mean_control_session_count_change": 1.176470588235294,
+        "mean_session_count_difference_in_differences": 2.235294117647059,
+        "subscriber_liveops_participation_count_change_sum": 29.0,
+        "control_liveops_participation_count_change_sum": 0.0,
+        "liveops_participation_count_difference_in_differences_sum": 29.0,
+        "mean_subscriber_liveops_participation_count_change": 1.705882352941176,
+        "mean_control_liveops_participation_count_change": 0.0,
+        "mean_liveops_participation_count_difference_in_differences": 1.705882352941176
+      },
+      {
+        "engagement_segment_id": "prior_payer__android__organic",
+        "prior_payer_status": "prior_payer",
+        "platform": "android",
+        "acquisition_channel": "organic",
+        "matched_pair_count": 10,
+        "matched_subscriber_count": 10,
+        "matched_control_count": 10,
+        "subscriber_session_count_change_sum": 34.0,
+        "control_session_count_change_sum": 11.0,
+        "session_count_difference_in_differences_sum": 23.0,
+        "mean_subscriber_session_count_change": 3.4,
+        "mean_control_session_count_change": 1.1,
+        "mean_session_count_difference_in_differences": 2.3,
+        "subscriber_liveops_participation_count_change_sum": 25.0,
+        "control_liveops_participation_count_change_sum": 3.0,
+        "liveops_participation_count_difference_in_differences_sum": 22.0,
+        "mean_subscriber_liveops_participation_count_change": 2.5,
+        "mean_control_liveops_participation_count_change": 0.3,
+        "mean_liveops_participation_count_difference_in_differences": 2.2
+      },
+      {
+        "engagement_segment_id": "prior_payer__android__paid_social",
+        "prior_payer_status": "prior_payer",
+        "platform": "android",
+        "acquisition_channel": "paid_social",
+        "matched_pair_count": 5,
+        "matched_subscriber_count": 5,
+        "matched_control_count": 5,
+        "subscriber_session_count_change_sum": 31.0,
+        "control_session_count_change_sum": 0.0,
+        "session_count_difference_in_differences_sum": 31.0,
+        "mean_subscriber_session_count_change": 6.2,
+        "mean_control_session_count_change": 0.0,
+        "mean_session_count_difference_in_differences": 6.2,
+        "subscriber_liveops_participation_count_change_sum": 10.0,
+        "control_liveops_participation_count_change_sum": 2.0,
+        "liveops_participation_count_difference_in_differences_sum": 8.0,
+        "mean_subscriber_liveops_participation_count_change": 2.0,
+        "mean_control_liveops_participation_count_change": 0.4,
+        "mean_liveops_participation_count_difference_in_differences": 1.6
+      },
+      {
+        "engagement_segment_id": "prior_payer__android__search",
+        "prior_payer_status": "prior_payer",
+        "platform": "android",
+        "acquisition_channel": "search",
+        "matched_pair_count": 14,
+        "matched_subscriber_count": 14,
+        "matched_control_count": 14,
+        "subscriber_session_count_change_sum": 46.0,
+        "control_session_count_change_sum": 13.0,
+        "session_count_difference_in_differences_sum": 33.0,
+        "mean_subscriber_session_count_change": 3.285714285714286,
+        "mean_control_session_count_change": 0.928571428571429,
+        "mean_session_count_difference_in_differences": 2.357142857142857,
+        "subscriber_liveops_participation_count_change_sum": 27.0,
+        "control_liveops_participation_count_change_sum": -3.0,
+        "liveops_participation_count_difference_in_differences_sum": 30.0,
+        "mean_subscriber_liveops_participation_count_change": 1.928571428571429,
+        "mean_control_liveops_participation_count_change": -0.214285714285714,
+        "mean_liveops_participation_count_difference_in_differences": 2.142857142857143
+      },
+      {
+        "engagement_segment_id": "prior_payer__ios__organic",
+        "prior_payer_status": "prior_payer",
+        "platform": "ios",
+        "acquisition_channel": "organic",
+        "matched_pair_count": 5,
+        "matched_subscriber_count": 5,
+        "matched_control_count": 5,
+        "subscriber_session_count_change_sum": 22.0,
+        "control_session_count_change_sum": 7.0,
+        "session_count_difference_in_differences_sum": 15.0,
+        "mean_subscriber_session_count_change": 4.4,
+        "mean_control_session_count_change": 1.4,
+        "mean_session_count_difference_in_differences": 3.0,
+        "subscriber_liveops_participation_count_change_sum": 12.0,
+        "control_liveops_participation_count_change_sum": 0.0,
+        "liveops_participation_count_difference_in_differences_sum": 12.0,
+        "mean_subscriber_liveops_participation_count_change": 2.4,
+        "mean_control_liveops_participation_count_change": 0.0,
+        "mean_liveops_participation_count_difference_in_differences": 2.4
+      },
+      {
+        "engagement_segment_id": "prior_payer__ios__paid_social",
+        "prior_payer_status": "prior_payer",
+        "platform": "ios",
+        "acquisition_channel": "paid_social",
+        "matched_pair_count": 8,
+        "matched_subscriber_count": 8,
+        "matched_control_count": 8,
+        "subscriber_session_count_change_sum": 43.0,
+        "control_session_count_change_sum": 2.0,
+        "session_count_difference_in_differences_sum": 41.0,
+        "mean_subscriber_session_count_change": 5.375,
+        "mean_control_session_count_change": 0.25,
+        "mean_session_count_difference_in_differences": 5.125,
+        "subscriber_liveops_participation_count_change_sum": 14.0,
+        "control_liveops_participation_count_change_sum": 0.0,
+        "liveops_participation_count_difference_in_differences_sum": 14.0,
+        "mean_subscriber_liveops_participation_count_change": 1.75,
+        "mean_control_liveops_participation_count_change": 0.0,
+        "mean_liveops_participation_count_difference_in_differences": 1.75
+      },
+      {
+        "engagement_segment_id": "prior_payer__ios__search",
+        "prior_payer_status": "prior_payer",
+        "platform": "ios",
+        "acquisition_channel": "search",
+        "matched_pair_count": 11,
+        "matched_subscriber_count": 11,
+        "matched_control_count": 11,
+        "subscriber_session_count_change_sum": 30.0,
+        "control_session_count_change_sum": 0.0,
+        "session_count_difference_in_differences_sum": 30.0,
+        "mean_subscriber_session_count_change": 2.727272727272727,
+        "mean_control_session_count_change": 0.0,
+        "mean_session_count_difference_in_differences": 2.727272727272727,
+        "subscriber_liveops_participation_count_change_sum": 21.0,
+        "control_liveops_participation_count_change_sum": -1.0,
+        "liveops_participation_count_difference_in_differences_sum": 22.0,
+        "mean_subscriber_liveops_participation_count_change": 1.909090909090909,
+        "mean_control_liveops_participation_count_change": -0.090909090909091,
+        "mean_liveops_participation_count_difference_in_differences": 2.0
+      }
+    ],
+    "cannibalization": [
+      {
+        "cannibalization_segment_id": "prior_payer",
+        "prior_payer_status": "prior_payer",
+        "matched_pair_count": 53,
+        "matched_subscriber_count": 53,
+        "matched_control_count": 53,
+        "subscriber_standalone_store_net_revenue_usd_change_sum": -716.47,
+        "control_standalone_store_net_revenue_usd_change_sum": 217.79,
+        "standalone_store_net_revenue_usd_difference_in_differences_sum": -934.26,
+        "mean_subscriber_standalone_store_net_revenue_usd_change": -13.518301886792452,
+        "mean_control_standalone_store_net_revenue_usd_change": 4.109245283018867,
+        "mean_standalone_store_net_revenue_usd_difference_in_differences": -17.627547169811322,
+        "subscriber_subscription_net_revenue_usd_change_sum": 529.47,
+        "control_subscription_net_revenue_usd_change_sum": 0.0,
+        "subscription_net_revenue_usd_difference_in_differences_sum": 529.47,
+        "mean_subscriber_subscription_net_revenue_usd_change": 9.99,
+        "mean_control_subscription_net_revenue_usd_change": 0.0,
+        "mean_subscription_net_revenue_usd_difference_in_differences": 9.99,
+        "subscriber_total_net_revenue_usd_change_sum": -187.0,
+        "control_total_net_revenue_usd_change_sum": 217.79,
+        "total_net_revenue_usd_difference_in_differences_sum": -404.79,
+        "mean_subscriber_total_net_revenue_usd_change": -3.528301886792453,
+        "mean_control_total_net_revenue_usd_change": 4.109245283018867,
+        "mean_total_net_revenue_usd_difference_in_differences": -7.637547169811321
+      }
+    ]
+  },
+  "results": {
+    "engagement": {
+      "matched_pair_count": 157,
+      "subscriber_session_count_change": 3.9872611464968153,
+      "control_session_count_change": 0.6496815286624203,
+      "engagement_difference_in_differences": 3.337579617834395,
+      "subscriber_liveops_participation_count_change": 1.9554140127388535,
+      "control_liveops_participation_count_change": 0.07643312101910828,
+      "liveops_difference_in_differences": 1.8789808917197452
+    },
+    "revenue": {
+      "eligible_prior_payer_count": 53,
+      "subscriber_store_change": -13.518301886792457,
+      "non_subscriber_store_change": 4.1092452830188675,
+      "standalone_store_difference_in_differences": -17.627547169811322,
+      "subscriber_subscription_change": 9.99,
+      "non_subscriber_subscription_change": 0.0,
+      "subscription_difference_in_differences": 9.99,
+      "subscriber_total_revenue_change": -3.528301886792452,
+      "non_subscriber_total_revenue_change": 4.1092452830188675,
+      "total_revenue_difference_in_differences": -7.637547169811319
+    },
+    "bootstrap_intervals": {
+      "engagement_change_ci_95": [
+        2.9426751592356686,
+        3.700796178343948
+      ],
+      "standalone_store_difference_in_differences_ci_95": [
+        -22.009778301886797,
+        -13.06145754716981
+      ],
+      "total_revenue_difference_in_differences_ci_95": [
+        -12.01977830188679,
+        -3.0714575471698127
+      ]
+    }
+  },
+  "context": {
+    "monthly_kpis": [
+      {
+        "monthly_kpi_id": "2026-02-01",
+        "metric_month": "2026-02-01T00:00:00.000",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "is_month_complete": true,
+        "mau": 14,
+        "month_start_active_subscriber_count": 0,
+        "month_end_active_subscriber_count": 0,
+        "expired_or_revoked_entitlement_count": 0,
+        "standalone_store_net_revenue_usd": 25.95,
+        "subscription_net_revenue_usd": 0.0,
+        "discounted_standalone_transaction_count": 0,
+        "eligible_standalone_transaction_count": 5,
+        "liveops_participant_count": 2,
+        "subscriber_churn_rate": null,
+        "total_net_revenue_usd": 25.95,
+        "arpmau": 1.853571428571428,
+        "discount_utilization_rate": 0.0,
+        "liveops_participation_rate": 0.142857142857143
+      },
+      {
+        "monthly_kpi_id": "2026-03-01",
+        "metric_month": "2026-03-01T00:00:00.000",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "is_month_complete": true,
+        "mau": 1000,
+        "month_start_active_subscriber_count": 0,
+        "month_end_active_subscriber_count": 185,
+        "expired_or_revoked_entitlement_count": 0,
+        "standalone_store_net_revenue_usd": 10391.7,
+        "subscription_net_revenue_usd": 1848.15,
+        "discounted_standalone_transaction_count": 17,
+        "eligible_standalone_transaction_count": 1770,
+        "liveops_participant_count": 965,
+        "subscriber_churn_rate": null,
+        "total_net_revenue_usd": 12239.85,
+        "arpmau": 12.23985,
+        "discount_utilization_rate": 0.009604519774011,
+        "liveops_participation_rate": 0.965
+      },
+      {
+        "monthly_kpi_id": "2026-04-01",
+        "metric_month": "2026-04-01T00:00:00.000",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "is_month_complete": true,
+        "mau": 1000,
+        "month_start_active_subscriber_count": 185,
+        "month_end_active_subscriber_count": 376,
+        "expired_or_revoked_entitlement_count": 24,
+        "standalone_store_net_revenue_usd": 8595.01,
+        "subscription_net_revenue_usd": 2147.85,
+        "discounted_standalone_transaction_count": 377,
+        "eligible_standalone_transaction_count": 1479,
+        "liveops_participant_count": 1000,
+        "subscriber_churn_rate": 0.12972972972973,
+        "total_net_revenue_usd": 10742.86,
+        "arpmau": 10.74286,
+        "discount_utilization_rate": 0.254901960784314,
+        "liveops_participation_rate": 1.0
+      },
+      {
+        "monthly_kpi_id": "2026-05-01",
+        "metric_month": "2026-05-01T00:00:00.000",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "is_month_complete": false,
+        "mau": 76,
+        "month_start_active_subscriber_count": 376,
+        "month_end_active_subscriber_count": null,
+        "expired_or_revoked_entitlement_count": 15,
+        "standalone_store_net_revenue_usd": 32.34,
+        "subscription_net_revenue_usd": 0.0,
+        "discounted_standalone_transaction_count": 6,
+        "eligible_standalone_transaction_count": 6,
+        "liveops_participant_count": 17,
+        "subscriber_churn_rate": 0.039893617021277,
+        "total_net_revenue_usd": 32.34,
+        "arpmau": 0.425526315789474,
+        "discount_utilization_rate": 1.0,
+        "liveops_participation_rate": 0.223684210526316
+      }
+    ],
+    "cohorts": [
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-18",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-18T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-18T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 39,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.0,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-19",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-19T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-19T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 43,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.0,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-20",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-20T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-20T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 43,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.0,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-21",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-21T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-21T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 39,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.0,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-22",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-22T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-22T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 49,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.0,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-23",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-23T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-23T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 55,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.0,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-24",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-24T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-24T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 45,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.0,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-25",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-25T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-25T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 76,
+        "converted_within_28d_player_count": 32,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.421052631578947,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-26",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-26T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-26T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 69,
+        "converted_within_28d_player_count": 24,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.347826086956522,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-27",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-27T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-27T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 85,
+        "converted_within_28d_player_count": 44,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.517647058823529,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-28",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-28T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-28T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 70,
+        "converted_within_28d_player_count": 39,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.557142857142857,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-29",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-29T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-29T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 77,
+        "converted_within_28d_player_count": 39,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.506493506493506,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-30",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-30T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-30T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 81,
+        "converted_within_28d_player_count": 32,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.395061728395062,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-03-31",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-03-31T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-31T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 70,
+        "converted_within_28d_player_count": 31,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 0.442857142857143,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-04-01",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-04-01T00:00:00.000",
+        "cohort_latest_at_utc": "2026-04-01T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 31,
+        "converted_within_28d_player_count": 31,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 1.0,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-04-02",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-04-02T00:00:00.000",
+        "cohort_latest_at_utc": "2026-04-02T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 44,
+        "converted_within_28d_player_count": 44,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 1.0,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-04-03",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-04-03T00:00:00.000",
+        "cohort_latest_at_utc": "2026-04-03T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 35,
+        "converted_within_28d_player_count": 35,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 1.0,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "eligible_exposure__2026-04-04",
+        "cohort_type": "eligible_exposure",
+        "cohort_date": "2026-04-04T00:00:00.000",
+        "cohort_latest_at_utc": "2026-04-04T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 29,
+        "converted_within_28d_player_count": 29,
+        "subscription_starter_count": 0,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": true,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": 1.0,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "subscription_start__2026-03-27",
+        "cohort_type": "subscription_start",
+        "cohort_date": "2026-03-27T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-27T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 0,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 33,
+        "mature_subscription_starter_count": 33,
+        "retained_at_d30_player_count": 28,
+        "is_conversion_mature": false,
+        "is_d30_mature": true,
+        "subscription_conversion_rate": null,
+        "d30_subscriber_retention_rate": 0.848484848484848
+      },
+      {
+        "subscription_cohort_id": "subscription_start__2026-03-28",
+        "cohort_type": "subscription_start",
+        "cohort_date": "2026-03-28T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-28T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 0,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 25,
+        "mature_subscription_starter_count": 25,
+        "retained_at_d30_player_count": 21,
+        "is_conversion_mature": false,
+        "is_d30_mature": true,
+        "subscription_conversion_rate": null,
+        "d30_subscriber_retention_rate": 0.84
+      },
+      {
+        "subscription_cohort_id": "subscription_start__2026-03-29",
+        "cohort_type": "subscription_start",
+        "cohort_date": "2026-03-29T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-29T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 0,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 47,
+        "mature_subscription_starter_count": 47,
+        "retained_at_d30_player_count": 45,
+        "is_conversion_mature": false,
+        "is_d30_mature": true,
+        "subscription_conversion_rate": null,
+        "d30_subscriber_retention_rate": 0.957446808510638
+      },
+      {
+        "subscription_cohort_id": "subscription_start__2026-03-30",
+        "cohort_type": "subscription_start",
+        "cohort_date": "2026-03-30T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-30T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 0,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 41,
+        "mature_subscription_starter_count": 41,
+        "retained_at_d30_player_count": 32,
+        "is_conversion_mature": false,
+        "is_d30_mature": true,
+        "subscription_conversion_rate": null,
+        "d30_subscriber_retention_rate": 0.780487804878049
+      },
+      {
+        "subscription_cohort_id": "subscription_start__2026-03-31",
+        "cohort_type": "subscription_start",
+        "cohort_date": "2026-03-31T00:00:00.000",
+        "cohort_latest_at_utc": "2026-03-31T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 0,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 39,
+        "mature_subscription_starter_count": 39,
+        "retained_at_d30_player_count": 35,
+        "is_conversion_mature": false,
+        "is_d30_mature": true,
+        "subscription_conversion_rate": null,
+        "d30_subscriber_retention_rate": 0.897435897435898
+      },
+      {
+        "subscription_cohort_id": "subscription_start__2026-04-01",
+        "cohort_type": "subscription_start",
+        "cohort_date": "2026-04-01T00:00:00.000",
+        "cohort_latest_at_utc": "2026-04-01T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 0,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 34,
+        "mature_subscription_starter_count": 34,
+        "retained_at_d30_player_count": 28,
+        "is_conversion_mature": false,
+        "is_d30_mature": true,
+        "subscription_conversion_rate": null,
+        "d30_subscriber_retention_rate": 0.823529411764706
+      },
+      {
+        "subscription_cohort_id": "subscription_start__2026-04-02",
+        "cohort_type": "subscription_start",
+        "cohort_date": "2026-04-02T00:00:00.000",
+        "cohort_latest_at_utc": "2026-04-02T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 0,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 31,
+        "mature_subscription_starter_count": 31,
+        "retained_at_d30_player_count": 25,
+        "is_conversion_mature": false,
+        "is_d30_mature": true,
+        "subscription_conversion_rate": null,
+        "d30_subscriber_retention_rate": 0.806451612903226
+      },
+      {
+        "subscription_cohort_id": "subscription_start__2026-04-03",
+        "cohort_type": "subscription_start",
+        "cohort_date": "2026-04-03T00:00:00.000",
+        "cohort_latest_at_utc": "2026-04-03T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 0,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 32,
+        "mature_subscription_starter_count": 32,
+        "retained_at_d30_player_count": 29,
+        "is_conversion_mature": false,
+        "is_d30_mature": true,
+        "subscription_conversion_rate": null,
+        "d30_subscriber_retention_rate": 0.90625
+      },
+      {
+        "subscription_cohort_id": "subscription_start__2026-04-04",
+        "cohort_type": "subscription_start",
+        "cohort_date": "2026-04-04T00:00:00.000",
+        "cohort_latest_at_utc": "2026-04-04T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 0,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 49,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": false,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": null,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "subscription_start__2026-04-05",
+        "cohort_type": "subscription_start",
+        "cohort_date": "2026-04-05T00:00:00.000",
+        "cohort_latest_at_utc": "2026-04-05T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 0,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 36,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": false,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": null,
+        "d30_subscriber_retention_rate": null
+      },
+      {
+        "subscription_cohort_id": "subscription_start__2026-04-06",
+        "cohort_type": "subscription_start",
+        "cohort_date": "2026-04-06T00:00:00.000",
+        "cohort_latest_at_utc": "2026-04-06T00:00:00.000Z",
+        "as_of_at_utc": "2026-05-03T23:56:22.000Z",
+        "eligible_exposed_player_count": 0,
+        "converted_within_28d_player_count": 0,
+        "subscription_starter_count": 33,
+        "mature_subscription_starter_count": 0,
+        "retained_at_d30_player_count": 0,
+        "is_conversion_mature": false,
+        "is_d30_mature": false,
+        "subscription_conversion_rate": null,
+        "d30_subscriber_retention_rate": null
+      }
+    ]
+  },
+  "data_quality_incidents": [
+    {
+      "incident_id": "cancellation_pending_expiry",
+      "incident_code": "cancellation_pending_expiry",
+      "incident_category": "entitlement_semantics",
+      "severity": "medium",
+      "affected_rows": 48,
+      "affected_metric": "active_subscription_entitlement",
+      "containment_rule": "Preserve access through contractual period end; cancellation disables renewal only.",
+      "decision_status": "contained"
+    },
+    {
+      "incident_id": "duplicate_store_webhook",
+      "incident_code": "duplicate_store_webhook",
+      "incident_category": "transaction_delivery",
+      "severity": "medium",
+      "affected_rows": 55,
+      "affected_metric": "recognized_net_revenue_usd",
+      "containment_rule": "Use the latest ingested webhook per transaction and retain duplicate evidence.",
+      "decision_status": "contained"
+    },
+    {
+      "incident_id": "missing_subscription_grant_link",
+      "incident_code": "missing_subscription_grant_link",
+      "incident_category": "grant_reconciliation",
+      "severity": "high",
+      "affected_rows": 32,
+      "affected_metric": "reconciled_subscription_currency_amount",
+      "containment_rule": "Set reconciled subscription currency to zero until a transaction link is present.",
+      "decision_status": "contained"
+    },
+    {
+      "incident_id": "mixed_timestamp_mismatch",
+      "incident_code": "mixed_timestamp_mismatch",
+      "incident_category": "timestamp_normalization",
+      "severity": "high",
+      "affected_rows": 0,
+      "affected_metric": "daily_and_windowed_metrics",
+      "containment_rule": "Derive UTC from local timestamp plus named time zone and retain the source mismatch flag.",
+      "decision_status": "clear"
+    },
+    {
+      "incident_id": "post_subscription_exposure",
+      "incident_code": "post_subscription_exposure",
+      "incident_category": "experiment_eligibility",
+      "severity": "high",
+      "affected_rows": 20,
+      "affected_metric": "incrementality_eligibility",
+      "containment_rule": "Null approved exposure fields and exclude the row from incrementality analysis.",
+      "decision_status": "contained"
+    }
+  ],
+  "observed_facts": [
+    "280 eligible subscribers and 157 eligible controls yielded 157 pairs; 123 subscribers and 0 controls remained unmatched.",
+    "The mean 28-day matched observational difference in sessions was +3.338 per pair.",
+    "Among 53 matched prior-payer pairs, the mean 28-day matched observational difference in standalone-store net revenue was $-17.628, subscription net revenue $+9.990, and total net revenue $-7.638 per pair."
+  ],
+  "inferences": [
+    "Store displacement and total net revenue answer different questions; neither component accounting nor matching identifies the effect of subscription.",
+    "The observed pattern may motivate a randomized pre-exposure intent-to-treat test; it does not predict rollout outcomes for unmatched players."
+  ],
+  "limitations": [
+    "All inputs are deterministic synthetic lab data, not evidence about a real product.",
+    "Subscriber status is self-selected and defined by a post-index subscription start.",
+    "Matching does not establish exchangeability, parallel trends, or causality.",
+    "Matching is greedy and order-dependent; residual baseline imbalance and unmeasured confounding can remain within exact strata.",
+    "Global timestamp bounds define maturity, not proof of individual telemetry completeness; eligible-exposure filtering can introduce selection.",
+    "The 28-day window does not establish profitability or lifetime value; costs, long-term renewal outcomes, and lifetime cash flows are not estimated.",
+    "Pair-bootstrap intervals condition on selected pairs; they quantify resampling variation, not confounding bias, rematching uncertainty, or causal effects.",
+    "Calendar-month KPIs and conversion/D30 cohorts use separate denominators and maturity rules and cannot substitute for matched 28-day differences."
+  ]
+}
