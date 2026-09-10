@@ -45,5 +45,8 @@ select
         when 'cancellation_pending_expiry'
             then 'Preserve access through contractual period end; cancellation disables renewal only.'
     end as containment_rule,
-    'contained' as decision_status
+    case
+        when affected_rows > 0 then 'contained'
+        else 'clear'
+    end as decision_status
 from detected
