@@ -1,4 +1,4 @@
-select
+select
     transaction.transaction_id,
     transaction.player_id,
     transaction.sku,
