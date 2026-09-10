@@ -14,6 +14,11 @@ with refunds as (
 select
     p.purchase_id,
     p.player_id,
+    p.purchased_at_utc,
+    p.platform_transaction_id,
+    p.product_id,
+    p.gross_amount,
+    p.currency_code,
     case
         when p.purchase_status = 'cancelled' then 'cancelled'
         when coalesce(r.refund_usd, 0) = p.gross_usd then 'refunded'
