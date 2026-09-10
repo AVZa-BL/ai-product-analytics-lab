@@ -1,0 +1,80 @@
+version: 2
+
+models:
+  - name: int_hybrid_subscription__subscription_entitlements
+    description: One reconstructed entitlement interval per synthetic subscriber.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: subscription_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_hybrid_subscription__players')
+                field: player_id
+      - name: entitlement_start_at_utc
+        data_tests: [not_null]
+      - name: entitlement_end_at_utc
+        data_tests: [not_null]
+
+  - name: int_hybrid_subscription__grant_reconciliation
+    description: Subscription transaction to currency-grant reconciliation with missing links classified.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: transaction_id
+        data_tests: [not_null, unique]
+      - name: grant_link_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [linked, missing_link, no_grant]
+
+  - name: int_hybrid_subscription__marketing_exposure_eligibility
+    description: Exposure timing eligibility for matching and incrementality analysis.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: exposure_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests: [not_null]
+
+  - name: int_hybrid_subscription__analysis_population
+    description: Subscriber and non-subscriber population with explicit 28-day index timestamps.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: player_id
+        data_tests: [not_null, unique]
+      - name: index_at_utc
+        data_tests: [not_null]
+
+  - name: int_hybrid_subscription__player_28d_behavior
+    description: One player-period row with pre/post engagement, LiveOps, and net-revenue measures.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: player_id
+        data_tests: [not_null]
+      - name: analysis_period
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [pre, post]
+
+  - name: int_hybrid_subscription__quality_audit
+    description: Counts of designed defects preserved through the governed intermediate layer.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: incident_code
+        data_tests: [not_null, unique]
+      - name: affected_rows
+        data_tests: [not_null]
