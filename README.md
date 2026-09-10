@@ -18,7 +18,7 @@ The Live Strategy case study publishes a governed [metric catalogue](docs/metric
 
 ## Hybrid subscription case study
 
-The Hybrid Subscription case study publishes a governed [metric catalogue](docs/metrics/hybrid_subscription.md), [incident register](docs/incidents/hybrid_subscription.md), executable [engagement and cannibalization diagnostic](notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py), and [decision memo](reports/hybrid_subscription/engagement_cannibalization_decision_memo.md). It is backed by deterministic source generation, tested dbt staging/intermediate/mart layers, entitlement reconstruction, revenue reconciliation, and explicit causal boundaries for engagement-lift and store-cannibalization analysis.
+The Hybrid Subscription case study publishes a governed [metric catalogue](docs/metrics/hybrid_subscription.md), [incident register](docs/incidents/hybrid_subscription.md), executable [engagement and cannibalization diagnostic](notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py), [decision memo](reports/hybrid_subscription/engagement_cannibalization_decision_memo.md), and [trusted evaluation cases](docs/ai-audit/hybrid_subscription_questions.yaml) with a deterministic [score report](reports/hybrid_subscription/agent_evaluation.json). It is backed by deterministic source generation, tested dbt staging/intermediate/mart layers, entitlement reconstruction, revenue reconciliation, explicit causal boundaries, approved-relation enforcement, and refusal of unsupported or adversarial requests.
 
 ## Requirements
 
