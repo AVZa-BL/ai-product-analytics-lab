@@ -1,4 +1,4 @@
-select
+select
     player.player_id,
     player.country_code,
     player.platform,
