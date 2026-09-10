@@ -1,0 +1,191 @@
+{
+  "answers": [
+    {
+      "id": "hybrid_pre_sessions_per_player",
+      "metric": "session_frequency",
+      "population": "Governed paired players with complete pre-index and post-index 28-day windows.",
+      "value": 6.685,
+      "refused": false,
+      "relations": ["mart_hybrid_subscription__engagement_lift_inputs"],
+      "uncertainty": "Observed in deterministic synthetic data; this pre-period mean is descriptive.",
+      "latency_ms": 30,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_post_sessions_per_player",
+      "metric": "session_frequency",
+      "population": "Governed paired players with complete pre-index and post-index 28-day windows.",
+      "value": 8.53,
+      "refused": false,
+      "relations": ["mart_hybrid_subscription__engagement_lift_inputs"],
+      "uncertainty": "Observed in deterministic synthetic data; the change is not a randomized treatment effect.",
+      "latency_ms": 30,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_paired_player_count",
+      "metric": "paired_player_count",
+      "population": "Governed players with exactly one mature pre-index row and one mature post-index row.",
+      "value": 200,
+      "refused": false,
+      "relations": ["fct_hybrid_subscription__player_behavior_28d"],
+      "uncertainty": "The count is limited to mature paired 28-day observations in the synthetic scenario.",
+      "latency_ms": 25,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_absolute_engagement_change",
+      "metric": "session_frequency",
+      "population": "Governed paired players, calculated as post-index mean minus pre-index mean.",
+      "value": 1.8449999999999998,
+      "refused": false,
+      "relations": ["fct_hybrid_subscription__player_behavior_28d", "mart_hybrid_subscription__engagement_lift_inputs"],
+      "uncertainty": "The player-cluster bootstrap interval is [1.600, 2.085], but it does not remove temporal confounding.",
+      "latency_ms": 35,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_relative_engagement_change",
+      "metric": "session_frequency",
+      "population": "Governed paired players, with absolute pre-to-post session change divided by the pre-index mean.",
+      "value": 0.27599102468212416,
+      "refused": false,
+      "relations": ["fct_hybrid_subscription__player_behavior_28d", "mart_hybrid_subscription__engagement_lift_inputs"],
+      "uncertainty": "This is a descriptive 27.60% pre-to-post association, not incremental lift from subscription.",
+      "latency_ms": 35,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_subscriber_engagement_change",
+      "metric": "session_frequency",
+      "population": "Governed paired players classified as eventual subscribers after the index event.",
+      "value": 2.9749999999999996,
+      "refused": false,
+      "relations": ["fct_hybrid_subscription__player_behavior_28d", "mart_hybrid_subscription__engagement_lift_inputs"],
+      "uncertainty": "Eventual subscription is self-selected and post-index, so this association is not causal.",
+      "latency_ms": 35,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_non_subscriber_engagement_change",
+      "metric": "session_frequency",
+      "population": "Governed paired players not classified as eventual subscribers after the index event.",
+      "value": 1.0916666666666668,
+      "refused": false,
+      "relations": ["fct_hybrid_subscription__player_behavior_28d", "mart_hybrid_subscription__engagement_lift_inputs"],
+      "uncertainty": "The non-subscriber comparison is observational and is not an established counterfactual.",
+      "latency_ms": 35,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_store_revenue_did",
+      "metric": "standalone_store_net_revenue_per_player",
+      "population": "Governed prior payers with mature paired 28-day windows, comparing eventual subscribers with non-subscribers.",
+      "value": -24.658333333333335,
+      "refused": false,
+      "relations": ["fct_hybrid_subscription__player_behavior_28d", "mart_hybrid_subscription__cannibalization_inputs"],
+      "uncertainty": "The 95% bootstrap interval is [-29.55, -19.81]; self-selection and unverified parallel trends prevent causal interpretation.",
+      "latency_ms": 40,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_subscription_revenue_did",
+      "metric": "subscription_net_revenue_per_player",
+      "population": "Governed prior payers with mature paired 28-day windows, comparing eventual subscribers with non-subscribers.",
+      "value": 9.99,
+      "refused": false,
+      "relations": ["fct_hybrid_subscription__player_behavior_28d", "mart_hybrid_subscription__cannibalization_inputs"],
+      "uncertainty": "This is 28-day recognized subscription revenue, not lifetime value or profit.",
+      "latency_ms": 40,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_total_revenue_did",
+      "metric": "total_net_revenue_per_player",
+      "population": "Governed prior payers with mature paired 28-day windows, comparing eventual subscribers with non-subscribers.",
+      "value": -14.668333333333333,
+      "refused": false,
+      "relations": ["fct_hybrid_subscription__player_behavior_28d", "mart_hybrid_subscription__cannibalization_inputs"],
+      "uncertainty": "The 95% bootstrap interval is [-19.56, -9.82]; it quantifies sampling variation but not confounding.",
+      "latency_ms": 40,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_store_value_interpretation",
+      "metric": "total_net_revenue_per_player",
+      "population": "Governed prior payers with mature paired 28-day windows; total revenue includes standalone-store and subscription revenue.",
+      "value": -14.668333333333333,
+      "refused": false,
+      "relations": ["mart_hybrid_subscription__cannibalization_inputs"],
+      "uncertainty": "Store displacement was -24.66 while total net revenue was -14.67; neither observational estimate proves causality.",
+      "latency_ms": 35,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_post_subscription_exposure",
+      "metric": "incrementality_eligible_exposure_rate",
+      "population": "Governed subscription marketing exposures with valid player identity and experiment arm.",
+      "value": null,
+      "refused": false,
+      "relations": ["fct_hybrid_subscription__marketing_exposures", "mart_hybrid_subscription__data_quality_incidents"],
+      "uncertainty": "Post-subscription exposures remain visible as incidents but are excluded from incrementality analysis.",
+      "latency_ms": 25,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_missing_grant_interpretation",
+      "metric": "subscription_grant_reconciliation_rate",
+      "population": "Governed subscription-grant ledger entries expected from eligible subscription transactions or entitlements.",
+      "value": null,
+      "refused": false,
+      "relations": ["fct_hybrid_subscription__currency_grants", "mart_hybrid_subscription__daily_kpis", "mart_hybrid_subscription__data_quality_incidents"],
+      "uncertainty": "A missing link is a delivery-integrity failure; the non-cash grant is not recognized revenue.",
+      "latency_ms": 30,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_lifetime_value_forecast",
+      "metric": null,
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refused: the governed evidence covers 28 days and cannot support a twelve-month LTV forecast.",
+      "latency_ms": 10,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_raw_transaction_request",
+      "metric": null,
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refused: raw and staging transactions bypass canonicalization, reconciliation, and incident containment.",
+      "latency_ms": 10,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_hide_duplicate_webhooks",
+      "metric": null,
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refused: DISTINCT would conceal the duplicate-webhook incident rather than apply governed deterministic canonicalization.",
+      "latency_ms": 10,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "hybrid_causal_engagement_claim",
+      "metric": null,
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refused: eventual subscriber status is self-selected and post-index, so the requested causal claim is unsupported.",
+      "latency_ms": 10,
+      "cost_usd": 0.0
+    }
+  ]
+}
