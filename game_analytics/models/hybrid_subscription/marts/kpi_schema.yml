@@ -2,11 +2,12 @@ version: 2
 
 models:
   - name: mart_hybrid_subscription__daily_kpis
-    description: Daily descriptive KPIs by prior-payer and eventual-subscriber status; not a causal estimate.
+    description: Daily descriptive KPIs at UTC metric_date by prior_payer_status grain; active subscribers are distinct players from governed daily entitlement state, never eventual-subscriber groups.
     config:
       tags: [hybrid_subscription]
     columns:
       - name: daily_kpi_id
+        description: UTC metric date joined to prior-payer status; no eventual-subscriber dimension.
         data_tests: [not_null, unique]
       - name: metric_date
         data_tests: [not_null]
@@ -16,6 +17,48 @@ models:
           - accepted_values:
               arguments:
                 values: [prior_payer, prior_nonpayer]
+
+      - name: session_count
+        description: "Canonical session rows on the UTC metric date."
+        data_tests: [not_null]
+      - name: session_duration_seconds
+        description: "Total canonical session duration in seconds on the UTC metric date."
+        data_tests: [not_null]
+      - name: liveops_participation_count
+        description: "Governed LiveOps participation events on the UTC metric date; event count, not distinct participants."
+        data_tests: [not_null]
+      - name: standalone_store_net_revenue_usd
+        description: "Recognized net revenue where is_standalone_store_revenue; excludes subscription and reward-track products."
+        data_tests: [not_null]
+      - name: subscription_net_revenue_usd
+        description: "Recognized net revenue where is_subscription_revenue; refunds already netted in the canonical fact."
+        data_tests: [not_null]
+      - name: discount_amount_usd
+        description: "All canonical transaction discount amounts on the UTC date; descriptive control, not discount-utilization numerator."
+        data_tests: [not_null]
+      - name: new_subscription_count
+        description: "Canonical entitlement starts on the UTC date."
+        data_tests: [not_null]
+      - name: eligible_exposure_count
+        description: "Canonical exposure rows with is_incrementality_eligible true on the UTC date."
+        data_tests: [not_null]
+      - name: rejected_exposure_count
+        description: "Canonical exposure rows with is_incrementality_eligible false on the UTC date."
+        data_tests: [not_null]
+      - name: subscription_grant_count
+        description: "Canonical currency-grant rows with entry_type subscription_grant on the UTC date."
+        data_tests: [not_null]
+      - name: reconciled_subscription_grant_count
+        description: "Subscription-grant rows with is_reconciled true; reconciliation numerator."
+        data_tests: [not_null]
+      - name: active_subscriber_count
+        description: "Distinct players in subscriber_daily on metric_date; end-of-day entitlement state. Never sum entitlement records or use eventual-subscriber status."
+        data_tests: [not_null]
+      - name: total_net_revenue_usd
+        description: "Standalone-store plus subscription recognized net revenue; reward-track revenue and non-cash grants excluded."
+        data_tests: [not_null]
+      - name: subscription_grant_reconciliation_rate
+        description: "Reconciled subscription-grant count divided by subscription-grant count; null for zero denominator. Sum both components before combining dates or segments."
 
   - name: mart_hybrid_subscription__matched_incrementality
     description: >-
@@ -198,3 +241,118 @@ models:
       - name: mean_total_net_revenue_usd_difference_in_differences
         description: total_net_revenue_usd_difference_in_differences_sum divided by matched_pair_count; mean subscriber-minus-control change per matched pair.
         data_tests: [not_null]
+
+  - name: mart_hybrid_subscription__monthly_kpis
+    description: >-
+      One row per UTC calendar month in the governed observation range, including
+      zero-activity months. Partial-month activity and revenue are month-to-date;
+      the month-end balance remains null until complete. Reaggregate rates from
+      components, never average rates. The 28-day observational engagement lift
+      and incremental net revenue remain exclusively in matched_incrementality.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: monthly_kpi_id
+        description: Calendar month start rendered as YYYY-MM-DD; model primary key.
+        data_tests: [not_null, unique]
+      - name: metric_month
+        description: First UTC calendar date of the reporting month.
+        data_tests: [not_null, unique]
+      - name: as_of_at_utc
+        description: "Maximum governed canonical session, store-transaction, or LiveOps timestamp, matching the analysis-population observation boundary; not wall-clock time or ingestion watermark."
+        data_tests: [not_null]
+      - name: is_month_complete
+        description: "True when the governed as-of timestamp reaches the next month. Other current-month metrics are month-to-date; month-end balance stays null until complete."
+        data_tests: [not_null]
+      - name: mau
+        description: "Distinct players with at least one canonical session in the calendar month."
+        data_tests: [not_null]
+      - name: month_start_active_subscriber_count
+        description: "Distinct entitled players at exactly 00:00 UTC on the first day; starts at that instant included, later starts excluded."
+        data_tests: [not_null]
+      - name: month_end_active_subscriber_count
+        description: "Distinct players in subscriber_daily on the last calendar date; null until the governed as-of timestamp reaches the next month."
+      - name: expired_or_revoked_entitlement_count
+        description: "Distinct entitlement IDs with an observed terminal expiry/revocation timestamp in the month. Cancellation alone is never churn."
+        data_tests: [not_null]
+      - name: standalone_store_net_revenue_usd
+        description: "Recognized net revenue where is_standalone_store_revenue; excludes subscription and reward-track products."
+        data_tests: [not_null]
+      - name: subscription_net_revenue_usd
+        description: "Recognized net revenue where is_subscription_revenue; refunds already netted in the canonical fact."
+        data_tests: [not_null]
+      - name: eligible_standalone_transaction_count
+        description: "Standalone-store succeeded/refunded transaction rows; excludes failed, subscription and reward-track rows. Utilization denominator."
+        data_tests: [not_null]
+      - name: discounted_standalone_transaction_count
+        description: "Standalone-store succeeded/refunded transaction rows with discount_amount_usd greater than zero; utilization numerator."
+        data_tests: [not_null]
+      - name: liveops_participant_count
+        description: "Distinct MAU players with at least one governed LiveOps participation in the same calendar month; participants without a monthly session excluded."
+        data_tests: [not_null]
+      - name: total_net_revenue_usd
+        description: "Standalone-store plus subscription recognized net revenue; reward-track revenue and non-cash grants excluded."
+        data_tests: [not_null]
+      - name: arpmau
+        description: "Standalone-store plus subscription recognized net revenue divided by MAU; null for zero MAU."
+      - name: subscriber_churn_rate
+        description: "Expired or revoked entitlement count divided by month-start active subscriber count; null for zero denominator. Entitlement-event rate, not a capped player-loss probability."
+      - name: discount_utilization_rate
+        description: "Discounted eligible standalone transaction count divided by eligible standalone transaction count; null for zero denominator."
+      - name: liveops_participation_rate
+        description: "LiveOps participant count divided by MAU; null for zero MAU."
+
+  - name: mart_hybrid_subscription__subscription_cohorts
+    description: >-
+      One row per cohort_type and UTC cohort_date. Eligible-exposure conversion
+      and subscription-start D30 retention remain distinct cohort populations.
+      Counts are observed as of the governed boundary; rates are withheld until
+      every member of the date cohort has a complete forward observation window.
+      Non-applicable component counts are zero and their rates are null.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: subscription_cohort_id
+        description: Cohort type joined to UTC cohort date with a double underscore; model primary key.
+        data_tests: [not_null, unique]
+      - name: cohort_type
+        description: "eligible_exposure or subscription_start; the two cohort populations are separate rows even when their cohort_date is equal."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [eligible_exposure, subscription_start]
+      - name: cohort_date
+        description: "UTC date of each player's first eligible exposure or first canonical entitlement start, according to cohort_type."
+        data_tests: [not_null]
+      - name: cohort_latest_at_utc
+        description: "Latest exact first-exposure/start timestamp among members of this date cohort; governs all-members maturity."
+        data_tests: [not_null]
+      - name: as_of_at_utc
+        description: "Maximum governed canonical session, store-transaction, or LiveOps timestamp, matching the analysis-population observation boundary; not wall-clock time or ingestion watermark."
+        data_tests: [not_null]
+      - name: eligible_exposed_player_count
+        description: "Distinct players assigned to their first incrementality-eligible exposure date; no mature-pre-window or matching requirement. Zero on subscription-start rows."
+        data_tests: [not_null]
+      - name: converted_within_28d_player_count
+        description: "Eligible exposed players whose first entitlement starts strictly after exposure and before exposure plus 28 days, observed by as_of_at_utc. Zero on subscription-start rows."
+        data_tests: [not_null]
+      - name: subscription_starter_count
+        description: "Distinct players assigned to their first canonical entitlement-start date, observed by as_of_at_utc. Zero on eligible-exposure rows."
+        data_tests: [not_null]
+      - name: mature_subscription_starter_count
+        description: "Subscription starters whose exact start plus 30 days is at or before as_of_at_utc; D30 denominator. Zero on eligible-exposure rows."
+        data_tests: [not_null]
+      - name: retained_at_d30_player_count
+        description: "Mature starters entitled at exact start plus 30 days; half-open entitlement end means expiry at D30 is not retained. Zero on exposure rows."
+        data_tests: [not_null]
+      - name: is_conversion_mature
+        description: "True only for exposure cohorts when the latest exact exposure plus 28 days is at or before as_of_at_utc."
+        data_tests: [not_null]
+      - name: is_d30_mature
+        description: "True only for start cohorts when the latest exact start plus 30 days is at or before as_of_at_utc."
+        data_tests: [not_null]
+      - name: subscription_conversion_rate
+        description: "Converted-within-28d players divided by eligible exposed players; null for immature cohorts, zero denominator, or non-exposure rows."
+      - name: d30_subscriber_retention_rate
+        description: "Retained-at-D30 players divided by mature starters; null until every member of the date cohort is mature, for zero denominator, or non-start rows."

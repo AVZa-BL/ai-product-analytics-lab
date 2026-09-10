@@ -2,7 +2,7 @@ with metric_rows as (
     select
         cast(session.started_at_utc as date) as metric_date,
         player.prior_payer_status,
-        player.is_subscriber,
+        null::varchar as active_subscriber_player_id,
         1 as session_count,
         session.duration_seconds as session_duration_seconds,
         0 as liveops_participation_count,
@@ -14,7 +14,7 @@ with metric_rows as (
         0 as rejected_exposure_count,
         0 as subscription_grant_count,
         0 as reconciled_subscription_grant_count
-    from {{ ref('stg_hybrid_subscription__sessions') }} session
+    from {{ ref('fct_hybrid_subscription__sessions') }} session
     join {{ ref('dim_hybrid_subscription__players') }} player using (player_id)
 
     union all
@@ -22,7 +22,7 @@ with metric_rows as (
     select
         cast(participation.participated_at_utc as date),
         player.prior_payer_status,
-        player.is_subscriber,
+        null::varchar as active_subscriber_player_id,
         0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0
     from {{ ref('stg_hybrid_subscription__live_event_participation') }} participation
     join {{ ref('dim_hybrid_subscription__players') }} player using (player_id)
@@ -32,15 +32,15 @@ with metric_rows as (
     select
         cast(transaction.transaction_at_utc as date),
         transaction.prior_payer_status,
-        player.is_subscriber,
+        null::varchar as active_subscriber_player_id,
         0, 0, 0,
         case
-            when transaction.product_type != 'subscription'
+            when transaction.is_standalone_store_revenue
                 then transaction.recognized_net_revenue_usd
             else 0
         end,
         case
-            when transaction.product_type = 'subscription'
+            when transaction.is_subscription_revenue
                 then transaction.recognized_net_revenue_usd
             else 0
         end,
@@ -54,7 +54,7 @@ with metric_rows as (
     select
         cast(entitlement.entitlement_start_at_utc as date),
         player.prior_payer_status,
-        player.is_subscriber,
+        null::varchar as active_subscriber_player_id,
         0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0
     from {{ ref('fct_hybrid_subscription__subscription_entitlements') }} entitlement
     join {{ ref('dim_hybrid_subscription__players') }} player using (player_id)
@@ -64,7 +64,7 @@ with metric_rows as (
     select
         cast(exposure.exposed_at_utc as date),
         player.prior_payer_status,
-        player.is_subscriber,
+        null::varchar as active_subscriber_player_id,
         0, 0, 0, 0, 0, 0, 0,
         case when exposure.is_incrementality_eligible then 1 else 0 end,
         case when exposure.is_incrementality_eligible then 0 else 1 end,
@@ -77,19 +77,38 @@ with metric_rows as (
     select
         cast(grant.occurred_at_utc as date),
         player.prior_payer_status,
-        player.is_subscriber,
+        null::varchar as active_subscriber_player_id,
         0, 0, 0, 0, 0, 0, 0, 0, 0,
         1,
         case when grant.is_reconciled then 1 else 0 end
     from {{ ref('fct_hybrid_subscription__currency_grants') }} grant
     join {{ ref('dim_hybrid_subscription__players') }} player using (player_id)
     where grant.entry_type = 'subscription_grant'
+
+    union all
+
+    select
+        subscriber.metric_date,
+        player.prior_payer_status,
+        subscriber.player_id,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    from {{ ref('fct_hybrid_subscription__subscriber_daily') }} subscriber
+    join {{ ref('dim_hybrid_subscription__players') }} player using (player_id)
+),
+observation as (
+    -- Same governed maximum timestamp used by the analysis population.
+    select max(observed_at_utc) as as_of_at_utc
+    from (
+        select started_at_utc as observed_at_utc from {{ ref('fct_hybrid_subscription__sessions') }}
+        union all select transaction_at_utc from {{ ref('fct_hybrid_subscription__store_transactions') }}
+        union all select participated_at_utc from {{ ref('stg_hybrid_subscription__live_event_participation') }}
+    ) timestamps
 ),
 aggregated as (
     select
         metric_date,
         prior_payer_status,
-        is_subscriber,
+        count(distinct active_subscriber_player_id) as active_subscriber_count,
         sum(session_count) as session_count,
         sum(session_duration_seconds) as session_duration_seconds,
         sum(liveops_participation_count) as liveops_participation_count,
@@ -104,11 +123,12 @@ aggregated as (
         sum(subscription_grant_count) as subscription_grant_count,
         sum(reconciled_subscription_grant_count) as reconciled_subscription_grant_count
     from metric_rows
-    group by metric_date, prior_payer_status, is_subscriber
+    cross join observation
+    where metric_date <= cast(as_of_at_utc as date)
+    group by metric_date, prior_payer_status
 )
 select
-    cast(metric_date as varchar) || '__' || prior_payer_status || '__'
-        || cast(is_subscriber as varchar) as daily_kpi_id,
+    cast(metric_date as varchar) || '__' || prior_payer_status as daily_kpi_id,
     *,
     reconciled_subscription_grant_count::double
         / nullif(subscription_grant_count, 0) as subscription_grant_reconciliation_rate
