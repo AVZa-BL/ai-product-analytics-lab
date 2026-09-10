@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: mart_hybrid_subscription__daily_kpis
+    description: Daily descriptive KPIs by prior-payer and eventual-subscriber status; not a causal estimate.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: daily_kpi_id
+        data_tests: [not_null, unique]
+      - name: metric_date
+        data_tests: [not_null]
+      - name: prior_payer_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [prior_payer, prior_nonpayer]
+
+  - name: mart_hybrid_subscription__engagement_lift_inputs
+    description: Segmented pre/post engagement inputs for descriptive lift diagnostics; not a causal estimate.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: engagement_segment_id
+        data_tests: [not_null, unique]
+      - name: analysis_period
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [pre, post]
+      - name: eligible_player_count
+        data_tests: [not_null]
+
+  - name: mart_hybrid_subscription__cannibalization_inputs
+    description: Prior-payer pre/post store, subscription, and total-value inputs for descriptive cannibalization analysis.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: cannibalization_segment_id
+        data_tests: [not_null, unique]
+      - name: analysis_period
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [pre, post]
+      - name: prior_payer_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [prior_payer]
