@@ -1,4 +1,4 @@
-select *
+select *
 from {{ ref('fct_hybrid_subscription__marketing_exposures') }}
 where (
         is_incrementality_eligible
