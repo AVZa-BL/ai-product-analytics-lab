@@ -41,12 +41,16 @@ classified_population as (
         observation_bounds.are_source_watermarks_valid,
         observation_bounds.ingestion_mature_through_at_utc,
         case
-            when nullif(trim(player.player_id), '') is null
+            when player.player_id is null
+                or regexp_matches(player.player_id, '^[[:space:]]*$')
                 then 'invalid_player_identity'
-            when nullif(trim(player.prior_payer_status), '') is null
+            when player.prior_payer_status is null
+                or regexp_matches(player.prior_payer_status, '^[[:space:]]*$')
                 or player.prior_payer_status not in ('prior_payer', 'prior_nonpayer')
-                or nullif(trim(player.platform), '') is null
-                or nullif(trim(player.acquisition_channel), '') is null
+                or player.platform is null
+                or regexp_matches(player.platform, '^[[:space:]]*$')
+                or player.acquisition_channel is null
+                or regexp_matches(player.acquisition_channel, '^[[:space:]]*$')
                 then 'invalid_matching_covariates'
             when eligible_exposure.eligible_exposure_at_utc is null
                 then 'no_eligible_exposure'

@@ -113,7 +113,7 @@ def test_each_source_must_cover_windows_and_pass_its_ingestion_allowance(
 @pytest.mark.parametrize(
     "column", ["player_id", "prior_payer_status", "platform", "acquisition_channel"]
 )
-@pytest.mark.parametrize("value", [None, "", "   "])
+@pytest.mark.parametrize("value", [None, "", "   ", "\t", "\n", "\t \n"])
 def test_invalid_identity_or_matching_covariates_are_excluded(population_db, column, value):
     db = population_db
     db.execute(
