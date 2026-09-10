@@ -1,4 +1,4 @@
-select
+select
     sku,
     product_type,
     list_price_usd,
