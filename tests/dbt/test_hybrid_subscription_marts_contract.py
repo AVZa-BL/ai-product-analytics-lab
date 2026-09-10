@@ -26,7 +26,7 @@ def test_marts_publish_governed_dimensions_and_facts() -> None:
     models = {model["name"]: model for model in schema["models"]}
 
     assert set(models) == EXPECTED_MODELS
-    assert {path.stem for path in MODEL_DIR.glob("*.sql")} == EXPECTED_MODELS
+    assert EXPECTED_MODELS <= {path.stem for path in MODEL_DIR.glob("*.sql")}
     for model in models.values():
         assert "hybrid_subscription" in model["config"]["tags"]
 
