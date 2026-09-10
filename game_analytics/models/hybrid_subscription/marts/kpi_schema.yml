@@ -74,6 +74,7 @@ models:
       tags: [hybrid_subscription]
     columns:
       - name: engagement_segment_id
+        description: One row per exact-match prior-payer status, platform, and acquisition-channel stratum.
         data_tests: [not_null, unique]
       - name: matched_pair_count
         description: Number of actual pairs in this exact-match stratum; denominator for all means.
@@ -83,16 +84,40 @@ models:
       - name: matched_control_count
         data_tests: [not_null]
       - name: subscriber_session_count_change_sum
+        description: Sum of subscriber 28-day post-minus-pre session_count changes across matched pairs in this row; numerator for mean_subscriber_session_count_change.
         data_tests: [not_null]
       - name: control_session_count_change_sum
+        description: Sum of control 28-day post-minus-pre session_count changes across matched pairs in this row; numerator for mean_control_session_count_change.
         data_tests: [not_null]
       - name: session_count_difference_in_differences_sum
+        description: Sum of subscriber post-minus-pre changes minus control post-minus-pre changes in session_count; numerator for mean_session_count_difference_in_differences.
         data_tests: [not_null]
       - name: subscriber_liveops_participation_count_change_sum
+        description: Sum of subscriber 28-day post-minus-pre liveops_participation_count changes across matched pairs in this row; numerator for mean_subscriber_liveops_participation_count_change.
         data_tests: [not_null]
       - name: control_liveops_participation_count_change_sum
+        description: Sum of control 28-day post-minus-pre liveops_participation_count changes across matched pairs in this row; numerator for mean_control_liveops_participation_count_change.
         data_tests: [not_null]
       - name: liveops_participation_count_difference_in_differences_sum
+        description: Sum of subscriber post-minus-pre changes minus control post-minus-pre changes in liveops_participation_count; numerator for mean_liveops_participation_count_difference_in_differences.
+        data_tests: [not_null]
+      - name: mean_subscriber_session_count_change
+        description: subscriber_session_count_change_sum divided by matched_pair_count; mean 28-day post-minus-pre change per matched pair.
+        data_tests: [not_null]
+      - name: mean_control_session_count_change
+        description: control_session_count_change_sum divided by matched_pair_count; mean 28-day post-minus-pre change per matched pair.
+        data_tests: [not_null]
+      - name: mean_session_count_difference_in_differences
+        description: session_count_difference_in_differences_sum divided by matched_pair_count; mean subscriber-minus-control change per matched pair.
+        data_tests: [not_null]
+      - name: mean_subscriber_liveops_participation_count_change
+        description: subscriber_liveops_participation_count_change_sum divided by matched_pair_count; mean 28-day post-minus-pre change per matched pair.
+        data_tests: [not_null]
+      - name: mean_control_liveops_participation_count_change
+        description: control_liveops_participation_count_change_sum divided by matched_pair_count; mean 28-day post-minus-pre change per matched pair.
+        data_tests: [not_null]
+      - name: mean_liveops_participation_count_difference_in_differences
+        description: liveops_participation_count_difference_in_differences_sum divided by matched_pair_count; mean subscriber-minus-control change per matched pair.
         data_tests: [not_null]
 
   - name: mart_hybrid_subscription__cannibalization_inputs
@@ -104,6 +129,7 @@ models:
       tags: [hybrid_subscription]
     columns:
       - name: cannibalization_segment_id
+        description: One row for the prior_payer stratum, only when pairs with both arms prior payers exist.
         data_tests: [not_null, unique]
       - name: prior_payer_status
         data_tests:
@@ -119,20 +145,56 @@ models:
       - name: matched_control_count
         data_tests: [not_null]
       - name: subscriber_standalone_store_net_revenue_usd_change_sum
+        description: Sum of subscriber 28-day post-minus-pre standalone_store_net_revenue_usd changes across matched pairs in this row; numerator for mean_subscriber_standalone_store_net_revenue_usd_change.
         data_tests: [not_null]
       - name: control_standalone_store_net_revenue_usd_change_sum
+        description: Sum of control 28-day post-minus-pre standalone_store_net_revenue_usd changes across matched pairs in this row; numerator for mean_control_standalone_store_net_revenue_usd_change.
         data_tests: [not_null]
       - name: standalone_store_net_revenue_usd_difference_in_differences_sum
+        description: Sum of subscriber post-minus-pre changes minus control post-minus-pre changes in standalone_store_net_revenue_usd; numerator for mean_standalone_store_net_revenue_usd_difference_in_differences.
         data_tests: [not_null]
       - name: subscriber_subscription_net_revenue_usd_change_sum
+        description: Sum of subscriber 28-day post-minus-pre subscription_net_revenue_usd changes across matched pairs in this row; numerator for mean_subscriber_subscription_net_revenue_usd_change.
         data_tests: [not_null]
       - name: control_subscription_net_revenue_usd_change_sum
+        description: Sum of control 28-day post-minus-pre subscription_net_revenue_usd changes across matched pairs in this row; numerator for mean_control_subscription_net_revenue_usd_change.
         data_tests: [not_null]
       - name: subscription_net_revenue_usd_difference_in_differences_sum
+        description: Sum of subscriber post-minus-pre changes minus control post-minus-pre changes in subscription_net_revenue_usd; numerator for mean_subscription_net_revenue_usd_difference_in_differences.
         data_tests: [not_null]
       - name: subscriber_total_net_revenue_usd_change_sum
+        description: Sum of subscriber 28-day post-minus-pre total_net_revenue_usd changes across matched pairs in this row; numerator for mean_subscriber_total_net_revenue_usd_change.
         data_tests: [not_null]
       - name: control_total_net_revenue_usd_change_sum
+        description: Sum of control 28-day post-minus-pre total_net_revenue_usd changes across matched pairs in this row; numerator for mean_control_total_net_revenue_usd_change.
         data_tests: [not_null]
       - name: total_net_revenue_usd_difference_in_differences_sum
+        description: Sum of subscriber post-minus-pre changes minus control post-minus-pre changes in total_net_revenue_usd; numerator for mean_total_net_revenue_usd_difference_in_differences.
+        data_tests: [not_null]
+      - name: mean_subscriber_standalone_store_net_revenue_usd_change
+        description: subscriber_standalone_store_net_revenue_usd_change_sum divided by matched_pair_count; mean 28-day post-minus-pre change per matched pair.
+        data_tests: [not_null]
+      - name: mean_control_standalone_store_net_revenue_usd_change
+        description: control_standalone_store_net_revenue_usd_change_sum divided by matched_pair_count; mean 28-day post-minus-pre change per matched pair.
+        data_tests: [not_null]
+      - name: mean_standalone_store_net_revenue_usd_difference_in_differences
+        description: standalone_store_net_revenue_usd_difference_in_differences_sum divided by matched_pair_count; mean subscriber-minus-control change per matched pair.
+        data_tests: [not_null]
+      - name: mean_subscriber_subscription_net_revenue_usd_change
+        description: subscriber_subscription_net_revenue_usd_change_sum divided by matched_pair_count; mean 28-day post-minus-pre change per matched pair.
+        data_tests: [not_null]
+      - name: mean_control_subscription_net_revenue_usd_change
+        description: control_subscription_net_revenue_usd_change_sum divided by matched_pair_count; mean 28-day post-minus-pre change per matched pair.
+        data_tests: [not_null]
+      - name: mean_subscription_net_revenue_usd_difference_in_differences
+        description: subscription_net_revenue_usd_difference_in_differences_sum divided by matched_pair_count; mean subscriber-minus-control change per matched pair.
+        data_tests: [not_null]
+      - name: mean_subscriber_total_net_revenue_usd_change
+        description: subscriber_total_net_revenue_usd_change_sum divided by matched_pair_count; mean 28-day post-minus-pre change per matched pair.
+        data_tests: [not_null]
+      - name: mean_control_total_net_revenue_usd_change
+        description: control_total_net_revenue_usd_change_sum divided by matched_pair_count; mean 28-day post-minus-pre change per matched pair.
+        data_tests: [not_null]
+      - name: mean_total_net_revenue_usd_difference_in_differences
+        description: total_net_revenue_usd_difference_in_differences_sum divided by matched_pair_count; mean subscriber-minus-control change per matched pair.
         data_tests: [not_null]

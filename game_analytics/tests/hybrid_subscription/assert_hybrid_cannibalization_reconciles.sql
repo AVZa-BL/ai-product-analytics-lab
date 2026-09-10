@@ -1,4 +1,114 @@
-with prior_payer_pairs as (
+with expected_pairs as (
+    -- Independent oracle: never derive expectations from published mart deltas.
+    select
+        pair.pair_id,
+        pair.subscriber_player_id,
+        pair.control_player_id,
+        pair.subscriber_prior_payer_status,
+        pair.control_prior_payer_status,
+        pair.subscriber_platform,
+        pair.subscriber_acquisition_channel,
+        subscriber_pre.standalone_store_net_revenue_usd as subscriber_pre_standalone_store_net_revenue_usd,
+        subscriber_post.standalone_store_net_revenue_usd as subscriber_post_standalone_store_net_revenue_usd,
+        subscriber_post.standalone_store_net_revenue_usd - subscriber_pre.standalone_store_net_revenue_usd
+            as subscriber_standalone_store_net_revenue_usd_change,
+        control_pre.standalone_store_net_revenue_usd as control_pre_standalone_store_net_revenue_usd,
+        control_post.standalone_store_net_revenue_usd as control_post_standalone_store_net_revenue_usd,
+        control_post.standalone_store_net_revenue_usd - control_pre.standalone_store_net_revenue_usd
+            as control_standalone_store_net_revenue_usd_change,
+        (subscriber_post.standalone_store_net_revenue_usd - subscriber_pre.standalone_store_net_revenue_usd)
+            - (control_post.standalone_store_net_revenue_usd - control_pre.standalone_store_net_revenue_usd)
+            as standalone_store_net_revenue_usd_difference_in_differences,
+        subscriber_pre.subscription_net_revenue_usd as subscriber_pre_subscription_net_revenue_usd,
+        subscriber_post.subscription_net_revenue_usd as subscriber_post_subscription_net_revenue_usd,
+        subscriber_post.subscription_net_revenue_usd - subscriber_pre.subscription_net_revenue_usd
+            as subscriber_subscription_net_revenue_usd_change,
+        control_pre.subscription_net_revenue_usd as control_pre_subscription_net_revenue_usd,
+        control_post.subscription_net_revenue_usd as control_post_subscription_net_revenue_usd,
+        control_post.subscription_net_revenue_usd - control_pre.subscription_net_revenue_usd
+            as control_subscription_net_revenue_usd_change,
+        (subscriber_post.subscription_net_revenue_usd - subscriber_pre.subscription_net_revenue_usd)
+            - (control_post.subscription_net_revenue_usd - control_pre.subscription_net_revenue_usd)
+            as subscription_net_revenue_usd_difference_in_differences,
+        subscriber_pre.total_net_revenue_usd as subscriber_pre_total_net_revenue_usd,
+        subscriber_post.total_net_revenue_usd as subscriber_post_total_net_revenue_usd,
+        subscriber_post.total_net_revenue_usd - subscriber_pre.total_net_revenue_usd
+            as subscriber_total_net_revenue_usd_change,
+        control_pre.total_net_revenue_usd as control_pre_total_net_revenue_usd,
+        control_post.total_net_revenue_usd as control_post_total_net_revenue_usd,
+        control_post.total_net_revenue_usd - control_pre.total_net_revenue_usd
+            as control_total_net_revenue_usd_change,
+        (subscriber_post.total_net_revenue_usd - subscriber_pre.total_net_revenue_usd)
+            - (control_post.total_net_revenue_usd - control_pre.total_net_revenue_usd)
+            as total_net_revenue_usd_difference_in_differences
+    from {{ ref('int_hybrid_subscription__matched_pairs') }} pair
+    left join {{ ref('fct_hybrid_subscription__player_behavior_28d') }} subscriber_pre
+        on pair.subscriber_player_id = subscriber_pre.player_id
+        and subscriber_pre.analysis_period = 'pre'
+        and subscriber_pre.is_subscriber
+    left join {{ ref('fct_hybrid_subscription__player_behavior_28d') }} subscriber_post
+        on pair.subscriber_player_id = subscriber_post.player_id
+        and subscriber_post.analysis_period = 'post'
+        and subscriber_post.is_subscriber
+    left join {{ ref('fct_hybrid_subscription__player_behavior_28d') }} control_pre
+        on pair.control_player_id = control_pre.player_id
+        and control_pre.analysis_period = 'pre'
+        and not control_pre.is_subscriber
+    left join {{ ref('fct_hybrid_subscription__player_behavior_28d') }} control_post
+        on pair.control_player_id = control_post.player_id
+        and control_post.analysis_period = 'post'
+        and not control_post.is_subscriber
+),
+invalid_pair_formulas as (
+    select expected.pair_id
+    from expected_pairs expected
+    left join {{ ref('mart_hybrid_subscription__matched_incrementality') }} published
+        on expected.pair_id = published.pair_id
+    where published.pair_id is null
+       or expected.subscriber_pre_standalone_store_net_revenue_usd is null
+       or published.subscriber_pre_standalone_store_net_revenue_usd is distinct from expected.subscriber_pre_standalone_store_net_revenue_usd
+       or expected.subscriber_post_standalone_store_net_revenue_usd is null
+       or published.subscriber_post_standalone_store_net_revenue_usd is distinct from expected.subscriber_post_standalone_store_net_revenue_usd
+       or expected.subscriber_standalone_store_net_revenue_usd_change is null
+       or published.subscriber_standalone_store_net_revenue_usd_change is distinct from expected.subscriber_standalone_store_net_revenue_usd_change
+       or expected.control_pre_standalone_store_net_revenue_usd is null
+       or published.control_pre_standalone_store_net_revenue_usd is distinct from expected.control_pre_standalone_store_net_revenue_usd
+       or expected.control_post_standalone_store_net_revenue_usd is null
+       or published.control_post_standalone_store_net_revenue_usd is distinct from expected.control_post_standalone_store_net_revenue_usd
+       or expected.control_standalone_store_net_revenue_usd_change is null
+       or published.control_standalone_store_net_revenue_usd_change is distinct from expected.control_standalone_store_net_revenue_usd_change
+       or expected.standalone_store_net_revenue_usd_difference_in_differences is null
+       or published.standalone_store_net_revenue_usd_difference_in_differences is distinct from expected.standalone_store_net_revenue_usd_difference_in_differences
+       or expected.subscriber_pre_subscription_net_revenue_usd is null
+       or published.subscriber_pre_subscription_net_revenue_usd is distinct from expected.subscriber_pre_subscription_net_revenue_usd
+       or expected.subscriber_post_subscription_net_revenue_usd is null
+       or published.subscriber_post_subscription_net_revenue_usd is distinct from expected.subscriber_post_subscription_net_revenue_usd
+       or expected.subscriber_subscription_net_revenue_usd_change is null
+       or published.subscriber_subscription_net_revenue_usd_change is distinct from expected.subscriber_subscription_net_revenue_usd_change
+       or expected.control_pre_subscription_net_revenue_usd is null
+       or published.control_pre_subscription_net_revenue_usd is distinct from expected.control_pre_subscription_net_revenue_usd
+       or expected.control_post_subscription_net_revenue_usd is null
+       or published.control_post_subscription_net_revenue_usd is distinct from expected.control_post_subscription_net_revenue_usd
+       or expected.control_subscription_net_revenue_usd_change is null
+       or published.control_subscription_net_revenue_usd_change is distinct from expected.control_subscription_net_revenue_usd_change
+       or expected.subscription_net_revenue_usd_difference_in_differences is null
+       or published.subscription_net_revenue_usd_difference_in_differences is distinct from expected.subscription_net_revenue_usd_difference_in_differences
+       or expected.subscriber_pre_total_net_revenue_usd is null
+       or published.subscriber_pre_total_net_revenue_usd is distinct from expected.subscriber_pre_total_net_revenue_usd
+       or expected.subscriber_post_total_net_revenue_usd is null
+       or published.subscriber_post_total_net_revenue_usd is distinct from expected.subscriber_post_total_net_revenue_usd
+       or expected.subscriber_total_net_revenue_usd_change is null
+       or published.subscriber_total_net_revenue_usd_change is distinct from expected.subscriber_total_net_revenue_usd_change
+       or expected.control_pre_total_net_revenue_usd is null
+       or published.control_pre_total_net_revenue_usd is distinct from expected.control_pre_total_net_revenue_usd
+       or expected.control_post_total_net_revenue_usd is null
+       or published.control_post_total_net_revenue_usd is distinct from expected.control_post_total_net_revenue_usd
+       or expected.control_total_net_revenue_usd_change is null
+       or published.control_total_net_revenue_usd_change is distinct from expected.control_total_net_revenue_usd_change
+       or expected.total_net_revenue_usd_difference_in_differences is null
+       or published.total_net_revenue_usd_difference_in_differences is distinct from expected.total_net_revenue_usd_difference_in_differences
+),
+prior_payer_pairs as (
     select *
     from {{ ref('mart_hybrid_subscription__matched_incrementality') }}
     where subscriber_prior_payer_status = 'prior_payer'
@@ -46,7 +156,9 @@ expected as (
             as mean_control_total_net_revenue_usd_change,
         avg(total_net_revenue_usd_difference_in_differences)
             as mean_total_net_revenue_usd_difference_in_differences
-    from prior_payer_pairs
+    from expected_pairs
+    where subscriber_prior_payer_status = 'prior_payer'
+      and control_prior_payer_status = 'prior_payer'
     group by subscriber_prior_payer_status
 ),
 published as (
@@ -91,6 +203,11 @@ reconciliation_differences as (
     select * from unexpected_published_rows
 ),
 violations as (
+    select 'invalid_pair_formula' as violation, pair_id as row_id
+    from invalid_pair_formulas
+
+    union all
+
     select 'invalid_prior_payer_pair_id' as violation, pair_id as row_id
     from prior_payer_pairs
     where pair_id is null
