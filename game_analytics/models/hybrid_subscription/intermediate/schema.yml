@@ -70,6 +70,7 @@ models:
                 values:
                   - no_eligible_exposure
                   - subscription_not_after_exposure
+                  - missing_observation_bounds
                   - immature_pre_window
                   - immature_post_window
       - name: is_population_eligible

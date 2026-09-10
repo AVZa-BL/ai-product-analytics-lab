@@ -19,13 +19,18 @@ population_periods as (
     cross join period_spine periods
     where population.is_population_eligible
 ),
-mature_population_periods as (
+windowed_population_periods as (
     select
         *,
         period_start_at_utc >= observation_start_at_utc
             and period_end_at_utc <= observation_end_at_utc
             as is_window_mature
     from population_periods
+),
+mature_population_periods as (
+    select *
+    from windowed_population_periods
+    where is_window_mature
 ),
 session_metrics as (
     select

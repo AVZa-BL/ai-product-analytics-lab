@@ -57,6 +57,9 @@ classified_population as (
                 and first_subscription.first_subscription_at_utc
                     <= eligible_exposure.eligible_exposure_at_utc
                 then 'subscription_not_after_exposure'
+            when observation_bounds.observation_start_at_utc is null
+                or observation_bounds.observation_end_at_utc is null
+                then 'missing_observation_bounds'
             when eligible_exposure.eligible_exposure_at_utc - interval '28 days'
                 < observation_bounds.observation_start_at_utc
                 then 'immature_pre_window'
