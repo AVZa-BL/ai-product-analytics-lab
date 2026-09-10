@@ -1,4 +1,4 @@
-select
+select
     subscription_id,
     player_id,
     entitlement_start_at_utc,
