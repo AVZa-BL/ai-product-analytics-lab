@@ -105,6 +105,62 @@ models:
       - name: discounted_standalone_transaction_count
         data_tests: [not_null]
 
+  - name: int_hybrid_subscription__matched_pairs
+    description: >-
+      Deterministic greedy one-to-one matches without replacement, using mature eligible
+      pre-period behavior and exact prior-payer, platform, and acquisition-channel strata.
+      Subscribers are visited by stratum, pre-session count, then player ID. Each chooses
+      the unused control with minimum absolute pre-session distance, then lower control
+      pre-session count, then control player ID. No pair row is emitted for an unmatched
+      subscriber; an entirely unmatched population therefore produces an empty relation.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: pair_id
+        description: Subscriber player ID joined to control player ID with a double underscore.
+        data_tests: [not_null, unique]
+      - name: subscriber_sequence
+        description: Global subscriber visit order; gaps identify unmatched subscribers.
+        data_tests: [not_null, unique]
+      - name: subscriber_player_id
+        data_tests: [not_null, unique]
+      - name: control_player_id
+        data_tests: [not_null, unique]
+      - name: subscriber_prior_payer_status
+        data_tests: [not_null]
+      - name: control_prior_payer_status
+        data_tests: [not_null]
+      - name: subscriber_platform
+        data_tests: [not_null]
+      - name: control_platform
+        data_tests: [not_null]
+      - name: subscriber_acquisition_channel
+        data_tests: [not_null]
+      - name: control_acquisition_channel
+        data_tests: [not_null]
+      - name: subscriber_pre_session_count
+        data_tests: [not_null]
+      - name: control_pre_session_count
+        data_tests: [not_null]
+      - name: pre_session_count_distance
+        description: Absolute difference between subscriber and control pre-session counts.
+        data_tests: [not_null]
+      - name: eligible_subscriber_count
+        description: All eligible pre-period subscribers, repeated on each pair.
+        data_tests: [not_null]
+      - name: eligible_control_count
+        description: All eligible pre-period controls, repeated on each pair.
+        data_tests: [not_null]
+      - name: matched_pair_count
+        description: Total matched pairs, repeated on each pair.
+        data_tests: [not_null]
+      - name: unmatched_subscriber_count
+        description: Eligible subscribers minus matched pairs.
+        data_tests: [not_null]
+      - name: unmatched_control_count
+        description: Eligible controls minus matched pairs.
+        data_tests: [not_null]
+
   - name: int_hybrid_subscription__quality_audit
     description: Counts of designed defects preserved through the governed intermediate layer.
     config:
