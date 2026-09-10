@@ -37,4 +37,3 @@ def test_intermediate_models_publish_business_state_contracts() -> None:
 
 def test_intermediate_invariants_have_executable_dbt_tests() -> None:
     assert EXPECTED_TESTS <= {path.name for path in TEST_DIR.glob("*.sql")}
-

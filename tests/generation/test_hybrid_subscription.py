@@ -144,4 +144,3 @@ def test_generator_rejects_wrong_scenario() -> None:
                 "subscription", 42, date(2026, 1, 1), 120, 200, Path("data/raw")
             )
         )
-

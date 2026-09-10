@@ -495,4 +495,3 @@ def _marketing_exposures(
         ingested_at_utc=times + pd.to_timedelta(7, unit="min"),
     )
     return _finish(frame, run_id)
-

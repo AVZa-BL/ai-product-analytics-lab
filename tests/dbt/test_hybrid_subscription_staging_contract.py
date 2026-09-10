@@ -34,4 +34,3 @@ def test_sources_cover_all_generator_tables() -> None:
     assert {table["name"] for table in source["tables"]} == {
         name.removeprefix("stg_hybrid_subscription__") for name in EXPECTED_MODELS
     }
-

@@ -1,7 +1,7 @@
 # Hybrid Subscription completion repair design
 
-**Date:** 2026-09-10  
-**Branch:** `scenario/hybrid-subscription`  
+**Date:** 2026-09-10\
+**Branch:** `scenario/hybrid-subscription`\
 **Status:** Approved design, pending implementation plan
 
 ## Purpose
