@@ -1,5 +1,5 @@
 {
-  "passed": 32,
+  "passed": 34,
   "results": [
     {
       "cost_usd": 0,
@@ -384,8 +384,32 @@
       "provenance_score": 1,
       "refusal_score": 1,
       "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0,
+      "id": "hybrid_source_watermark_maturity",
+      "latency_ms": 30,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0,
+      "id": "hybrid_empty_pair_population",
+      "latency_ms": 30,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
     }
   ],
   "scenario": "hybrid_subscription",
-  "total": 32
+  "total": 34
 }

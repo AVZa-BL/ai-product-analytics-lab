@@ -76,3 +76,61 @@ def test_governance_does_not_imply_unpublished_notebooks_or_execution() -> None:
     audit = Path("docs/ai-audit/hybrid_subscription.md").read_text()
     assert "direct exact-source execution succeeded" in audit
     assert RESULTS["metadata"]["code_version"] in audit
+
+
+def assert_memo_evidence(text, results):
+    """Every copied population, estimate, interval, incident and provenance value."""
+    for field, value in results["population"].items():
+        assert f"| {field} | {value} |" in text, field
+    for field, value in results["results"]["bootstrap_intervals"].items():
+        assert f"| {field} | {value} |" in text, field
+    for incident in results["data_quality_incidents"]:
+        assert (
+            f"| {incident['incident_code']} | {incident['affected_rows']} | "
+            f"{incident['decision_status']} | {incident['containment_rule']} |"
+        ) in text
+    for key in ["code_version", "executed_at_utc"]:
+        assert results["metadata"][key] in text
+    for key in ["bootstrap_seed", "bootstrap_draws"]:
+        assert f"{key} = {results['metadata'][key]}" in text
+
+
+def assert_audit_evidence(text, results):
+    """Copied audit numbers must be exact source fields, not prose-only numbers."""
+    for field in ["matched_pair_count", "unmatched_subscriber_count", "unmatched_control_count"]:
+        assert f"{field} = {results['population'][field]}" in text
+    for group, field in [
+        ("engagement", "engagement_difference_in_differences"),
+        ("revenue", "standalone_store_difference_in_differences"),
+        ("revenue", "subscription_difference_in_differences"),
+        ("revenue", "total_revenue_difference_in_differences"),
+    ]:
+        assert f"{field} = {results['results'][group][field]}" in text
+    for key in ["code_version", "executed_at_utc"]:
+        assert results["metadata"][key] in text
+    for relation in results["metadata"]["input_relations"]:
+        assert relation in text
+
+
+def test_all_copied_memo_and_audit_values_have_exact_committed_sources():
+    assert_memo_evidence(
+        (ROOT / "engagement_cannibalization_decision_memo.md").read_text(), RESULTS
+    )
+    assert_audit_evidence(Path("docs/ai-audit/hybrid_subscription.md").read_text(), RESULTS)
+
+
+@pytest.mark.parametrize("field", ["interval", "incident", "timestamp"])
+def test_source_checks_reject_mutated_memo_numbers(field):
+    import copy
+
+    text = (ROOT / "engagement_cannibalization_decision_memo.md").read_text()
+    assert_memo_evidence(text, RESULTS)
+    corrupted = copy.deepcopy(RESULTS)
+    if field == "interval":
+        corrupted["results"]["bootstrap_intervals"]["engagement_change_ci_95"][0] += 0.1
+    elif field == "incident":
+        corrupted["data_quality_incidents"][0]["affected_rows"] += 1
+    else:
+        corrupted["metadata"]["executed_at_utc"] = "invented-timestamp"
+    with pytest.raises(AssertionError):
+        assert_memo_evidence(text, corrupted)

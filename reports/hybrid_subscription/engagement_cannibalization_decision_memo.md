@@ -14,10 +14,20 @@ Population counts come from `population` in the JSON:
 
 | JSON field | Value |
 | --- | --- |
+| candidate_player_count | 1000 |
 | eligible_control_count | 157 |
 | eligible_subscriber_count | 280 |
+| excluded_player_count | 563 |
+| immature_post_window_count | 0 |
+| immature_pre_window_count | 543 |
+| ingestion_watermark_not_mature_count | 0 |
+| invalid_matching_covariates_count | 0 |
+| invalid_player_identity_count | 0 |
 | matched_pair_count | 157 |
 | matched_prior_payer_pair_count | 53 |
+| missing_or_invalid_source_watermark_count | 0 |
+| no_eligible_exposure_count | 20 |
+| subscription_not_after_exposure_count | 0 |
 | unmatched_control_count | 0 |
 | unmatched_subscriber_count | 123 |
 
@@ -54,9 +64,9 @@ The index is each player's earliest incrementality-eligible exposure. A subscrib
 
 Matching is deterministic greedy one-to-one nearest control without replacement. Subscribers sort by prior_payer_status, platform, acquisition_channel, pre_session_count, then player_id. Available exact-stratum controls sort by absolute pre_session_count distance, control pre_session_count, then control player_id. The order is part of the contract; unmatched handling is part of the population disclosure.
 
-Pre windows are `[index - 28 days, index)`; post windows are `[index, index + 28 days)`. Both must lie within the global minimum/maximum governed session, transaction, and LiveOps timestamps, with one complete behavior row per player per period. Global maturity does not prove individual telemetry completeness. Cohort conversion and D30 rates are withheld until every date-cohort member's forward window matures; ratio denominators of zero produce NULL.
+Pre windows are `[index - 28 days, index)`; post windows are `[index, index + 28 days)`, as exact UTC elapsed durations across DST. Every session, canonical transaction and LiveOps source must cover both windows and have its maximum ingestion timestamp at least the post endpoint plus its maximum observed nonnegative ingestion lag. Missing, invalid or stale sources fail closed. The empirical allowance is a snapshot proxy, not an operational completeness SLA or proof of individual telemetry completeness. Null/blank identity and matching covariates are excluded before behavior, with reason counts retained. One complete behavior row per player per period is required. Cohort conversion and D30 rates are withheld until every date-cohort member's forward window matures; ratio denominators of zero produce NULL.
 
-Bootstrap seed `42` and draws `2000` are the committed metadata. Whole-pair resampling conditions on selected matches: intervals quantify resampling variation, not confounding bias, rematching uncertainty, or proof of exchangeability/parallel trends. All inputs are deterministic synthetic lab data. The horizon does not establish real-product effects, profitability, or lifetime value.
+`bootstrap_seed = 42` and `bootstrap_draws = 2000` are the committed metadata. Whole-pair resampling conditions on selected matches: intervals quantify resampling variation, not confounding bias, rematching uncertainty, or proof of exchangeability/parallel trends. All inputs are deterministic synthetic lab data. The horizon does not establish real-product effects, profitability, or lifetime value.
 
 ## Data-quality qualification
 
@@ -64,6 +74,7 @@ The governed incident mart retains defects and containment decisions; containmen
 
 | Incident code | Affected rows | Decision status | Containment |
 | --- | --- | --- | --- |
+| analysis_population_exclusion | 563 | contained | Exclude invalid identity/covariates, ineligible exposure and incomplete source windows; retain all exclusion reasons and counts in population summary. |
 | cancellation_pending_expiry | 48 | contained | Preserve access through contractual period end; cancellation disables renewal only. |
 | duplicate_store_webhook | 55 | contained | Use the latest ingested webhook per transaction and retain duplicate evidence. |
 | missing_subscription_grant_link | 32 | contained | Set reconciled subscription currency to zero until a transaction link is present. |
@@ -80,10 +91,10 @@ Keep reward-track exclusion and refund accounting fixed; monitor exposure eligib
 
 ## Reproducibility
 
-The [tracked notebook source](../../notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py) queries `mart_hybrid_subscription__matched_incrementality` and reconciles it to the engagement/cannibalization aggregate marts before calculation. Pair lineage includes `fct_hybrid_subscription__player_behavior_28d`; the notebook does not reconstruct business metrics from raw or staging data.
+The [tracked notebook source](../../notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py) queries `mart_hybrid_subscription__matched_incrementality` and reconciles it to the engagement/cannibalization aggregates plus `mart_hybrid_subscription__match_population_summary` before calculation. The independent summary remains one row at zero pairs; estimates and intervals become NULL/unavailable and unsupported bootstrap/plots are skipped. With zero prior-payer pairs, engagement remains reportable and revenue is unavailable. Pair lineage includes `fct_hybrid_subscription__player_behavior_28d`; the notebook does not reconstruct business metrics from raw or staging data.
 
-The executed source version is `632094ba0a1f1eb085cb7e416e1c85e6f4431159`; execution time is `2026-09-10T21:14:23.916094Z`, both copied from the JSON metadata. The JSON is published by results commit `9932fe2e947d9eb7062e3e68dde719ddb6dae15a`.
+The executed source version is `2c0f5801f50178b8b21a3d7865001b491fa9755b`; execution time is `2026-09-10T22:38:20.716243Z`, both copied from the JSON metadata. The refreshed JSON and this memo are committed together after the source commit; metadata binds to that exact source.
 
-The direct exact-source execution succeeded using a locally reconstructed governed snapshot with verified source blobs and an explicit remote-source SHA override. This is not a claim of a full dbt invocation or a real Git checkout. Jupyter kernel execution and real-checkout HEAD equivalence remain owner-run validations. The locally converted notebook is unexecuted; generated notebooks and figures are not published evidence and are not linked here.
+The direct exact-source execution succeeded using a locally reconstructed governed snapshot with verified source blobs and an explicit remote-source SHA override. This is not a claim of a full dbt invocation or a real Git checkout. Native dbt parse/build could not run (`dbt: command not found`); Jupytext execution could not run (`No module named 'nbconvert'`). Jupyter kernel execution and real-checkout HEAD equivalence remain owner-run validations. The locally converted notebook is unexecuted; generated notebooks and figures are not published evidence and are not linked here.
 
 Use the [audit](../../docs/ai-audit/hybrid_subscription.md), [metric catalogue](../../docs/metrics/hybrid_subscription.md), and JSON execution provenance for the exact validation boundary.
