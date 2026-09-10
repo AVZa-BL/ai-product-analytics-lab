@@ -9,6 +9,9 @@ select
     transaction.discount_amount_usd,
     transaction.refund_amount_usd,
     transaction.net_amount_usd,
+    transaction.product_type = 'subscription' as is_subscription_revenue,
+    transaction.product_type not in ('subscription', 'reward_track') as is_standalone_store_revenue,
+    transaction.product_type = 'reward_track' as is_reward_track_revenue,
     case
         when transaction.transaction_status in ('succeeded', 'refunded')
             then transaction.net_amount_usd - transaction.refund_amount_usd

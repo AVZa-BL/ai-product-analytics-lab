@@ -124,3 +124,33 @@ models:
           - accepted_values:
               arguments:
                 values: [pre, post]
+
+  - name: fct_hybrid_subscription__sessions
+    description: Canonical session fact at the staged unique session grain.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: session_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_hybrid_subscription__players')
+                field: player_id
+
+  - name: fct_hybrid_subscription__subscriber_daily
+    description: One player-date entitlement state using half-open contractual windows.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: player_date_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_hybrid_subscription__players')
+                field: player_id
