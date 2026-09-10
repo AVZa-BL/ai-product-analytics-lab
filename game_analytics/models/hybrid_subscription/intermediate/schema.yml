@@ -161,6 +161,32 @@ models:
         description: Eligible controls minus matched pairs.
         data_tests: [not_null]
 
+  - name: int_hybrid_subscription__match_population_summary
+    description: >-
+      Exactly one row of eligible, matched, and unmatched population control totals,
+      including empty, single-arm, and disjoint-stratum populations with zero pairs.
+      Counts come from eligible pre-period behavior and actual matched pairs, so no
+      synthetic pair row is needed. The population reconciliation test enforces the
+      one-row grain and independently verifies all five totals.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: eligible_subscriber_count
+        description: All mature eligible pre-period subscribers, including unmatched players.
+        data_tests: [not_null]
+      - name: eligible_control_count
+        description: All mature eligible pre-period controls, including unmatched players.
+        data_tests: [not_null]
+      - name: matched_pair_count
+        description: Actual pair row count; zero when no pairs exist.
+        data_tests: [not_null]
+      - name: unmatched_subscriber_count
+        description: Eligible subscribers minus actual matched pairs.
+        data_tests: [not_null]
+      - name: unmatched_control_count
+        description: Eligible controls minus actual matched pairs.
+        data_tests: [not_null]
+
   - name: int_hybrid_subscription__quality_audit
     description: Counts of designed defects preserved through the governed intermediate layer.
     config:

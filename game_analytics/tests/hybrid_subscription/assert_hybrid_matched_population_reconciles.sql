@@ -6,6 +6,12 @@ with eligible_players as (
 pairs as (
     select * from {{ ref('int_hybrid_subscription__matched_pairs') }}
 ),
+published_summary as (
+    select * from {{ ref('int_hybrid_subscription__match_population_summary') }}
+),
+summary_cardinality as (
+    select count(*) as summary_row_count from published_summary
+),
 eligible_totals as (
     select
         count(*) filter (where is_subscriber) as eligible_subscriber_count,
@@ -57,6 +63,25 @@ expected_matches as (
     from stratum_counts
 ),
 violations as (
+    select 'invalid_summary_cardinality' as violation, null::varchar as pair_id
+    from summary_cardinality
+    where summary_row_count != 1
+
+    union all
+
+    select 'incorrect_summary_totals', null::varchar
+    from published_summary summary
+    cross join eligible_totals eligible
+    cross join matched_totals matched
+    cross join unmatched_totals unmatched
+    where summary.eligible_subscriber_count is distinct from eligible.eligible_subscriber_count
+       or summary.eligible_control_count is distinct from eligible.eligible_control_count
+       or summary.matched_pair_count is distinct from matched.matched_pair_count
+       or summary.unmatched_subscriber_count is distinct from unmatched.unmatched_subscriber_count
+       or summary.unmatched_control_count is distinct from unmatched.unmatched_control_count
+
+    union all
+
     -- Scalar aggregates always produce a control row, including empty populations.
     select 'population_does_not_reconcile' as violation, null::varchar as pair_id
     from eligible_totals eligible

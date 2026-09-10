@@ -12,6 +12,7 @@ EXPECTED_MODELS = {
     "int_hybrid_subscription__player_28d_behavior",
     "int_hybrid_subscription__quality_audit",
     "int_hybrid_subscription__matched_pairs",
+    "int_hybrid_subscription__match_population_summary",
 }
 EXPECTED_TESTS = {
     "assert_cancellation_preserves_entitlement.sql",
@@ -19,6 +20,8 @@ EXPECTED_TESTS = {
     "assert_grant_reconciliation_is_complete.sql",
     "assert_exposure_eligibility_precedes_subscription.sql",
     "assert_player_28d_behavior_grain.sql",
+    "assert_hybrid_matched_pairs_valid.sql",
+    "assert_hybrid_matched_population_reconciles.sql",
 }
 
 
