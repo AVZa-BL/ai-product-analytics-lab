@@ -1,0 +1,222 @@
+version: 2
+
+models:
+  - name: stg_live_strategy__players
+    description: Typed player installs at one row per player.
+    config:
+      tags: [live_strategy]
+    columns:
+      - name: player_id
+        data_tests: [not_null, unique]
+      - name: installed_at_utc
+        data_tests: [not_null]
+      - name: platform
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [ios, android]
+
+  - name: stg_live_strategy__sessions
+    description: Typed sessions at one row per session, retaining deliberately missing end timestamps.
+    config:
+      tags: [live_strategy]
+    columns:
+      - name: session_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_live_strategy__players')
+                field: player_id
+      - name: started_at_utc
+        data_tests: [not_null]
+      - name: platform
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [ios, android]
+
+  - name: stg_live_strategy__gameplay_events
+    description: Typed event arrivals; ingestion_event_id is unique while client_event_id may repeat.
+    config:
+      tags: [live_strategy]
+    columns:
+      - name: ingestion_event_id
+        data_tests: [not_null, unique]
+      - name: client_event_id
+        data_tests: [not_null]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_live_strategy__players')
+                field: player_id
+      - name: session_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_live_strategy__sessions')
+                field: session_id
+      - name: occurred_at_utc
+        data_tests: [not_null]
+      - name: platform
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [ios, android]
+
+  - name: stg_live_strategy__purchases
+    description: Typed purchases at one row per purchase.
+    config:
+      tags: [live_strategy]
+    columns:
+      - name: purchase_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_live_strategy__players')
+                field: player_id
+      - name: purchased_at_utc
+        data_tests: [not_null]
+      - name: purchase_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [completed, pending, cancelled]
+
+  - name: stg_live_strategy__progression_snapshots
+    description: Typed progression observations at one row per snapshot.
+    config:
+      tags: [live_strategy]
+    columns:
+      - name: snapshot_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_live_strategy__players')
+                field: player_id
+      - name: snapshot_at_utc
+        data_tests: [not_null]
+
+  - name: stg_live_strategy__alliances
+    description: Typed alliances at one row per alliance.
+    config:
+      tags: [live_strategy]
+    columns:
+      - name: alliance_id
+        data_tests: [not_null, unique]
+      - name: leader_player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_live_strategy__players')
+                field: player_id
+
+  - name: stg_live_strategy__alliance_memberships
+    description: Typed membership validity records, retaining deliberately invalid time intervals.
+    config:
+      tags: [live_strategy]
+    columns:
+      - name: membership_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_live_strategy__players')
+                field: player_id
+      - name: alliance_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_live_strategy__alliances')
+                field: alliance_id
+      - name: membership_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [active, left]
+
+  - name: stg_live_strategy__live_events
+    description: Typed LiveOps windows at one row per live event.
+    config:
+      tags: [live_strategy]
+    columns:
+      - name: live_event_id
+        data_tests: [not_null, unique]
+      - name: starts_at_utc
+        data_tests: [not_null]
+      - name: ends_at_utc
+        data_tests: [not_null]
+
+  - name: stg_live_strategy__battles
+    description: Typed battle results at one row per battle.
+    config:
+      tags: [live_strategy]
+    columns:
+      - name: battle_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_live_strategy__players')
+                field: player_id
+      - name: outcome
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [win, loss]
+
+  - name: stg_live_strategy__economy_transactions
+    description: Typed economy ledger entries at one row per ledger entry.
+    config:
+      tags: [live_strategy]
+    columns:
+      - name: ledger_entry_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_live_strategy__players')
+                field: player_id
+      - name: transaction_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [earn, purchase, refund]
+
+  - name: stg_live_strategy__config_versions
+    description: Typed effective-dated configuration records at one row per version.
+    config:
+      tags: [live_strategy]
+    columns:
+      - name: config_version_id
+        data_tests: [not_null, unique]
+      - name: effective_from_utc
+        data_tests: [not_null]
+      - name: effective_to_utc
+        data_tests: [not_null]

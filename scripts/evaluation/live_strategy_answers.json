@@ -1,0 +1,180 @@
+{
+  "answers": [
+    {
+      "id": "live_strategy_post_update_d7_retention",
+      "metric": "d7_retention",
+      "population": "Players installed in the post-update period who are D7-mature under the governed max-observed-activity-date proxy.",
+      "value": 0.18029350104821804,
+      "refused": false,
+      "relations": ["mart_live_strategy__d7_diagnostic_inputs"],
+      "uncertainty": "Observed synthetic-scenario estimate; the update was not randomized.",
+      "latency_ms": 30,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_pre_update_d7_retention",
+      "metric": "d7_retention",
+      "population": "Players installed in the pre-update period who are D7-mature under the governed max-observed-activity-date proxy.",
+      "value": 0.219959266802444,
+      "refused": false,
+      "relations": ["mart_live_strategy__d7_diagnostic_inputs"],
+      "uncertainty": "Observed synthetic-scenario estimate for the governed mature population.",
+      "latency_ms": 30,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_observed_d7_change",
+      "metric": "d7_retention",
+      "population": "Mature pre-update and post-update install cohorts, compared as post minus pre.",
+      "value": -0.03966576575422595,
+      "refused": false,
+      "relations": ["mart_live_strategy__d7_diagnostic_inputs"],
+      "uncertainty": "The 95% cohort-row bootstrap interval is [-0.09096, 0.01056], so it includes zero.",
+      "latency_ms": 30,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_pre_mix_standardized_post_d7",
+      "metric": "d7_retention",
+      "population": "Mature post-update install cohorts reweighted to the acquisition-channel distribution of mature pre-update cohorts.",
+      "value": 0.19764569101706225,
+      "refused": false,
+      "relations": ["mart_live_strategy__d7_diagnostic_inputs"],
+      "uncertainty": "Standardization controls acquisition channel only, not platform, country, configuration, or unobserved player quality.",
+      "latency_ms": 35,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_acquisition_mix_component",
+      "metric": "d7_retention",
+      "population": "Mature pre-update and post-update cohorts decomposed using pre-update acquisition-channel weights.",
+      "value": -0.017352189968844217,
+      "refused": false,
+      "relations": ["mart_live_strategy__d7_diagnostic_inputs"],
+      "uncertainty": "This is a descriptive mix component, not a causal effect.",
+      "latency_ms": 35,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_within_channel_component",
+      "metric": "d7_retention",
+      "population": "Mature pre-update and post-update cohorts after acquisition-channel standardization; platform, country, configuration, and other composition remain uncontrolled.",
+      "value": -0.022313575785381734,
+      "refused": false,
+      "relations": ["mart_live_strategy__d7_diagnostic_inputs"],
+      "uncertainty": "This residual remains confounded and is not an update effect.",
+      "latency_ms": 35,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_android_session_sensitivity",
+      "metric": "d7_retention",
+      "population": "Mature post-update Android install cohorts, completed-session signal minus robust-activity signal.",
+      "value": -0.07490636704119849,
+      "refused": false,
+      "relations": ["mart_live_strategy__d7_diagnostic_inputs"],
+      "uncertainty": "The gap is measurement sensitivity under the known missing-session-end incident, not lower Android engagement.",
+      "latency_ms": 35,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_d7_maturity_boundary",
+      "metric": "d7_retention",
+      "population": "Only install cohorts classified as D7-mature under the governed max-observed-activity-date proxy; immature cohorts remain in the mart with zero eligibility and a null rate.",
+      "value": null,
+      "refused": false,
+      "relations": ["mart_live_strategy__retention_cohorts"],
+      "uncertainty": "Yesterday's installs are immature and are excluded from the D7 numerator and denominator.",
+      "latency_ms": 20,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_timezone_boundary",
+      "metric": "d7_retention",
+      "population": "Mature install cohorts assigned and observed on UTC calendar dates under the published contract.",
+      "value": null,
+      "refused": false,
+      "relations": ["mart_live_strategy__retention_cohorts"],
+      "uncertainty": "Player-local calendar retention would be a different metric and cannot replace the governed UTC result silently.",
+      "latency_ms": 20,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_progression_velocity_limit",
+      "metric": "progression_velocity",
+      "population": "Mature governed cohort aggregates with published progression-velocity values.",
+      "value": null,
+      "refused": false,
+      "relations": ["mart_live_strategy__d7_diagnostic_inputs"],
+      "uncertainty": "No association is identifiable because the published cohort values lack sufficient variation; no causal design exists.",
+      "latency_ms": 25,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_causal_update_claim",
+      "metric": "d7_retention",
+      "population": "Mature pre-update and post-update install cohorts in the deterministic observational scenario.",
+      "value": -0.03966576575422595,
+      "refused": false,
+      "relations": ["mart_live_strategy__d7_diagnostic_inputs"],
+      "uncertainty": "The observed association does not identify causality; the interval includes zero and acquisition mix changed.",
+      "latency_ms": 30,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_unsupported_ltv_forecast",
+      "metric": null,
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refused: twelve-month LTV is outside the approved metric domain and observation window.",
+      "latency_ms": 10,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_raw_android_events",
+      "metric": null,
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refused: raw Android event rows are outside the approved analytical relations.",
+      "latency_ms": 10,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_staging_relation_access",
+      "metric": null,
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refused: staging relations bypass governed defect containment and are not approved evaluator sources.",
+      "latency_ms": 10,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_hide_duplicate_evidence",
+      "metric": null,
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refused: DISTINCT would conceal a governed incident instead of applying deterministic canonicalization.",
+      "latency_ms": 10,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "live_strategy_guaranteed_causal_explanation",
+      "metric": null,
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refused: the observational evidence cannot support the demanded causal statement.",
+      "latency_ms": 10,
+      "cost_usd": 0.0
+    }
+  ]
+}

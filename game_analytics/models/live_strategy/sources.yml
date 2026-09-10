@@ -1,0 +1,30 @@
+version: 2
+
+sources:
+  - name: live_strategy_raw
+    description: Immutable synthetic live-strategy evidence generated for the scenario.
+    meta:
+      external_location: "{{ var('raw_data_root') }}/live_strategy/{name}.parquet"
+    tables:
+      - name: players
+        description: One row per installed player.
+      - name: sessions
+        description: One row per player session; some Android 4.12.0 sessions deliberately lack an end timestamp.
+      - name: gameplay_events
+        description: One row per ingested gameplay-event arrival; client_event_id duplicates are intentional.
+      - name: purchases
+        description: One row per purchase record.
+      - name: progression_snapshots
+        description: One row per player progression snapshot.
+      - name: alliances
+        description: One row per alliance.
+      - name: alliance_memberships
+        description: One row per alliance-membership validity record; invalid intervals are deliberate.
+      - name: live_events
+        description: One row per configured LiveOps event window.
+      - name: battles
+        description: One row per battle result.
+      - name: economy_transactions
+        description: One row per economy-ledger entry, including purchase and refund evidence.
+      - name: config_versions
+        description: One row per effective-dated game-configuration version.

@@ -1,0 +1,279 @@
+version: 2
+
+models:
+  - name: dim_live_strategy__players
+    description: One governed row per installed player.
+    columns:
+      - name: player_id
+        data_tests: [not_null, unique]
+
+  - name: dim_live_strategy__config_versions
+    description: One row per effective-dated game configuration.
+    columns:
+      - name: config_version_id
+        data_tests: [not_null, unique]
+
+  - name: fct_live_strategy__player_activity_daily
+    description: One row per active player and UTC calendar date, using robust activity evidence.
+    columns:
+      - name: activity_date_utc
+        data_tests: [not_null]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_live_strategy__players')
+                field: player_id
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "(cast(activity_date_utc as varchar) || '|' || player_id)"
+
+  - name: fct_live_strategy__sessions
+    description: One row per session with completed-session quality made explicit.
+    columns:
+      - name: session_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_live_strategy__players')
+                field: player_id
+
+  - name: fct_live_strategy__purchases
+    description: One row per reconciled store purchase, including refunds and install dimensions.
+    columns:
+      - name: purchase_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_live_strategy__players')
+                field: player_id
+
+  - name: mart_live_strategy__daily_kpis
+    description: >-
+      Governed KPI outputs at UTC date, platform, country, and acquisition-channel grain.
+      Retention rates divide summed mature cohort counts; all DAU-based ratios are null when DAU
+      is zero. See docs/metrics/live_strategy.md for eligibility, exclusions, and limitations.
+    columns:
+      - name: activity_date_utc
+        description: UTC reporting date for activity, installs, sessions, or purchases in the row.
+        data_tests: [not_null]
+      - name: platform
+        description: Player platform recorded at installation.
+        data_tests: [not_null]
+      - name: country_code
+        description: Player country recorded at installation.
+        data_tests: [not_null]
+      - name: acquisition_channel
+        description: Player acquisition channel recorded at installation.
+        data_tests: [not_null]
+      - name: new_installs
+        description: Governed players installed on the UTC reporting date.
+      - name: dau
+        description: Unique players with a valid gameplay event or any session start on the UTC date.
+      - name: eligible_d1_players
+        description: Players in install-date cohorts mature enough for D1 observation.
+      - name: retained_d1_players
+        description: Eligible D1 players with robust activity on install UTC date plus one.
+      - name: eligible_d7_players
+        description: Players in install-date cohorts mature enough for D7 observation.
+      - name: retained_d7_players
+        description: Eligible D7 players with robust activity on install UTC date plus seven.
+      - name: d1_retention
+        description: Retained D1 players divided by eligible D1 players; null when immature.
+      - name: d7_retention
+        description: Retained D7 players divided by eligible D7 players; null when immature.
+      - name: session_frequency
+        description: All session starts divided by DAU; missing ends do not remove starts.
+      - name: median_session_duration_seconds
+        description: Median duration among sessions with non-null, nonnegative ends only.
+      - name: qualifying_session_count
+        description: Count of valid completed sessions contributing to median duration.
+      - name: payers
+        description: Active players with positive reconciled player-day net revenue.
+      - name: payer_conversion
+        description: Active positive-net payers divided by DAU; null when DAU is zero.
+      - name: gross_revenue_usd
+        description: Reconciled purchase gross USD before refund subtraction.
+      - name: refunds_usd
+        description: Reconciled USD refunds attached to reported purchases.
+      - name: net_revenue_usd
+        description: Gross revenue less reconciled refunds in USD.
+      - name: arpdau
+        description: Reconciled net revenue in USD divided by DAU; null when DAU is zero.
+      - name: event_participation_rate
+        description: Unique active players with live_event_joined evidence divided by DAU.
+      - name: alliance_adoption_rate
+        description: Unique active players in a valid alliance interval divided by DAU.
+      - name: progression_velocity
+        description: >-
+          Mean player-level level change per elapsed day since the prior progression snapshot.
+    data_tests:
+      - unique:
+          arguments:
+            column_name: >-
+              (cast(activity_date_utc as varchar) || '|' || platform || '|' ||
+              country_code || '|' || acquisition_channel)
+      - accepted_values:
+          name: daily_kpi_rates_are_bounded
+          arguments:
+            column_name: >-
+              (coalesce(d1_retention between 0 and 1, true)
+              and coalesce(d7_retention between 0 and 1, true)
+              and coalesce(payer_conversion between 0 and 1, true)
+              and coalesce(event_participation_rate between 0 and 1, true)
+              and coalesce(alliance_adoption_rate between 0 and 1, true))
+            values: [true]
+            quote: false
+      - accepted_values:
+          name: daily_kpi_null_semantics_are_explicit
+          arguments:
+            column_name: >-
+              (((eligible_d1_players = 0 and d1_retention is null)
+              or (eligible_d1_players > 0 and d1_retention is not null))
+              and ((eligible_d7_players = 0 and d7_retention is null)
+              or (eligible_d7_players > 0 and d7_retention is not null))
+              and ((dau = 0 and session_frequency is null and payer_conversion is null
+              and arpdau is null and event_participation_rate is null
+              and alliance_adoption_rate is null)
+              or (dau > 0 and session_frequency is not null and payer_conversion is not null
+              and arpdau is not null and event_participation_rate is not null
+              and alliance_adoption_rate is not null)))
+            values: [true]
+            quote: false
+
+  - name: mart_live_strategy__retention_cohorts
+    description: >-
+      Install cohorts with independently summed mature D1 and D7 numerators and denominators.
+      Configuration is assigned from the exact install timestamp using half-open UTC intervals;
+      immature rates are null rather than zero.
+    columns:
+      - name: install_date_utc
+        description: UTC calendar date of installation.
+        data_tests: [not_null]
+      - name: period
+        description: Pre- or post-update label derived from the exact installation timestamp.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [pre_update, post_update]
+      - name: platform
+        description: Player platform at installation.
+        data_tests: [not_null]
+      - name: country_code
+        description: Player country at installation.
+        data_tests: [not_null]
+      - name: acquisition_channel
+        description: Player acquisition channel at installation.
+        data_tests: [not_null]
+      - name: config_version_id
+        description: Configuration version effective at the exact install timestamp.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_live_strategy__config_versions')
+                field: config_version_id
+      - name: installed_players
+        description: Total players in the cohort regardless of maturity.
+      - name: eligible_d1_players
+        description: Cohort players with install date plus one fully observable in the activity window.
+      - name: retained_d1_players
+        description: Eligible players with robust activity on install UTC date plus one.
+      - name: eligible_d7_players
+        description: Cohort players with install date plus seven fully observable in the activity window.
+      - name: retained_d7_players
+        description: Eligible players with robust activity on install UTC date plus seven.
+      - name: d1_retention
+        description: Retained D1 divided by eligible D1; null for an immature cohort.
+      - name: d7_retention
+        description: Retained D7 divided by eligible D7; null for an immature cohort.
+    data_tests:
+      - unique:
+          arguments:
+            column_name: >-
+              (cast(install_date_utc as varchar) || '|' || period || '|' || platform ||
+              '|' || country_code || '|' || acquisition_channel || '|' || config_version_id)
+      - accepted_values:
+          name: retention_cohort_rates_are_bounded
+          arguments:
+            column_name: >-
+              (coalesce(d1_retention between 0 and 1, true)
+              and coalesce(d7_retention between 0 and 1, true))
+            values: [true]
+            quote: false
+      - accepted_values:
+          name: retention_cohort_null_semantics_are_explicit
+          arguments:
+            column_name: >-
+              (((eligible_d1_players = 0 and d1_retention is null)
+              or (eligible_d1_players > 0 and d1_retention is not null))
+              and ((eligible_d7_players = 0 and d7_retention is null)
+              or (eligible_d7_players > 0 and d7_retention is not null)))
+            values: [true]
+            quote: false
+
+  - name: mart_live_strategy__d7_diagnostic_inputs
+    description: >-
+      Mature D7 cohort inputs with governed robust activity and completed-session sensitivity
+      signals kept as separate rows. Rates are calculated from counts, never averaged.
+    columns:
+      - name: install_date_utc
+        description: UTC calendar date of installation for the mature D7 cohort.
+        data_tests: [not_null]
+      - name: period
+        description: Pre- or post-update label inherited from the governed cohort mart.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [pre_update, post_update]
+      - name: platform
+        description: Player platform at installation.
+        data_tests: [not_null]
+      - name: country_code
+        description: Player country at installation.
+        data_tests: [not_null]
+      - name: acquisition_channel
+        description: Player acquisition channel at installation.
+        data_tests: [not_null]
+      - name: config_version_id
+        description: Configuration version effective at the exact install timestamp.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_live_strategy__config_versions')
+                field: config_version_id
+      - name: retention_signal
+        description: Governed robust activity or valid completed-session instrumentation sensitivity.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [robust_activity, completed_session]
+      - name: eligible_players
+        description: Players in the mature cohort contributing to the selected signal denominator.
+      - name: retained_players
+        description: Eligible players meeting the selected D7 retention signal.
+      - name: retention_rate
+        description: Retained players divided by eligible players.
+      - name: median_upgrade_attempts
+        description: Median player upgrade attempts observed from install date through D7.
+      - name: median_progression_velocity
+        description: Median player-level level change per elapsed day from install through D7.
+    data_tests:
+      - unique:
+          arguments:
+            column_name: >-
+              (cast(install_date_utc as varchar) || '|' || period || '|' || platform ||
+              '|' || country_code || '|' || acquisition_channel || '|' ||
+              config_version_id || '|' || retention_signal)

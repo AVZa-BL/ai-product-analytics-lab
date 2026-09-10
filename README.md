@@ -4,13 +4,17 @@ A portfolio project demonstrating governed, reproducible product analytics acros
 
 ## Current status
 
-The shared Python, DuckDB, dbt, governance, and evaluation foundation is complete. Scenario implementations are planned and will be developed independently after the shared quality gate passes.
+The shared Python, DuckDB, dbt, governance, and evaluation foundation is complete. Scenario implementations are developed independently and validated through scenario-specific quality gates.
 
 | Scenario | Analytical focus | Status |
 | --- | --- | --- |
-| Live strategy game | Retention and progression diagnostic | Planned |
-| Subscription product | Conversion and lifecycle diagnostic | Planned |
+| Live strategy game | Retention and progression diagnostic | Complete |
+| Subscription product | Conversion and lifecycle diagnostic | Complete |
 | Hybrid game subscription | Cannibalization and entitlement diagnostic | Planned |
+
+## Live Strategy case study
+
+The Live Strategy case study publishes a governed [metric catalogue](docs/metrics/live_strategy.md), [incident register](docs/incidents/live_strategy.md), executable [D7 diagnostic notebook](notebooks/live_strategy/01_d7_retention_diagnostic.py), [decision memo](reports/live_strategy/d7_retention_diagnostic.md), and [trusted evaluation cases](docs/ai-audit/live_strategy_questions.yaml). Together they demonstrate metric contracts, explicit data-defect containment, reproducible observational analysis, causal boundaries, and refusal of requests outside approved marts.
 
 ## Requirements
 
