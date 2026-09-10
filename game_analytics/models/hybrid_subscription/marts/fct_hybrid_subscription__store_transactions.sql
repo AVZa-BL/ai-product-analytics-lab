@@ -24,4 +24,4 @@ select
     player.prior_payer_status,
     transaction.scenario_run_id
 from {{ ref('stg_hybrid_subscription__store_transactions') }} transaction
-join {{ ref('dim_hybrid_subscription__players') }} player using (player_id)
+join {{ ref('stg_hybrid_subscription__players') }} player using (player_id)
