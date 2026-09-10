@@ -1,0 +1,167 @@
+version: 2
+
+models:
+  - name: stg_hybrid_subscription__players
+    description: Typed synthetic players with immutable prior-payer segmentation.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: player_id
+        data_tests: [not_null, unique]
+      - name: platform
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [ios, android]
+      - name: prior_payer_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [prior_payer, prior_nonpayer]
+
+  - name: stg_hybrid_subscription__sessions
+    description: Typed sessions with source timezone evidence and canonical UTC timestamps.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: session_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_hybrid_subscription__players')
+                field: player_id
+      - name: started_at_utc
+        data_tests: [not_null]
+
+  - name: stg_hybrid_subscription__subscription_events
+    description: Typed lifecycle events; cancellation disables renewal but does not end entitlement.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: subscription_event_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_hybrid_subscription__players')
+                field: player_id
+      - name: event_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [started, renewed, canceled, expired, revoked]
+      - name: occurred_at_utc
+        data_tests: [not_null]
+
+  - name: stg_hybrid_subscription__store_transactions
+    description: Latest canonical webhook per transaction with duplicate evidence retained as flags and counts.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: transaction_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_hybrid_subscription__players')
+                field: player_id
+      - name: sku
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_hybrid_subscription__product_catalogue')
+                field: sku
+      - name: transaction_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [succeeded, refunded, failed]
+      - name: transaction_at_utc
+        data_tests: [not_null]
+
+  - name: stg_hybrid_subscription__currency_ledger
+    description: Typed virtual-currency entries with missing subscription links explicitly flagged.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: ledger_entry_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_hybrid_subscription__players')
+                field: player_id
+      - name: entry_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [subscription_grant, purchase_grant, spend]
+
+  - name: stg_hybrid_subscription__live_event_participation
+    description: Typed LiveOps participation at one row per participation.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: participation_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_hybrid_subscription__players')
+                field: player_id
+      - name: participated_at_utc
+        data_tests: [not_null]
+
+  - name: stg_hybrid_subscription__marketing_exposures
+    description: Typed campaign and experiment exposures; causal eligibility is resolved downstream.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: exposure_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_hybrid_subscription__players')
+                field: player_id
+      - name: experiment_arm
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [control, offer]
+      - name: exposed_at_utc
+        data_tests: [not_null]
+
+  - name: stg_hybrid_subscription__product_catalogue
+    description: Typed store and subscription products at one row per SKU.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: sku
+        data_tests: [not_null, unique]
+      - name: product_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [subscription, currency, reward_track]
