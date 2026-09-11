@@ -266,7 +266,7 @@ if not pairs.empty:
     axis.grid(axis="y", alpha=0.2)
     figure.tight_layout()
     figure.savefig(FIGURE_DIR / "matched_pair_session_differences.png", dpi=150)
-    plt.show()
+    display(figure)
     plt.close(figure)
 
 # %%
@@ -290,7 +290,7 @@ if not prior_payer_pairs.empty:
         axis.grid(axis="y", alpha=0.2)
     figure.tight_layout()
     figure.savefig(FIGURE_DIR / "matched_pair_revenue_differences.png", dpi=150)
-    plt.show()
+    display(figure)
     plt.close(figure)
 
 # %% [markdown]
