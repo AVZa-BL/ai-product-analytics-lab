@@ -80,16 +80,22 @@ def test_governance_keeps_generated_notebooks_unpublished_and_records_execution(
 
 def test_memo_provenance_and_run_totals_match_machine_readable_evidence() -> None:
     memo = (ROOT / "engagement_cannibalization_decision_memo.md").read_text()
+    audit = Path("docs/ai-audit/hybrid_subscription.md").read_text()
     validation = VALIDATION["results"]
 
     assert RESULTS["metadata"]["code_version"] == VALIDATION["source_commit"]
-    assert RESULTS["metadata"]["code_version_source"] in memo
-    assert RESULTS["metadata"]["execution_provenance"]["mode"] in memo
-    assert f"PASS={validation['passed_tests']}" in memo
-    assert f"SUCCESS={validation['successful_models']}" in memo
-    assert f"TOTAL={validation['total']}" in memo
-    for field, label in [("warnings", "WARN"), ("errors", "ERROR"), ("skipped", "SKIP")]:
-        assert f"{label}={validation[field]}" in memo
+    for text in [memo, audit]:
+        assert RESULTS["metadata"]["code_version_source"] in text
+        assert RESULTS["metadata"]["execution_provenance"]["mode"] in text
+        assert f"PASS={validation['passed_tests']}" in text
+        assert f"SUCCESS={validation['successful_models']}" in text
+        assert f"TOTAL={validation['total']}" in text
+        for field, label in [
+            ("warnings", "WARN"),
+            ("errors", "ERROR"),
+            ("skipped", "SKIP"),
+        ]:
+            assert f"{label}={validation[field]}" in text
 
 
 def assert_memo_evidence(text, results):
