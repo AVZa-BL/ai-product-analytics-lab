@@ -1,14 +1,14 @@
 {
   "answers": [
     {
-      "answer": "denominator: Not applicable: distinct-player count, not a rate. exclusions: Players with no canonical session in the month; duplicate session rows do not create additional active players. grain: One row per UTC calendar month. interpretation_boundary: Descriptive monthly activity, not daily active users summed across days and not evidence of a subscription effect. maturity: Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. numerator: mau: count of distinct players with at least one canonical session in the month. source_model: mart_hybrid_subscription__monthly_kpis",
+      "answer": "denominator: Not applicable: distinct-player count, not a rate. exclusions: Players with no canonical session in the month; duplicate session rows do not create additional active players. grain: One row per UTC calendar month. interpretation_boundary: Descriptive monthly activity, not daily active users summed across days and not evidence of a subscription effect. maturity: Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete. numerator: mau: count of distinct players with at least one canonical session in the month. source_model: mart_hybrid_subscription__monthly_kpis",
       "cost_usd": 0,
       "definition": {
         "denominator": "Not applicable: distinct-player count, not a rate.",
         "exclusions": "Players with no canonical session in the month; duplicate session rows do not create additional active players.",
         "grain": "One row per UTC calendar month.",
         "interpretation_boundary": "Descriptive monthly activity, not daily active users summed across days and not evidence of a subscription effect.",
-        "maturity": "Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark.",
+        "maturity": "Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete.",
         "numerator": "mau: count of distinct players with at least one canonical session in the month.",
         "source_model": "mart_hybrid_subscription__monthly_kpis"
       },
@@ -73,14 +73,14 @@
       "value": null
     },
     {
-      "answer": "denominator: month_start_active_subscriber_count: distinct players entitled at exactly the opening instant. exclusions: Cancellation alone is not churn; ignore cancellation as a terminal event and exclude terminal timestamps after as_of_at_utc. grain: One row per UTC calendar month. interpretation_boundary: An entitlement-event rate, not a capped player-loss probability: numerator counts entitlements and denominator counts opening players, so the rate may exceed one. Do not silently redefine it as distinct lost players. maturity: Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero opening denominator. numerator: expired_or_revoked_entitlement_count: distinct subscription_id values with an observed terminal expiry/revocation timestamp in the month. source_model: mart_hybrid_subscription__monthly_kpis",
+      "answer": "denominator: month_start_active_subscriber_count: distinct players entitled at exactly the opening instant. exclusions: Cancellation alone is not churn; ignore cancellation as a terminal event and exclude terminal timestamps after as_of_at_utc. grain: One row per UTC calendar month. interpretation_boundary: An entitlement-event rate, not a capped player-loss probability: numerator counts entitlements and denominator counts opening players, so the rate may exceed one. Do not silently redefine it as distinct lost players. maturity: Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete. NULL for zero opening denominator. numerator: expired_or_revoked_entitlement_count: distinct subscription_id values with an observed terminal expiry/revocation timestamp in the month. source_model: mart_hybrid_subscription__monthly_kpis",
       "cost_usd": 0,
       "definition": {
         "denominator": "month_start_active_subscriber_count: distinct players entitled at exactly the opening instant.",
         "exclusions": "Cancellation alone is not churn; ignore cancellation as a terminal event and exclude terminal timestamps after as_of_at_utc.",
         "grain": "One row per UTC calendar month.",
         "interpretation_boundary": "An entitlement-event rate, not a capped player-loss probability: numerator counts entitlements and denominator counts opening players, so the rate may exceed one. Do not silently redefine it as distinct lost players.",
-        "maturity": "Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero opening denominator.",
+        "maturity": "Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete. NULL for zero opening denominator.",
         "numerator": "expired_or_revoked_entitlement_count: distinct subscription_id values with an observed terminal expiry/revocation timestamp in the month.",
         "source_model": "mart_hybrid_subscription__monthly_kpis"
       },
@@ -119,14 +119,14 @@
       "value": null
     },
     {
-      "answer": "denominator: mau: distinct monthly active players. exclusions: Reward-track revenue (reward-track products) and non-cash grants are excluded; failed transactions contribute zero recognized revenue; canonicalization contains duplicate webhooks. grain: One row per UTC calendar month. interpretation_boundary: Descriptive cash revenue per MAU, not ARPPU, profit, causal value, or LTV. Revenue is not restricted to session-active payers even though the denominator is MAU. maturity: Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero MAU. numerator: total_net_revenue_usd = standalone_store_net_revenue_usd + subscription_net_revenue_usd, from canonical recognized transaction revenue net of refunds. source_model: mart_hybrid_subscription__monthly_kpis",
+      "answer": "denominator: mau: distinct monthly active players. exclusions: Reward-track revenue (reward-track products) and non-cash grants are excluded; failed transactions contribute zero recognized revenue; canonicalization contains duplicate webhooks. grain: One row per UTC calendar month. interpretation_boundary: Descriptive cash revenue per MAU, not ARPPU, profit, causal value, or LTV. Revenue is not restricted to session-active payers even though the denominator is MAU. maturity: Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete. NULL for zero MAU. numerator: total_net_revenue_usd = standalone_store_net_revenue_usd + subscription_net_revenue_usd, from canonical recognized transaction revenue net of refunds. source_model: mart_hybrid_subscription__monthly_kpis",
       "cost_usd": 0,
       "definition": {
         "denominator": "mau: distinct monthly active players.",
         "exclusions": "Reward-track revenue (reward-track products) and non-cash grants are excluded; failed transactions contribute zero recognized revenue; canonicalization contains duplicate webhooks.",
         "grain": "One row per UTC calendar month.",
         "interpretation_boundary": "Descriptive cash revenue per MAU, not ARPPU, profit, causal value, or LTV. Revenue is not restricted to session-active payers even though the denominator is MAU.",
-        "maturity": "Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero MAU.",
+        "maturity": "Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete. NULL for zero MAU.",
         "numerator": "total_net_revenue_usd = standalone_store_net_revenue_usd + subscription_net_revenue_usd, from canonical recognized transaction revenue net of refunds.",
         "source_model": "mart_hybrid_subscription__monthly_kpis"
       },
@@ -166,14 +166,14 @@
       "value": null
     },
     {
-      "answer": "denominator: eligible_standalone_transaction_count: all canonical succeeded/refunded standalone-store transaction rows. exclusions: Failed transactions, subscription and reward-track products; duplicate webhooks contained by canonicalization. grain: One row per UTC calendar month. interpretation_boundary: Transaction utilization rate, not discount dollars divided by revenue and not distinct discounted customers. Refunded eligible transactions remain in both applicable counts. maturity: Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero eligible transaction denominator. numerator: discounted_standalone_transaction_count: canonical succeeded/refunded standalone-store transaction rows with discount_amount_usd > 0. source_model: mart_hybrid_subscription__monthly_kpis",
+      "answer": "denominator: eligible_standalone_transaction_count: all canonical succeeded/refunded standalone-store transaction rows. exclusions: Failed transactions, subscription and reward-track products; duplicate webhooks contained by canonicalization. grain: One row per UTC calendar month. interpretation_boundary: Transaction utilization rate, not discount dollars divided by revenue and not distinct discounted customers. Refunded eligible transactions remain in both applicable counts. maturity: Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete. NULL for zero eligible transaction denominator. numerator: discounted_standalone_transaction_count: canonical succeeded/refunded standalone-store transaction rows with discount_amount_usd > 0. source_model: mart_hybrid_subscription__monthly_kpis",
       "cost_usd": 0,
       "definition": {
         "denominator": "eligible_standalone_transaction_count: all canonical succeeded/refunded standalone-store transaction rows.",
         "exclusions": "Failed transactions, subscription and reward-track products; duplicate webhooks contained by canonicalization.",
         "grain": "One row per UTC calendar month.",
         "interpretation_boundary": "Transaction utilization rate, not discount dollars divided by revenue and not distinct discounted customers. Refunded eligible transactions remain in both applicable counts.",
-        "maturity": "Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero eligible transaction denominator.",
+        "maturity": "Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete. NULL for zero eligible transaction denominator.",
         "numerator": "discounted_standalone_transaction_count: canonical succeeded/refunded standalone-store transaction rows with discount_amount_usd > 0.",
         "source_model": "mart_hybrid_subscription__monthly_kpis"
       },
@@ -213,14 +213,14 @@
       "value": null
     },
     {
-      "answer": "denominator: mau: distinct players with at least one canonical session in that month. exclusions: Participants without a same-month canonical session and participations outside the month. grain: One row per UTC calendar month. interpretation_boundary: Participant rate among MAU, not daily event counts or matched 28-day participation-count change; does not identify a causal engagement effect. maturity: Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero MAU. numerator: liveops_participant_count: distinct MAU players with at least one governed LiveOps participation in the same calendar month. source_model: mart_hybrid_subscription__monthly_kpis",
+      "answer": "denominator: mau: distinct players with at least one canonical session in that month. exclusions: Participants without a same-month canonical session and participations outside the month. grain: One row per UTC calendar month. interpretation_boundary: Participant rate among MAU, not daily event counts or matched 28-day participation-count change; does not identify a causal engagement effect. maturity: Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete. NULL for zero MAU. numerator: liveops_participant_count: distinct MAU players with at least one governed LiveOps participation in the same calendar month. source_model: mart_hybrid_subscription__monthly_kpis",
       "cost_usd": 0,
       "definition": {
         "denominator": "mau: distinct players with at least one canonical session in that month.",
         "exclusions": "Participants without a same-month canonical session and participations outside the month.",
         "grain": "One row per UTC calendar month.",
         "interpretation_boundary": "Participant rate among MAU, not daily event counts or matched 28-day participation-count change; does not identify a causal engagement effect.",
-        "maturity": "Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero MAU.",
+        "maturity": "Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete. NULL for zero MAU.",
         "numerator": "liveops_participant_count: distinct MAU players with at least one governed LiveOps participation in the same calendar month.",
         "source_model": "mart_hybrid_subscription__monthly_kpis"
       },

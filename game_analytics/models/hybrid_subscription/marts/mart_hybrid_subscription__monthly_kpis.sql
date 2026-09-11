@@ -2,33 +2,41 @@
 -- and incremental total net revenue remain at pair grain in matched_incrementality;
 -- consumers query that mart separately rather than replicating estimates by month.
 with observation as (
-    select min(observed_at_utc) as first_observed_at_utc, max(observed_at_utc) as as_of_at_utc
-    from (
-        select started_at_utc as observed_at_utc from {{ ref('fct_hybrid_subscription__sessions') }}
-        union all select transaction_at_utc from {{ ref('fct_hybrid_subscription__store_transactions') }}
-        union all select participated_at_utc from {{ ref('stg_hybrid_subscription__live_event_participation') }}
-    ) timestamps
+    select observation_start_at_utc as first_observed_at_utc, as_of_at_utc
+    from {{ ref('int_hybrid_subscription__governed_observation_boundary') }}
+    where are_source_watermarks_valid
 ),
 months as (
     select distinct cast(date_trunc('month', d.date_day) as date) as metric_month,
-        o.as_of_at_utc
+        o.first_observed_at_utc, o.as_of_at_utc
     from {{ ref('dim_dates') }} d cross join observation o
-    where d.date_day >= cast(date_trunc('month', timezone('UTC', o.first_observed_at_utc)) as date)
+    -- Suppress the first calendar month when common governed coverage begins
+    -- after its opening instant; later partial months are published month-to-date.
+    where d.date_day >= case
+        when timezone('UTC', o.first_observed_at_utc)
+            = date_trunc('month', timezone('UTC', o.first_observed_at_utc))
+            then cast(date_trunc('month', timezone('UTC', o.first_observed_at_utc)) as date)
+        else cast(date_trunc('month', timezone('UTC', o.first_observed_at_utc)) + interval '1 month' as date)
+      end
       and d.date_day <= cast(timezone('UTC', o.as_of_at_utc) as date)
 ),
 active_players as (
     select distinct cast(date_trunc('month', timezone('UTC', started_at_utc)) as date) as metric_month, player_id
-    from {{ ref('fct_hybrid_subscription__sessions') }}
+    from {{ ref('fct_hybrid_subscription__sessions') }} cross join observation o
+    where started_at_utc >= o.first_observed_at_utc
+      and started_at_utc <= o.as_of_at_utc
 ),
 activity as (
     select metric_month, count(*) as mau from active_players group by metric_month
 ),
 liveops as (
     select a.metric_month, count(distinct a.player_id) as liveops_participant_count
-    from active_players a
+    from active_players a cross join observation o
     join {{ ref('stg_hybrid_subscription__live_event_participation') }} p
         on p.player_id = a.player_id
         and cast(date_trunc('month', timezone('UTC', p.participated_at_utc)) as date) = a.metric_month
+        and p.participated_at_utc >= o.first_observed_at_utc
+        and p.participated_at_utc <= o.as_of_at_utc
     group by a.metric_month
 ),
 revenue as (
@@ -41,7 +49,9 @@ revenue as (
             as eligible_standalone_transaction_count,
         count(*) filter (where is_standalone_store_revenue and transaction_status in ('succeeded', 'refunded')
             and discount_amount_usd > 0) as discounted_standalone_transaction_count
-    from {{ ref('fct_hybrid_subscription__store_transactions') }}
+    from {{ ref('fct_hybrid_subscription__store_transactions') }} cross join observation o
+    where transaction_at_utc >= o.first_observed_at_utc
+      and transaction_at_utc <= o.as_of_at_utc
     group by cast(date_trunc('month', timezone('UTC', transaction_at_utc)) as date)
 ),
 start_subscribers as (
@@ -63,7 +73,8 @@ churn as (
     select cast(date_trunc('month', timezone('UTC', e.terminal_event_at_utc)) as date) as metric_month,
         count(distinct e.subscription_id) as expired_or_revoked_entitlement_count
     from {{ ref('fct_hybrid_subscription__subscription_entitlements') }} e cross join observation o
-    where e.terminal_event_at_utc <= o.as_of_at_utc
+    where e.terminal_event_at_utc >= o.first_observed_at_utc
+      and e.terminal_event_at_utc <= o.as_of_at_utc
     group by cast(date_trunc('month', timezone('UTC', e.terminal_event_at_utc)) as date)
 ),
 components as (

@@ -1,11 +1,13 @@
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 ROOT = Path("reports/hybrid_subscription")
 RESULTS = json.loads((ROOT / "engagement_cannibalization_diagnostic_results.json").read_text())
+VALIDATION = json.loads((ROOT / "native_validation.json").read_text())
 
 
 def test_memo_has_decision_and_observational_boundaries() -> None:
@@ -70,12 +72,30 @@ def test_governance_keeps_generated_notebooks_unpublished_and_records_execution(
     ]:
         text = path.read_text()
         assert not re.search(r"\]\([^)]*(?:\.ipynb|figures/)[^)]*\)", text)
-        assert "Jupyter kernel execution" in text
-        assert "real-checkout HEAD equivalence" in text
-        assert "owner-run" in text.lower()
+        assert "native_validation.json" in text
     audit = Path("docs/ai-audit/hybrid_subscription.md").read_text()
     assert "direct exact-source execution succeeded" in audit
     assert RESULTS["metadata"]["code_version"] in audit
+
+
+def test_memo_provenance_and_run_totals_match_machine_readable_evidence() -> None:
+    memo = (ROOT / "engagement_cannibalization_decision_memo.md").read_text()
+    audit = Path("docs/ai-audit/hybrid_subscription.md").read_text()
+    validation = VALIDATION["results"]
+
+    assert RESULTS["metadata"]["code_version"] == VALIDATION["source_commit"]
+    for text in [memo, audit]:
+        assert RESULTS["metadata"]["code_version_source"] in text
+        assert RESULTS["metadata"]["execution_provenance"]["mode"] in text
+        assert f"PASS={validation['passed_tests']}" in text
+        assert f"SUCCESS={validation['successful_models']}" in text
+        assert f"TOTAL={validation['total']}" in text
+        for field, label in [
+            ("warnings", "WARN"),
+            ("errors", "ERROR"),
+            ("skipped", "SKIP"),
+        ]:
+            assert f"{label}={validation[field]}" in text
 
 
 def assert_memo_evidence(text, results):
@@ -117,6 +137,21 @@ def test_all_copied_memo_and_audit_values_have_exact_committed_sources():
         (ROOT / "engagement_cannibalization_decision_memo.md").read_text(), RESULTS
     )
     assert_audit_evidence(Path("docs/ai-audit/hybrid_subscription.md").read_text(), RESULTS)
+
+
+def test_published_context_uses_conservative_source_maturity_boundary():
+    metadata = RESULTS["metadata"]
+    expected_as_of = min(
+        datetime.fromisoformat(source["ingestion_mature_through_at_utc"])
+        for source in metadata["source_watermarks"]
+    )
+    published_rows = RESULTS["context"]["monthly_kpis"] + RESULTS["context"]["cohorts"]
+
+    assert published_rows
+    assert all(
+        datetime.fromisoformat(row["as_of_at_utc"].replace("Z", "+00:00")) == expected_as_of
+        for row in published_rows
+    )
 
 
 @pytest.mark.parametrize("field", ["interval", "incident", "timestamp"])

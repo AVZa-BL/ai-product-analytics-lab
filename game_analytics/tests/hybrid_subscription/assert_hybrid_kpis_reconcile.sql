@@ -5,7 +5,16 @@ with observed as (
     union all select transaction_at_utc from {{ ref('fct_hybrid_subscription__store_transactions') }}
     union all select participated_at_utc from {{ ref('stg_hybrid_subscription__live_event_participation') }}
 ),
-bounds as (select min(observed_at_utc) as first_at, max(observed_at_utc) as as_of_at_utc from observed),
+daily_bound as (
+    select max(observed_at_utc) as as_of_at_utc from observed
+),
+bounds as (
+    select max(observation_start_at_utc) as first_at,
+        min(ingestion_mature_through_at_utc) as as_of_at_utc
+    from {{ ref('int_hybrid_subscription__source_watermarks') }}
+    having count(*) = 3 and bool_and(is_source_valid)
+        and count(ingestion_mature_through_at_utc) = 3
+),
 daily_events as (
     select f.player_id, cast(timezone('UTC', f.started_at_utc) as date) as metric_date from {{ ref('fct_hybrid_subscription__sessions') }} f
     union all
@@ -25,7 +34,7 @@ daily_events as (
 daily_keys as (
     select distinct e.metric_date,p.prior_payer_status
     from daily_events e join {{ ref('dim_hybrid_subscription__players') }} p using (player_id)
-    cross join bounds b where e.metric_date <= cast(timezone('UTC', b.as_of_at_utc) as date)
+    cross join daily_bound b where e.metric_date <= cast(timezone('UTC', b.as_of_at_utc) as date)
 ),
 daily_components as (
     select k.*,
@@ -50,22 +59,26 @@ expected_daily as (
     from daily_components
 ),
 month_keys as (
-    select distinct date_trunc('month',d.date_day)::date as metric_month,b.as_of_at_utc
+    select distinct date_trunc('month',d.date_day)::date as metric_month,b.first_at,b.as_of_at_utc
     from {{ ref('dim_dates') }} d cross join bounds b
-    where date_trunc('month',d.date_day) between date_trunc('month', timezone('UTC', b.first_at)) and date_trunc('month', timezone('UTC', b.as_of_at_utc))
+    where d.date_day >= case
+        when timezone('UTC', b.first_at)=date_trunc('month',timezone('UTC',b.first_at))
+            then date_trunc('month',timezone('UTC',b.first_at))::date
+        else (date_trunc('month',timezone('UTC',b.first_at))+interval '1 month')::date end
+      and d.date_day <= timezone('UTC',b.as_of_at_utc)::date
 ),
 monthly_components as (
     select k.metric_month, k.as_of_at_utc,
         k.metric_month + interval '1 month' <= timezone('UTC', k.as_of_at_utc) as is_month_complete,
-        (select count(distinct s.player_id) from {{ ref('fct_hybrid_subscription__sessions') }} s where date_trunc('month', timezone('UTC', s.started_at_utc))::date=k.metric_month) as mau,
+        (select count(distinct s.player_id) from {{ ref('fct_hybrid_subscription__sessions') }} s where date_trunc('month', timezone('UTC', s.started_at_utc))::date=k.metric_month and s.started_at_utc>=k.first_at and s.started_at_utc<=k.as_of_at_utc) as mau,
         (select count(distinct e.player_id) from {{ ref('fct_hybrid_subscription__subscription_entitlements') }} e where e.entitlement_start_at_utc <= timezone('UTC', cast(k.metric_month as timestamp)) and e.entitlement_end_at_utc > timezone('UTC', cast(k.metric_month as timestamp))) as month_start_active_subscriber_count,
         (select case when k.metric_month + interval '1 month' <= timezone('UTC', k.as_of_at_utc) then count(distinct s.player_id) end from {{ ref('fct_hybrid_subscription__subscriber_daily') }} s where s.metric_date=(k.metric_month + interval '1 month' - interval '1 day')::date) as month_end_active_subscriber_count,
-        (select count(distinct e.subscription_id) from {{ ref('fct_hybrid_subscription__subscription_entitlements') }} e where date_trunc('month', timezone('UTC', e.terminal_event_at_utc))::date=k.metric_month and e.terminal_event_at_utc <= k.as_of_at_utc and exists (select 1 from {{ ref('stg_hybrid_subscription__subscription_events') }} v where v.player_id=e.player_id and v.occurred_at_utc=e.terminal_event_at_utc and v.event_type in ('expired','revoked'))) as expired_or_revoked_entitlement_count,
-        (select coalesce(sum(t.recognized_net_revenue_usd),0) from {{ ref('fct_hybrid_subscription__store_transactions') }} t where date_trunc('month', timezone('UTC', t.transaction_at_utc))::date=k.metric_month and t.is_standalone_store_revenue) as standalone_store_net_revenue_usd,
-        (select coalesce(sum(t.recognized_net_revenue_usd),0) from {{ ref('fct_hybrid_subscription__store_transactions') }} t where date_trunc('month', timezone('UTC', t.transaction_at_utc))::date=k.metric_month and t.is_subscription_revenue) as subscription_net_revenue_usd,
-        (select count(*) from {{ ref('fct_hybrid_subscription__store_transactions') }} t where date_trunc('month', timezone('UTC', t.transaction_at_utc))::date=k.metric_month and t.is_standalone_store_revenue and t.transaction_status in ('succeeded','refunded')) as eligible_standalone_transaction_count,
-        (select count(*) from {{ ref('fct_hybrid_subscription__store_transactions') }} t where date_trunc('month', timezone('UTC', t.transaction_at_utc))::date=k.metric_month and t.is_standalone_store_revenue and t.transaction_status in ('succeeded','refunded') and t.discount_amount_usd>0) as discounted_standalone_transaction_count,
-        (select count(distinct l.player_id) from {{ ref('stg_hybrid_subscription__live_event_participation') }} l where date_trunc('month', timezone('UTC', l.participated_at_utc))::date=k.metric_month and exists (select 1 from {{ ref('fct_hybrid_subscription__sessions') }} s where s.player_id=l.player_id and date_trunc('month', timezone('UTC', s.started_at_utc))::date=k.metric_month)) as liveops_participant_count
+        (select count(distinct e.subscription_id) from {{ ref('fct_hybrid_subscription__subscription_entitlements') }} e where date_trunc('month', timezone('UTC', e.terminal_event_at_utc))::date=k.metric_month and e.terminal_event_at_utc>=k.first_at and e.terminal_event_at_utc<=k.as_of_at_utc and exists (select 1 from {{ ref('stg_hybrid_subscription__subscription_events') }} v where v.player_id=e.player_id and v.occurred_at_utc=e.terminal_event_at_utc and v.event_type in ('expired','revoked'))) as expired_or_revoked_entitlement_count,
+        (select coalesce(sum(t.recognized_net_revenue_usd),0) from {{ ref('fct_hybrid_subscription__store_transactions') }} t where date_trunc('month', timezone('UTC', t.transaction_at_utc))::date=k.metric_month and t.transaction_at_utc>=k.first_at and t.transaction_at_utc<=k.as_of_at_utc and t.is_standalone_store_revenue) as standalone_store_net_revenue_usd,
+        (select coalesce(sum(t.recognized_net_revenue_usd),0) from {{ ref('fct_hybrid_subscription__store_transactions') }} t where date_trunc('month', timezone('UTC', t.transaction_at_utc))::date=k.metric_month and t.transaction_at_utc>=k.first_at and t.transaction_at_utc<=k.as_of_at_utc and t.is_subscription_revenue) as subscription_net_revenue_usd,
+        (select count(*) from {{ ref('fct_hybrid_subscription__store_transactions') }} t where date_trunc('month', timezone('UTC', t.transaction_at_utc))::date=k.metric_month and t.transaction_at_utc>=k.first_at and t.transaction_at_utc<=k.as_of_at_utc and t.is_standalone_store_revenue and t.transaction_status in ('succeeded','refunded')) as eligible_standalone_transaction_count,
+        (select count(*) from {{ ref('fct_hybrid_subscription__store_transactions') }} t where date_trunc('month', timezone('UTC', t.transaction_at_utc))::date=k.metric_month and t.transaction_at_utc>=k.first_at and t.transaction_at_utc<=k.as_of_at_utc and t.is_standalone_store_revenue and t.transaction_status in ('succeeded','refunded') and t.discount_amount_usd>0) as discounted_standalone_transaction_count,
+        (select count(distinct l.player_id) from {{ ref('stg_hybrid_subscription__live_event_participation') }} l where date_trunc('month', timezone('UTC', l.participated_at_utc))::date=k.metric_month and l.participated_at_utc>=k.first_at and l.participated_at_utc<=k.as_of_at_utc and exists (select 1 from {{ ref('fct_hybrid_subscription__sessions') }} s where s.player_id=l.player_id and date_trunc('month', timezone('UTC', s.started_at_utc))::date=k.metric_month and s.started_at_utc>=k.first_at and s.started_at_utc<=k.as_of_at_utc)) as liveops_participant_count
     from month_keys k
 ),
 expected_monthly as (
@@ -92,7 +105,7 @@ cohort_members as (
             and s.start_at <= b.as_of_at_utc then 1 else 0 end as converted_within_28d_player_count,
         0 as subscription_starter_count,0 as mature_subscription_starter_count,0 as retained_at_d30_player_count
     from first_exposures x left join first_starts s using (player_id) cross join bounds b
-    where x.index_at <= b.as_of_at_utc
+    where x.index_at >= b.first_at and x.index_at <= b.as_of_at_utc
     union all
     select 'subscription_start',s.player_id,s.start_at,0,0,1,
         case when s.start_at + interval '720 hours' <= b.as_of_at_utc then 1 else 0 end,
@@ -100,7 +113,7 @@ cohort_members as (
             select 1 from {{ ref('fct_hybrid_subscription__subscription_entitlements') }} e
             where e.player_id=s.player_id and e.entitlement_start_at_utc <= s.start_at + interval '720 hours'
               and e.entitlement_end_at_utc > s.start_at + interval '720 hours') then 1 else 0 end
-    from first_starts s cross join bounds b where s.start_at <= b.as_of_at_utc
+    from first_starts s cross join bounds b where s.start_at >= b.first_at and s.start_at <= b.as_of_at_utc
 ),
 cohort_components as (
     select cohort_type,cast(timezone('UTC', cohort_at) as date) as cohort_date,

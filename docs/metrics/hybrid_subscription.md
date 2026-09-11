@@ -28,7 +28,7 @@ Recognized cash revenue comes from canonical succeeded/refunded transactions, wi
 
 **Exclusions:** Players with no canonical session in the month; duplicate session rows do not create additional active players.
 
-**Maturity:** Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark.
+**Maturity:** Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete.
 
 **Interpretation boundary:** Descriptive monthly activity, not daily active users summed across days and not evidence of a subscription effect.
 
@@ -76,7 +76,7 @@ Recognized cash revenue comes from canonical succeeded/refunded transactions, wi
 
 **Exclusions:** Cancellation alone is not churn; ignore cancellation as a terminal event and exclude terminal timestamps after as_of_at_utc.
 
-**Maturity:** Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero opening denominator.
+**Maturity:** Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete. NULL for zero opening denominator.
 
 **Interpretation boundary:** An entitlement-event rate, not a capped player-loss probability: numerator counts entitlements and denominator counts opening players, so the rate may exceed one. Do not silently redefine it as distinct lost players.
 
@@ -108,7 +108,7 @@ Recognized cash revenue comes from canonical succeeded/refunded transactions, wi
 
 **Exclusions:** Reward-track revenue (reward-track products) and non-cash grants are excluded; failed transactions contribute zero recognized revenue; canonicalization contains duplicate webhooks.
 
-**Maturity:** Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero MAU.
+**Maturity:** Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete. NULL for zero MAU.
 
 **Interpretation boundary:** Descriptive cash revenue per MAU, not ARPPU, profit, causal value, or LTV. Revenue is not restricted to session-active payers even though the denominator is MAU.
 
@@ -140,7 +140,7 @@ Recognized cash revenue comes from canonical succeeded/refunded transactions, wi
 
 **Exclusions:** Failed transactions, subscription and reward-track products; duplicate webhooks contained by canonicalization.
 
-**Maturity:** Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero eligible transaction denominator.
+**Maturity:** Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete. NULL for zero eligible transaction denominator.
 
 **Interpretation boundary:** Transaction utilization rate, not discount dollars divided by revenue and not distinct discounted customers. Refunded eligible transactions remain in both applicable counts.
 
@@ -172,7 +172,7 @@ Recognized cash revenue comes from canonical succeeded/refunded transactions, wi
 
 **Exclusions:** Participants without a same-month canonical session and participations outside the month.
 
-**Maturity:** Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero MAU.
+**Maturity:** Calendar month in UTC; governed as_of_at_utc is the minimum ingestion-mature-through timestamp across the three required valid outcome sources. The first partial coverage month is suppressed; before the next month, publish only facts at or before as_of_at_utc as month-to-date values labelled incomplete. NULL for zero MAU.
 
 **Interpretation boundary:** Participant rate among MAU, not daily event counts or matched 28-day participation-count change; does not identify a causal engagement effect.
 

@@ -14,6 +14,7 @@ EXPECTED_MODELS = {
     "int_hybrid_subscription__matched_pairs",
     "int_hybrid_subscription__match_population_summary",
     "int_hybrid_subscription__source_watermarks",
+    "int_hybrid_subscription__governed_observation_boundary",
 }
 EXPECTED_TESTS = {
     "assert_cancellation_preserves_entitlement.sql",

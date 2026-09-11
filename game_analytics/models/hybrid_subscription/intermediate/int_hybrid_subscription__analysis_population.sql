@@ -17,11 +17,11 @@ eligible_exposure as (
 ),
 observation_bounds as (
     select
-        count(*) = 3 and bool_and(is_source_valid) as are_source_watermarks_valid,
-        max(observation_start_at_utc) as observation_start_at_utc,
-        min(observation_end_at_utc) as observation_end_at_utc,
-        min(ingestion_mature_through_at_utc) as ingestion_mature_through_at_utc
-    from {{ ref('int_hybrid_subscription__source_watermarks') }}
+        are_source_watermarks_valid,
+        observation_start_at_utc,
+        observation_end_at_utc,
+        as_of_at_utc as ingestion_mature_through_at_utc
+    from {{ ref('int_hybrid_subscription__governed_observation_boundary') }}
 ),
 classified_population as (
     select

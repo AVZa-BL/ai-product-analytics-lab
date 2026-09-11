@@ -1,0 +1,15 @@
+{
+  "source_commit": "e45a19cf48a6b08f27f5c13c71c2d999857c194f",
+  "mode": "clean dbt reconstruction from exact published source snapshot",
+  "selector": "hybrid_subscription",
+  "dbt_version": "1.12.3",
+  "generated_at_utc": "2026-09-11T19:04:44.309597Z",
+  "results": {
+    "passed_tests": 311,
+    "successful_models": 36,
+    "warnings": 0,
+    "errors": 0,
+    "skipped": 0,
+    "total": 347
+  }
+}
