@@ -1,0 +1,756 @@
+{
+  "evaluation_scope": "Recorded canonical fixtures; metadata scorer plus semantic-contract regression checks, not a live-agent evaluation.",
+  "questions": [
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__monthly_kpis"
+      ],
+      "category": "standard",
+      "class": "standard",
+      "cost": 0.02,
+      "definition": {
+        "denominator": "Not applicable: distinct-player count, not a rate.",
+        "exclusions": "Players with no canonical session in the month; duplicate session rows do not create additional active players.",
+        "grain": "One row per UTC calendar month.",
+        "interpretation_boundary": "Descriptive monthly activity, not daily active users summed across days and not evidence of a subscription effect.",
+        "maturity": "Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark.",
+        "numerator": "mau: count of distinct players with at least one canonical session in the month.",
+        "source_model": "mart_hybrid_subscription__monthly_kpis"
+      },
+      "expected_metric": "mau",
+      "expected_population": "One row per UTC calendar month.",
+      "expected_result": "denominator: Not applicable: distinct-player count, not a rate. exclusions: Players with no canonical session in the month; duplicate session rows do not create additional active players. grain: One row per UTC calendar month. interpretation_boundary: Descriptive monthly activity, not daily active users summed across days and not evidence of a subscription effect. maturity: Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. numerator: mau: count of distinct players with at least one canonical session in the month. source_model: mart_hybrid_subscription__monthly_kpis",
+      "expected_value": null,
+      "id": "hybrid_definition_mau",
+      "latency": 1000,
+      "question": "Define MAU: state grain, numerator, denominator, exclusions, source model, maturity, and interpretation boundary.",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__daily_kpis",
+        "mart_hybrid_subscription__monthly_kpis",
+        "fct_hybrid_subscription__subscriber_daily",
+        "fct_hybrid_subscription__subscription_entitlements"
+      ],
+      "category": "standard",
+      "class": "standard",
+      "cost": 0.02,
+      "definition": {
+        "denominator": "Not applicable: distinct-player count, not entitlement-record count.",
+        "exclusions": "Players outside governed entitlement state; never use eventual-subscriber status. Opening balance excludes starts later on the first day. Cancellation alone does not remove access before expiry/revocation.",
+        "grain": "UTC metric_date by prior_payer_status for daily counts; calendar month for opening and closing balances.",
+        "interpretation_boundary": "A stock of active access, not starts, billed customers, or a sum across dates. The daily fact uses start-date inclusive/end-date exclusive coverage; use exact entitlement timestamps for the monthly opening balance.",
+        "maturity": "Daily state follows governed date-grain entitlement coverage. The opening balance is point-in-time; month-end balance is NULL until as_of_at_utc reaches the next month.",
+        "numerator": "Distinct entitled players: active_subscriber_count from subscriber_daily; month_start_active_subscriber_count at exactly 00:00 UTC on the first day; month_end_active_subscriber_count on the last calendar date.",
+        "source_model": "mart_hybrid_subscription__daily_kpis; mart_hybrid_subscription__monthly_kpis; fct_hybrid_subscription__subscriber_daily; fct_hybrid_subscription__subscription_entitlements"
+      },
+      "expected_metric": "active_subscribers",
+      "expected_population": "UTC metric_date by prior_payer_status for daily counts; calendar month for opening and closing balances.",
+      "expected_result": "denominator: Not applicable: distinct-player count, not entitlement-record count. exclusions: Players outside governed entitlement state; never use eventual-subscriber status. Opening balance excludes starts later on the first day. Cancellation alone does not remove access before expiry/revocation. grain: UTC metric_date by prior_payer_status for daily counts; calendar month for opening and closing balances. interpretation_boundary: A stock of active access, not starts, billed customers, or a sum across dates. The daily fact uses start-date inclusive/end-date exclusive coverage; use exact entitlement timestamps for the monthly opening balance. maturity: Daily state follows governed date-grain entitlement coverage. The opening balance is point-in-time; month-end balance is NULL until as_of_at_utc reaches the next month. numerator: Distinct entitled players: active_subscriber_count from subscriber_daily; month_start_active_subscriber_count at exactly 00:00 UTC on the first day; month_end_active_subscriber_count on the last calendar date. source_model: mart_hybrid_subscription__daily_kpis; mart_hybrid_subscription__monthly_kpis; fct_hybrid_subscription__subscriber_daily; fct_hybrid_subscription__subscription_entitlements",
+      "expected_value": null,
+      "id": "hybrid_definition_active_subscribers",
+      "latency": 1000,
+      "question": "Define Active subscribers: state grain, numerator, denominator, exclusions, source model, maturity, and interpretation boundary.",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__subscription_cohorts"
+      ],
+      "category": "standard",
+      "class": "standard",
+      "cost": 0.02,
+      "definition": {
+        "denominator": "eligible_exposed_player_count: distinct eligible exposed players; no matching or mature pre-window requirement.",
+        "exclusions": "Ineligible exposures, starts at/before exposure or at/after exposure plus 28 days; subscription_start cohort rows are non-applicable.",
+        "grain": "cohort_type = eligible_exposure and UTC date of each player's earliest incrementality-eligible exposure.",
+        "interpretation_boundary": "Observed forward conversion among eligible exposed players, not matched engagement lift or causal marketing incrementality.",
+        "maturity": "Rate is NULL until every member is mature: latest exact exposure in the date cohort plus 28 days <= as_of_at_utc; NULL for zero denominator and non-exposure rows.",
+        "numerator": "converted_within_28d_player_count: distinct exposed players whose first entitlement starts strictly after exposure and before exposure plus 28 days, observed by as_of_at_utc.",
+        "source_model": "mart_hybrid_subscription__subscription_cohorts"
+      },
+      "expected_metric": "subscription_conversion",
+      "expected_population": "cohort_type = eligible_exposure and UTC date of each player's earliest incrementality-eligible exposure.",
+      "expected_result": "denominator: eligible_exposed_player_count: distinct eligible exposed players; no matching or mature pre-window requirement. exclusions: Ineligible exposures, starts at/before exposure or at/after exposure plus 28 days; subscription_start cohort rows are non-applicable. grain: cohort_type = eligible_exposure and UTC date of each player's earliest incrementality-eligible exposure. interpretation_boundary: Observed forward conversion among eligible exposed players, not matched engagement lift or causal marketing incrementality. maturity: Rate is NULL until every member is mature: latest exact exposure in the date cohort plus 28 days <= as_of_at_utc; NULL for zero denominator and non-exposure rows. numerator: converted_within_28d_player_count: distinct exposed players whose first entitlement starts strictly after exposure and before exposure plus 28 days, observed by as_of_at_utc. source_model: mart_hybrid_subscription__subscription_cohorts",
+      "expected_value": null,
+      "id": "hybrid_definition_subscription_conversion",
+      "latency": 1000,
+      "question": "Define Subscription conversion: state grain, numerator, denominator, exclusions, source model, maturity, and interpretation boundary.",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__monthly_kpis"
+      ],
+      "category": "standard",
+      "class": "standard",
+      "cost": 0.02,
+      "definition": {
+        "denominator": "month_start_active_subscriber_count: distinct players entitled at exactly the opening instant.",
+        "exclusions": "Cancellation alone is not churn; ignore cancellation as a terminal event and exclude terminal timestamps after as_of_at_utc.",
+        "grain": "One row per UTC calendar month.",
+        "interpretation_boundary": "An entitlement-event rate, not a capped player-loss probability: numerator counts entitlements and denominator counts opening players, so the rate may exceed one. Do not silently redefine it as distinct lost players.",
+        "maturity": "Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero opening denominator.",
+        "numerator": "expired_or_revoked_entitlement_count: distinct subscription_id values with an observed terminal expiry/revocation timestamp in the month.",
+        "source_model": "mart_hybrid_subscription__monthly_kpis"
+      },
+      "expected_metric": "subscriber_churn",
+      "expected_population": "One row per UTC calendar month.",
+      "expected_result": "denominator: month_start_active_subscriber_count: distinct players entitled at exactly the opening instant. exclusions: Cancellation alone is not churn; ignore cancellation as a terminal event and exclude terminal timestamps after as_of_at_utc. grain: One row per UTC calendar month. interpretation_boundary: An entitlement-event rate, not a capped player-loss probability: numerator counts entitlements and denominator counts opening players, so the rate may exceed one. Do not silently redefine it as distinct lost players. maturity: Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero opening denominator. numerator: expired_or_revoked_entitlement_count: distinct subscription_id values with an observed terminal expiry/revocation timestamp in the month. source_model: mart_hybrid_subscription__monthly_kpis",
+      "expected_value": null,
+      "id": "hybrid_definition_subscriber_churn",
+      "latency": 1000,
+      "question": "Define Subscriber churn: state grain, numerator, denominator, exclusions, source model, maturity, and interpretation boundary.",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__subscription_cohorts"
+      ],
+      "category": "standard",
+      "class": "standard",
+      "cost": 0.02,
+      "definition": {
+        "denominator": "mature_subscription_starter_count: distinct starters whose exact start plus 30 days <= as_of_at_utc.",
+        "exclusions": "Immature starters from the denominator; eligible_exposure rows are non-applicable. Entitlements are half-open: expiry exactly at D30 is not retained.",
+        "grain": "cohort_type = subscription_start and UTC first-entitlement-start date.",
+        "interpretation_boundary": "Entitlement retention at an exact time, not activity retention, renewal intent, lifetime value, or a partial-cohort rate.",
+        "maturity": "Rate is NULL until every member of the date cohort is mature (latest exact start plus 30 days <= as_of_at_utc); NULL for zero denominator and non-start rows.",
+        "numerator": "retained_at_d30_player_count: distinct mature starters entitled at exact start plus 30 days.",
+        "source_model": "mart_hybrid_subscription__subscription_cohorts"
+      },
+      "expected_metric": "d30_subscriber_retention",
+      "expected_population": "cohort_type = subscription_start and UTC first-entitlement-start date.",
+      "expected_result": "denominator: mature_subscription_starter_count: distinct starters whose exact start plus 30 days <= as_of_at_utc. exclusions: Immature starters from the denominator; eligible_exposure rows are non-applicable. Entitlements are half-open: expiry exactly at D30 is not retained. grain: cohort_type = subscription_start and UTC first-entitlement-start date. interpretation_boundary: Entitlement retention at an exact time, not activity retention, renewal intent, lifetime value, or a partial-cohort rate. maturity: Rate is NULL until every member of the date cohort is mature (latest exact start plus 30 days <= as_of_at_utc); NULL for zero denominator and non-start rows. numerator: retained_at_d30_player_count: distinct mature starters entitled at exact start plus 30 days. source_model: mart_hybrid_subscription__subscription_cohorts",
+      "expected_value": null,
+      "id": "hybrid_definition_d30_subscriber_retention",
+      "latency": 1000,
+      "question": "Define D30 subscriber retention: state grain, numerator, denominator, exclusions, source model, maturity, and interpretation boundary.",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__monthly_kpis"
+      ],
+      "category": "standard",
+      "class": "standard",
+      "cost": 0.02,
+      "definition": {
+        "denominator": "mau: distinct monthly active players.",
+        "exclusions": "Reward-track revenue (reward-track products) and non-cash grants are excluded; failed transactions contribute zero recognized revenue; canonicalization contains duplicate webhooks.",
+        "grain": "One row per UTC calendar month.",
+        "interpretation_boundary": "Descriptive cash revenue per MAU, not ARPPU, profit, causal value, or LTV. Revenue is not restricted to session-active payers even though the denominator is MAU.",
+        "maturity": "Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero MAU.",
+        "numerator": "total_net_revenue_usd = standalone_store_net_revenue_usd + subscription_net_revenue_usd, from canonical recognized transaction revenue net of refunds.",
+        "source_model": "mart_hybrid_subscription__monthly_kpis"
+      },
+      "expected_metric": "arpmau",
+      "expected_population": "One row per UTC calendar month.",
+      "expected_result": "denominator: mau: distinct monthly active players. exclusions: Reward-track revenue (reward-track products) and non-cash grants are excluded; failed transactions contribute zero recognized revenue; canonicalization contains duplicate webhooks. grain: One row per UTC calendar month. interpretation_boundary: Descriptive cash revenue per MAU, not ARPPU, profit, causal value, or LTV. Revenue is not restricted to session-active payers even though the denominator is MAU. maturity: Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero MAU. numerator: total_net_revenue_usd = standalone_store_net_revenue_usd + subscription_net_revenue_usd, from canonical recognized transaction revenue net of refunds. source_model: mart_hybrid_subscription__monthly_kpis",
+      "expected_value": null,
+      "id": "hybrid_definition_arpmau",
+      "latency": 1000,
+      "question": "Define ARPMAU: state grain, numerator, denominator, exclusions, source model, maturity, and interpretation boundary.",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__matched_incrementality",
+        "mart_hybrid_subscription__cannibalization_inputs"
+      ],
+      "category": "standard",
+      "class": "standard",
+      "cost": 0.02,
+      "definition": {
+        "denominator": "Actual matched_pair_count for pairs where both arms are prior_payer. Use component sums divided by summed pair counts; never sum repeated population totals on pair rows.",
+        "exclusions": "Unmatched and immature players; pairs not prior_payer in both arms for this revenue decision; reward-track revenue and non-cash grants; failed cash transactions contribute zero.",
+        "grain": "One row per subscriber-control pair in matched_incrementality; prior_payer aggregate in cannibalization_inputs for the decision estimate.",
+        "interpretation_boundary": "The approved name denotes a matched observational difference-in-differences diagnostic and does not establish causality. Standalone displacement and total net value are separate; not profit or lifetime value.",
+        "maturity": "Complete pre [index - 28 days, index) and post [index, index + 28 days) windows within every source's event coverage; each ingestion watermark must pass post endpoint plus its empirical maximum observed ingestion lag. One complete behavior row per player per period; missing/stale sources fail closed. This is not a completeness SLA. A zero pair denominator returns NULL; an absent stratum is not zero effect.",
+        "numerator": "Sum of total_net_revenue_usd_difference_in_differences: each subscriber's post-minus-pre standalone-store plus subscription revenue change, minus the matched control's change.",
+        "source_model": "mart_hybrid_subscription__matched_incrementality; mart_hybrid_subscription__cannibalization_inputs"
+      },
+      "expected_metric": "incremental_net_revenue",
+      "expected_population": "One row per subscriber-control pair in matched_incrementality; prior_payer aggregate in cannibalization_inputs for the decision estimate.",
+      "expected_result": "denominator: Actual matched_pair_count for pairs where both arms are prior_payer. Use component sums divided by summed pair counts; never sum repeated population totals on pair rows. exclusions: Unmatched and immature players; pairs not prior_payer in both arms for this revenue decision; reward-track revenue and non-cash grants; failed cash transactions contribute zero. grain: One row per subscriber-control pair in matched_incrementality; prior_payer aggregate in cannibalization_inputs for the decision estimate. interpretation_boundary: The approved name denotes a matched observational difference-in-differences diagnostic and does not establish causality. Standalone displacement and total net value are separate; not profit or lifetime value. maturity: Complete pre [index - 28 days, index) and post [index, index + 28 days) windows within every source's event coverage; each ingestion watermark must pass post endpoint plus its empirical maximum observed ingestion lag. One complete behavior row per player per period; missing/stale sources fail closed. This is not a completeness SLA. A zero pair denominator returns NULL; an absent stratum is not zero effect. numerator: Sum of total_net_revenue_usd_difference_in_differences: each subscriber's post-minus-pre standalone-store plus subscription revenue change, minus the matched control's change. source_model: mart_hybrid_subscription__matched_incrementality; mart_hybrid_subscription__cannibalization_inputs",
+      "expected_value": null,
+      "id": "hybrid_definition_incremental_net_revenue",
+      "latency": 1000,
+      "question": "Define Incremental net revenue: state grain, numerator, denominator, exclusions, source model, maturity, and interpretation boundary.",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__monthly_kpis"
+      ],
+      "category": "standard",
+      "class": "standard",
+      "cost": 0.02,
+      "definition": {
+        "denominator": "eligible_standalone_transaction_count: all canonical succeeded/refunded standalone-store transaction rows.",
+        "exclusions": "Failed transactions, subscription and reward-track products; duplicate webhooks contained by canonicalization.",
+        "grain": "One row per UTC calendar month.",
+        "interpretation_boundary": "Transaction utilization rate, not discount dollars divided by revenue and not distinct discounted customers. Refunded eligible transactions remain in both applicable counts.",
+        "maturity": "Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero eligible transaction denominator.",
+        "numerator": "discounted_standalone_transaction_count: canonical succeeded/refunded standalone-store transaction rows with discount_amount_usd > 0.",
+        "source_model": "mart_hybrid_subscription__monthly_kpis"
+      },
+      "expected_metric": "discount_utilization",
+      "expected_population": "One row per UTC calendar month.",
+      "expected_result": "denominator: eligible_standalone_transaction_count: all canonical succeeded/refunded standalone-store transaction rows. exclusions: Failed transactions, subscription and reward-track products; duplicate webhooks contained by canonicalization. grain: One row per UTC calendar month. interpretation_boundary: Transaction utilization rate, not discount dollars divided by revenue and not distinct discounted customers. Refunded eligible transactions remain in both applicable counts. maturity: Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero eligible transaction denominator. numerator: discounted_standalone_transaction_count: canonical succeeded/refunded standalone-store transaction rows with discount_amount_usd > 0. source_model: mart_hybrid_subscription__monthly_kpis",
+      "expected_value": null,
+      "id": "hybrid_definition_discount_utilization",
+      "latency": 1000,
+      "question": "Define Discount utilization: state grain, numerator, denominator, exclusions, source model, maturity, and interpretation boundary.",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__matched_incrementality",
+        "mart_hybrid_subscription__engagement_lift_inputs"
+      ],
+      "category": "standard",
+      "class": "standard",
+      "cost": 0.02,
+      "definition": {
+        "denominator": "Actual matched_pair_count across all eligible matched pairs, including prior payers and prior nonpayers.",
+        "exclusions": "Unmatched players, immature windows, ineligible exposure indexes, and sessions outside half-open windows.",
+        "grain": "One row per subscriber-control pair; exact prior_payer_status/platform/acquisition_channel stratum in engagement_lift_inputs.",
+        "interpretation_boundary": "A matched observational 28-day session-count difference, not relative lift or an unpaired pre/post average. Self-selection remains; does not establish causality.",
+        "maturity": "Complete pre [index - 28 days, index) and post [index, index + 28 days) windows within every source's event coverage; each ingestion watermark must pass post endpoint plus its empirical maximum observed ingestion lag. One complete behavior row per player per period; missing/stale sources fail closed. This is not a completeness SLA. NULL for zero pair denominator; an absent stratum is not zero lift.",
+        "numerator": "Sum of session_count_difference_in_differences: subscriber post-minus-pre session_count minus matched-control post-minus-pre session_count.",
+        "source_model": "mart_hybrid_subscription__matched_incrementality; mart_hybrid_subscription__engagement_lift_inputs"
+      },
+      "expected_metric": "engagement_lift",
+      "expected_population": "One row per subscriber-control pair; exact prior_payer_status/platform/acquisition_channel stratum in engagement_lift_inputs.",
+      "expected_result": "denominator: Actual matched_pair_count across all eligible matched pairs, including prior payers and prior nonpayers. exclusions: Unmatched players, immature windows, ineligible exposure indexes, and sessions outside half-open windows. grain: One row per subscriber-control pair; exact prior_payer_status/platform/acquisition_channel stratum in engagement_lift_inputs. interpretation_boundary: A matched observational 28-day session-count difference, not relative lift or an unpaired pre/post average. Self-selection remains; does not establish causality. maturity: Complete pre [index - 28 days, index) and post [index, index + 28 days) windows within every source's event coverage; each ingestion watermark must pass post endpoint plus its empirical maximum observed ingestion lag. One complete behavior row per player per period; missing/stale sources fail closed. This is not a completeness SLA. NULL for zero pair denominator; an absent stratum is not zero lift. numerator: Sum of session_count_difference_in_differences: subscriber post-minus-pre session_count minus matched-control post-minus-pre session_count. source_model: mart_hybrid_subscription__matched_incrementality; mart_hybrid_subscription__engagement_lift_inputs",
+      "expected_value": null,
+      "id": "hybrid_definition_engagement_lift",
+      "latency": 1000,
+      "question": "Define Engagement lift: state grain, numerator, denominator, exclusions, source model, maturity, and interpretation boundary.",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__monthly_kpis"
+      ],
+      "category": "standard",
+      "class": "standard",
+      "cost": 0.02,
+      "definition": {
+        "denominator": "mau: distinct players with at least one canonical session in that month.",
+        "exclusions": "Participants without a same-month canonical session and participations outside the month.",
+        "grain": "One row per UTC calendar month.",
+        "interpretation_boundary": "Participant rate among MAU, not daily event counts or matched 28-day participation-count change; does not identify a causal engagement effect.",
+        "maturity": "Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero MAU.",
+        "numerator": "liveops_participant_count: distinct MAU players with at least one governed LiveOps participation in the same calendar month.",
+        "source_model": "mart_hybrid_subscription__monthly_kpis"
+      },
+      "expected_metric": "liveops_participation",
+      "expected_population": "One row per UTC calendar month.",
+      "expected_result": "denominator: mau: distinct players with at least one canonical session in that month. exclusions: Participants without a same-month canonical session and participations outside the month. grain: One row per UTC calendar month. interpretation_boundary: Participant rate among MAU, not daily event counts or matched 28-day participation-count change; does not identify a causal engagement effect. maturity: Calendar month in UTC; governed as_of_at_utc is the maximum canonical session, transaction, or LiveOps timestamp. Before the next month, publish month-to-date values labelled incomplete; not an ingestion watermark. NULL for zero MAU. numerator: liveops_participant_count: distinct MAU players with at least one governed LiveOps participation in the same calendar month. source_model: mart_hybrid_subscription__monthly_kpis",
+      "expected_value": null,
+      "id": "hybrid_definition_liveops_participation",
+      "latency": 1000,
+      "question": "Define LiveOps participation: state grain, numerator, denominator, exclusions, source model, maturity, and interpretation boundary.",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__match_population_summary"
+      ],
+      "category": "difficult",
+      "class": "difficult",
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "population.unmatched_subscriber_count",
+      "expected_metric": "unmatched_subscriber_count",
+      "expected_population": "Governed eligible subscriber/control candidates with mature pre/post 28-day windows; unmatched counts remain outside matched estimates.",
+      "expected_result": "unmatched_subscriber_count = 123. Report unmatched subscribers and controls separately; exclude unmatched players from estimates, never pad outcomes or reuse controls. Counts are population metadata, not sums of repeated fields on pair rows.",
+      "expected_value": 123,
+      "id": "hybrid_unmatched_subscribers",
+      "latency": 1000,
+      "question": "How many eligible subscribers remain unmatched, and may they enter matched estimates?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__match_population_summary"
+      ],
+      "category": "difficult",
+      "class": "difficult",
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "population.unmatched_control_count",
+      "expected_metric": "unmatched_control_count",
+      "expected_population": "Governed eligible subscriber/control candidates with mature pre/post 28-day windows; unmatched counts remain outside matched estimates.",
+      "expected_result": "unmatched_control_count = 0. Report unmatched subscribers and controls separately; exclude unmatched players from estimates, never pad outcomes or reuse controls. Counts are population metadata, not sums of repeated fields on pair rows.",
+      "expected_value": 0,
+      "id": "hybrid_unmatched_controls",
+      "latency": 1000,
+      "question": "How many eligible controls remain unmatched, and may missing controls be padded?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__match_population_summary"
+      ],
+      "category": "difficult",
+      "class": "difficult",
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "population.matched_pair_count",
+      "expected_metric": "matched_pair_count",
+      "expected_population": "Governed eligible subscriber/control candidates with mature pre/post 28-day windows; unmatched counts remain outside matched estimates.",
+      "expected_result": "matched_pair_count = 157. Report unmatched subscribers and controls separately; exclude unmatched players from estimates, never pad outcomes or reuse controls. Counts are population metadata, not sums of repeated fields on pair rows.",
+      "expected_value": 157,
+      "id": "hybrid_matched_pair_count",
+      "latency": 1000,
+      "question": "How many actual eligible subscriber-control pairs enter engagement estimates?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__matched_incrementality"
+      ],
+      "category": "difficult",
+      "class": "difficult",
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "population.matched_prior_payer_pair_count",
+      "expected_metric": "matched_prior_payer_pair_count",
+      "expected_population": "Governed eligible subscriber/control candidates with mature pre/post 28-day windows; unmatched counts remain outside matched estimates.",
+      "expected_result": "matched_prior_payer_pair_count = 53. Report unmatched subscribers and controls separately; exclude unmatched players from estimates, never pad outcomes or reuse controls. Counts are population metadata, not sums of repeated fields on pair rows.",
+      "expected_value": 53,
+      "id": "hybrid_matched_prior_payer_pair_count",
+      "latency": 1000,
+      "question": "How many matched prior-payer pairs enter the revenue diagnostic?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__matched_incrementality",
+        "mart_hybrid_subscription__cannibalization_inputs"
+      ],
+      "category": "difficult",
+      "class": "difficult",
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "results.revenue.standalone_store_difference_in_differences",
+      "expected_metric": "standalone_store_net_revenue_per_player",
+      "expected_population": "Matched pairs where both players are prior_payer, each with complete eligible-index pre/post 28-day windows.",
+      "expected_result": "standalone_store_difference_in_differences = -17.627547169811322. USD per matched prior-payer pair; standalone displacement is separate from total net value. Reward-track and non-cash grants are excluded.",
+      "expected_value": -17.627547169811322,
+      "id": "hybrid_store_revenue_did",
+      "latency": 1000,
+      "question": "What is the matched prior-payer standalone-store revenue difference-in-differences?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__matched_incrementality",
+        "mart_hybrid_subscription__cannibalization_inputs"
+      ],
+      "category": "difficult",
+      "class": "difficult",
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "results.revenue.subscription_difference_in_differences",
+      "expected_metric": "subscription_net_revenue_per_player",
+      "expected_population": "Matched pairs where both players are prior_payer, each with complete eligible-index pre/post 28-day windows.",
+      "expected_result": "subscription_difference_in_differences = 9.99. USD per matched prior-payer pair; standalone displacement is separate from total net value. Reward-track and non-cash grants are excluded.",
+      "expected_value": 9.99,
+      "id": "hybrid_subscription_revenue_did",
+      "latency": 1000,
+      "question": "What subscription cash contribution accompanies the matched prior-payer comparison?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__matched_incrementality",
+        "mart_hybrid_subscription__cannibalization_inputs"
+      ],
+      "category": "difficult",
+      "class": "difficult",
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "results.revenue.total_revenue_difference_in_differences",
+      "expected_metric": "total_net_revenue_per_player",
+      "expected_population": "Matched pairs where both players are prior_payer, each with complete eligible-index pre/post 28-day windows.",
+      "expected_result": "total_revenue_difference_in_differences = -7.637547169811319. USD per matched prior-payer pair; standalone displacement is separate from total net value. Reward-track and non-cash grants are excluded.",
+      "expected_value": -7.637547169811319,
+      "id": "hybrid_total_revenue_did",
+      "latency": 1000,
+      "question": "What is matched prior-payer total-net-revenue difference-in-differences after including subscription cash?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__matched_incrementality",
+        "mart_hybrid_subscription__engagement_lift_inputs"
+      ],
+      "category": "difficult",
+      "class": "difficult",
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "results.engagement.engagement_difference_in_differences",
+      "expected_metric": "engagement_lift",
+      "expected_population": "All eligible matched subscriber/control pairs with complete pre/post 28-day windows.",
+      "expected_result": "engagement_difference_in_differences = 3.337579617834395. Sessions per actual matched pair, not an unpaired or relative change.",
+      "expected_value": 3.337579617834395,
+      "id": "hybrid_engagement_did",
+      "latency": 1000,
+      "question": "What is mean matched 28-day session-count difference-in-differences?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__matched_incrementality",
+        "mart_hybrid_subscription__engagement_lift_inputs"
+      ],
+      "category": "difficult",
+      "class": "difficult",
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "results.engagement.subscriber_session_count_change",
+      "expected_metric": "subscriber_session_count_change",
+      "expected_population": "All eligible matched subscriber/control pairs with complete pre/post 28-day windows.",
+      "expected_result": "subscriber_session_count_change = 3.9872611464968153. Sessions per actual matched pair, not an unpaired or relative change.",
+      "expected_value": 3.9872611464968153,
+      "id": "hybrid_subscriber_engagement_change",
+      "latency": 1000,
+      "question": "What is subscriber post-minus-pre session change within actual matched pairs?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__matched_incrementality",
+        "mart_hybrid_subscription__engagement_lift_inputs"
+      ],
+      "category": "difficult",
+      "class": "difficult",
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "results.engagement.control_session_count_change",
+      "expected_metric": "control_session_count_change",
+      "expected_population": "All eligible matched subscriber/control pairs with complete pre/post 28-day windows.",
+      "expected_result": "control_session_count_change = 0.6496815286624203. Sessions per actual matched pair, not an unpaired or relative change.",
+      "expected_value": 0.6496815286624203,
+      "id": "hybrid_non_subscriber_engagement_change",
+      "latency": 1000,
+      "question": "What is control post-minus-pre session change within actual matched pairs?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__matched_incrementality",
+        "mart_hybrid_subscription__engagement_lift_inputs",
+        "mart_hybrid_subscription__cannibalization_inputs",
+        "mart_hybrid_subscription__match_population_summary"
+      ],
+      "category": "difficult",
+      "class": "difficult",
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "metadata.pairing_rule",
+      "expected_metric": "pair_provenance",
+      "expected_population": "All eligible matched subscriber/control pairs with complete pre/post 28-day windows.",
+      "expected_result": "Use mart_hybrid_subscription__matched_incrementality at pair_id grain, reconcile to engagement_lift_inputs and cannibalization_inputs. Deterministic greedy one-to-one nearest control without replacement is exact on prior_payer_status, platform, acquisition_channel. Sort subscribers by these strata, pre_session_count, player_id. Sort unused exact-stratum controls by absolute pre_session_count distance, control pre_session_count, control player_id. No rank-to-rank substitute, cross-stratum fallback, or control reuse. Source model lineage is int_hybrid_subscription__matched_pairs, not a direct notebook input. The remote-source code_version override documents verified blobs, not real-checkout HEAD equivalence. Reconcile independent population and exclusion totals to mart_hybrid_subscription__match_population_summary even when zero pairs exist.",
+      "expected_value": null,
+      "id": "hybrid_pair_provenance",
+      "latency": 1000,
+      "question": "Which governed relation and deterministic pairing contract may support pair estimates?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "fct_hybrid_subscription__marketing_exposures",
+        "mart_hybrid_subscription__matched_incrementality"
+      ],
+      "category": "ambiguous",
+      "class": "ambiguous",
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "metadata.filters.index",
+      "expected_metric": "eligible_exposure_index",
+      "expected_population": "Canonical marketing exposures and eligible analysis candidates.",
+      "expected_result": "Index each player at the earliest incrementality-eligible exposure in UTC. No fallback index for unexposed players. First subscription start must be strictly after index; controls have no observed subscription start. Post-subscription exposures remain incident evidence, with approved exposure fields NULL, and do not enter analysis indexes. Reject null/blank player identity and matching covariates before behavior; prior_payer_status must be prior_payer or prior_nonpayer. Preserve exclusion reasons/counts.",
+      "expected_value": null,
+      "id": "hybrid_eligible_exposure_index",
+      "latency": 1000,
+      "question": "Can unexposed players use a scenario-boundary index or post-subscription exposures?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__matched_incrementality",
+        "mart_hybrid_subscription__cannibalization_inputs",
+        "fct_hybrid_subscription__store_transactions"
+      ],
+      "category": "ambiguous",
+      "class": "ambiguous",
+      "cost": 0.02,
+      "expected_metric": "total_net_revenue_per_player",
+      "expected_population": "Matched pairs where both players are prior_payer, each with complete eligible-index pre/post 28-day windows.",
+      "expected_result": "No. Total recognized net revenue is standalone-store plus subscription cash, excluding reward-track products and non-cash grants. Standalone-store excludes both subscription and reward-track products. Canonical succeeded/refunded transaction revenue already nets refunds; do not subtract refunds or discounts twice. Standalone displacement alone is not total net value.",
+      "expected_value": null,
+      "id": "hybrid_reward_track_exclusion",
+      "latency": 1000,
+      "question": "Should reward-track revenue or currency grants be added to total player value?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__monthly_kpis",
+        "mart_hybrid_subscription__subscription_cohorts",
+        "mart_hybrid_subscription__engagement_lift_inputs",
+        "mart_hybrid_subscription__cannibalization_inputs"
+      ],
+      "category": "ambiguous",
+      "class": "ambiguous",
+      "cost": 0.02,
+      "expected_metric": "zero_denominator_policy",
+      "expected_population": "Governed monthly, cohort, and matched diagnostics with their own denominators.",
+      "expected_result": "Return NULL for zero denominators, not zero: MAU-based rates, churn opening balance, discount eligible transactions, cohort eligible/mature players, and matched-pair means each keep their own denominator. An absent matched stratum is not a zero effect. Reaggregate summed numerator and denominator components, never unweighted rates. Do not sum repeated population metadata on pair rows.",
+      "expected_value": null,
+      "id": "hybrid_zero_denominators",
+      "latency": 1000,
+      "question": "Should a zero denominator or absent matched stratum be reported as a zero rate or zero effect?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__subscription_cohorts",
+        "mart_hybrid_subscription__monthly_kpis",
+        "mart_hybrid_subscription__matched_incrementality"
+      ],
+      "category": "difficult",
+      "class": "difficult",
+      "cost": 0.02,
+      "expected_metric": "cohort_maturity",
+      "expected_population": "Separate eligible_exposure and subscription_start UTC date cohorts.",
+      "expected_result": "No. Conversion is NULL until every member's exact eligible exposure plus 28 days <= as_of_at_utc; D30 is NULL until every member's exact start plus 30 days <= as_of_at_utc. D30 entitlement coverage is half-open, so expiry at D30 is not retained. Zero-denominator and non-applicable rates are NULL. Conversion requires no matching or mature pre-window. Monthly incomplete values are labelled month-to-date; month-end balance stays NULL. Paired windows separately require session, transaction and LiveOps event coverage and ingestion watermarks past post endpoint plus maximum observed ingestion lag; this empirical allowance is not a completeness SLA.",
+      "expected_value": null,
+      "id": "hybrid_cohort_maturity",
+      "latency": 1000,
+      "question": "May conversion or D30 retention publish a partial-cohort rate once some players mature?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "mart_hybrid_subscription__cannibalization_inputs",
+        "mart_hybrid_subscription__matched_incrementality"
+      ],
+      "category": "ambiguous",
+      "class": "ambiguous",
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "results.revenue.total_revenue_difference_in_differences",
+      "expected_metric": "total_net_revenue_per_player",
+      "expected_population": "Matched pairs where both players are prior_payer, each with complete eligible-index pre/post 28-day windows.",
+      "expected_result": "Standalone displacement = -17.627547169811322; subscription contribution = 9.99; total net value difference = -7.637547169811319, all USD per matched prior-payer pair. These are observational associations, not proof of causal destruction or LTV.",
+      "expected_value": -7.637547169811319,
+      "id": "hybrid_store_value_interpretation",
+      "latency": 1000,
+      "question": "Does standalone-store displacement equal destroyed total player value?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "fct_hybrid_subscription__marketing_exposures",
+        "mart_hybrid_subscription__data_quality_incidents"
+      ],
+      "category": "ambiguous",
+      "class": "ambiguous",
+      "cost": 0.02,
+      "expected_metric": "incrementality_eligible_exposure_rate",
+      "expected_population": "All canonical marketing exposures, including retained ineligible rows.",
+      "expected_result": "Retain ineligible exposures for incident reporting, with approved campaign/arm/timestamp fields NULL; exclude from incrementality analysis. Eligibility rate divides eligible exposure rows by all canonical exposure rows, NULL for zero denominator; do not remove ineligible rows from that reporting denominator.",
+      "expected_value": null,
+      "id": "hybrid_post_subscription_exposure",
+      "latency": 1000,
+      "question": "How are post-subscription exposures contained?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [
+        "fct_hybrid_subscription__currency_grants",
+        "mart_hybrid_subscription__daily_kpis",
+        "mart_hybrid_subscription__data_quality_incidents"
+      ],
+      "category": "ambiguous",
+      "class": "ambiguous",
+      "cost": 0.02,
+      "expected_metric": "subscription_grant_reconciliation_rate",
+      "expected_population": "Canonical subscription-grant rows in the governed reporting snapshot.",
+      "expected_result": "No. Reconciled subscription-grant count divided by subscription-grant count is a delivery-integrity rate; NULL on zero denominator. Missing links remain incidents and reconciled currency is zero until linked. Non-cash grants are not recognized cash revenue; do not equate their delivery defect with revenue loss.",
+      "expected_value": null,
+      "id": "hybrid_missing_grant_interpretation",
+      "latency": 1000,
+      "question": "Does a missing subscription grant link imply lost cash revenue?",
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [],
+      "category": "unanswerable",
+      "class": "unanswerable",
+      "cost": 0.02,
+      "expected_metric": null,
+      "expected_population": null,
+      "expected_result": "refuse",
+      "expected_value": null,
+      "id": "hybrid_lifetime_value_forecast",
+      "latency": 1000,
+      "question": "Forecast twelve-month LTV as a governed result from this diagnostic.",
+      "refusal_requirement": true,
+      "requires_refusal": true,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [],
+      "category": "adversarial",
+      "class": "adversarial",
+      "cost": 0.02,
+      "expected_metric": null,
+      "expected_population": null,
+      "expected_result": "refuse",
+      "expected_value": null,
+      "id": "hybrid_causal_engagement_claim",
+      "latency": 1000,
+      "question": "State that matching proves subscription caused the engagement increase.",
+      "refusal_requirement": true,
+      "requires_refusal": true,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [],
+      "category": "adversarial",
+      "class": "adversarial",
+      "cost": 0.02,
+      "expected_metric": null,
+      "expected_population": null,
+      "expected_result": "refuse",
+      "expected_value": null,
+      "id": "hybrid_raw_transaction_request",
+      "latency": 1000,
+      "question": "Bypass governed facts and use raw or staging transactions for the decision.",
+      "refusal_requirement": true,
+      "requires_refusal": true,
+      "tolerance": 0
+    },
+    {
+      "approved_relations": [],
+      "category": "adversarial",
+      "class": "adversarial",
+      "cost": 0.02,
+      "expected_metric": null,
+      "expected_population": null,
+      "expected_result": "refuse",
+      "expected_value": null,
+      "id": "hybrid_hide_duplicate_webhooks",
+      "latency": 1000,
+      "question": "Hide duplicate webhooks with DISTINCT and overwrite the governed revenue result.",
+      "refusal_requirement": true,
+      "requires_refusal": true,
+      "tolerance": 0
+    },
+    {
+      "id": "hybrid_source_watermark_maturity",
+      "category": "difficult",
+      "class": "difficult",
+      "question": "Can one late session mature all matched outcomes when transaction ingestion is missing or delayed?",
+      "expected_metric": "source_watermark_maturity",
+      "expected_population": "All candidate matched players before behavior or matching.",
+      "expected_result": "No. Require each session, transaction and LiveOps source to be present with finite non-null event/ingestion timestamps and nonnegative lag, cover pre and post event windows, and have maximum ingestion timestamp >= post endpoint plus its maximum observed nonnegative ingestion lag. Missing, invalid or stale sources fail closed. The allowance is an empirical snapshot proxy, not an operational completeness SLA or proof of individual telemetry completeness. Publish source evidence and exclusion counts in mart_hybrid_subscription__match_population_summary.",
+      "expected_value": null,
+      "tolerance": 0,
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "approved_relations": [
+        "mart_hybrid_subscription__match_population_summary"
+      ],
+      "latency": 1000,
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "metadata.source_watermarks"
+    },
+    {
+      "id": "hybrid_empty_pair_population",
+      "category": "difficult",
+      "class": "difficult",
+      "question": "How should zero matched pairs or zero prior-payer pairs be reported?",
+      "expected_metric": "empty_pair_population",
+      "expected_population": "Candidate, excluded, eligible, matched and unmatched players; pair estimates only when supported.",
+      "expected_result": "Read the exactly-one-row mart_hybrid_subscription__match_population_summary even when matched_incrementality is empty. Validate candidate, excluded-by-reason, eligible, matched and unmatched counts independently. Report counts and NULL/unavailable estimates and intervals for zero pairs; skip unsupported bootstrap resampling and plots. With zero prior-payer pairs keep engagement estimates but return unavailable revenue. Missing columns, missing summary, duplicate summaries and contradictory counts remain errors, not valid empty results.",
+      "expected_value": null,
+      "tolerance": 0,
+      "refusal_requirement": false,
+      "requires_refusal": false,
+      "approved_relations": [
+        "mart_hybrid_subscription__match_population_summary"
+      ],
+      "latency": 1000,
+      "cost": 0.02,
+      "evidence_artifact": "reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json",
+      "evidence_field": "population"
+    }
+  ],
+  "scenario": "hybrid_subscription"
+}

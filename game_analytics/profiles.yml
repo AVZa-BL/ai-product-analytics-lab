@@ -5,3 +5,5 @@ game_analytics:
       type: duckdb
       path: dev.duckdb
       threads: 4
+      settings:
+        TimeZone: UTC

@@ -10,11 +10,15 @@ The shared Python, DuckDB, dbt, governance, and evaluation foundation is complet
 | --- | --- | --- |
 | Live strategy game | Retention and progression diagnostic | Complete |
 | Subscription product | Conversion and lifecycle diagnostic | Complete |
-| Hybrid game subscription | Cannibalization and entitlement diagnostic | Planned |
+| Hybrid game subscription | Cannibalization and entitlement diagnostic | Governed matched evidence published; owner-run execution validation pending |
 
 ## Live Strategy case study
 
 The Live Strategy case study publishes a governed [metric catalogue](docs/metrics/live_strategy.md), [incident register](docs/incidents/live_strategy.md), executable [D7 diagnostic notebook](notebooks/live_strategy/01_d7_retention_diagnostic.py), [decision memo](reports/live_strategy/d7_retention_diagnostic.md), and [trusted evaluation cases](docs/ai-audit/live_strategy_questions.yaml). Together they demonstrate metric contracts, explicit data-defect containment, reproducible observational analysis, causal boundaries, and refusal of requests outside approved marts.
+
+## Hybrid subscription case study
+
+The Hybrid Subscription case study publishes a governed [metric catalogue](docs/metrics/hybrid_subscription.md), [incident register](docs/incidents/hybrid_subscription.md), executable [engagement and cannibalization diagnostic](notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py), [decision memo](reports/hybrid_subscription/engagement_cannibalization_decision_memo.md), and [trusted evaluation cases](docs/ai-audit/hybrid_subscription_questions.yaml) with a deterministic [score report](reports/hybrid_subscription/agent_evaluation.json). The [regenerated results JSON](reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json) publishes matched/unmatched population counts, reconciled engagement and separate standalone/subscription/total cash evidence, monthly KPIs, and conversion/D30 context. The catalogue covers all ten approved KPI contracts. Deterministic matching remains observational and does not establish causality. Direct exact-source execution succeeded; Jupyter kernel execution and real-checkout HEAD equivalence remain owner-run validations, as detailed in the [AI audit](docs/ai-audit/hybrid_subscription.md). The score report evaluates canonical recorded fixtures, not live-agent reasoning or autonomous decisions.
 
 ## Requirements
 

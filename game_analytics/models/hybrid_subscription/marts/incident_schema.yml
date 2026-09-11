@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: mart_hybrid_subscription__data_quality_incidents
+    description: Governed incident register with detected scope, metric impact, and enforced containment.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: incident_id
+        data_tests: [not_null, unique]
+      - name: incident_code
+        data_tests: [not_null]
+      - name: severity
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [medium, high]
+      - name: affected_rows
+        data_tests: [not_null]
+      - name: decision_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [contained, clear]

@@ -1,0 +1,16 @@
+version: 2
+
+sources:
+  - name: hybrid_subscription_raw
+    description: Immutable synthetic hybrid-game subscription evidence.
+    meta:
+      external_location: "{{ var('raw_data_root') }}/hybrid_subscription/{name}.parquet"
+    tables:
+      - name: players
+      - name: sessions
+      - name: subscription_events
+      - name: store_transactions
+      - name: currency_ledger
+      - name: live_event_participation
+      - name: marketing_exposures
+      - name: product_catalogue
