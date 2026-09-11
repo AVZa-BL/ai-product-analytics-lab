@@ -2,7 +2,7 @@
 
 ## Review scope and evidence authority
 
-This audit separates proposed interpretation, executed evidence, and validation boundaries. The numerical authority is the [regenerated results JSON](../../reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json), refreshed after the source repair and native owner-run validation. Its executed source version is `e3ab527d7bfb2709f0f06a2128289ecb530f957a`, with execution timestamp `2026-09-11T16:13:57.580290Z`.
+This audit separates proposed interpretation, executed evidence, and validation boundaries. The numerical authority is the [regenerated results JSON](../../reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json), refreshed after the source repair and native owner-run validation. Its executed source version is `e45a19cf48a6b08f27f5c13c71c2d999857c194f`, with execution timestamp `2026-09-11T19:09:28.834708Z`.
 
 The [ten-KPI catalogue](../metrics/hybrid_subscription.md) and [dbt KPI metadata](../../game_analytics/models/hybrid_subscription/marts/kpi_schema.yml) define semantics. The JSON metadata identifies the governed inputs:
 

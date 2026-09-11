@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -117,6 +118,21 @@ def test_all_copied_memo_and_audit_values_have_exact_committed_sources():
         (ROOT / "engagement_cannibalization_decision_memo.md").read_text(), RESULTS
     )
     assert_audit_evidence(Path("docs/ai-audit/hybrid_subscription.md").read_text(), RESULTS)
+
+
+def test_published_context_uses_conservative_source_maturity_boundary():
+    metadata = RESULTS["metadata"]
+    expected_as_of = min(
+        datetime.fromisoformat(source["ingestion_mature_through_at_utc"])
+        for source in metadata["source_watermarks"]
+    )
+    published_rows = RESULTS["context"]["monthly_kpis"] + RESULTS["context"]["cohorts"]
+
+    assert published_rows
+    assert all(
+        datetime.fromisoformat(row["as_of_at_utc"].replace("Z", "+00:00")) == expected_as_of
+        for row in published_rows
+    )
 
 
 @pytest.mark.parametrize("field", ["interval", "incident", "timestamp"])
