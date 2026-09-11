@@ -1,12 +1,8 @@
 with observation as (
-    select max(observed_at_utc) as as_of_at_utc
-    from (
-        select started_at_utc as observed_at_utc from {{ ref('fct_hybrid_subscription__sessions') }}
-        union all
-        select transaction_at_utc from {{ ref('fct_hybrid_subscription__store_transactions') }}
-        union all
-        select participated_at_utc from {{ ref('stg_hybrid_subscription__live_event_participation') }}
-    ) timestamps
+    select min(ingestion_mature_through_at_utc) as as_of_at_utc
+    from {{ ref('int_hybrid_subscription__source_watermarks') }}
+    having count(*) = 3 and bool_and(is_source_valid)
+        and count(ingestion_mature_through_at_utc) = 3
 )
 select cohort.subscription_cohort_id
 from {{ ref('mart_hybrid_subscription__subscription_cohorts') }} cohort

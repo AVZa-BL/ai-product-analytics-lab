@@ -218,3 +218,14 @@ models:
         description: Maximum observed nonnegative ingestion lag in elapsed seconds, including latest canonical webhook arrival. Null when no valid observations exist.
       - name: is_source_valid
         data_tests: [not_null]
+
+  - name: int_hybrid_subscription__governed_observation_boundary
+    description: One fail-closed observation boundary shared by forward-looking hybrid analyses; as-of is the minimum mature-through timestamp across all three required sources.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: are_source_watermarks_valid
+        data_tests: [not_null]
+      - name: observation_start_at_utc
+      - name: observation_end_at_utc
+      - name: as_of_at_utc

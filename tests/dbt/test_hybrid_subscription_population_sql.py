@@ -68,10 +68,8 @@ def population_db():
 
 
 def build_population(db):
-    # Before the fix this model is absent: still exercise the old population SQL
-    # so the RED evidence describes incorrect eligibility rather than compilation.
-    if (MODEL_ROOT / "intermediate" / f"{PREFIX}source_watermarks.sql").exists():
-        build(db, "source_watermarks")
+    build(db, "source_watermarks")
+    build(db, "governed_observation_boundary")
     build(db, "analysis_population")
     return db.sql(f"select * from {PREFIX}analysis_population order by player_id").df()
 

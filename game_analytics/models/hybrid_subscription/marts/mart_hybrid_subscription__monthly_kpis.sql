@@ -2,12 +2,9 @@
 -- and incremental total net revenue remain at pair grain in matched_incrementality;
 -- consumers query that mart separately rather than replicating estimates by month.
 with observation as (
-    select min(observed_at_utc) as first_observed_at_utc, max(observed_at_utc) as as_of_at_utc
-    from (
-        select started_at_utc as observed_at_utc from {{ ref('fct_hybrid_subscription__sessions') }}
-        union all select transaction_at_utc from {{ ref('fct_hybrid_subscription__store_transactions') }}
-        union all select participated_at_utc from {{ ref('stg_hybrid_subscription__live_event_participation') }}
-    ) timestamps
+    select observation_start_at_utc as first_observed_at_utc, as_of_at_utc
+    from {{ ref('int_hybrid_subscription__governed_observation_boundary') }}
+    where are_source_watermarks_valid
 ),
 months as (
     select distinct cast(date_trunc('month', d.date_day) as date) as metric_month,

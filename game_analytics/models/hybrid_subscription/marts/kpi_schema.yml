@@ -276,7 +276,7 @@ models:
         description: First UTC calendar date of the reporting month.
         data_tests: [not_null, unique]
       - name: as_of_at_utc
-        description: "Maximum governed canonical session, store-transaction, or LiveOps timestamp, matching the analysis-population observation boundary; not wall-clock time or ingestion watermark."
+        description: "Minimum ingestion-mature-through timestamp across the three valid governed outcome sources, matching the analysis-population boundary; never wall-clock time or the most advanced source."
         data_tests: [not_null]
       - name: is_month_complete
         description: "True when the governed as-of timestamp reaches the next month. Other current-month metrics are month-to-date; month-end balance stays null until complete."
@@ -346,7 +346,7 @@ models:
         description: "Latest exact first-exposure/start timestamp among members of this date cohort; governs all-members maturity."
         data_tests: [not_null]
       - name: as_of_at_utc
-        description: "Maximum governed canonical session, store-transaction, or LiveOps timestamp, matching the analysis-population observation boundary; not wall-clock time or ingestion watermark."
+        description: "Minimum ingestion-mature-through timestamp across the three valid governed outcome sources, matching the analysis-population boundary; never wall-clock time or the most advanced source."
         data_tests: [not_null]
       - name: eligible_exposed_player_count
         description: "Distinct players assigned to their first incrementality-eligible exposure date; no mature-pre-window or matching requirement. Zero on subscription-start rows."

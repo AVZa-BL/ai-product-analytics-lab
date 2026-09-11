@@ -5,7 +5,16 @@ with observed as (
     union all select transaction_at_utc from {{ ref('fct_hybrid_subscription__store_transactions') }}
     union all select participated_at_utc from {{ ref('stg_hybrid_subscription__live_event_participation') }}
 ),
-bounds as (select min(observed_at_utc) as first_at, max(observed_at_utc) as as_of_at_utc from observed),
+daily_bound as (
+    select max(observed_at_utc) as as_of_at_utc from observed
+),
+bounds as (
+    select max(observation_start_at_utc) as first_at,
+        min(ingestion_mature_through_at_utc) as as_of_at_utc
+    from {{ ref('int_hybrid_subscription__source_watermarks') }}
+    having count(*) = 3 and bool_and(is_source_valid)
+        and count(ingestion_mature_through_at_utc) = 3
+),
 daily_events as (
     select f.player_id, cast(timezone('UTC', f.started_at_utc) as date) as metric_date from {{ ref('fct_hybrid_subscription__sessions') }} f
     union all
@@ -25,7 +34,7 @@ daily_events as (
 daily_keys as (
     select distinct e.metric_date,p.prior_payer_status
     from daily_events e join {{ ref('dim_hybrid_subscription__players') }} p using (player_id)
-    cross join bounds b where e.metric_date <= cast(timezone('UTC', b.as_of_at_utc) as date)
+    cross join daily_bound b where e.metric_date <= cast(timezone('UTC', b.as_of_at_utc) as date)
 ),
 daily_components as (
     select k.*,

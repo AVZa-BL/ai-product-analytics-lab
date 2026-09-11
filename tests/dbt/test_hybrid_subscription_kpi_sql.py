@@ -95,6 +95,18 @@ def facts():
         update fct_hybrid_subscription__store_transactions set product_type = case
             when is_subscription_revenue then 'subscription'
             when is_reward_track_revenue then 'reward_track' else 'currency_pack' end;
+        create table int_hybrid_subscription__governed_observation_boundary
+        (observation_start_at_utc timestamptz, as_of_at_utc timestamptz,
+        are_source_watermarks_valid boolean);
+        insert into int_hybrid_subscription__governed_observation_boundary values
+        ('2025-12-31 12:00:00+00','2026-03-01 00:00:00+00',true);
+        create table int_hybrid_subscription__source_watermarks
+        (source_name varchar, observation_start_at_utc timestamptz,
+        ingestion_mature_through_at_utc timestamptz, is_source_valid boolean);
+        insert into int_hybrid_subscription__source_watermarks values
+        ('sessions','2025-12-31 12:00:00+00','2026-03-01 00:00:00+00',true),
+        ('store_transactions','2025-12-31 12:00:00+00','2026-03-01 00:00:00+00',true),
+        ('live_event_participation','2025-12-31 12:00:00+00','2026-03-01 00:00:00+00',true);
     """)
     yield db
     db.close()
@@ -294,6 +306,10 @@ def test_d30_uses_elapsed_utc_time_across_dst(facts):
         ('d30-boundary','c','2026-03-31 00:00:00+00',1);
         insert into fct_hybrid_subscription__subscription_entitlements values
         ('c1','c','2026-03-01 00:00:00+00','2026-03-30 23:30:00+00',null,null);
+        update int_hybrid_subscription__governed_observation_boundary
+        set as_of_at_utc='2026-03-31 00:00:00+00';
+        update int_hybrid_subscription__source_watermarks
+        set ingestion_mature_through_at_utc='2026-03-31 00:00:00+00';
         set timezone='America/Los_Angeles';
     """)
     build(facts, "subscription_cohorts")
@@ -323,6 +339,10 @@ def test_cohort_maturity_waits_for_latest_member_on_same_date(facts):
         ('watermark','c','2026-03-03 00:00:00+00',1);
         insert into fct_hybrid_subscription__marketing_exposures values
         ('x7','c','2026-02-01 12:00:00+00',true);
+        update int_hybrid_subscription__governed_observation_boundary
+        set as_of_at_utc='2026-03-03 00:00:00+00';
+        update int_hybrid_subscription__source_watermarks
+        set ingestion_mature_through_at_utc='2026-03-03 00:00:00+00';
     """)
     build(facts, "subscription_cohorts")
     mixed = row(
@@ -337,8 +357,10 @@ def test_cohort_maturity_waits_for_latest_member_on_same_date(facts):
     assert mixed["d30_subscriber_retention_rate"] is None
     facts.execute(f"drop table {MART}subscription_cohorts")
     facts.execute("""
-        update fct_hybrid_subscription__sessions set started_at_utc='2026-03-03 12:00:00+00'
-        where session_id='watermark';
+        update int_hybrid_subscription__governed_observation_boundary
+        set as_of_at_utc='2026-03-03 12:00:00+00';
+        update int_hybrid_subscription__source_watermarks
+        set ingestion_mature_through_at_utc='2026-03-03 12:00:00+00';
     """)
     build(facts, "subscription_cohorts")
     mature = row(
@@ -374,6 +396,14 @@ def test_no_observations_publishes_no_speculative_rows(facts):
         "stg_hybrid_subscription__live_event_participation",
     ]:
         facts.execute(f"delete from {source}")
+    facts.execute("""
+        update int_hybrid_subscription__governed_observation_boundary
+        set are_source_watermarks_valid=false, observation_start_at_utc=null,
+            as_of_at_utc=null;
+        update int_hybrid_subscription__source_watermarks
+        set is_source_valid=false, observation_start_at_utc=null,
+            ingestion_mature_through_at_utc=null;
+    """)
     for name in ["daily_kpis", "monthly_kpis", "subscription_cohorts"]:
         build(facts, name)
         assert facts.execute(f"select count(*) from {MART}{name}").fetchone()[0] == 0
@@ -403,8 +433,10 @@ def test_conversion_day_cohort_waits_for_last_exposure_timestamp(facts):
     assert mixed["subscription_conversion_rate"] is None
     facts.execute(f"drop table {MART}subscription_cohorts")
     facts.execute("""
-        update fct_hybrid_subscription__sessions
-        set started_at_utc='2026-03-01 12:00:00+00' where session_id='s4';
+        update int_hybrid_subscription__governed_observation_boundary
+        set as_of_at_utc='2026-03-01 12:00:00+00';
+        update int_hybrid_subscription__source_watermarks
+        set ingestion_mature_through_at_utc='2026-03-01 12:00:00+00';
     """)
     build(facts, "subscription_cohorts")
     mature = row(
@@ -429,3 +461,31 @@ def test_churn_zero_opening_balance_and_revocation(facts):
     assert january["month_start_active_subscriber_count"] == 0
     assert january["expired_or_revoked_entitlement_count"] == 1
     assert january["subscriber_churn_rate"] is None
+
+
+def test_lagging_source_boundary_withholds_cohort_and_month_maturity(facts):
+    facts.execute("""
+        update int_hybrid_subscription__governed_observation_boundary
+        set as_of_at_utc='2026-01-15 00:00:00+00';
+        update int_hybrid_subscription__source_watermarks
+        set ingestion_mature_through_at_utc='2026-01-15 00:00:00+00'
+        where source_name='store_transactions';
+    """)
+    build(facts, "monthly_kpis")
+    build(facts, "subscription_cohorts")
+
+    january = row(facts, "monthly_kpis", "metric_month=date '2026-01-01'")
+    assert january["as_of_at_utc"] == facts.execute(
+        "select timestamptz '2026-01-15 00:00:00+00'"
+    ).fetchone()[0]
+    assert january["is_month_complete"] is False
+    assert january["month_end_active_subscriber_count"] is None
+
+    conversion = row(
+        facts,
+        "subscription_cohorts",
+        "cohort_type='eligible_exposure' and cohort_date=date '2025-12-31'",
+    )
+    assert conversion["as_of_at_utc"] == january["as_of_at_utc"]
+    assert conversion["is_conversion_mature"] is False
+    assert conversion["subscription_conversion_rate"] is None
