@@ -7,6 +7,7 @@ import pytest
 
 ROOT = Path("reports/hybrid_subscription")
 RESULTS = json.loads((ROOT / "engagement_cannibalization_diagnostic_results.json").read_text())
+VALIDATION = json.loads((ROOT / "native_validation.json").read_text())
 
 
 def test_memo_has_decision_and_observational_boundaries() -> None:
@@ -71,12 +72,24 @@ def test_governance_keeps_generated_notebooks_unpublished_and_records_execution(
     ]:
         text = path.read_text()
         assert not re.search(r"\]\([^)]*(?:\.ipynb|figures/)[^)]*\)", text)
-        assert "Jupyter kernel execution" in text
-        assert "real-checkout HEAD equivalence" in text
-        assert "owner-run" in text.lower()
+        assert "native_validation.json" in text
     audit = Path("docs/ai-audit/hybrid_subscription.md").read_text()
     assert "direct exact-source execution succeeded" in audit
     assert RESULTS["metadata"]["code_version"] in audit
+
+
+def test_memo_provenance_and_run_totals_match_machine_readable_evidence() -> None:
+    memo = (ROOT / "engagement_cannibalization_decision_memo.md").read_text()
+    validation = VALIDATION["results"]
+
+    assert RESULTS["metadata"]["code_version"] == VALIDATION["source_commit"]
+    assert RESULTS["metadata"]["code_version_source"] in memo
+    assert RESULTS["metadata"]["execution_provenance"]["mode"] in memo
+    assert f"PASS={validation['passed_tests']}" in memo
+    assert f"SUCCESS={validation['successful_models']}" in memo
+    assert f"TOTAL={validation['total']}" in memo
+    for field, label in [("warnings", "WARN"), ("errors", "ERROR"), ("skipped", "SKIP")]:
+        assert f"{label}={validation[field]}" in memo
 
 
 def assert_memo_evidence(text, results):

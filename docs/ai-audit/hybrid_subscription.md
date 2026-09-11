@@ -2,7 +2,7 @@
 
 ## Review scope and evidence authority
 
-This audit separates proposed interpretation, executed evidence, and validation boundaries. The numerical authority is the [regenerated results JSON](../../reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json), refreshed after the source repair and native owner-run validation. Its executed source version is `e45a19cf48a6b08f27f5c13c71c2d999857c194f`, with execution timestamp `2026-09-11T19:09:28.834708Z`.
+This audit separates proposed interpretation, executed evidence, and validation boundaries. The numerical authority is the [regenerated results JSON](../../reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json), refreshed after the source repair and clean exact-snapshot validation. Its executed source version is `e45a19cf48a6b08f27f5c13c71c2d999857c194f`, with execution timestamp `2026-09-11T19:09:28.834708Z`.
 
 The [ten-KPI catalogue](../metrics/hybrid_subscription.md) and [dbt KPI metadata](../../game_analytics/models/hybrid_subscription/marts/kpi_schema.yml) define semantics. The JSON metadata identifies the governed inputs:
 
@@ -18,7 +18,7 @@ The analysis module and notebook must use these governed diagnostic inputs, not 
 
 ## Execution performed and limitations
 
-The direct exact-source execution succeeded. The repository owner generated the documented deterministic synthetic fixture at scale 1000, ran native dbt parse/build from a real checkout, and executed the [tracked notebook source](../../notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py) through Jupytext with a working Jupyter kernel. The dbt build completed with PASS=345, WARN=0, ERROR=0, SKIP=0. Pair counts, candidate/exclusion totals and engagement/revenue aggregate controls reconciled before calculation. UTC is enforced on dbt profiles and notebook connections, and date/fixed-window operations are explicitly UTC-safe.
+The direct exact-source execution succeeded. A clean reconstruction generated the documented deterministic synthetic fixture at scale 1000, ran native dbt parse/build, and executed the [tracked notebook source](../../notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py) against the resulting governed DuckDB artifact. The [machine-readable validation record](../../reports/hybrid_subscription/native_validation.json) reports PASS=311 tests, SUCCESS=36 models, WARN=0, ERROR=0, SKIP=0, TOTAL=347. Pair counts, candidate/exclusion totals and engagement/revenue aggregate controls reconciled before calculation. UTC is enforced on dbt profiles and notebook connections, and date/fixed-window operations are explicitly UTC-safe.
 
 The final artifact used the default local Git version path: `metadata.code_version` equals `git rev-parse HEAD`, and `metadata.code_version_source` is `local git HEAD`. Owner-run Jupyter kernel execution and real-checkout HEAD equivalence therefore supersede the earlier remote reconstruction and its explicit override. The recorded package versions and database hash describe the owner's native execution environment.
 
