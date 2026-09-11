@@ -2,7 +2,7 @@
 
 ## Review scope and evidence authority
 
-This audit separates proposed interpretation, executed evidence, and outstanding validation. The numerical authority is the [regenerated results JSON](../../reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json), refreshed in the evidence commit after its source repair. Its executed source version is `2c0f5801f50178b8b21a3d7865001b491fa9755b`, with execution timestamp `2026-09-10T22:38:20.716243Z`.
+This audit separates proposed interpretation, executed evidence, and validation boundaries. The numerical authority is the [regenerated results JSON](../../reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json), refreshed after the source repair and native owner-run validation. Its executed source version is `e3ab527d7bfb2709f0f06a2128289ecb530f957a`, with execution timestamp `2026-09-11T16:13:57.580290Z`.
 
 The [ten-KPI catalogue](../metrics/hybrid_subscription.md) and [dbt KPI metadata](../../game_analytics/models/hybrid_subscription/marts/kpi_schema.yml) define semantics. The JSON metadata identifies the governed inputs:
 
@@ -18,13 +18,11 @@ The analysis module and notebook must use these governed diagnostic inputs, not 
 
 ## Execution performed and limitations
 
-The direct exact-source execution succeeded. The workflow materialized and verified branch source blobs, generated the documented deterministic synthetic fixture, rendered unchanged SQL with literal dbt ref/source substitutions in dependency order, and directly ran the [tracked notebook source](../../notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py). Pair counts, candidate/exclusion totals and engagement/revenue aggregate controls reconciled before calculation. UTC is enforced on dbt profiles and notebook connections, and date/fixed-window operations are explicitly UTC-safe.
+The direct exact-source execution succeeded. The repository owner generated the documented deterministic synthetic fixture at scale 1000, ran native dbt parse/build from a real checkout, and executed the [tracked notebook source](../../notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py) through Jupytext with a working Jupyter kernel. The dbt build completed with PASS=345, WARN=0, ERROR=0, SKIP=0. Pair counts, candidate/exclusion totals and engagement/revenue aggregate controls reconciled before calculation. UTC is enforced on dbt profiles and notebook connections, and date/fixed-window operations are explicitly UTC-safe.
 
-The code-version path used an explicit remote-source SHA override, backed by verified source-file blobs; it was not a local `git rev-parse HEAD` equivalence claim. The full Python suite and source-level SQL checks were run separately. Local SQL reconstruction is not a native dbt build claim: both native dbt parse/build commands failed with `dbt: command not found`. Jupytext execution failed with `No module named 'nbconvert'`; no installation or permission bypass was attempted.
+The final artifact used the default local Git version path: `metadata.code_version` equals `git rev-parse HEAD`, and `metadata.code_version_source` is `local git HEAD`. Owner-run Jupyter kernel execution and real-checkout HEAD equivalence therefore supersede the earlier remote reconstruction and its explicit override. The recorded package versions and database hash describe the owner's native execution environment.
 
-Jupyter kernel execution and real-checkout HEAD equivalence remain owner-run validations. Jupytext execution first lacked nbconvert; a subsequent kernel attempt failed before kernel_info with an operation-not-permitted networking error. The permission failure was treated as a stop condition. Conversion alone produced an unexecuted local notebook; no executed-notebook claim is made. Generated notebooks and figures are untracked, not published evidence, and are not linked.
-
-The owner must rerun the tracked source through a working Jupyter kernel in a real checkout and verify default `metadata.code_version == git rev-parse HEAD`. That rerun should preserve governed generation inputs and compare deterministic results; execution timestamps and package metadata need not be byte-identical.
+The executed notebook and figures remain local generated artifacts: they are untracked, are not published evidence, and are not linked. The committed JSON is the machine-readable evidence artifact; it retains the governed inputs, canonical counts, execution metadata, results, uncertainty and limitations.
 
 ## Accepted and corrected analytical decisions
 

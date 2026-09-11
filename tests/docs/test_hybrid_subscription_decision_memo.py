@@ -63,7 +63,7 @@ def test_memo_numeric_evidence_matches_committed_json(group: str, field: str) ->
     assert f"| {field} | {RESULTS['results'][group][field]} |" in text
 
 
-def test_governance_does_not_imply_unpublished_notebooks_or_execution() -> None:
+def test_governance_keeps_generated_notebooks_unpublished_and_records_execution() -> None:
     for path in [
         ROOT / "engagement_cannibalization_decision_memo.md",
         Path("docs/ai-audit/hybrid_subscription.md"),
@@ -72,7 +72,7 @@ def test_governance_does_not_imply_unpublished_notebooks_or_execution() -> None:
         assert not re.search(r"\]\([^)]*(?:\.ipynb|figures/)[^)]*\)", text)
         assert "Jupyter kernel execution" in text
         assert "real-checkout HEAD equivalence" in text
-        assert "owner-run" in text
+        assert "owner-run" in text.lower()
     audit = Path("docs/ai-audit/hybrid_subscription.md").read_text()
     assert "direct exact-source execution succeeded" in audit
     assert RESULTS["metadata"]["code_version"] in audit
