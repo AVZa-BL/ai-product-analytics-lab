@@ -261,8 +261,10 @@ models:
 
   - name: mart_hybrid_subscription__monthly_kpis
     description: >-
-      One row per UTC calendar month in the governed observation range, including
-      zero-activity months. Partial-month activity and revenue are month-to-date;
+      One row per UTC calendar month wholly covered from its opening instant by
+      the governed observation range, including zero-activity months. A first
+      partial coverage month is suppressed; the current month's activity and
+      revenue are bounded at the governed as-of timestamp and published month-to-date;
       the month-end balance remains null until complete. Reaggregate rates from
       components, never average rates. The 28-day observational engagement lift
       and incremental net revenue remain exclusively in matched_incrementality.

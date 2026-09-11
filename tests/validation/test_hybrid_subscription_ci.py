@@ -29,15 +29,18 @@ def test_hybrid_validation_script_generates_fixture_and_builds_full_selector(tmp
 
     assert completed.returncode == 0, completed.stderr
     commands = log.read_text().splitlines()
-    assert any(
+    expected = [
         "-m analytics_lab.generate --scenario hybrid_subscription --seed 42 "
-        "--start-date 2026-01-01 --days 180 --scale 1000 --output-dir data/raw" in line
-        for line in commands
-    )
-    assert any("parse --profiles-dir . --no-partial-parse" in line for line in commands)
-    assert any(
-        "build --selector hybrid_subscription --profiles-dir ." in line for line in commands
-    )
+        "--start-date 2026-01-01 --days 180 --scale 1000 --output-dir data/raw",
+        "deps --profiles-dir .",
+        "parse --profiles-dir . --no-partial-parse",
+        "build --selector hybrid_subscription --profiles-dir .",
+    ]
+    positions = [
+        next(i for i, line in enumerate(commands) if fragment in line)
+        for fragment in expected
+    ]
+    assert positions == sorted(positions)
 
 
 def test_ci_runs_hybrid_validation_job():

@@ -465,6 +465,9 @@ def test_churn_zero_opening_balance_and_revocation(facts):
 
 def test_lagging_source_boundary_withholds_cohort_and_month_maturity(facts):
     facts.execute("""
+        insert into fct_hybrid_subscription__store_transactions values
+        ('after-as-of','a','prior_payer','2026-01-20 12:00:00+00',
+         'succeeded',true,false,false,50,0,'currency_pack');
         update int_hybrid_subscription__governed_observation_boundary
         set as_of_at_utc='2026-01-15 00:00:00+00';
         update int_hybrid_subscription__source_watermarks
@@ -480,6 +483,8 @@ def test_lagging_source_boundary_withholds_cohort_and_month_maturity(facts):
     ).fetchone()[0]
     assert january["is_month_complete"] is False
     assert january["month_end_active_subscriber_count"] is None
+    assert january["mau"] == 1
+    assert january["standalone_store_net_revenue_usd"] == 8
 
     conversion = row(
         facts,
@@ -489,3 +494,24 @@ def test_lagging_source_boundary_withholds_cohort_and_month_maturity(facts):
     assert conversion["as_of_at_utc"] == january["as_of_at_utc"]
     assert conversion["is_conversion_mature"] is False
     assert conversion["subscription_conversion_rate"] is None
+
+
+def test_partial_first_month_and_precoverage_cohorts_are_suppressed(facts):
+    facts.execute("""
+        update int_hybrid_subscription__governed_observation_boundary
+        set observation_start_at_utc='2026-01-02 00:00:00+00';
+        update int_hybrid_subscription__source_watermarks
+        set observation_start_at_utc='2026-01-02 00:00:00+00'
+        where source_name='live_event_participation';
+    """)
+    build(facts, "monthly_kpis")
+    build(facts, "subscription_cohorts")
+
+    assert facts.execute(f"""
+        select count(*) from {MART}monthly_kpis
+        where metric_month=date '2026-01-01'
+    """).fetchone()[0] == 0
+    assert facts.execute(f"""
+        select count(*) from {MART}subscription_cohorts
+        where cohort_date < date '2026-01-02'
+    """).fetchone()[0] == 0

@@ -1,5 +1,5 @@
 with observation as (
-    select as_of_at_utc
+    select observation_start_at_utc, as_of_at_utc
     from {{ ref('int_hybrid_subscription__governed_observation_boundary') }}
     where are_source_watermarks_valid
 ),
@@ -34,7 +34,8 @@ conversion as (
         false as is_d30_mature
     from exposures e left join starters s using (player_id)
     cross join observation o
-    where e.first_exposure_at_utc <= o.as_of_at_utc
+    where e.first_exposure_at_utc >= o.observation_start_at_utc
+      and e.first_exposure_at_utc <= o.as_of_at_utc
     group by cast(timezone('UTC', e.first_exposure_at_utc) as date), o.as_of_at_utc
 ),
 retention as (
@@ -57,7 +58,8 @@ retention as (
         on e.player_id = s.player_id
         and e.entitlement_start_at_utc <= s.first_start_at_utc + interval '720 hours'
         and e.entitlement_end_at_utc > s.first_start_at_utc + interval '720 hours'
-    where s.first_start_at_utc <= o.as_of_at_utc
+    where s.first_start_at_utc >= o.observation_start_at_utc
+      and s.first_start_at_utc <= o.as_of_at_utc
     group by cast(timezone('UTC', s.first_start_at_utc) as date), o.as_of_at_utc
 ),
 cohorts as (
