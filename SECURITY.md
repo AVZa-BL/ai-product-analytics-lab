@@ -1,21 +1,21 @@
-# Security Policy
+# Security policy
 
-## Supported Versions
+## Scope
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+This is a local portfolio project. It generates synthetic data, builds it with dbt into
+a local DuckDB file, and publishes analysis artifacts. It has no deployment, no network
+services, no authentication, and no production, customer, or employer data. There are no
+released versions to support.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+## Reporting a vulnerability
 
-## Reporting a Vulnerability
+Report suspected issues through GitHub Security Advisories:
+<https://github.com/AVZa-BL/ai-product-analytics-lab/security/advisories/new>
 
-Use this section to tell people how to report a vulnerability.
+Expect an initial response within 14 days. Because the project is not deployed, fixes
+land on `main` rather than in a patched release.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+## Out of scope
+
+Production hardening, orchestration, warehouse scaling and deployment are outside the
+project's stated scope, as recorded in the README limitations.
