@@ -32,3 +32,18 @@ models:
     hybrid_subscription:
       +schema: hybrid_subscription
       +tags: [hybrid_subscription]
+
+seeds:
+  game_analytics:
+    subscription:
+      +schema: subscription
+      +tags: [subscription]
+
+data_tests:
+  game_analytics:
+    live_strategy:
+      +tags: [live_strategy]
+    subscription:
+      +tags: [subscription]
+    hybrid_subscription:
+      +tags: [hybrid_subscription]
