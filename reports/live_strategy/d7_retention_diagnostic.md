@@ -60,10 +60,10 @@ The incident controls were exercised by the scenario dbt build and targeted sing
 - Input relation: `main_live_strategy.mart_live_strategy__d7_diagnostic_inputs`
 - Results artifact: `reports/live_strategy/d7_retention_diagnostic_results.json`
 - Executable analysis: `notebooks/live_strategy/01_d7_retention_diagnostic.py`
-- Generated notebook: `notebooks/live_strategy/01_d7_retention_diagnostic.ipynb`
-- Execution timestamp: `2026-09-10T10:52:26.954957Z`
-- Code version: `6add51353110b0a6de6d4aee7c619c7aed2f9e0c`
-- Runtime: Python 3.12.14, pandas 2.3.3, DuckDB 1.5.5, NumPy 2.5.3
+- Generated notebook: `notebooks/live_strategy/01_d7_retention_diagnostic.ipynb` (untracked local artifact; the results JSON is the published evidence)
+- Execution timestamp: `2026-09-20T02:29:50.723704Z`
+- Code version: `85fea91c52ca7fcb5e7eaae2b10f088777ff7078`
+- Runtime: Python 3.12.14, pandas 2.3.3, DuckDB 1.5.5, NumPy 2.5.2
 - Bootstrap: seed 42, 2,000 draws, stratified over governed cohort rows
 - Metric definitions: [`docs/metrics/live_strategy.md`](../../docs/metrics/live_strategy.md)
 - Incident context: [`docs/incidents/live_strategy.md`](../../docs/incidents/live_strategy.md)

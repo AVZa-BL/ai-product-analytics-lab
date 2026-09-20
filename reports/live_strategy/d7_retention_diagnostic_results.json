@@ -1,0 +1,80 @@
+{
+  "metadata": {
+    "input_relations": [
+      "main_live_strategy.mart_live_strategy__d7_diagnostic_inputs"
+    ],
+    "filters": {
+      "periods": [
+        "pre_update",
+        "post_update"
+      ],
+      "retention_signals": [
+        "robust_activity",
+        "completed_session"
+      ],
+      "maturity_rule": "eligible_d7_players > 0 in governed cohort mart"
+    },
+    "code_version": "85fea91c52ca7fcb5e7eaae2b10f088777ff7078",
+    "executed_at_utc": "2026-09-20T02:29:50.723704Z",
+    "package_versions": {
+      "python": "3.12.14",
+      "pandas": "2.3.3",
+      "duckdb": "1.5.5",
+      "numpy": "2.5.2"
+    },
+    "bootstrap_seed": 42,
+    "bootstrap_draws": 2000,
+    "contained_incident_codes": [
+      "duplicate_android_client_events",
+      "missing_android_session_ends",
+      "purchase_refund_status_lag",
+      "events_before_install",
+      "invalid_membership_interval",
+      "ambiguous_intraday_configuration_join"
+    ]
+  },
+  "population": {
+    "install_date_min": "2026-01-01",
+    "install_date_max": "2026-06-23",
+    "pre_update_eligible_players": 491,
+    "post_update_eligible_players": 477
+  },
+  "results": {
+    "pre_update_d7_retention": 0.219959266802444,
+    "post_update_d7_retention": 0.18029350104821804,
+    "observed_d7_change": -0.03966576575422595,
+    "pre_mix_standardized_post_d7_retention": 0.19764569101706225,
+    "acquisition_mix_contribution": -0.017352189968844217,
+    "within_channel_association": -0.022313575785381734,
+    "android_instrumentation_sensitivity": -0.07490636704119849,
+    "bootstrap_difference_ci_95": [
+      -0.09095753938117758,
+      0.010564049497460206
+    ],
+    "progression_friction_associations": {
+      "upgrade_attempts_spearman": -0.0499192664610646,
+      "progression_velocity_spearman": null
+    }
+  },
+  "observed_facts": [
+    "Robust D7 retention moved from 22.00% to 18.03%.",
+    "The observed change was -3.97%.",
+    "Holding the pre-update channel mix fixed gives 19.76% post-update.",
+    "The acquisition-mix component was -1.74%.",
+    "Android completed-session sensitivity was -7.49%."
+  ],
+  "inferences": [
+    "The within-channel residual is descriptive; it also contains uncontrolled shifts in platform, country, configuration version, and other cohort composition.",
+    "The mix shift contributes to the aggregate movement and should be controlled in decisions.",
+    "The Android signal gap is measurement sensitivity, not evidence of lower player engagement.",
+    "The cohort-level Spearman association for upgrade attempts is -0.050; this ecological association does not identify a player-level or causal effect.",
+    "The cohort-level progression velocity association is not identifiable because the published values lack sufficient variation."
+  ],
+  "limitations": [
+    "The season update and configuration timing were not randomized.",
+    "Acquisition mix changed across periods and remains an observational confounder.",
+    "The bootstrap resamples aggregated cohort rows, not individual players.",
+    "Progression checks use cohort-level medians and are ecological associations; they cannot identify a treatment effect or player-level relationship.",
+    "Incident codes are documented context inherited from governed upstream models; this notebook does not independently query the incident mart."
+  ]
+}
