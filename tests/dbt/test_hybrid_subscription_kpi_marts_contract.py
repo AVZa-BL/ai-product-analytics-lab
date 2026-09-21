@@ -18,6 +18,7 @@ EXPECTED_TESTS = {
     "assert_hybrid_behavior_windows_complete.sql",
     "assert_hybrid_matched_pairs_valid.sql",
     "assert_hybrid_matched_population_reconciles.sql",
+    "assert_hybrid_matched_balance_is_disclosed.sql",
     "assert_hybrid_reward_track_excluded.sql",
     "assert_hybrid_kpis_reconcile.sql",
     "assert_hybrid_zero_denominators_are_null.sql",
