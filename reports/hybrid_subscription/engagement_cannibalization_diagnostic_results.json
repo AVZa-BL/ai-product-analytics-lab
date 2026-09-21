@@ -97,14 +97,14 @@
       "reuse_controls": false,
       "source_model": "game_analytics/models/hybrid_subscription/intermediate/int_hybrid_subscription__matched_pairs.sql"
     },
-    "code_version": "e45a19cf48a6b08f27f5c13c71c2d999857c194f",
+    "code_version": "f7349296f45cc99184e91537dfe0444e5386567b",
     "code_version_source": "explicit remote snapshot override",
-    "executed_at_utc": "2026-09-11T19:09:28.834708Z",
+    "executed_at_utc": "2026-09-21T21:59:51.223464Z",
     "package_versions": {
       "python": "3.12.14",
       "pandas": "2.3.3",
       "duckdb": "1.5.5",
-      "numpy": "2.5.3",
+      "numpy": "2.5.2",
       "matplotlib": "3.11.1"
     },
     "bootstrap_seed": 42,
@@ -113,7 +113,7 @@
     "execution_provenance": {
       "mode": "existing local governed DuckDB artifact"
     },
-    "database_sha256": "72f09265b320be92d6cfdd0253efbbd2b7cd4e5e8c81056f07610fbd930b6acc"
+    "database_sha256": "d420f0ad7c2234930e986e297afb26826eda86a3e129612b4cc4c2450589a08a"
   },
   "population": {
     "eligible_subscriber_count": 280,
@@ -131,7 +131,11 @@
     "immature_pre_window_count": 543,
     "immature_post_window_count": 0,
     "ingestion_watermark_not_mature_count": 0,
-    "matched_prior_payer_pair_count": 53
+    "matched_prior_payer_pair_count": 53,
+    "mean_matched_subscriber_pre_session_count": 7.076433121019108,
+    "mean_unmatched_subscriber_pre_session_count": 7.975609756097561,
+    "pre_session_count_selection_gap": 0.8991766350784527,
+    "pre_session_count_standardized_mean_difference": 1.8872441243566622
   },
   "control_totals": {
     "reconciliation_status": "passed before calculation",
@@ -1048,6 +1052,7 @@
   ],
   "observed_facts": [
     "280 eligible subscribers and 157 eligible controls yielded 157 pairs; 123 subscribers and 0 controls remained unmatched.",
+    "Unmatched subscribers are not a random subset. Their mean pre-window session count is 7.976 against 7.076 for matched subscribers, a gap of +0.899 sessions (standardized mean difference 1.887). Matched estimates therefore describe the matched subset, not all eligible subscribers.",
     "The mean 28-day matched observational difference in sessions was +3.338 per pair.",
     "Among 53 matched prior-payer pairs, the mean 28-day matched observational difference in standalone-store net revenue was $-17.628, subscription net revenue $+9.990, and total net revenue $-7.638 per pair."
   ],

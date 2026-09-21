@@ -25,8 +25,12 @@ Population counts come from `population` in the JSON:
 | invalid_player_identity_count | 0 |
 | matched_pair_count | 157 |
 | matched_prior_payer_pair_count | 53 |
+| mean_matched_subscriber_pre_session_count | 7.076433121019108 |
+| mean_unmatched_subscriber_pre_session_count | 7.975609756097561 |
 | missing_or_invalid_source_watermark_count | 0 |
 | no_eligible_exposure_count | 20 |
+| pre_session_count_selection_gap | 0.8991766350784527 |
+| pre_session_count_standardized_mean_difference | 1.8872441243566622 |
 | subscription_not_after_exposure_count | 0 |
 | unmatched_control_count | 0 |
 | unmatched_subscriber_count | 123 |
@@ -64,6 +68,10 @@ The index is each player's earliest incrementality-eligible exposure. A subscrib
 
 Matching is deterministic greedy one-to-one nearest control without replacement. Subscribers sort by prior_payer_status, platform, acquisition_channel, pre_session_count, then player_id. Available exact-stratum controls sort by absolute pre_session_count distance, control pre_session_count, then control player_id. The order is part of the contract; unmatched handling is part of the population disclosure.
 
+The control pool is exhausted in every stratum: all 157 eligible controls are used and 123 of 280 eligible subscribers remain unmatched. Because subscribers are ordered by ascending pre_session_count within a stratum, which subscribers go unmatched is decided by that ordering rather than at random. Matched subscribers average 7.076 pre-window sessions against 7.976 for unmatched, a gap of +0.899 with a pooled-standard-deviation standardized mean difference of 1.887, far above the 0.1 conventionally treated as adequate balance. The unmatched arm is also tightly concentrated (standard deviation 0.155 against 0.656 for matched), close to this fixture's pre-window ceiling of eight sessions.
+
+The estimand is therefore the average treatment effect on the treated among lower-engagement subscribers, not among eligible subscribers overall. Because the excluded subscribers are those with least room to increase, the engagement difference is plausibly an upper bound for the full subscriber population; the direction of that bound is a structural argument from the ceiling, not a quantified correction. These figures are published in `mart_hybrid_subscription__match_population_summary` and asserted by `assert_hybrid_matched_balance_is_disclosed`, so the selection stays visible rather than resting on counts alone.
+
 Pre windows are `[index - 28 days, index)`; post windows are `[index, index + 28 days)`, as exact UTC elapsed durations across DST. Every session, canonical transaction and LiveOps source must cover both windows and have its maximum ingestion timestamp at least the post endpoint plus its maximum observed nonnegative ingestion lag. Missing, invalid or stale sources fail closed. The empirical allowance is a snapshot proxy, not an operational completeness SLA or proof of individual telemetry completeness. Null/blank identity and matching covariates are excluded before behavior, with reason counts retained. One complete behavior row per player per period is required. Cohort conversion and D30 rates are withheld until every date-cohort member's forward window matures; ratio denominators of zero produce NULL.
 
 `bootstrap_seed = 42` and `bootstrap_draws = 2000` are the committed metadata. Whole-pair resampling conditions on selected matches: intervals quantify resampling variation, not confounding bias, rematching uncertainty, or proof of exchangeability/parallel trends. All inputs are deterministic synthetic lab data. The horizon does not establish real-product effects, profitability, or lifetime value.
@@ -93,8 +101,8 @@ Keep reward-track exclusion and refund accounting fixed; monitor exposure eligib
 
 The [tracked notebook source](../../notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py) queries `mart_hybrid_subscription__matched_incrementality` and reconciles it to the engagement/cannibalization aggregates plus `mart_hybrid_subscription__match_population_summary` before calculation. The independent summary remains one row at zero pairs; estimates and intervals become NULL/unavailable and unsupported bootstrap/plots are skipped. With zero prior-payer pairs, engagement remains reportable and revenue is unavailable. Pair lineage includes `fct_hybrid_subscription__player_behavior_28d`; the notebook does not reconstruct business metrics from raw or staging data.
 
-The executed source version is `e45a19cf48a6b08f27f5c13c71c2d999857c194f`; execution time is `2026-09-11T19:09:28.834708Z`, both copied from the JSON metadata. The refreshed JSON and this memo follow the source repair; metadata binds the native execution to that exact source.
+The executed source version is `f7349296f45cc99184e91537dfe0444e5386567b`; execution time is `2026-09-21T21:59:51.223464Z`, both copied from the JSON metadata. The refreshed JSON and this memo follow the source repair; metadata binds the native execution to that exact source.
 
-The [machine-readable validation record](native_validation.json) binds a clean dbt reconstruction to the exact source snapshot above. The full `hybrid_subscription` selector completed with PASS=311 tests, SUCCESS=36 models, WARN=0, ERROR=0, SKIP=0, TOTAL=347. The diagnostic JSON records `explicit remote snapshot override` for the source version and `existing local governed DuckDB artifact` for execution mode; it was first published by descendant commit `4550c41154fc28e5d2d203c536597cf227d6319e`. Generated notebooks and figures remain untracked; they are not published evidence and are not linked here.
+The [machine-readable validation record](native_validation.json) binds a clean dbt reconstruction to the exact source snapshot above. The full `hybrid_subscription` selector completed with PASS=312 tests, SUCCESS=36 models, WARN=0, ERROR=0, SKIP=0, TOTAL=348. The diagnostic JSON records `explicit remote snapshot override` for the source version and `existing local governed DuckDB artifact` for execution mode; it is committed by the commit immediately following that pinned source version, because an artifact cannot carry the identifier of the commit that contains it. Generated notebooks and figures remain untracked; they are not published evidence and are not linked here.
 
 Use the [audit](../../docs/ai-audit/hybrid_subscription.md), [metric catalogue](../../docs/metrics/hybrid_subscription.md), and JSON execution provenance for the exact validation boundary.
