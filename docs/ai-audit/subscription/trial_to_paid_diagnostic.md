@@ -24,7 +24,7 @@ Corrected: “Mature trial-to-paid conversion is lower after the designed declin
 
 - Scenario: deterministic synthetic subscription data, seed 42, start date January 1, 2026, 180 days, scale 1,000.
 - Source models: `mart_subscription__trial_conversion_diagnostic`, `mart_subscription__kpis_daily`, `fct_subscription__payments`, `int_subscription__quality_audit`, `int_subscription__trial_cohorts`, and `dim_subscription__users`.
-- Notebook: `notebooks/subscription/trial_to_paid_diagnostic.ipynb`.
+- Notebook: `notebooks/subscription/trial_to_paid_diagnostic.py`.
 - Metric contracts: `docs/metrics/subscription/`.
 - Incident record: `docs/incidents/subscription/2026-08-27-subscription-data-quality.md`.
 - Run date: recorded dynamically as `execution_date` in the notebook.

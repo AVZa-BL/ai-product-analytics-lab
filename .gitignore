@@ -35,5 +35,3 @@ generation_manifest.json
 # Generated notebook artifacts; the committed results JSON is the published evidence.
 reports/**/figures/
 notebooks/**/*.ipynb
-# Tracked pending conversion to jupytext.
-!notebooks/subscription/trial_to_paid_diagnostic.ipynb

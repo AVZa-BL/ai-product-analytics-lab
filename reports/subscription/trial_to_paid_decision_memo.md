@@ -70,7 +70,7 @@ cat >> reports/subscription/trial_to_paid_decision_memo.md <<'MD'
 ## Reproducibility
 
 - Input relations: `mart_subscription__trial_conversion_diagnostic`, `mart_subscription__kpis_daily`, `fct_subscription__payments`, `int_subscription__quality_audit`, `int_subscription__trial_cohorts`, `dim_subscription__users`
-- Executable analysis: [`notebooks/subscription/trial_to_paid_diagnostic.ipynb`](../../notebooks/subscription/trial_to_paid_diagnostic.ipynb)
+- Executable analysis: [`notebooks/subscription/trial_to_paid_diagnostic.py`](../../notebooks/subscription/trial_to_paid_diagnostic.py)
 - Generation: seed 42, start date 2026-01-01, 180 days, scale 1,000
 - Code version: `4d95492`; the executed notebook records its own commit SHA and execution timestamp
 - Conversion definition: paid start through three days after scheduled trial end, with 2-day and 7-day sensitivities
