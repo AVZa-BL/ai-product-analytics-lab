@@ -1,5 +1,5 @@
 {
-  "passed": 5,
+  "passed": 17,
   "results": [
     {
       "cost_usd": 0.0,
@@ -60,8 +60,152 @@
       "provenance_score": 1,
       "refusal_score": 1,
       "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_signup_to_trial_rate",
+      "latency_ms": 45,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_activation_rate",
+      "latency_ms": 45,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_trial_activation_rate",
+      "latency_ms": 45,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_d30_paid_retention",
+      "latency_ms": 45,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_early_paid_churn",
+      "latency_ms": 45,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_nrr",
+      "latency_ms": 45,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_reaggregation_rule",
+      "latency_ms": 45,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_activation_definition_ambiguity",
+      "latency_ms": 45,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_averaged_daily_rates",
+      "latency_ms": 45,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_drop_missing_campaign_users",
+      "latency_ms": 45,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_ingestion_time_cancellation",
+      "latency_ms": 45,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
+    },
+    {
+      "cost_usd": 0.0,
+      "id": "subscription_forecast_next_quarter",
+      "latency_ms": 45,
+      "metric_score": 1,
+      "numeric_score": 1,
+      "passed": true,
+      "population_score": 1,
+      "provenance_score": 1,
+      "refusal_score": 1,
+      "uncertainty_score": 1
     }
   ],
   "scenario": "subscription",
-  "total": 5
+  "total": 17
 }

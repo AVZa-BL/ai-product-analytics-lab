@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def test_subscription_diagnostic_artifacts_are_auditable() -> None:
-    notebook = Path("notebooks/subscription/trial_to_paid_diagnostic.ipynb").read_text()
+    notebook = Path("notebooks/subscription/trial_to_paid_diagnostic.py").read_text()
     memo = Path("reports/subscription/trial_to_paid_decision_memo.md").read_text()
     audit = Path("docs/ai-audit/subscription/trial_to_paid_diagnostic.md").read_text()
     for token in [

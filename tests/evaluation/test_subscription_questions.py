@@ -16,7 +16,7 @@ REQUIRED = {
 
 def test_subscription_question_set_covers_required_question_classes() -> None:
     questions = yaml.safe_load(
-        Path("scripts/evaluation/subscription_questions.yaml").read_text()
+        Path("docs/ai-audit/subscription_questions.yaml").read_text()
     )["questions"]
     assert {question["class"] for question in questions} == {
         "standard",
@@ -31,7 +31,12 @@ def test_subscription_question_set_covers_required_question_classes() -> None:
         in {
             "signup_to_trial_rate",
             "trial_to_paid_conversion",
+            "activation",
+            "trial_activation",
+            "d30_paid_retention",
+            "early_paid_churn",
             "mrr",
+            "nrr",
             "cac",
             "refusal",
         }

@@ -345,6 +345,13 @@ def population_controls(pair_count=0):
                 "immature_post_window_count": 0,
                 "ingestion_watermark_not_mature_count": 0,
                 "source_watermarks_json": "[]",
+                # Balance of the matched against the unmatched subscriber arm. With no
+                # matched pairs the matched arm is empty, so its mean, the gap and the
+                # standardized mean difference are all legitimately NULL.
+                "mean_matched_subscriber_pre_session_count": 7.0 if pair_count else None,
+                "mean_unmatched_subscriber_pre_session_count": 8.0,
+                "pre_session_count_selection_gap": 1.0 if pair_count else None,
+                "pre_session_count_standardized_mean_difference": 2.0 if pair_count else None,
             }
         ]
     )
@@ -363,6 +370,13 @@ def test_zero_pairs_require_independent_complete_population_counts(matched_pairs
         malformed[column] += 1
         with pytest.raises(ValueError, match="reconcile"):
             population_summary(pairs, malformed)
+    # A published gap that disagrees with the two arm means is a corrupted balance
+    # disclosure, not a rounding artifact, so it must fail closed like the counts.
+    mismatched = population_controls()
+    mismatched["mean_matched_subscriber_pre_session_count"] = 7.0
+    mismatched["pre_session_count_selection_gap"] = 99.0
+    with pytest.raises(ValueError, match="selection gap does not reconcile"):
+        population_summary(pairs, mismatched)
 
 
 @pytest.mark.parametrize("pair_count", [0, 2])

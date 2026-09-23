@@ -6,7 +6,9 @@
       "population": "Paid-active subscription entitlements on 2026-06-29 UTC.",
       "value": 136.640827,
       "refused": false,
-      "relations": ["mart_subscription__kpis_daily"],
+      "relations": [
+        "mart_subscription__kpis_daily"
+      ],
       "uncertainty": "MRR is calculated from modeled paid-active entitlement state; tolerance is USD 0.01.",
       "latency_ms": 40,
       "cost_usd": 0.0
@@ -17,7 +19,9 @@
       "population": "Mature trial cohorts only; paid start from trial start through three days after scheduled trial end.",
       "value": 0.3,
       "refused": false,
-      "relations": ["mart_subscription__trial_conversion_diagnostic"],
+      "relations": [
+        "mart_subscription__trial_conversion_diagnostic"
+      ],
       "uncertainty": "The estimate is 54 conversions among 180 mature trials and remains descriptive, not causal.",
       "latency_ms": 45,
       "cost_usd": 0.0
@@ -28,7 +32,10 @@
       "population": "Tracked campaign spend divided by attributed new paid users; unknown campaigns are excluded and disclosed.",
       "value": null,
       "refused": false,
-      "relations": ["mart_subscription__kpis_daily", "dim_subscription__campaigns"],
+      "relations": [
+        "mart_subscription__kpis_daily",
+        "dim_subscription__campaigns"
+      ],
       "uncertainty": "A complete all-user CAC is unsupported because 60 users have missing campaign identifiers; report tracked-attribution CAC only.",
       "latency_ms": 35,
       "cost_usd": 0.0
@@ -53,6 +60,157 @@
       "relations": [],
       "uncertainty": "Refused: entitlement ends at cancellation_effective_at, not at cancellation ingestion or request time.",
       "latency_ms": 10,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_signup_to_trial_rate",
+      "metric": "signup_to_trial_rate",
+      "population": "All signups in the window; reaggregated from summed numerators and denominators, not averaged daily rates.",
+      "value": 0.18,
+      "refused": false,
+      "relations": [
+        "mart_subscription__kpis_daily"
+      ],
+      "uncertainty": "Governed descriptive value reaggregated from summed numerators and denominators, matched to tolerance 0.0001; observational, not causal.",
+      "latency_ms": 45,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_activation_rate",
+      "metric": "activation",
+      "population": "All signups in the window; activation counted from canonicalized event names, not a single raw alias.",
+      "value": 0.48,
+      "refused": false,
+      "relations": [
+        "mart_subscription__kpis_daily"
+      ],
+      "uncertainty": "Governed descriptive value reaggregated from summed numerators and denominators, matched to tolerance 0.0001; observational, not causal.",
+      "latency_ms": 45,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_trial_activation_rate",
+      "metric": "trial_activation",
+      "population": "Trial starts only, not all signups; the denominator is 180 trials rather than 1000 signups.",
+      "value": 0.477778,
+      "refused": false,
+      "relations": [
+        "mart_subscription__kpis_daily"
+      ],
+      "uncertainty": "Governed descriptive value reaggregated from summed numerators and denominators, matched to tolerance 0.0001; observational, not causal.",
+      "latency_ms": 45,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_d30_paid_retention",
+      "metric": "d30_paid_retention",
+      "population": "New paid users whose 30-day window has matured; 54 eligible, not all paid users ever observed.",
+      "value": 0.648148,
+      "refused": false,
+      "relations": [
+        "mart_subscription__kpis_daily",
+        "fct_subscription__daily_user_state"
+      ],
+      "uncertainty": "Governed descriptive value reaggregated from summed numerators and denominators, matched to tolerance 0.0001; observational, not causal.",
+      "latency_ms": 45,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_early_paid_churn",
+      "metric": "early_paid_churn",
+      "population": "Mature new paid users; churn follows entitlement state at effective_at, so a cancellation before period end does not by itself count.",
+      "value": 0.111111,
+      "refused": false,
+      "relations": [
+        "mart_subscription__kpis_daily",
+        "int_subscription__subscription_periods"
+      ],
+      "uncertainty": "Governed descriptive value reaggregated from summed numerators and denominators, matched to tolerance 0.0001; observational, not causal.",
+      "latency_ms": 45,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_nrr",
+      "metric": "nrr",
+      "population": "Recurring revenue from the retained base, reaggregated from summed numerator and denominator USD; excludes new-customer revenue and is not a growth rate.",
+      "value": 0.898576,
+      "refused": false,
+      "relations": [
+        "mart_subscription__kpis_daily",
+        "fct_subscription__daily_user_state"
+      ],
+      "uncertainty": "Governed descriptive value reaggregated from summed numerators and denominators, matched to tolerance 0.0001; observational, not causal.",
+      "latency_ms": 45,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_reaggregation_rule",
+      "metric": "trial_to_paid_conversion",
+      "population": "Recompute from summed numerators and denominators; a mean of daily rates weights sparse days equally with dense ones and is not the governed metric.",
+      "value": null,
+      "refused": false,
+      "relations": [
+        "mart_subscription__kpis_daily"
+      ],
+      "uncertainty": "State the reaggregation rule rather than returning an averaged-rate number.",
+      "latency_ms": 45,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_activation_definition_ambiguity",
+      "metric": "activation",
+      "population": "Ambiguous between activation over all signups and trial activation over trial starts; the two have different denominators and must not be conflated.",
+      "value": null,
+      "refused": false,
+      "relations": [
+        "mart_subscription__kpis_daily"
+      ],
+      "uncertainty": "Ask which denominator is meant, or report both with their populations named.",
+      "latency_ms": 45,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_averaged_daily_rates",
+      "metric": "refusal",
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refuse the requested method and reaggregate from summed numerators and denominators.",
+      "latency_ms": 45,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_drop_missing_campaign_users",
+      "metric": "refusal",
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refuse; missing attribution is contained in an explicit unknown bucket and disclosed, never silently dropped.",
+      "latency_ms": 45,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_ingestion_time_cancellation",
+      "metric": "refusal",
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refuse; entitlement state follows effective_at, and ingestion time would overstate paid activity, MRR and retention before the webhook arrived.",
+      "latency_ms": 45,
+      "cost_usd": 0.0
+    },
+    {
+      "id": "subscription_forecast_next_quarter",
+      "metric": "refusal",
+      "population": null,
+      "value": null,
+      "refused": true,
+      "relations": [],
+      "uncertainty": "Refuse; the governed marts describe observed mature cohorts and support no forecast.",
+      "latency_ms": 45,
       "cost_usd": 0.0
     }
   ]

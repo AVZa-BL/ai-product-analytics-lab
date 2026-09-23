@@ -48,6 +48,16 @@ POPULATION_COUNT_COLUMNS = (
     "unmatched_subscriber_count",
     "unmatched_control_count",
 )
+# Matching without replacement can exhaust a stratum's control pool, after which the
+# deterministic subscriber ordering decides who is left out. These describe that
+# selection. Each is legitimately NULL when an arm is empty or has no variance, so they
+# are validated separately from the nonnegative-integer counts above.
+BALANCE_COLUMNS = (
+    "mean_matched_subscriber_pre_session_count",
+    "mean_unmatched_subscriber_pre_session_count",
+    "pre_session_count_selection_gap",
+    "pre_session_count_standardized_mean_difference",
+)
 EXCLUSION_REASONS = (
     "invalid_player_identity",
     "invalid_matching_covariates",
@@ -189,6 +199,17 @@ def population_summary(pairs: pd.DataFrame, published: pd.DataFrame) -> dict[str
             if not pd.to_numeric(validated[column], errors="raise").eq(result[column]).all():
                 raise ValueError("population summary disagrees with pair-row totals")
     result["matched_prior_payer_pair_count"] = len(_prior_payer_pairs(validated))
+    _require_columns(published, BALANCE_COLUMNS, "population summary balance")
+    balance = pd.to_numeric(published.loc[:, BALANCE_COLUMNS].iloc[0], errors="coerce")
+    for column in BALANCE_COLUMNS:
+        value = balance[column]
+        result[column] = None if pd.isna(value) else float(value)
+    unmatched_mean = result["mean_unmatched_subscriber_pre_session_count"]
+    matched_mean = result["mean_matched_subscriber_pre_session_count"]
+    gap = result["pre_session_count_selection_gap"]
+    if unmatched_mean is not None and matched_mean is not None:
+        if gap is None or abs(gap - (unmatched_mean - matched_mean)) > 1e-9:
+            raise ValueError("population summary selection gap does not reconcile")
     return result
 
 

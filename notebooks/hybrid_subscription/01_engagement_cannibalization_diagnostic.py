@@ -200,7 +200,6 @@ reconcile_published_inputs(pairs, inputs["engagement"], inputs["cannibalization"
 
 population = population_summary(pairs, inputs["population_summary"])
 prior_payer_pairs = pairs.loc[pairs["subscriber_prior_payer_status"].eq("prior_payer")]
-population["matched_prior_payer_pair_count"] = len(prior_payer_pairs)
 display(pd.DataFrame([population]).T.rename(columns={0: "Players or pairs"}))
 display(inputs["incidents"])
 print("Population and both published aggregate controls reconcile before calculation.")
@@ -334,6 +333,18 @@ observed_facts = [
     f"{population['unmatched_subscriber_count']} subscribers and "
     f"{population['unmatched_control_count']} controls remained unmatched.",
 ]
+if population["pre_session_count_selection_gap"] is not None:
+    smd = population["pre_session_count_standardized_mean_difference"]
+    observed_facts.append(
+        "Unmatched subscribers are not a random subset. Their mean pre-window session "
+        f"count is {population['mean_unmatched_subscriber_pre_session_count']:.3f} "
+        f"against {population['mean_matched_subscriber_pre_session_count']:.3f} for "
+        f"matched subscribers, a gap of "
+        f"{population['pre_session_count_selection_gap']:+.3f} sessions"
+        + (f" (standardized mean difference {smd:.3f})" if smd is not None else "")
+        + ". Matched estimates therefore describe the matched subset, not all eligible "
+        "subscribers."
+    )
 if pairs.empty:
     observed_facts.append(
         "No matched pairs: estimates and intervals are unavailable; no bootstrap "
