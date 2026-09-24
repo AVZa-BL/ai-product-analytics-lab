@@ -32,6 +32,10 @@ The Hybrid Subscription case study publishes a governed [metric catalogue](docs/
 
 ## Setup
 
+New here? **[docs/getting_started.md](docs/getting_started.md)** takes you from a fresh clone to querying modelled data in about ten minutes, including what to read first and the traps worth knowing about.
+
+The short version:
+
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
