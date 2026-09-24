@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -61,6 +62,34 @@ def load_diagnostic_inputs(db_path: Path) -> pd.DataFrame:
             return connection.sql(query).df()
         finally:
             connection.close()
+
+
+def fingerprint_inputs(frame: pd.DataFrame) -> dict[str, object]:
+    """Return a content fingerprint of the diagnostic inputs.
+
+    The results artifact records which commit and which library versions produced a
+    run, but nothing about the data that run read. That gap makes a stale DuckDB build
+    indistinguishable from a genuine recomputation: a notebook re-executed without
+    rebuilding reproduces the previous numbers exactly and moves only code_version and
+    executed_at_utc, which reads as reassuring reproducibility and is not. Hashing the
+    input frame closes it, because the digest changes whenever the mart changes
+    regardless of what the commit says.
+
+    Rows are sorted by every column before hashing, so the digest depends on content
+    alone and is unaffected by the query's ORDER BY or by ties within it.
+    """
+    if frame.empty:
+        raise ValueError("cannot fingerprint an empty diagnostic frame")
+
+    ordered = frame.sort_values(by=list(frame.columns), kind="mergesort").reset_index(
+        drop=True
+    )
+    digest = hashlib.sha256(ordered.to_csv(index=False).encode()).hexdigest()
+    return {
+        "sha256": digest,
+        "row_count": int(len(ordered)),
+        "columns": list(ordered.columns),
+    }
 
 
 def _validate_frame(frame: pd.DataFrame, *, signal: str) -> pd.DataFrame:
