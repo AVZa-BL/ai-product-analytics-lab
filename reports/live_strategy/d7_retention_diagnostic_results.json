@@ -14,8 +14,8 @@
       ],
       "maturity_rule": "eligible_d7_players > 0 in governed cohort mart"
     },
-    "code_version": "9d97f009efab5f8bd2897c1f352b7360682aa425",
-    "executed_at_utc": "2026-09-24T01:14:31.208877Z",
+    "code_version": "683ff9d581913949de6c5356bf43b743d4f7a8ea",
+    "executed_at_utc": "2026-09-24T05:04:47.677706Z",
     "package_versions": {
       "python": "3.12.14",
       "pandas": "2.3.3",
