@@ -64,8 +64,6 @@ Containment makes these metrics internally consistent. It does not establish tha
 - Did acquisition quality, creative, or targeting change within channels around April 19?
 - Was plan exposure randomized or selected by user/product behavior?
 - Which activation event definition is stable enough to use as a prospective experiment guardrail?
-cd /Users/th1s/Projects/ai-product-analytics-lab
-cat >> reports/subscription/trial_to_paid_decision_memo.md <<'MD'
 
 ## Reproducibility
 
