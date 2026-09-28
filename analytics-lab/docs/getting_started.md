@@ -13,9 +13,11 @@ Allow about ten minutes to get from a fresh clone to querying modelled data.
 
 ## 1. Install
 
+The repository holds several projects, each in its own folder. This guide is for the lab in `analytics-lab/`, and every command below runs from inside that folder.
+
 ```bash
 git clone https://github.com/AVZa-BL/ai-product-analytics-lab.git
-cd ai-product-analytics-lab
+cd ai-product-analytics-lab/analytics-lab
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
