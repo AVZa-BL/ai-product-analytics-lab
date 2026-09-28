@@ -31,6 +31,7 @@ The near-zero upgrade-attempt correlation is an ecological cohort-level associat
 - Configuration timing and the acquisition-mix shift are observational confounders.
 - Reconciled purchases are associated with their governed transaction records; no causal monetization effect is inferred here.
 - The six contained incident classes are retained as known measurement context. Their existence does not imply that every reported estimate is biased by the same amount.
+- The published figures are exact for the recorded execution platform only. A Linux/x86_64 run of the same commit, from byte-identical generated inputs, shifts the population by one player and the observed change from −3.97% to −3.19%. The Reproducibility section states the measured divergence in full.
 
 ## Data-quality qualification
 
@@ -61,12 +62,41 @@ The incident controls were exercised by the scenario dbt build and targeted sing
 - Results artifact: `reports/live_strategy/d7_retention_diagnostic_results.json`
 - Executable analysis: `notebooks/live_strategy/01_d7_retention_diagnostic.py`
 - Generated notebook: `notebooks/live_strategy/01_d7_retention_diagnostic.ipynb` (untracked local artifact; the results JSON is the published evidence)
-- Execution timestamp: `2026-09-20T02:29:50.723704Z`
-- Code version: `85fea91c52ca7fcb5e7eaae2b10f088777ff7078`
+- Execution timestamp: `2026-09-24T05:04:47.677706Z`
+- Code version: `683ff9d581913949de6c5356bf43b743d4f7a8ea`
 - Runtime: Python 3.12.14, pandas 2.3.3, DuckDB 1.5.5, NumPy 2.5.2
+- Execution platform: macOS, arm64. The values above are platform-dependent; see below.
 - Bootstrap: seed 42, 2,000 draws, stratified over governed cohort rows
 - Metric definitions: [`docs/metrics/live_strategy.md`](../../docs/metrics/live_strategy.md)
 - Incident context: [`docs/incidents/live_strategy.md`](../../docs/incidents/live_strategy.md)
+
+### Reproducibility is exact within a platform, not across platforms
+
+Re-running this analysis on the recorded platform reproduces every value above
+exactly. Re-running it on Linux/x86_64 does not. The divergence was measured
+directly and is stated here rather than left for a reader to discover:
+
+| | macOS, arm64 (published) | Linux, x86_64 |
+| --- | --- | --- |
+| Post-update eligible players | 477 | 478 |
+| Pre-update D7 retention | 0.219959 | 0.211813 |
+| Post-update D7 retention | 0.180294 | 0.179916 |
+| Observed D7 change | −0.039666 | −0.031896 |
+| Bootstrap 95% CI | [−0.0910, +0.0106] | [−0.0810, +0.0169] |
+
+The generated inputs are **not** the cause. The same seed produces byte-identical
+Parquet on both platforms, verified by SHA-256 over `players.parquet`
+(`6767331d224dc305`) and `sessions.parquet` (`097a4964e0bcf6c6`), with an identical
+acquisition-channel mix of 498 organic, 352 paid social, 150 paid search. Identical
+NumPy, pandas, pyarrow and DuckDB versions were also confirmed on both, and pinning
+NumPy to the recorded 2.5.2 on Linux did not close the gap. The divergence therefore
+arises downstream of generation, and which stage is responsible is not yet
+established.
+
+The qualitative finding is unaffected: D7 retention declines after the update by
+roughly three to four percentage points, the acquisition-mix component explains
+under half of it, and the bootstrap interval spans zero on both platforms. What is
+not safe is quoting these figures to the sixth decimal without naming the platform.
 
 Regenerate the runtime JSON and executed notebook from the repository root with:
 

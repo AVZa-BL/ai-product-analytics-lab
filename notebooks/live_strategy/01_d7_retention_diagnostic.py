@@ -42,6 +42,7 @@ import duckdb
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from IPython.display import Markdown, display
 
 
@@ -64,6 +65,7 @@ from analytics_lab.analysis.live_strategy_retention import (
     INPUT_RELATION,
     bootstrap_difference_ci,
     d7_contribution_table,
+    fingerprint_inputs,
     load_diagnostic_inputs,
     standardized_retention,
 )
@@ -100,6 +102,14 @@ package_versions = {
     "pandas": pd.__version__,
     "duckdb": duckdb.__version__,
     "numpy": np.__version__,
+    # pyarrow round-trips every Parquet dtype and was absent from this block while an
+    # unexplained cross-machine divergence was being diagnosed, so it could not be
+    # ruled out from the artifact alone.
+    "pyarrow": pa.__version__,
+}
+execution_platform = {
+    "system": platform.system(),
+    "machine": platform.machine(),
 }
 
 print(f"Repository: {REPO_ROOT}")
@@ -129,6 +139,12 @@ print(f"Versions: {package_versions}")
 diagnostic = load_diagnostic_inputs(DB_PATH)
 if diagnostic.empty:
     raise ValueError("Governed diagnostic mart returned no rows")
+
+input_fingerprint = fingerprint_inputs(diagnostic)
+print(
+    f"Input fingerprint: {input_fingerprint['sha256'][:16]}"
+    f" over {input_fingerprint['row_count']} rows"
+)
 
 required_periods = set(FILTERS["periods"])
 required_signals = set(FILTERS["retention_signals"])
@@ -337,6 +353,8 @@ results = {
         "code_version": code_version,
         "executed_at_utc": executed_at_utc,
         "package_versions": package_versions,
+        "execution_platform": execution_platform,
+        "input_fingerprint": input_fingerprint,
         "bootstrap_seed": BOOTSTRAP_SEED,
         "bootstrap_draws": BOOTSTRAP_DRAWS,
         "contained_incident_codes": CONTAINED_INCIDENT_CODES,

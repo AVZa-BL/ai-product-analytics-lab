@@ -48,7 +48,9 @@ Expect `PASS=153`, `PASS=102` and `PASS=348`. The hybrid build takes about two m
 
 Each script generates deterministic synthetic Parquet into `data/raw/`, then builds only that scenario's models and tests. They share `game_analytics/dev.duckdb`, so running all three leaves all three schemas available at once.
 
-The data is seeded, so your numbers will match the committed reports exactly. That is deliberate — reproducibility is the point of the project.
+The data is seeded, so the generated Parquet is byte-identical on every machine — verified across macOS/arm64 and Linux/x86_64 by SHA-256 over the generated files.
+
+Downstream figures are a weaker guarantee. Re-running a diagnostic on the same platform that produced a published report reproduces it exactly; re-running it on a different platform can shift values slightly. The live-strategy D7 memo documents a measured case: one player moves between periods on Linux/x86_64, and the observed change reads −3.19% instead of the published −3.97%. The published reports name the platform they were produced on, and the cause of the divergence is still being traced. If your numbers differ from a committed report, check the platform before assuming you have found a bug.
 
 ## 4. Query the modelled data
 
@@ -78,7 +80,7 @@ Notebooks are stored as jupytext percent-format Python, not `.ipynb`, so they di
 ./.venv/bin/python -m jupytext --to notebook --execute notebooks/live_strategy/01_d7_retention_diagnostic.py --output notebooks/live_strategy/01_d7_retention_diagnostic.ipynb
 ```
 
-This rewrites `reports/live_strategy/d7_retention_diagnostic_results.json`. Compare it with the committed version: every analytical value should be identical, with only `code_version` and `executed_at_utc` changing. If an analytical value moves, that is a real finding, not noise.
+This rewrites `reports/live_strategy/d7_retention_diagnostic_results.json`. Compare it with the committed version. On the platform the report was produced on, every analytical value should be identical, with only `code_version`, `executed_at_utc` and `input_fingerprint` changing. If an analytical value moves on that platform, that is a real finding, not noise — and `input_fingerprint.sha256` tells you immediately whether the inputs changed or only the computation did.
 
 Generated `.ipynb` files and figures are gitignored by design — the committed JSON is the published evidence, not the notebook.
 

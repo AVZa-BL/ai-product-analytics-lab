@@ -51,5 +51,6 @@ The approved design and scenario boundaries are documented in [the architecture 
 
 - This is a local portfolio project, not a production analytics platform.
 - All data is synthetic and should not be treated as evidence about a real product.
+- Generated data is byte-identical across platforms, but published diagnostic figures are exact only on the platform each report names. A measured Linux/x86_64 versus macOS/arm64 divergence is documented in the [live-strategy decision memo](reports/live_strategy/d7_retention_diagnostic.md); its cause is not yet established.
 - The evaluator scores recorded answer artifacts; it does not authorize autonomous decisions.
 - Production security, orchestration, warehouse scaling, and deployment are outside the current scope.
