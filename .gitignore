@@ -1,0 +1,18 @@
+# Patterns for every project in this repository. Each project keeps its own
+# .gitignore for anything specific to it; patterns with a slash in the middle
+# are relative to the folder that holds the .gitignore, so they cannot live here.
+
+# Local Python environments and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Secrets
+.env
