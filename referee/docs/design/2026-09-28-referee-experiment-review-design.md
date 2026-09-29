@@ -2,6 +2,7 @@
 
 **Date:** 2026-09-28
 **Status:** Approved design (Alexander Zatey), pending implementation plan
+**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. Sections 0 to 15 are unchanged.
 **Scope:** New module inside `ai-product-analytics-lab`; first milestone is the experiment spec schema
 
 This document is the handoff from the design conversation into Claude Code. It is self-contained: nothing outside this file and the repository is needed to start.
@@ -299,3 +300,44 @@ Read docs/superpowers/specs/2026-09-28-referee-experiment-review-design.md in fu
 3. Work step by step in teaching mode: before writing each file, show it to me and explain the design choices; wait for my OK; run ruff and pytest after each file.
 4. Follow section 14. Finish with a PR titled "feat(referee): experiment spec schema and validation".
 ```
+
+
+---
+
+## 16. Amendment 1: repository layout and settled validation rules (2026-09-29)
+
+Added after the design was approved and while milestone 1 was being implemented. Sections 0 to 15 above are left as written; where they disagree with this section, this section wins.
+
+### 16.1 Repository layout
+
+Pull request #22 moved the analytics lab into `analytics-lab/`, and Referee became a second, independent project in `referee/`, with its own `pyproject.toml`, virtual environment and CI job.
+
+| The design says | Now |
+| --- | --- |
+| Package `src/analytics_lab/referee/`, installed by the existing `pip install -e .` (section 3) | Package `referee/src/referee/`, import name `referee`, installed from `referee/` with `python -m pip install -e '.[dev]'` |
+| Tests in `tests/referee/` (section 3) | `referee/tests/`, flat (no `referee` subfolder) |
+| Docs in `docs/referee/` (section 3) | `referee/docs/`; this document is in `referee/docs/design/` |
+| CLI `python -m analytics_lab.referee review-design <spec.yaml>` (section 3) | `python -m referee review-design <spec.yaml>`, run from `referee/` |
+| `ruff check src scripts tests`, and `bash scripts/validation/run_shared_checks.sh` before a PR (section 14) | From `referee/`: `ruff check src tests` and `python -m pytest -q`. The CI job `referee-quality-gate` runs both. The lab's scripts apply to changes inside `analytics-lab/`. |
+| Test module names unique across directories (section 14) | Applies within each project. Referee prefixes its own module names so a run from the repository root cannot clash with the lab's |
+| `pyyaml` and `scipy` become core dependencies in milestone 2 (section 14) | Unchanged, applied in `referee/pyproject.toml`. `pyyaml` is already a development dependency, because a CI guard test reads the workflow file |
+| The synthetic experiment extends the hybrid generator and dbt models (section 10) | They live in `analytics-lab/`. Referee reads their Parquet output through `review-results`, so the two projects share no Python code |
+
+### 16.2 Superseded and deferred items
+
+- Section 0 is superseded. Pull request #21 fixed the provenance guard on `main` before implementation began, and the literal values in section 0 (`e06418d1…`) are stale. Nothing was done for it.
+- The milestone 1 deliverable `docs/referee/spec-template.yaml` (section 13) moves to milestone 2, when YAML loading exists and a test can keep the template honest.
+- The YAML example in section 6 cannot be loaded as written. PyYAML reads an unquoted `null:` key as Python `None` (`yaml.safe_load('null: x')` returns `{None: 'x'}`), so YAML files, and the milestone 2 template, must quote it: `"null": ...`.
+
+### 16.3 Validation rules settled during milestone 1
+
+Section 6.1 stays authoritative. These rules fill the gaps it left, and `referee/tests/test_spec.py` pins each of them.
+
+- Every string field in the spec (`owner`, `population.eligibility`, every `name`, and the rest) is a non-empty string.
+- `population.analysis_unit` takes the same five values as `randomization_unit`, and defaults to it when omitted.
+- Guardrails do not accept `governed_reference`; only the primary metric does.
+- `guardrails` may be omitted or null (both mean none), `is_control` defaults to false, `baseline_std` may be omitted for a binary metric, and `governed_reference` is optional.
+- Integer fields take real integers only: `true` and `4200.0` are rejected, and so is `referee_spec_version: true`.
+- Non-finite numbers (`NaN`, infinity) are rejected. `id` must match `^[a-z0-9_]+$` in full, so a trailing newline is not accepted.
+- Unknown keys are errors at every level, and a near miss names its likely target (`design: unknown key 'alphaa' (did you mean 'alpha'?)`).
+- `ExperimentSpec.from_dict` raises one `SpecError` (a `ValueError`) that lists every violation in schema order. Its result is frozen, hashable and independent of the input.
