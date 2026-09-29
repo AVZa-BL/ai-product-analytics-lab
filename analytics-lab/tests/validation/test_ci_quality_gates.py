@@ -5,7 +5,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-ROOT = Path(__file__).parents[2]
+ROOT = Path(__file__).parents[2]  # analytics-lab/, the project this suite tests
+# GitHub only reads workflows from the repository root, one level above the project.
+WORKFLOWS = ROOT.parent / ".github" / "workflows"
+CI = WORKFLOWS / "ci.yml"
 SCENARIOS = ("live_strategy", "subscription", "hybrid_subscription")
 
 
@@ -30,9 +33,18 @@ _DuplicateKeyLoader.add_constructor(
 )
 
 
+def test_workflows_are_found() -> None:
+    """An empty parameter set skips a parametrized test instead of failing it.
+
+    If the workflow folder moves again, the duplicate-key check below would go on
+    passing while checking nothing, so the folder itself is asserted here.
+    """
+    assert sorted(WORKFLOWS.glob("*.yml")), f"no workflow files found in {WORKFLOWS}"
+
+
 @pytest.mark.parametrize(
     "workflow",
-    sorted((ROOT / ".github/workflows").glob("*.yml")),
+    sorted(WORKFLOWS.glob("*.yml")),
     ids=lambda path: path.name,
 )
 def test_workflow_has_no_duplicate_keys(workflow: Path) -> None:
@@ -99,7 +111,7 @@ def test_scenario_script_rejects_an_unknown_scenario() -> None:
 
 
 def test_ci_gates_every_scenario() -> None:
-    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    workflow = yaml.safe_load(CI.read_text())
     job = workflow["jobs"]["scenario-quality-gate"]
     assert sorted(job["strategy"]["matrix"]["scenario"]) == sorted(SCENARIOS)
     run_commands = [step.get("run", "") for step in job["steps"]]
@@ -107,8 +119,18 @@ def test_ci_gates_every_scenario() -> None:
 
 
 def test_ci_runs_the_shared_gate() -> None:
-    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    workflow = yaml.safe_load(CI.read_text())
     run_commands = [
         step.get("run", "") for step in workflow["jobs"]["shared-quality-gate"]["steps"]
     ]
     assert "bash scripts/validation/run_shared_checks.sh" in run_commands
+
+
+def test_ci_runs_the_lab_from_its_own_folder() -> None:
+    """The gates are relative to the project, so CI must start every step inside it.
+
+    Tying the workflow's default directory to this folder's name means renaming the
+    folder without updating CI fails here instead of as a confusing "No such file".
+    """
+    workflow = yaml.safe_load(CI.read_text())
+    assert workflow["defaults"]["run"]["working-directory"] == ROOT.name

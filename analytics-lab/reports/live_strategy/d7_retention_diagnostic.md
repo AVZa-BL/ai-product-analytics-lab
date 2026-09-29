@@ -98,7 +98,7 @@ roughly three to four percentage points, the acquisition-mix component explains
 under half of it, and the bootstrap interval spans zero on both platforms. What is
 not safe is quoting these figures to the sixth decimal without naming the platform.
 
-Regenerate the runtime JSON and executed notebook from the repository root with:
+Regenerate the runtime JSON and executed notebook from the `analytics-lab/` folder with:
 
 ```bash
 ./.venv/bin/python -m jupytext \

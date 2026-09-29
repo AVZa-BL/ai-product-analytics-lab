@@ -75,6 +75,6 @@ Containment makes these metrics internally consistent. It does not establish tha
 - Metric contracts: [`docs/metrics/subscription/`](../../docs/metrics/subscription/)
 - Incident record: [`docs/incidents/subscription/2026-08-27-subscription-data-quality.md`](../../docs/incidents/subscription/2026-08-27-subscription-data-quality.md)
 
-Rebuild the scenario from the repository root with `bash scripts/validation/run_subscription_checks.sh`.
+Rebuild the scenario from the `analytics-lab/` folder with `bash scripts/validation/run_subscription_checks.sh`.
 
 Unlike the live-strategy and hybrid case studies, this scenario publishes no committed machine-readable results artifact, so the numbers above cannot be bound to one by test. That is a known gap, not a claim that the values are unverifiable.

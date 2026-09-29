@@ -1,56 +1,17 @@
-# AI Product Analytics Lab
+# Product analytics portfolio
 
-A portfolio project demonstrating governed, reproducible product analytics across three synthetic business scenarios. All data is generated locally; the repository contains no production, customer, or employer data.
+A home for portfolio projects in product analytics. Each project lives in its own folder with its own dependencies, tests and scripts, and is run from inside that folder. All data is synthetic; the repository contains no production, customer, or employer data.
 
-## Current status
+## Projects
 
-The shared Python, DuckDB, dbt, governance, and evaluation foundation is complete. Scenario implementations are developed independently and validated through scenario-specific quality gates.
-
-| Scenario | Analytical focus | Status |
+| Project | What it is | Status |
 | --- | --- | --- |
-| Live strategy game | Retention and progression diagnostic | Complete |
-| Subscription product | Conversion and lifecycle diagnostic | Complete |
-| Hybrid game subscription | Cannibalization and entitlement diagnostic | Complete; native dbt and Jupyter execution validated |
+| [`analytics-lab/`](analytics-lab/) | AI Product Analytics Lab: governed, reproducible product analytics across three synthetic business scenarios, with metric contracts, decision memos and trusted evaluation cases for AI-assisted analysis | Complete |
 
-## Live Strategy case study
+Start with the lab's [README](analytics-lab/README.md), or go straight to its [getting-started guide](analytics-lab/docs/getting_started.md).
 
-The Live Strategy case study publishes a governed [metric catalogue](docs/metrics/live_strategy.md), [incident register](docs/incidents/live_strategy.md), executable [D7 diagnostic notebook](notebooks/live_strategy/01_d7_retention_diagnostic.py), [decision memo](reports/live_strategy/d7_retention_diagnostic.md), and [trusted evaluation cases](docs/ai-audit/live_strategy_questions.yaml). Together they demonstrate metric contracts, explicit data-defect containment, reproducible observational analysis, causal boundaries, and refusal of requests outside approved marts.
+## How the repository is organised
 
-## Subscription case study
-
-The Subscription case study publishes nine governed [metric contracts](docs/metrics/subscription/), a [data-quality incident record](docs/incidents/subscription/2026-08-27-subscription-data-quality.md), an executable [trial-to-paid diagnostic notebook](notebooks/subscription/trial_to_paid_diagnostic.py), a [decision memo](reports/subscription/trial_to_paid_decision_memo.md), an [AI audit](docs/ai-audit/subscription/trial_to_paid_diagnostic.md), and [trusted evaluation cases](docs/ai-audit/subscription_questions.yaml) with a deterministic [score report](reports/subscription/agent_evaluation.json). The diagnostic separates acquisition mix, onboarding performance, activation behavior, payment failures and plan mix as candidate explanations of a mature trial-to-paid decline, and declines to assign a causal driver without a controlled experiment.
-
-## Hybrid subscription case study
-
-The Hybrid Subscription case study publishes a governed [metric catalogue](docs/metrics/hybrid_subscription.md), [incident register](docs/incidents/hybrid_subscription.md), executable [engagement and cannibalization diagnostic](notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py), [decision memo](reports/hybrid_subscription/engagement_cannibalization_decision_memo.md), and [trusted evaluation cases](docs/ai-audit/hybrid_subscription_questions.yaml) with a deterministic [score report](reports/hybrid_subscription/agent_evaluation.json). The [regenerated results JSON](reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json) publishes matched/unmatched population counts, reconciled engagement and separate standalone/subscription/total cash evidence, monthly KPIs, and conversion/D30 context. The catalogue covers all ten approved KPI contracts. Deterministic matching remains observational and does not establish causality. Native dbt execution, Jupyter kernel execution, and real-checkout HEAD provenance validation succeeded, as recorded in the [native validation report](reports/hybrid_subscription/native_validation.json) and [AI audit](docs/ai-audit/hybrid_subscription.md). The score report evaluates canonical recorded fixtures, not live-agent reasoning or autonomous decisions.
-
-## Requirements
-
-- Python 3.12, compatible with Apple Silicon
-- Git
-- Homebrew for macOS package management
-
-## Setup
-
-New here? **[docs/getting_started.md](docs/getting_started.md)** takes you from a fresh clone to querying modelled data in about ten minutes, including what to read first and the traps worth knowing about.
-
-The short version:
-
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[dev]'
-bash scripts/validation/run_shared_checks.sh
-```
-
-## Architecture
-
-The approved design and scenario boundaries are documented in [the architecture specification](docs/superpowers/specs/2026-08-27-three-scenario-analytics-lab-design.md).
-
-## Limitations
-
-- This is a local portfolio project, not a production analytics platform.
-- All data is synthetic and should not be treated as evidence about a real product.
-- Generated data is byte-identical across platforms, but published diagnostic figures are exact only on the platform each report names. A measured Linux/x86_64 versus macOS/arm64 divergence is documented in the [live-strategy decision memo](reports/live_strategy/d7_retention_diagnostic.md); its cause is not yet established.
-- The evaluator scores recorded answer artifacts; it does not authorize autonomous decisions.
-- Production security, orchestration, warehouse scaling, and deployment are outside the current scope.
+- `analytics-lab/` holds the project above, with its own `pyproject.toml`, tests, scripts and `.gitignore`.
+- `.github/workflows/ci.yml` is the single CI workflow. GitHub reads workflows only from the repository root, so its steps start inside each project's folder.
+- `SECURITY.md` is the reporting policy for the whole repository.
