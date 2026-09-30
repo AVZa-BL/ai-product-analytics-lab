@@ -9,57 +9,6 @@ import pytest
 from referee.spec import ExperimentSpec, SpecError
 
 
-@pytest.fixture
-def raw_spec() -> dict:
-    """A valid spec as the plain dict a YAML file would load into. Fresh for every test."""
-    return {
-        "referee_spec_version": 1,
-        "id": "hybrid_offer_page_2026_10",
-        "title": "Subscription offer page variants",
-        "owner": "analytics",
-        "hypothesis": {
-            "null": "The offer page variant does not change 7-day subscription conversion.",
-            "alternative": "Variant B increases 7-day subscription conversion.",
-            "direction": "increase",
-        },
-        "population": {
-            "randomization_unit": "player",
-            "analysis_unit": "player",
-            "eligibility": "Players who open the offer page and are not subscribed at exposure.",
-            "daily_eligible_units": 4200,
-            "exposure_trigger": "offer_page_view",
-        },
-        "arms": [
-            {"name": "control", "allocation": 0.5, "is_control": True},
-            {"name": "variant_b", "allocation": 0.5},
-        ],
-        "primary_metric": {
-            "name": "subscription_conversion_7d",
-            "kind": "binary",
-            "baseline": 0.032,
-            "baseline_std": None,
-            "governed_reference": "docs/metrics/hybrid_subscription.md",
-        },
-        "guardrails": [
-            {
-                "name": "refund_rate_14d",
-                "kind": "binary",
-                "baseline": 0.018,
-                "harmful_direction": "increase",
-                "tolerance_relative": 0.10,
-            }
-        ],
-        "design": {
-            "mde_relative": 0.05,
-            "alpha": 0.05,
-            "power": 0.80,
-            "sided": "two_sided",
-            "planned_duration_days": 14,
-            "min_duration_days": 14,
-        },
-    }
-
-
 def _container(raw: dict, dotted: str) -> tuple:
     """Resolve a dotted path such as "arms.1.allocation" to (container, last key)."""
     *parents, last = dotted.split(".")
