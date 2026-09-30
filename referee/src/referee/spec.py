@@ -23,6 +23,11 @@ Direction = Literal["increase", "decrease", "two_sided"]
 MetricKind = Literal["binary", "continuous", "ratio"]
 HarmfulDirection = Literal["increase", "decrease"]
 Sidedness = Literal["two_sided", "one_sided"]
+ExposureTiming = Literal["pre_treatment", "post_treatment"]
+Interference = Literal["none_expected", "possible"]
+AlphaCorrection = Literal["none", "bonferroni", "dunnett"]
+StoppingRule = Literal["fixed_horizon", "sequential"]
+SrmCadence = Literal["daily", "weekly", "none"]
 
 _ID_PATTERN = re.compile(r"^[a-z0-9_]+$")
 
@@ -54,6 +59,8 @@ class Population:
     eligibility: str
     daily_eligible_units: int
     exposure_trigger: str
+    exposure_timing: ExposureTiming | None
+    interference: Interference | None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -90,6 +97,17 @@ class Design:
     sided: Sidedness
     planned_duration_days: int
     min_duration_days: int
+    alpha_adjustment: AlphaCorrection | None
+    pre_period_covariate: str | None
+
+
+@dataclass(frozen=True, kw_only=True)
+class Procedure:
+    """How the test will be run. Every field is optional; an absent one is what a rule reads."""
+
+    stopping_rule: StoppingRule | None
+    srm_check_cadence: SrmCadence | None
+    bucketing_salt: str | None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -109,6 +127,7 @@ class ExperimentSpec:
     primary_metric: PrimaryMetric
     guardrails: tuple[Guardrail, ...]
     design: Design
+    procedure: Procedure
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> ExperimentSpec:
@@ -138,6 +157,7 @@ class ExperimentSpec:
             primary_metric=_primary_metric(root.mapping("primary_metric")),
             guardrails=_guardrails(root),
             design=_design(root.mapping("design")),
+            procedure=_procedure(root.mapping("procedure", required=False)),
         )
         root.reject_unknown()
 
@@ -169,6 +189,8 @@ def _population(node: _Node) -> Population:
         eligibility=node.text("eligibility"),
         daily_eligible_units=node.integer("daily_eligible_units", ge=1),
         exposure_trigger=node.text("exposure_trigger"),
+        exposure_timing=node.optional_choice("exposure_timing", get_args(ExposureTiming)),
+        interference=node.optional_choice("interference", get_args(Interference)),
     )
     node.reject_unknown()
     return population
@@ -280,6 +302,8 @@ def _design(node: _Node) -> Design:
         sided=node.choice("sided", get_args(Sidedness)),
         planned_duration_days=node.integer("planned_duration_days", ge=1),
         min_duration_days=node.integer("min_duration_days", ge=1),
+        alpha_adjustment=node.optional_choice("alpha_adjustment", get_args(AlphaCorrection)),
+        pre_period_covariate=node.optional_text("pre_period_covariate"),
     )
     if (
         not node.failed("planned_duration_days", "min_duration_days")
@@ -292,6 +316,16 @@ def _design(node: _Node) -> Design:
         )
     node.reject_unknown()
     return design
+
+
+def _procedure(node: _Node) -> Procedure:
+    procedure = Procedure(
+        stopping_rule=node.optional_choice("stopping_rule", get_args(StoppingRule)),
+        srm_check_cadence=node.optional_choice("srm_check_cadence", get_args(SrmCadence)),
+        bucketing_salt=node.optional_text("bucketing_salt"),
+    )
+    node.reject_unknown()
+    return procedure
 
 
 def _reject_duplicate_names(
@@ -394,6 +428,16 @@ class _Node:
             return options[0]
         return value
 
+    def optional_choice[T](self, key: str, options: tuple[T, ...]) -> T | None:
+        value = self._lookup(key, required=False)
+        if value is _ABSENT or value is None:
+            return None
+        if value not in options:
+            allowed = ", ".join(str(option) for option in options)
+            self.fail(key, f"must be one of {allowed}; got {_show(value)}")
+            return None
+        return value
+
     def boolean(self, key: str, *, default: bool) -> bool:
         value = self._lookup(key, required=False)
         if value is _ABSENT:
@@ -457,8 +501,10 @@ class _Node:
 
     # -- nested structure
 
-    def mapping(self, key: str) -> _Node:
-        value = self._lookup(key, required=True)
+    def mapping(self, key: str, *, required: bool = True) -> _Node:
+        value = self._lookup(key, required=required)
+        if not required and (value is _ABSENT or value is None):
+            return _Node({}, self._at(key), self._violations)
         return self._child(key, value)
 
     def sequence(self, key: str, *, required: bool = True) -> list[_Node]:
