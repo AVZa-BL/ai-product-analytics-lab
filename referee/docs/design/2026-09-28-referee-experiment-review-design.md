@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-28
 **Status:** Approved design (Alexander Zatey), pending implementation plan
-**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. Sections 0 to 15 are unchanged.
+**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. 2 (2026-09-30): milestone 2 decisions, see section 17. Sections 0 to 15 are unchanged.
 **Scope:** New module inside `ai-product-analytics-lab`; first milestone is the experiment spec schema
 
 This document is the handoff from the design conversation into Claude Code. It is self-contained: nothing outside this file and the repository is needed to start.
@@ -341,3 +341,64 @@ Section 6.1 stays authoritative. These rules fill the gaps it left, and `referee
 - Non-finite numbers (`NaN`, infinity) are rejected. `id` must match `^[a-z0-9_]+$` in full, so a trailing newline is not accepted.
 - Unknown keys are errors at every level, and a near miss names its likely target (`design: unknown key 'alphaa' (did you mean 'alpha'?)`).
 - `ExperimentSpec.from_dict` raises one `SpecError` (a `ValueError`) that lists every violation in schema order. Its result is frozen, hashable and independent of the input.
+
+
+---
+
+## 17. Amendment 2: milestone 2 decisions (2026-09-30)
+
+Decided before milestone 2 was built. Sections 0 to 16 are left as written; where they disagree with this section, this section wins. "Delivered in" names the pull request that implements a decision: 2a (power), 2b (finding model and rules), 2c (YAML loader, CLI, rule documentation).
+
+### 17.1 Power references (corrects sections 9 and 12)
+
+The formulas in section 9 stand. The references named for them do not agree with them, so the tests use other statsmodels functions. Agreement was measured over grids of baselines, effect sizes, alpha, power, sidedness and unequal allocations.
+
+| Quantity | Reference named in sections 9 and 12 | Measured agreement | Reference used instead |
+| --- | --- | --- | --- |
+| Two proportions | `NormalIndPower` with `proportion_effectsize` (an arcsine approximation) | 53 of 180 cases within 1 unit; worst gap 1,433 | `samplesize_proportions_2indep_onetail` with `alpha / 2` for a two-sided test: exact in every case |
+| Two means | `TTestIndPower` (t-based) | 66 of 96 cases within 1 unit; worst gap 39 | `NormalIndPower` with `alternative="larger"` and `alpha / 2`: exact in every case |
+
+Two conventions the tests must pin: in `samplesize_proportions_2indep_onetail` the returned size belongs to the first group, which is `prop2 + diff` (the treatment), and `ratio` is the second group's size over the first's; and a two-sided `NormalIndPower` call also counts the opposite tail, which the section 9 formula ignores. Delivered in: 2a.
+
+### 17.2 Spec extension
+
+Milestone 2's rules need facts the version-1 schema does not carry. Seven optional fields are added. A spec that is valid today stays valid, and an absent field is what makes the matching rule fire.
+
+| Field | Values | Rule and when it fires |
+| --- | --- | --- |
+| `design.alpha_adjustment` | `none`, `bonferroni`, `dunnett` | DES-005: more than two arms and the field absent or `none` |
+| `design.pre_period_covariate` | metric name | DES-008: absent |
+| `population.exposure_timing` | `pre_treatment`, `post_treatment` | DES-007 (blocker): `post_treatment` |
+| `population.interference` | `none_expected`, `possible` | DES-006: the randomization unit is `player` or `user` and the value is not `none_expected` |
+| `procedure.stopping_rule` | `fixed_horizon`, `sequential` | PRO-001 (blocker): absent |
+| `procedure.srm_check_cadence` | `daily`, `weekly`, `none` | PRO-002: absent or `none` |
+| `procedure.bucketing_salt` | non-empty string | PRO-004: absent |
+
+`dunnett` is accepted but planned conservatively as Bonferroni until a Dunnett implementation exists. Delivered in: 2b.
+
+### 17.3 Rule semantics
+
+- HYP-001 stays a reserved ID. Spec validation already enforces its listed conditions (a null hypothesis, a direction, a named metric), so they cannot reach a review. It fires as a blocker in one case validation cannot see: the null and alternative statements are identical after case and whitespace normalisation.
+- A target effect that cannot exist (for example a rate above 1 after the relative lift) makes DES-001 report that the effect is unattainable, and the review reports it as a blocker.
+- DES-004 states the cost of an unequal allocation as the extra units it needs over an equal split for the same power, for example +18.2% for a 70/30 split at a 10% relative effect on a 3.2% baseline.
+
+Delivered in: 2b.
+
+### 17.4 Review outcome, command line and loading
+
+- A design review returns its findings sorted by severity and then rule ID, a list of blocking rule IDs, and a recommendation: `revise` if there is any blocker, otherwise `proceed`. It remains advisory.
+- `python -m referee review-design <spec.yaml>` takes `--format text|json`. It exits 0 when there is no blocker, 1 when there is one, and 2 when the input cannot be read or does not validate.
+- The report carries the spec's sha256 and the Referee version. The git SHA and package versions arrive with the results report in milestone 4.
+- The YAML loader rejects duplicate keys, which PyYAML would otherwise resolve silently, and answers an unquoted `null:` key with a message that says to quote it.
+- The rule documentation is generated from the rule code, and a test fails if it drifts.
+- The design's section 6 example is underpowered: it needs 389,060 units and its 14 days deliver 58,800, so DES-001 fires. Milestone 2 ships it as an example beside a properly powered one.
+
+Delivered in: 2c.
+
+### 17.5 Dependencies
+
+`pyyaml` becomes a core dependency with the loader (2c). `scipy` stays out of the core until milestone 4, where SRM needs the chi-squared distribution; power needs only `statistics.NormalDist`. This corrects section 14, which assumed both were needed in milestone 2. `statsmodels` is a development dependency, used only by the power tests (2a).
+
+### 17.6 Delivery
+
+Milestone 2 is delivered as three sequential pull requests instead of one branch: 2a `feat/referee-power`, 2b `feat/referee-design-rules`, 2c `feat/referee-cli`. Each needs the one before it.
