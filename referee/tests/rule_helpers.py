@@ -23,3 +23,12 @@ def evaluate(rule: Rule, raw: dict, **changes: object) -> Finding | None:
     for dotted, value in changes.items():
         _set(raw, dotted.replace("__", "."), value)
     return rule.evaluate(ReviewContext.of(ExperimentSpec.from_dict(raw)))
+
+
+def write_yaml(directory, raw: dict, name: str = "spec.yaml"):
+    """Write `raw` as a YAML spec file and return its path. PyYAML quotes the `null` key."""
+    import yaml
+
+    path = directory / name
+    path.write_text(yaml.safe_dump(raw, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    return path
