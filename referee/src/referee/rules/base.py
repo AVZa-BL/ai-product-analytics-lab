@@ -13,14 +13,40 @@ from dataclasses import dataclass
 from typing import Any
 
 from referee.findings import Finding, Severity
+from referee.power import AlphaAdjustment, PowerError, PowerPlan, plan_power
 from referee.spec import ExperimentSpec
+
+
+def power_alpha_adjustment(spec: ExperimentSpec) -> AlphaAdjustment:
+    """The adjustment the power plan uses for what the spec declares.
+
+    Only an explicit "none" turns the adjustment off. An absent field and "bonferroni" plan
+    with Bonferroni, and so does "dunnett", which is slightly less conservative but is not
+    implemented here: the plan may ask for a few more units than Dunnett would.
+    """
+    return "none" if spec.design.alpha_adjustment == "none" else "bonferroni"
 
 
 @dataclass(frozen=True, kw_only=True)
 class ReviewContext:
-    """Everything a rule may read. Rules never modify it."""
+    """Everything a rule may read. Rules never modify it.
+
+    The power plan is worked out once, here, because several rules read it. If the design
+    cannot be sized at all (a target effect that cannot exist), `plan` is None and
+    `power_error` says why; exactly one of the two is set.
+    """
 
     spec: ExperimentSpec
+    plan: PowerPlan | None
+    power_error: str | None
+
+    @classmethod
+    def of(cls, spec: ExperimentSpec) -> ReviewContext:
+        try:
+            plan = plan_power(spec, alpha_adjustment=power_alpha_adjustment(spec))
+        except PowerError as error:
+            return cls(spec=spec, plan=None, power_error=str(error))
+        return cls(spec=spec, plan=plan, power_error=None)
 
 
 Check = Callable[[ReviewContext], dict[str, Any] | None]

@@ -16,16 +16,18 @@ CATALOGUE_SEVERITY = {
     "HYP-003": "warning",
     "HYP-004": "warning",
     "HYP-005": "warning",
+    "DES-001": "blocker",
+    "DES-002": "warning",
+    "DES-003": "warning",
+    "DES-004": "info",
+    "DES-005": "warning",
+    "DES-006": "warning",
+    "DES-007": "blocker",
+    "DES-008": "warning",
     "PRO-001": "blocker",
     "PRO-002": "warning",
     "PRO-003": "warning",
     "PRO-004": "info",
-}
-
-FULL_PROCEDURE = {
-    "stopping_rule": "fixed_horizon",
-    "srm_check_cadence": "daily",
-    "bucketing_salt": "offer_page_2026_10",
 }
 
 
@@ -44,14 +46,12 @@ def make_rule(**overrides: Any) -> Rule:
 
 @pytest.fixture
 def context(raw_spec: dict) -> ReviewContext:
-    return ReviewContext(spec=ExperimentSpec.from_dict(raw_spec))
+    return ReviewContext.of(ExperimentSpec.from_dict(raw_spec))
 
 
 @pytest.fixture
-def clean_spec(raw_spec: dict) -> ExperimentSpec:
-    """A spec no implemented rule objects to."""
-    raw_spec["procedure"] = dict(FULL_PROCEDURE)
-    return ExperimentSpec.from_dict(raw_spec)
+def clean_spec(clean_raw_spec: dict) -> ExperimentSpec:
+    return ExperimentSpec.from_dict(clean_raw_spec)
 
 
 # --- Rule ------------------------------------------------------------------------------
@@ -129,8 +129,10 @@ def test_the_review_names_the_spec_it_reviewed(clean_spec: ExperimentSpec) -> No
     assert review_design(clean_spec).spec_id == "hybrid_offer_page_2026_10"
 
 
-def test_a_spec_without_a_procedure_is_told_to_revise(raw_spec: dict) -> None:
-    review = review_design(ExperimentSpec.from_dict(raw_spec))
+def test_a_spec_without_a_procedure_is_told_to_revise(clean_raw_spec: dict) -> None:
+    del clean_raw_spec["procedure"]
+
+    review = review_design(ExperimentSpec.from_dict(clean_raw_spec))
 
     assert [f.rule_id for f in review.findings] == ["PRO-001", "PRO-002", "PRO-004"]
     assert review.blocking_rule_ids == ("PRO-001",)
@@ -138,6 +140,7 @@ def test_a_spec_without_a_procedure_is_told_to_revise(raw_spec: dict) -> None:
 
 
 def test_the_same_spec_gives_the_same_review(raw_spec: dict) -> None:
+    """The section 6 example has findings of every severity, so this is not vacuous."""
     spec = ExperimentSpec.from_dict(raw_spec)
 
     assert review_design(spec) == review_design(spec)

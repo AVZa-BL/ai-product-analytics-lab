@@ -18,3 +18,11 @@ JOHARI_ET_AL_2017 = (
     "Johari, Koomen, Pekelis, Walsh. Peeking at A/B Tests: Why It Matters, "
     "and What to Do About It. KDD 2017."
 )
+DUNNETT_1955 = (
+    "Dunnett. A Multiple Comparison Procedure for Comparing Several Treatments with a Control. "
+    "Journal of the American Statistical Association 50(272), 1955."
+)
+DENG_ET_AL_2013 = (
+    "Deng, Xu, Kohavi, Walker. Improving the Sensitivity of Online Controlled Experiments "
+    "by Utilizing Pre-Experiment Data. WSDM 2013."
+)
