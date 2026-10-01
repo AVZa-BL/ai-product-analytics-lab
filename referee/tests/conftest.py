@@ -52,3 +52,25 @@ def raw_spec() -> dict:
             "min_duration_days": 14,
         },
     }
+
+
+@pytest.fixture
+def clean_raw_spec(raw_spec: dict) -> dict:
+    """`raw_spec` changed just enough that no design-review rule objects to it.
+
+    The section 6 example is deliberately flawed (it is underpowered and declares nothing
+    about how the test is run); this is the same experiment with enough traffic and every
+    optional field declared.
+    """
+    raw_spec["population"].update(
+        daily_eligible_units=100_000,
+        exposure_timing="pre_treatment",
+        interference="none_expected",
+    )
+    raw_spec["design"]["pre_period_covariate"] = "subscription_conversion_7d_pre_exposure"
+    raw_spec["procedure"] = {
+        "stopping_rule": "fixed_horizon",
+        "srm_check_cadence": "daily",
+        "bucketing_salt": "offer_page_2026_10",
+    }
+    return raw_spec
