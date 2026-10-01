@@ -27,4 +27,4 @@ ruff check src tests
 python -m pytest -q
 ```
 
-The project has no runtime dependencies yet. `pytest`, `pyyaml` and `ruff` are development tools.
+The only runtime dependency is PyYAML, used to read spec files; the power calculations and rules use the standard library. `pytest`, `ruff` and `statsmodels` (which the tests check the power formulas against) are development tools.
