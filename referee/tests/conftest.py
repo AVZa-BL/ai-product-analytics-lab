@@ -74,3 +74,22 @@ def clean_raw_spec(raw_spec: dict) -> dict:
         "bucketing_salt": "offer_page_2026_10",
     }
     return raw_spec
+
+
+@pytest.fixture
+def worst_raw_spec(raw_spec: dict) -> dict:
+    """A spec every one of the 17 design-review rules objects to."""
+    raw_spec["hypothesis"]["alternative"] = raw_spec["hypothesis"]["null"]  # HYP-001
+    del raw_spec["primary_metric"]["governed_reference"]  # HYP-002
+    raw_spec["population"]["analysis_unit"] = "session"  # HYP-003 (and DES-006: player units)
+    raw_spec["design"]["sided"] = "one_sided"  # HYP-004
+    raw_spec["primary_metric"].update(kind="ratio", baseline=0.9, baseline_std=5.0)  # HYP-005
+    raw_spec["design"].update(planned_duration_days=10, min_duration_days=7)  # DES-001/2/3
+    raw_spec["arms"] = [  # DES-004 (unequal) and DES-005 (three arms, no adjustment)
+        {"name": "control", "allocation": 0.5, "is_control": True},
+        {"name": "b", "allocation": 0.3},
+        {"name": "c", "allocation": 0.2},
+    ]
+    raw_spec["population"]["exposure_timing"] = "post_treatment"  # DES-007
+    raw_spec["guardrails"] = []  # PRO-003
+    return raw_spec  # no covariate (DES-008), no procedure (PRO-001/2/4)

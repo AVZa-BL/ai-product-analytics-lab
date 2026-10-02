@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-28
 **Status:** Approved design (Alexander Zatey), pending implementation plan
-**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. 2 (2026-09-30): milestone 2 decisions, see section 17. Sections 0 to 15 are unchanged.
+**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. 2 (2026-09-30): milestone 2 decisions, see section 17. 3 (2026-10-02): milestone 2c decisions, see section 18. Sections 0 to 15 are unchanged.
 **Scope:** New module inside `ai-product-analytics-lab`; first milestone is the experiment spec schema
 
 This document is the handoff from the design conversation into Claude Code. It is self-contained: nothing outside this file and the repository is needed to start.
@@ -402,3 +402,43 @@ Delivered in: 2c.
 ### 17.6 Delivery
 
 Milestone 2 is delivered as three sequential pull requests instead of one branch: 2a `feat/referee-power`, 2b `feat/referee-design-rules`, 2c `feat/referee-cli`. Each needs the one before it.
+
+---
+
+## 18. Amendment 3: milestone 2c decisions (2026-10-02)
+
+Milestone 2c delivers the loader, the report and the `review-design` command. These are the decisions it made that sections 0 to 17 do not record.
+
+### 18.1 The spec's fingerprint
+
+- `ExperimentSpec.sha256()` is the SHA-256 of `canonical_json()` encoded as UTF-8. The canonical JSON has sorted keys, no spaces, non-ASCII written as it is, and refuses NaN. It is built from `to_dict()`, which is schema-ordered and omits whatever was not given.
+- The fingerprint covers the parsed spec, not the file's bytes. Comments, key order, flow or block style and number spelling (`4` against `4.0`) do not change it. Any change to a value does, and so does the order of `arms`.
+- An absent optional field and an explicit `null` have the same fingerprint, and an empty `procedure` section is dropped, so adding an optional field in a later schema version does not change the fingerprint of an existing spec.
+- Text is hashed as written, without Unicode normalisation. `shasum` on the YAML file will not reproduce the fingerprint; a `source_sha256` of the file's bytes was considered for the report and left out.
+- The design's section 6 example has the fingerprint `b0332774feccd582db109bfffff10e1330ce418ab28471ccb625fe0b00af10e8`. A test pins it, so the canonical form cannot change unnoticed.
+
+### 18.2 Loading YAML
+
+The loader reads with `SafeLoader` and refuses, with a message naming the file, line and column, what PyYAML would resolve silently: a repeated key (it keeps the last), an unquoted `null:` key and other keys YAML reads as booleans or numbers, aliases and merge keys, and more than one document. A missing, unreadable or non-UTF-8 file is a `LoadError` naming the path. A mapping that is not a valid spec raises the spec's own `SpecError`.
+
+One consequence of PyYAML implementing YAML 1.1: a number such as `5e-2` or `1e-2` is read as text, because a float needs a dot. It is reported by spec validation as a non-number; `0.05` or `5.0e-2` works.
+
+### 18.3 Report and command line
+
+- `python -m referee review-design <spec.yaml> [--format text|json]`. Exit status: 0 no blocker found, 1 at least one blocker, 2 the spec cannot be read or is not valid (and usage errors), 3 a failure inside Referee. Status 3 is added to section 17.4's three, because an uncaught Python exception exits with 1, which a pipeline would read as a blocker.
+- Results go to stdout. Errors go to stderr as plain text with nothing on stdout, also under `--format json`.
+- The report is one dict with a fixed key order and a `report_version` of 1: Referee version, the spec's id, title and fingerprint, the recommendation, the blocking rule IDs, counts by severity, and the findings. The JSON and the text are both made from that dict. It holds no timestamp, host or path, so the same spec reviewed by the same Referee gives the same bytes.
+- The report does not carry the power plan itself; DES-001's evidence states the numbers that matter.
+
+### 18.4 Rule documentation
+
+- Every rule has a `fires_when` sentence beside its title, why-it-matters and remediation. `docs/rules.md` is generated from the rule code by `python -m referee.rules.docs`, and a test fails if the committed file differs. This replaces the file's planned location `docs/referee/rules.md` in section 3, in line with section 16.1.
+- The page documents the rule definitions. No test can prove that a `fires_when` sentence describes its check function; the trigger and non-trigger tests of each rule are what pin the behaviour.
+- A rule whose ID prefix has no group in the generator is refused, so the results rules (`RES`) cannot be added without deciding how they are documented.
+
+### 18.5 Examples and the spec template
+
+- Section 16.2 moved `docs/referee/spec-template.yaml` to milestone 2. It is replaced by two examples in `referee/examples/`: `offer-page-underpowered.yaml` (the section 6 example, which gets `revise` with blockers DES-001 and PRO-001) and `offer-page-powered.yaml` (the same experiment planned for 98 days with every optional field declared, which gets `proceed`). The second serves as the template: it is commented and every optional field is present.
+- Each example's text and JSON output is stored in `referee/tests/golden/` and compared by a test, with checks of what the files must mean so that one regenerated from a broken build still fails. The two examples are checked to differ in exactly nine fields.
+
+Delivered in: 2c.

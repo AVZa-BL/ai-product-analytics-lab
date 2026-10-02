@@ -54,6 +54,10 @@ HYP_001 = Rule(
     id="HYP-001",
     severity="blocker",
     title="Null and alternative hypotheses are the same statement",
+    fires_when=(
+        "The null and alternative statements are the same text once case is ignored and runs "
+        "of whitespace are collapsed."
+    ),
     why_it_matters=(
         "A test weighs an alternative against a null. If both say the same thing, no outcome "
         "can favour one over the other, so the experiment cannot be falsified."
@@ -70,6 +74,7 @@ HYP_002 = Rule(
     id="HYP-002",
     severity="warning",
     title="Primary metric has no governed reference",
+    fires_when="primary_metric.governed_reference is absent.",
     why_it_matters=(
         "Without a governed definition the metric can be computed differently at planning "
         "and at readout, and the result cannot be reproduced or audited."
@@ -85,6 +90,7 @@ HYP_003 = Rule(
     id="HYP-003",
     severity="warning",
     title="Analysis unit differs from randomization unit",
+    fires_when="population.analysis_unit differs from population.randomization_unit.",
     why_it_matters=(
         "Units that are randomized together are not independent when they are analysed at a "
         "different level, for example many sessions from one player. Treating the analysed "
@@ -102,6 +108,7 @@ HYP_004 = Rule(
     id="HYP-004",
     severity="warning",
     title="One-sided test requested",
+    fires_when="design.sided is one_sided.",
     why_it_matters=(
         "A one-sided test cannot detect an effect in the other direction, and choosing it "
         "after seeing the data halves the p-value without adding evidence. It is defensible "
@@ -119,6 +126,7 @@ HYP_005 = Rule(
     id="HYP-005",
     severity="warning",
     title="Primary metric is a ratio of two unit-level quantities",
+    fires_when="primary_metric.kind is ratio. Guardrails are not checked.",
     why_it_matters=(
         "The variance of a ratio depends on both quantities and on how they move together, so "
         "the standard error of a per-unit mean does not apply. The sample size then rests on "

@@ -1,0 +1,62 @@
+# The same experiment, planned so that Referee has nothing to object to.
+#
+# Compared with offer-page-underpowered.yaml:
+#   - planned_duration_days is 98, the whole-week duration DES-001 asked for. 98 days at
+#     4,200 units a day deliver 411,600 units; the design needs 389,060.
+#   - the optional fields the rules read are declared: when exposure is recorded, whether
+#     players can affect each other, a pre-period covariate, and a procedure section.
+#
+# Referee's recommendation is "proceed" (exit status 0). That is advice, not approval:
+# the review checks the design, not whether the hypothesis is worth testing.
+#
+# Try it:  python -m referee review-design examples/offer-page-powered.yaml
+referee_spec_version: 1
+id: hybrid_offer_page_2026_10_powered
+title: Subscription offer page variants (planned for 98 days)
+owner: analytics
+
+hypothesis:
+  "null": The offer page variant does not change 7-day subscription conversion.
+  alternative: Variant B increases 7-day subscription conversion.
+  direction: increase
+
+population:
+  randomization_unit: player
+  analysis_unit: player
+  eligibility: Players who open the offer page and are not subscribed at exposure.
+  daily_eligible_units: 4200
+  exposure_trigger: offer_page_view
+  exposure_timing: pre_treatment # the trigger fires before the variant can act
+  interference: none_expected # one player's offer page does not change another's
+
+arms:
+  - {name: control, allocation: 0.5, is_control: true}
+  - {name: variant_b, allocation: 0.5}
+
+primary_metric:
+  name: subscription_conversion_7d
+  kind: binary
+  baseline: 0.032
+  baseline_std: null
+  governed_reference: docs/metrics/hybrid_subscription.md # relative to analytics-lab/
+
+guardrails:
+  - name: refund_rate_14d
+    kind: binary
+    baseline: 0.018
+    harmful_direction: increase
+    tolerance_relative: 0.10
+
+design:
+  mde_relative: 0.05
+  alpha: 0.05
+  power: 0.80
+  sided: two_sided
+  planned_duration_days: 98
+  min_duration_days: 14
+  pre_period_covariate: subscription_conversion_7d_pre_28d # illustrative name
+
+procedure:
+  stopping_rule: fixed_horizon
+  srm_check_cadence: daily
+  bucketing_salt: hybrid_offer_page_2026_10_powered

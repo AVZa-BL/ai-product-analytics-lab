@@ -1,0 +1,9 @@
+Referee design review
+Spec:      hybrid_offer_page_2026_10_powered - Subscription offer page variants (planned for 98 days)
+Spec hash: sha256:b576c2926810c71f1228751421d11e940bc928bd3539bb3556467b2b0576089a
+Referee:   0.1.0
+
+Recommendation: PROCEED
+Findings: none
+
+Referee is advisory: it recommends, and does not approve or stop an experiment.

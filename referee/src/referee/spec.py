@@ -8,11 +8,13 @@ question for the review rules, which read a valid spec and never repair an inval
 from __future__ import annotations
 
 import difflib
+import hashlib
+import json
 import math
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, Literal, get_args
 
 SPEC_VERSION = 1
@@ -164,6 +166,44 @@ class ExperimentSpec:
         if violations:
             raise SpecError(violations)
         return spec
+
+    def to_dict(self) -> dict[str, Any]:
+        """The spec as plain data that `from_dict` accepts, in schema order.
+
+        What was not given is left out: an absent field and an explicit null read the same,
+        so neither is written, and a `procedure` section with nothing in it is dropped. That
+        keeps the canonical form, and with it the fingerprint, unchanged when a later schema
+        version adds an optional field.
+        """
+        return _drop_unset(asdict(self))
+
+    def canonical_json(self) -> str:
+        """One fixed text for this spec: sorted keys, no spaces, non-ASCII written as is.
+
+        The same experiment gives the same text however the input file was laid out, ordered
+        or commented. The order of `arms` is kept, because it is part of the spec.
+        """
+        return json.dumps(
+            self.to_dict(),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+
+    def sha256(self) -> str:
+        """The hex SHA-256 of the canonical JSON as UTF-8: this spec's fingerprint."""
+        return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
+
+
+def _drop_unset(value: Any) -> Any:
+    """Plain lists and dicts from `asdict`'s output, without None values or empty mappings."""
+    if isinstance(value, dict):
+        kept = {key: _drop_unset(item) for key, item in value.items()}
+        return {key: item for key, item in kept.items() if item is not None and item != {}}
+    if isinstance(value, list | tuple):
+        return [_drop_unset(item) for item in value]
+    return value
 
 
 # --- Section parsers: each one reads like the schema it validates -------------------------

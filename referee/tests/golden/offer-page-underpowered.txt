@@ -1,0 +1,110 @@
+Referee design review
+Spec:      hybrid_offer_page_2026_10 - Subscription offer page variants
+Spec hash: sha256:b0332774feccd582db109bfffff10e1330ce418ab28471ccb625fe0b00af10e8
+Referee:   0.1.0
+
+Recommendation: REVISE
+Blocking rules: DES-001, PRO-001
+Findings: blockers 2, warnings 3, info 1
+
+[BLOCKER] DES-001: Design cannot reach the planned power
+    Evidence:
+      required_total: 389060
+      achievable_total: 58800
+      required_days: 93
+      required_days_whole_weeks: 98
+      planned_duration_days: 14
+      requested_mde_relative: 0.05
+      achievable_mde_relative: 0.131
+    Why it matters:
+      With too few units a real effect of the planned size is likely to be missed, and a
+      result of no significant difference then says little. If the target effect cannot
+      exist at all, for example a rate above 1 after the relative lift, no sample size
+      can reach it.
+    What to do:
+      Run for the required days, bring in more eligible units, accept the larger minimum
+      detectable effect the evidence reports, or choose a target effect that can exist.
+    References:
+      - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge
+        University Press, 2020.
+
+[BLOCKER] PRO-001: No stopping rule declared
+    Evidence:
+      field: "procedure.stopping_rule"
+      value: null
+    Why it matters:
+      Looking at results repeatedly and stopping when they look significant pushes the
+      false-positive rate of a fixed-horizon test well above the chosen alpha. Without a
+      declared rule, a planned stop cannot be told from a peek.
+    What to do:
+      Set procedure.stopping_rule to fixed_horizon (analyse once, at the planned end) or
+      to sequential (and use a test designed for repeated looks).
+    References:
+      - Johari, Koomen, Pekelis, Walsh. Peeking at A/B Tests: Why It Matters, and What
+        to Do About It. KDD 2017.
+      - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge
+        University Press, 2020.
+
+[WARNING] DES-006: Interference between units is possible
+    Evidence:
+      randomization_unit: "player"
+      interference: null
+    Why it matters:
+      If one player's treatment can change another's behaviour, as with social or
+      multiplayer features, units are not independent and the measured effect can be
+      biased.
+    What to do:
+      Randomize at a level that contains the interaction (clusters of players), or set
+      population.interference to none_expected and record why.
+    References:
+      - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge
+        University Press, 2020.
+
+[WARNING] DES-008: No pre-period covariate declared
+    Evidence:
+      field: "design.pre_period_covariate"
+      value: null
+    Why it matters:
+      A covariate measured before the experiment lets the analysis remove variance that
+      has nothing to do with the treatment (CUPED), which can shorten the test or
+      sharpen the estimate.
+    What to do:
+      Declare design.pre_period_covariate, for example the primary metric measured for
+      each unit before exposure.
+    References:
+      - Deng, Xu, Kohavi, Walker. Improving the Sensitivity of Online Controlled
+        Experiments by Utilizing Pre-Experiment Data. WSDM 2013.
+
+[WARNING] PRO-002: No sample-ratio-mismatch check scheduled
+    Evidence:
+      field: "procedure.srm_check_cadence"
+      value: null
+    Why it matters:
+      When arm counts depart from the registered allocation, assignment or logging is
+      broken and the comparison is invalid. The mismatch is found only if someone
+      checks.
+    What to do:
+      Set procedure.srm_check_cadence to daily (recommended) or weekly, and act on a
+      mismatch before reading any result.
+    References:
+      - Fabijan et al. Diagnosing Sample Ratio Mismatch in Online Controlled
+        Experiments. KDD 2019.
+      - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge
+        University Press, 2020.
+
+[INFO] PRO-004: Bucketing salt not declared
+    Evidence:
+      field: "procedure.bucketing_salt"
+      value: null
+    Why it matters:
+      Assignment hashes the unit ID with a salt. Reusing one salt across experiments
+      gives them the same bucket boundaries, which can carry one experiment's effect
+      into the next.
+    What to do:
+      Set procedure.bucketing_salt to a value unique to this experiment, for example its
+      id.
+    References:
+      - Kohavi, Deng, Frasca, Longbotham, Walker, Xu. Trustworthy Online Controlled
+        Experiments: Five Puzzling Outcomes Explained. KDD 2012.
+
+Referee is advisory: it recommends, and does not approve or stop an experiment.
