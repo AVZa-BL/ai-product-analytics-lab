@@ -12,6 +12,9 @@ EXPECTED_MODELS = {
     "stg_hybrid_subscription__live_event_participation",
     "stg_hybrid_subscription__marketing_exposures",
     "stg_hybrid_subscription__product_catalogue",
+    "stg_hybrid_subscription__experiment_assignments",
+    "stg_hybrid_subscription__experiment_exposures",
+    "stg_hybrid_subscription__experiment_outcomes",
 }
 
 

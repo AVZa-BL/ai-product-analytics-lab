@@ -7,6 +7,10 @@ import numpy as np
 import pandas as pd
 
 from analytics_lab.generation.base import GenerationConfig
+from analytics_lab.generation.hybrid_experiment import (
+    TABLE_NAMES as EXPERIMENT_TABLE_NAMES,
+)
+from analytics_lab.generation.hybrid_experiment import generate_experiment_tables
 
 TABLE_NAMES = (
     "players",
@@ -17,6 +21,7 @@ TABLE_NAMES = (
     "live_event_participation",
     "marketing_exposures",
     "product_catalogue",
+    *EXPERIMENT_TABLE_NAMES,
 )
 
 
@@ -125,6 +130,10 @@ def generate(config: GenerationConfig) -> dict[str, pd.DataFrame]:
             rng, players, start_map, launch_at, run_id
         ),
         "product_catalogue": catalogue,
+        # The experiment draws from its own random stream, so the tables above are unchanged.
+        **generate_experiment_tables(
+            config, players, frozenset(subscriber_ids), launch_at, run_id
+        ),
     }
     return {name: tables[name] for name in TABLE_NAMES}
 

@@ -16,6 +16,9 @@ EXPECTED_TABLES = {
     "live_event_participation",
     "marketing_exposures",
     "product_catalogue",
+    "experiment_assignments",
+    "experiment_exposures",
+    "experiment_outcomes",
 }
 
 
