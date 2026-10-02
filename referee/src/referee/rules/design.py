@@ -112,6 +112,12 @@ DES_001 = Rule(
     id="DES-001",
     severity="blocker",
     title="Design cannot reach the planned power",
+    fires_when=(
+        "The sample the design needs, at its alpha, power and target effect, is larger than "
+        "the units the planned duration delivers (daily_eligible_units times "
+        "planned_duration_days), or the target effect cannot exist, for example a rate above "
+        "1 after the relative lift."
+    ),
     why_it_matters=(
         "With too few units a real effect of the planned size is likely to be missed, and a "
         "result of no significant difference then says little. If the target effect cannot "
@@ -130,6 +136,7 @@ DES_002 = Rule(
     id="DES-002",
     severity="warning",
     title="Planned duration is not a whole number of weeks",
+    fires_when="design.planned_duration_days is not a multiple of 7.",
     why_it_matters=(
         "Behaviour and treatment effects can differ by day of the week. A test that covers "
         "some weekdays more often than others estimates an effect weighted towards those "
@@ -144,6 +151,7 @@ DES_003 = Rule(
     id="DES-003",
     severity="warning",
     title="Planned duration is under 14 days",
+    fires_when="design.planned_duration_days is below 14.",
     why_it_matters=(
         "Effects can be larger or smaller in the first days after a change than later, as "
         "users react to novelty or adapt to it. A short test cannot show which, so it may "
@@ -161,6 +169,11 @@ DES_004 = Rule(
     id="DES-004",
     severity="info",
     title="Allocation is not an equal split",
+    fires_when=(
+        "The arm allocations are not all equal, to within 1e-9. The evidence gives the extra "
+        "units this allocation needs over an equal split; a negative value means it needs "
+        "fewer."
+    ),
     why_it_matters=(
         "For the same power, an unequal split usually needs more units than an equal one. "
         "The evidence states the difference for this allocation; a negative value means this "
@@ -178,6 +191,7 @@ DES_005 = Rule(
     id="DES-005",
     severity="warning",
     title="More than two arms without an alpha adjustment",
+    fires_when="There are more than two arms and design.alpha_adjustment is absent or none.",
     why_it_matters=(
         "Each extra variant adds a comparison against control, and each comparison is another "
         "chance of a false positive, so the chance of at least one across the experiment "
@@ -195,6 +209,10 @@ DES_006 = Rule(
     id="DES-006",
     severity="warning",
     title="Interference between units is possible",
+    fires_when=(
+        "population.randomization_unit is player or user, and population.interference is "
+        "absent or possible."
+    ),
     why_it_matters=(
         "If one player's treatment can change another's behaviour, as with social or "
         "multiplayer features, units are not independent and the measured effect can be "
@@ -212,6 +230,7 @@ DES_007 = Rule(
     id="DES-007",
     severity="blocker",
     title="Exposure is recorded after the treatment starts acting",
+    fires_when="population.exposure_timing is post_treatment.",
     why_it_matters=(
         "If units enter the analysis only after the treatment may have influenced whether "
         "they are exposed, the arms stop being comparable and the result is biased, however "
@@ -229,6 +248,7 @@ DES_008 = Rule(
     id="DES-008",
     severity="warning",
     title="No pre-period covariate declared",
+    fires_when="design.pre_period_covariate is absent.",
     why_it_matters=(
         "A covariate measured before the experiment lets the analysis remove variance that "
         "has nothing to do with the treatment (CUPED), which can shorten the test or sharpen "

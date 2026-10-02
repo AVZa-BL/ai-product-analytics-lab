@@ -42,6 +42,7 @@ PRO_001 = Rule(
     id="PRO-001",
     severity="blocker",
     title="No stopping rule declared",
+    fires_when="procedure.stopping_rule is absent.",
     why_it_matters=(
         "Looking at results repeatedly and stopping when they look significant pushes the "
         "false-positive rate of a fixed-horizon test well above the chosen alpha. Without a "
@@ -59,6 +60,7 @@ PRO_002 = Rule(
     id="PRO-002",
     severity="warning",
     title="No sample-ratio-mismatch check scheduled",
+    fires_when="procedure.srm_check_cadence is absent or none.",
     why_it_matters=(
         "When arm counts depart from the registered allocation, assignment or logging is "
         "broken and the comparison is invalid. The mismatch is found only if someone checks."
@@ -75,6 +77,7 @@ PRO_003 = Rule(
     id="PRO-003",
     severity="warning",
     title="No guardrail metrics declared",
+    fires_when="The spec declares no guardrails.",
     why_it_matters=(
         "A change can improve the primary metric while harming something it does not "
         "measure, such as refunds or retention. Guardrails make that harm visible before a "
@@ -92,6 +95,7 @@ PRO_004 = Rule(
     id="PRO-004",
     severity="info",
     title="Bucketing salt not declared",
+    fires_when="procedure.bucketing_salt is absent.",
     why_it_matters=(
         "Assignment hashes the unit ID with a salt. Reusing one salt across experiments "
         "gives them the same bucket boundaries, which can carry one experiment's effect "

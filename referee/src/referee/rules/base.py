@@ -1,9 +1,9 @@
 """What a rule is, and what it is given to look at.
 
-A rule is data plus one function. The data (ID, severity, title, why it matters, how to fix
-it, references) never changes between runs, which is what lets the rule documentation be
-generated from the rules themselves. The function looks at a `ReviewContext` and returns the
-evidence that triggered the rule, or None when the spec is fine.
+A rule is data plus one function. The data (ID, severity, title, when it fires, why it matters,
+how to fix it, references) never changes between runs, which is what lets the rule
+documentation be generated from the rules themselves. The function looks at a `ReviewContext`
+and returns the evidence that triggered the rule, or None when the spec is fine.
 """
 
 from __future__ import annotations
@@ -57,6 +57,7 @@ class Rule:
     id: str
     severity: Severity
     title: str
+    fires_when: str
     why_it_matters: str
     remediation: str
     references: tuple[str, ...]
@@ -66,6 +67,8 @@ class Rule:
         # Build a throwaway finding so a malformed rule fails when it is defined, not the
         # first time a spec happens to trigger it.
         self.finding({})
+        if not isinstance(self.fires_when, str) or not self.fires_when.strip():
+            raise ValueError(f"fires_when must be a non-empty string, got {self.fires_when!r}")
 
     def finding(self, evidence: dict[str, Any]) -> Finding:
         return Finding(
