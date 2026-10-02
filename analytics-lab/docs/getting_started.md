@@ -117,6 +117,8 @@ If you read only one thing, read a decision memo's **Assumptions and uncertainty
 
 **`sed: -i may not be used with stdin`** on macOS — BSD `sed` needs `sed -i ''`. Prefer a Python one-liner or an editor.
 
+**`[Errno 24] Too many open files`**, or `IO Error: Cannot open file "../data/raw/....parquet": Too many open files`, during a scenario build on macOS — macOS lets each process keep only a small number of files open by default (often 256), and dbt's four threads query many Parquet files at once. The build then fails in whichever tests happen to be running when the limit is reached. Which tests fail, and how many, changes from run to run, and dbt skips everything downstream of them, so a handful of errors can become dozens of skips. Check the limit with `ulimit -n`, raise it for the current terminal with `ulimit -n 4096`, and re-run the check script. The setting lasts only for that terminal window, so repeat it in a new one. CI runs on Linux and does not hit this.
+
 **`Catalog Error: Table with name ... does not exist`** — either you are not connected from inside `game_analytics/`, or that scenario has not been built yet. Re-run its check script.
 
 **A scenario build pulls in another scenario's tests** — the check scripts pass `--indirect-selection cautious` for exactly this reason. If you invoke `dbt build` by hand, pass it too, or dbt will drag in any test that touches the shared calendar model.
