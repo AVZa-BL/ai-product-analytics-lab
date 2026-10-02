@@ -19,6 +19,9 @@ Event tables also carry `ingested_at_utc`. The matched diagnostic derives source
 | `live_event_participation` | One participation; `participation_id` | `player_id` | `participated_at_{raw,local,timezone,utc}` |
 | `marketing_exposures` | One campaign exposure; `exposure_id` | `player_id` | `exposed_at_{raw,local,timezone,utc}` |
 | `product_catalogue` | One product; `sku` | None | Not applicable |
+| `experiment_assignments` | One logged player; `assignment_id`, one per `player_id` | `player_id` | `assigned_at_utc` only |
+| `experiment_exposures` | One offer-page exposure, possibly several per player; `exposure_id` | `player_id` (an assigned player) | `exposed_at_utc` only |
+| `experiment_outcomes` | One logged player; `player_id` | `player_id` (an assigned player) | `window_{start,end}_utc`, `first_purchase_at_utc` |
 
 ## Analytical signal
 
@@ -41,3 +44,35 @@ subscribers with matched non-subscriber controls and judge total net revenue.
 
 Raw defects are immutable evidence. Staging and intermediate models must detect,
 label, and contain them rather than rewriting the generated files.
+
+## Synthetic offer-page experiment
+
+The three `experiment_*` tables hold a three-arm offer-page test (`control`, `variant_b`,
+`variant_c`) for the milestone 3 results reviewer. They are generated from their own random
+stream, so adding them did not change any other table: the eight tables above have the same
+content as before, and a test pins their fingerprints.
+
+Players who never subscribe are assigned by hashing the player ID with a salt, over a 21-day
+window that opens ten days after the subscription launch. Outcomes cover the seven days after
+assignment. These tables carry UTC timestamps only, with no raw, local or time-zone evidence and
+no `ingested_at_utc`, because no timestamp-normalisation defect is planted in them. A scenario
+shorter than 90 days cannot hold the experiment and is refused.
+
+`experiment_outcomes` is an addition to the two tables the design document names. The planted
+effects need arm-dependent outcomes, and the scenario's existing tables must not change.
+
+### Planted problems
+
+The sizes are in `PlantedParameters`, and `ground_truth()` returns the plan as data. At the CI
+scale of 1,000 players each problem is present but too small to test statistically. Statistical
+claims are tested at a reference scale of 5,000 players.
+
+| Problem | Injection | Required downstream treatment |
+| --- | --- | --- |
+| Sample-ratio mismatch in `variant_c` | From day 8 of the window a bucketing bug on android loses about 65% of arm C's assignments, mostly players with few sessions | Test the arm split against the registered allocation before reading any effect; the mismatch invalidates the arm even though the bias it causes is small |
+| Exposure after purchase | 35% of players who purchase are first exposed after their first purchase | Detect and exclude from exposure-based comparisons, as for the late subscriber exposures above |
+| Heavy-tailed revenue | Purchase amounts are lognormal with sigma 1.7 | Do not rely on a normal approximation of mean revenue per player |
+| Novelty in `variant_b` | Purchase and session lifts in the first week fall and reverse by the third | Examine the effect by exposure week before calling a result stable |
+| Configuration change in `variant_b` | `arm_config_version` moves from 1 to 2 on day 12 of the window | Treat the two versions as different treatments, and record the change in the incident register |
+
+A player lost to the bucketing bug has no row in any experiment table; absence is the evidence.

@@ -14,3 +14,6 @@ sources:
       - name: live_event_participation
       - name: marketing_exposures
       - name: product_catalogue
+      - name: experiment_assignments
+      - name: experiment_exposures
+      - name: experiment_outcomes

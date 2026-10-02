@@ -165,3 +165,88 @@ models:
           - accepted_values:
               arguments:
                 values: [subscription, currency, reward_track]
+
+  - name: stg_hybrid_subscription__experiment_assignments
+    description: >
+      Typed experiment assignment log, one row per logged player. A player whose assignment
+      was lost to the planted bucketing bug has no row: absence is the evidence.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: assignment_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_hybrid_subscription__players')
+                field: player_id
+      - name: arm
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [control, variant_b, variant_c]
+      - name: assigned_at_utc
+        data_tests: [not_null]
+      - name: arm_config_version
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2]
+
+  - name: stg_hybrid_subscription__experiment_exposures
+    description: >
+      Typed experiment exposure events, possibly several per player. Some are logged after
+      the player's first purchase, which the intermediate layer flags.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: exposure_id
+        data_tests: [not_null, unique]
+      - name: player_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_hybrid_subscription__experiment_assignments')
+                field: player_id
+      - name: arm
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [control, variant_b, variant_c]
+      - name: exposed_at_utc
+        data_tests: [not_null]
+      - name: exposure_surface
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [offer_page]
+
+  - name: stg_hybrid_subscription__experiment_outcomes
+    description: Typed seven-day outcomes, one row per logged player, anchored on assignment.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: player_id
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_hybrid_subscription__experiment_assignments')
+                field: player_id
+      - name: window_start_utc
+        data_tests: [not_null]
+      - name: sessions_7d
+        data_tests: [not_null]
+      - name: purchases_7d
+        data_tests: [not_null]
+      - name: revenue_usd_7d
+        data_tests: [not_null]
