@@ -272,6 +272,24 @@ models:
               arguments:
                 values: [never_exposed, exposed_after_first_purchase]
 
+  - name: int_hybrid_subscription__experiment_srm
+    description: One row per experiment with the chi-square sample-ratio check of assigned players against an equal split. The p-value formula exp(-x/2) is exact only for 2 degrees of freedom, so arm_count is pinned to 3.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: experiment_id
+        data_tests: [not_null, unique]
+      - name: arm_count
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [3]
+      - name: p_value
+        data_tests: [not_null]
+      - name: is_srm_flagged
+        description: True when p is below 0.001, a conventional SRM alarm level that is stricter than the usual 0.05 because the check runs on every experiment.
+        data_tests: [not_null]
+
 unit_tests:
   - name: experiment_first_exposure_edge_cases
     description: Paths the generated data never reaches, such as a player who was never exposed.
@@ -336,3 +354,52 @@ unit_tests:
         - {player_id: clean, platform: android, pre_sessions_28d: 2, is_eligible: true, exclusion_reason: null}
         - {player_id: never_exposed, platform: ios, pre_sessions_28d: 0, is_eligible: false, exclusion_reason: never_exposed}
         - {player_id: late_exposed, platform: android, pre_sessions_28d: 1, is_eligible: false, exclusion_reason: exposed_after_first_purchase}
+  - name: experiment_srm_counts_and_threshold
+    description: Exact chi-square values, the zero-arm case, and either side of the 0.001 alarm threshold (chi-square 13.8155).
+    model: int_hybrid_subscription__experiment_srm
+    config:
+      tags: [hybrid_subscription]
+    given:
+      - input: ref('stg_hybrid_subscription__experiment_assignments')
+        format: csv
+        rows: |
+          assignment_id,experiment_id,arm
+          even_1,even,control
+          even_2,even,variant_b
+          even_3,even,variant_c
+          skew_1,skew,control
+          skew_2,skew,control
+          skew_3,skew,control
+          skew_4,skew,variant_b
+          skew_5,skew,variant_b
+          skew_6,skew,variant_c
+          empty_arm_1,empty_arm,control
+          empty_arm_2,empty_arm,control
+          empty_arm_3,empty_arm,control
+          empty_arm_4,empty_arm,variant_b
+          empty_arm_5,empty_arm,variant_b
+          empty_arm_6,empty_arm,variant_b
+    expect:
+      rows:
+        - {experiment_id: even, assigned_players: 3, arm_count: 3, chi_square: 0, is_srm_flagged: false}
+        - {experiment_id: skew, assigned_players: 6, arm_count: 3, chi_square: 1, is_srm_flagged: false}
+        - {experiment_id: empty_arm, assigned_players: 6, arm_count: 3, chi_square: 3, is_srm_flagged: false}
+  - name: experiment_srm_alarm_threshold_boundary
+    description: Alarm threshold either side of p = 0.001 (chi-square 13.8155) at 300 players, counts 126/100/74 (chi-square 13.52, p about 0.0012) and 127/100/73 (chi-square 14.58, p about 0.0007).
+    model: int_hybrid_subscription__experiment_srm
+    config:
+      tags: [hybrid_subscription]
+    given:
+      - input: ref('stg_hybrid_subscription__experiment_assignments')
+        format: sql
+        rows: |
+          select 'below_c_' || i as assignment_id, 'below' as experiment_id, 'control' as arm from range(126) t(i)
+          union all select 'below_b_' || i, 'below', 'variant_b' from range(100) t(i)
+          union all select 'below_v_' || i, 'below', 'variant_c' from range(74) t(i)
+          union all select 'above_c_' || i, 'above', 'control' from range(127) t(i)
+          union all select 'above_b_' || i, 'above', 'variant_b' from range(100) t(i)
+          union all select 'above_v_' || i, 'above', 'variant_c' from range(73) t(i)
+    expect:
+      rows:
+        - {experiment_id: below, assigned_players: 300, is_srm_flagged: false}
+        - {experiment_id: above, assigned_players: 300, is_srm_flagged: true}
