@@ -26,6 +26,37 @@ models:
       - name: min_arm_config_version
         description: A min and max that differ within one row mean the arm changed configuration that day.
 
+  - name: mart_hybrid_subscription__experiment_readout
+    description: One row per experiment and arm. Arm totals, the experiment's sample-ratio check, a config-change flag, outcome means over eligible players, revenue concentration, and point differences against control that are NULL for control and whenever the sample-ratio check is flagged. Descriptive only; it carries no uncertainty, so a difference here is not evidence of an effect.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: experiment_id
+        data_tests: [not_null]
+      - name: arm
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [control, variant_b, variant_c]
+      - name: assigned_players
+        data_tests: [not_null]
+      - name: assigned_share
+        description: Share of the experiment's assigned players in this arm. Compare with the equal split behind the sample-ratio check.
+        data_tests: [not_null]
+      - name: experiment_srm_p_value
+        description: The experiment-level value repeated on every arm row. Do not sum or average it across arms.
+        data_tests: [not_null]
+      - name: is_srm_flagged
+        data_tests: [not_null]
+      - name: has_config_change
+        description: True when assigned players in the arm carry more than one arm_config_version. Outcomes are pooled across versions.
+        data_tests: [not_null]
+      - name: revenue_top1pct_share
+        description: Share of the arm's eligible revenue held by its top 1% of eligible players, at least one player. NULL when the arm has no revenue. Noisy at small scale, where 1% is a handful of players.
+      - name: mean_sessions_7d_difference_vs_control
+        description: NULL for control and for every arm when is_srm_flagged. A point difference with no uncertainty.
+
 unit_tests:
   - name: experiment_arm_daily_buckets_sums_and_nulls
     description: UTC date boundary, eligible-only outcome sums, NULL means on a zero denominator, and config versions.
@@ -57,3 +88,97 @@ unit_tests:
         - {arm: control, assigned_date_utc: '2026-04-12', assigned_players: 1, eligible_players: 1, excluded_players: 0, sessions_7d_sum: 6, purchasers: 0, revenue_usd_7d_sum: 0.0, mean_sessions_7d: 6.0, purchase_rate: 0.0, mean_revenue_usd_7d: 0.0, min_arm_config_version: 1, max_arm_config_version: 1}
         - {arm: variant_b, assigned_date_utc: '2026-04-11', assigned_players: 2, eligible_players: 2, excluded_players: 0, sessions_7d_sum: 8, purchasers: 1, revenue_usd_7d_sum: 4.5, mean_sessions_7d: 4.0, purchase_rate: 0.5, mean_revenue_usd_7d: 2.25, min_arm_config_version: 1, max_arm_config_version: 2}
         - {arm: variant_c, assigned_date_utc: '2026-04-11', assigned_players: 1, eligible_players: 0, excluded_players: 1, sessions_7d_sum: 0, purchasers: 0, revenue_usd_7d_sum: 0.0, mean_sessions_7d: null, purchase_rate: null, mean_revenue_usd_7d: null, min_arm_config_version: 1, max_arm_config_version: 1}
+  - name: experiment_readout_rates_differences_and_containment
+    description: Rates and concentration from exact inputs, differences against control, NULL differences when the sample-ratio check is flagged, config-change flag, and exclusion of ineligible revenue from concentration.
+    model: mart_hybrid_subscription__experiment_readout
+    config:
+      tags: [hybrid_subscription]
+    given:
+      - input: ref('mart_hybrid_subscription__experiment_arm_daily')
+        rows:
+          - {experiment_id: ok, arm: control, assigned_players: 3, eligible_players: 2, excluded_players: 1, sessions_7d_sum: 8, purchasers: 1, revenue_usd_7d_sum: 20.0, min_arm_config_version: 1, max_arm_config_version: 1}
+          - {experiment_id: ok, arm: variant_b, assigned_players: 2, eligible_players: 2, excluded_players: 0, sessions_7d_sum: 12, purchasers: 2, revenue_usd_7d_sum: 50.0, min_arm_config_version: 1, max_arm_config_version: 2}
+          - {experiment_id: bad, arm: control, assigned_players: 3, eligible_players: 2, excluded_players: 1, sessions_7d_sum: 8, purchasers: 1, revenue_usd_7d_sum: 20.0, min_arm_config_version: 1, max_arm_config_version: 1}
+          - {experiment_id: bad, arm: variant_b, assigned_players: 2, eligible_players: 2, excluded_players: 0, sessions_7d_sum: 12, purchasers: 2, revenue_usd_7d_sum: 50.0, min_arm_config_version: 1, max_arm_config_version: 1}
+          - {experiment_id: empty, arm: control, assigned_players: 1, eligible_players: 0, excluded_players: 1, sessions_7d_sum: 0, purchasers: 0, revenue_usd_7d_sum: 0.0, min_arm_config_version: 1, max_arm_config_version: 1}
+          - {experiment_id: norev, arm: control, assigned_players: 2, eligible_players: 2, excluded_players: 0, sessions_7d_sum: 6, purchasers: 0, revenue_usd_7d_sum: 0.0, min_arm_config_version: 1, max_arm_config_version: 1}
+      - input: ref('int_hybrid_subscription__experiment_eligible_population')
+        rows:
+          - {experiment_id: ok, player_id: ok_c1, arm: control, is_eligible: true}
+          - {experiment_id: ok, player_id: ok_c2, arm: control, is_eligible: true}
+          - {experiment_id: ok, player_id: ok_c3, arm: control, is_eligible: false}
+          - {experiment_id: ok, player_id: ok_b1, arm: variant_b, is_eligible: true}
+          - {experiment_id: ok, player_id: ok_b2, arm: variant_b, is_eligible: true}
+          - {experiment_id: bad, player_id: bad_c1, arm: control, is_eligible: true}
+          - {experiment_id: bad, player_id: bad_c2, arm: control, is_eligible: true}
+          - {experiment_id: bad, player_id: bad_c3, arm: control, is_eligible: false}
+          - {experiment_id: bad, player_id: bad_b1, arm: variant_b, is_eligible: true}
+          - {experiment_id: bad, player_id: bad_b2, arm: variant_b, is_eligible: true}
+          - {experiment_id: empty, player_id: empty_c1, arm: control, is_eligible: false}
+          - {experiment_id: norev, player_id: norev_c1, arm: control, is_eligible: true}
+          - {experiment_id: norev, player_id: norev_c2, arm: control, is_eligible: true}
+      - input: ref('stg_hybrid_subscription__experiment_outcomes')
+        rows:
+          - {player_id: ok_c1, revenue_usd_7d: 15.0}
+          - {player_id: ok_c2, revenue_usd_7d: 5.0}
+          - {player_id: ok_c3, revenue_usd_7d: 900.0}
+          - {player_id: ok_b1, revenue_usd_7d: 40.0}
+          - {player_id: ok_b2, revenue_usd_7d: 10.0}
+          - {player_id: bad_c1, revenue_usd_7d: 15.0}
+          - {player_id: bad_c2, revenue_usd_7d: 5.0}
+          - {player_id: bad_c3, revenue_usd_7d: 900.0}
+          - {player_id: bad_b1, revenue_usd_7d: 40.0}
+          - {player_id: bad_b2, revenue_usd_7d: 10.0}
+          - {player_id: empty_c1, revenue_usd_7d: 7.0}
+          - {player_id: norev_c1, revenue_usd_7d: 0.0}
+          - {player_id: norev_c2, revenue_usd_7d: 0.0}
+      - input: ref('int_hybrid_subscription__experiment_srm')
+        rows:
+          - {experiment_id: ok, chi_square: 1.0, p_value: 0.5, is_srm_flagged: false}
+          - {experiment_id: bad, chi_square: 40.0, p_value: 0.0000000020611536224385579, is_srm_flagged: true}
+          - {experiment_id: empty, chi_square: 0.0, p_value: 1.0, is_srm_flagged: false}
+          - {experiment_id: norev, chi_square: 0.0, p_value: 1.0, is_srm_flagged: false}
+    expect:
+      rows:
+        - {experiment_id: ok, arm: control, assigned_players: 3, assigned_share: 0.6, eligible_players: 2, excluded_players: 1, is_srm_flagged: false, has_config_change: false, mean_sessions_7d: 4.0, purchase_rate: 0.5, mean_revenue_usd_7d: 10.0, revenue_top1pct_share: 0.75, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
+        - {experiment_id: ok, arm: variant_b, assigned_players: 2, assigned_share: 0.4, eligible_players: 2, excluded_players: 0, is_srm_flagged: false, has_config_change: true, mean_sessions_7d: 6.0, purchase_rate: 1.0, mean_revenue_usd_7d: 25.0, revenue_top1pct_share: 0.8, mean_sessions_7d_difference_vs_control: 2.0, purchase_rate_difference_vs_control: 0.5, mean_revenue_usd_7d_difference_vs_control: 15.0}
+        - {experiment_id: bad, arm: control, assigned_players: 3, assigned_share: 0.6, eligible_players: 2, excluded_players: 1, is_srm_flagged: true, has_config_change: false, mean_sessions_7d: 4.0, purchase_rate: 0.5, mean_revenue_usd_7d: 10.0, revenue_top1pct_share: 0.75, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
+        - {experiment_id: bad, arm: variant_b, assigned_players: 2, assigned_share: 0.4, eligible_players: 2, excluded_players: 0, is_srm_flagged: true, has_config_change: false, mean_sessions_7d: 6.0, purchase_rate: 1.0, mean_revenue_usd_7d: 25.0, revenue_top1pct_share: 0.8, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
+        - {experiment_id: empty, arm: control, assigned_players: 1, assigned_share: 1.0, eligible_players: 0, excluded_players: 1, is_srm_flagged: false, has_config_change: false, mean_sessions_7d: null, purchase_rate: null, mean_revenue_usd_7d: null, revenue_top1pct_share: null, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
+        - {experiment_id: norev, arm: control, assigned_players: 2, assigned_share: 1.0, eligible_players: 2, excluded_players: 0, is_srm_flagged: false, has_config_change: false, mean_sessions_7d: 3.0, purchase_rate: 0.0, mean_revenue_usd_7d: 0.0, revenue_top1pct_share: null, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
+  - name: experiment_readout_top_one_percent_rounds_up
+    description: With 150 eligible players the top 1% is 2 players (ceiling of 1.5), holding 150 of 600 revenue; with exactly 100 it is 1 player, holding 50 of 100.
+    model: mart_hybrid_subscription__experiment_readout
+    config:
+      tags: [hybrid_subscription]
+    given:
+      - input: ref('mart_hybrid_subscription__experiment_arm_daily')
+        rows:
+          - {experiment_id: big, arm: control, assigned_players: 150, eligible_players: 150, excluded_players: 0, sessions_7d_sum: 0, purchasers: 52, revenue_usd_7d_sum: 600.0, min_arm_config_version: 1, max_arm_config_version: 1}
+          - {experiment_id: exact, arm: control, assigned_players: 100, eligible_players: 100, excluded_players: 0, sessions_7d_sum: 0, purchasers: 2, revenue_usd_7d_sum: 100.0, min_arm_config_version: 1, max_arm_config_version: 1}
+      - input: ref('int_hybrid_subscription__experiment_eligible_population')
+        format: sql
+        rows: |
+          select 'big' as experiment_id, 'p' || lpad(cast(i as varchar), 3, '0') as player_id,
+              'control' as arm, true as is_eligible
+          from range(150) t(i)
+          union all
+          select 'exact', 'q' || lpad(cast(i as varchar), 3, '0'), 'control', true
+          from range(100) t(i)
+      - input: ref('stg_hybrid_subscription__experiment_outcomes')
+        format: sql
+        rows: |
+          select 'p' || lpad(cast(i as varchar), 3, '0') as player_id,
+              case when i = 0 then 100.0 when i = 1 then 50.0 when i < 52 then 9.0 else 0.0 end as revenue_usd_7d
+          from range(150) t(i)
+          union all
+          select 'q' || lpad(cast(i as varchar), 3, '0'), case when i < 2 then 50.0 else 0.0 end
+          from range(100) t(i)
+      - input: ref('int_hybrid_subscription__experiment_srm')
+        rows:
+          - {experiment_id: big, chi_square: 0.0, p_value: 1.0, is_srm_flagged: false}
+          - {experiment_id: exact, chi_square: 0.0, p_value: 1.0, is_srm_flagged: false}
+    expect:
+      rows:
+        - {experiment_id: big, arm: control, assigned_players: 150, revenue_top1pct_share: 0.25}
+        - {experiment_id: exact, arm: control, assigned_players: 100, revenue_top1pct_share: 0.5}
