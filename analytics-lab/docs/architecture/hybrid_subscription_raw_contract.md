@@ -76,3 +76,5 @@ claims are tested at a reference scale of 5,000 players.
 | Configuration change in `variant_b` | `arm_config_version` moves from 1 to 2 on day 12 of the window | Treat the two versions as different treatments, and record the change in the incident register |
 
 A player lost to the bucketing bug has no row in any experiment table; absence is the evidence.
+
+The models built on these tables, and what each planted problem looks like in them, are described in the [experiment readout document](../metrics/hybrid_subscription_experiment.md).

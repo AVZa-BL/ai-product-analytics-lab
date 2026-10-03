@@ -6,8 +6,9 @@ can be judged on finding exactly those and nothing else:
 
 * a sample-ratio mismatch in arm C, caused by a bucketing bug on one platform that starts
   partway through the test and loses mostly players who rarely return, which tilts arm C's
-  comparison upward by a small amount (0.1 to 0.6 sessions across eight seeds at 5,000
-  players, too small to see on its own); it is the mismatch, not the size of the bias, that
+  comparison upward by a small amount (among players assigned after the bug starts, 0.1 to
+  0.6 sessions across eight seeds at 5,000 players; less when averaged over all assigned
+  players; too small to see on its own); it is the mismatch, not the size of the bias, that
   invalidates the arm
 * exposures logged after the player's first purchase, for part of the purchasers
 * heavy-tailed revenue per player

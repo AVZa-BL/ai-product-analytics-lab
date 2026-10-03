@@ -189,3 +189,5 @@ These support the ten KPIs; they do not replace their denominators.
 | Incrementality-eligible exposure rate | `fct_hybrid_subscription__marketing_exposures`, canonical exposure | Eligible exposure count / all canonical exposure count | Ineligible rows stay in denominator and incident reporting, not analysis indexes. Exposure readiness, not a treatment effect. |
 
 Quality controls describe the observed governed snapshot. Empirical ingestion allowances do not guarantee future refund-lag or unseen-event completeness. Consult the [incident register](../incidents/hybrid_subscription.md) and [regenerated evidence](../../reports/hybrid_subscription/engagement_cannibalization_diagnostic_results.json) before decisions.
+
+The synthetic offer-page experiment used to validate the Referee results reviewer is documented separately in the [experiment readout](hybrid_subscription_experiment.md); it is a fixture with planted problems, not one of the ten approved KPIs.
