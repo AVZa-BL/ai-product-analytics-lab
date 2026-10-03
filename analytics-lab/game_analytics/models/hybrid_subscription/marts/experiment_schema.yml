@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: mart_hybrid_subscription__experiment_arm_daily
+    description: One row per experiment, arm and UTC assignment date. Counts of assigned, eligible and excluded players, outcome sums over eligible players, and means and rates that are NULL on a zero denominator. Descriptive only; it carries no uncertainty.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: experiment_id
+        data_tests: [not_null]
+      - name: arm
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [control, variant_b, variant_c]
+      - name: assigned_date_utc
+        data_tests: [not_null]
+      - name: assigned_players
+        description: Every player assigned on that date, including excluded ones, so a shrinking arm stays visible.
+        data_tests: [not_null]
+      - name: eligible_players
+        data_tests: [not_null]
+      - name: mean_sessions_7d
+        description: Eligible players only. NULL when there are none.
+      - name: min_arm_config_version
+        description: A min and max that differ within one row mean the arm changed configuration that day.
+
+unit_tests:
+  - name: experiment_arm_daily_buckets_sums_and_nulls
+    description: UTC date boundary, eligible-only outcome sums, NULL means on a zero denominator, and config versions.
+    model: mart_hybrid_subscription__experiment_arm_daily
+    config:
+      tags: [hybrid_subscription]
+    given:
+      - input: ref('int_hybrid_subscription__experiment_eligible_population')
+        rows:
+          - {experiment_id: e, player_id: p1, arm: control, assigned_at_utc: '2026-04-11 23:59:59+00', arm_config_version: 1, is_eligible: true}
+          - {experiment_id: e, player_id: p2, arm: control, assigned_at_utc: '2026-04-11 10:00:00+00', arm_config_version: 1, is_eligible: true}
+          - {experiment_id: e, player_id: p3, arm: control, assigned_at_utc: '2026-04-11 11:00:00+00', arm_config_version: 1, is_eligible: false}
+          - {experiment_id: e, player_id: p4, arm: control, assigned_at_utc: '2026-04-12 00:00:00+00', arm_config_version: 1, is_eligible: true}
+          - {experiment_id: e, player_id: p5, arm: variant_b, assigned_at_utc: '2026-04-11 09:00:00+00', arm_config_version: 1, is_eligible: true}
+          - {experiment_id: e, player_id: p6, arm: variant_b, assigned_at_utc: '2026-04-11 20:00:00+00', arm_config_version: 2, is_eligible: true}
+          - {experiment_id: e, player_id: p7, arm: variant_c, assigned_at_utc: '2026-04-11 09:00:00+00', arm_config_version: 1, is_eligible: false}
+      - input: ref('stg_hybrid_subscription__experiment_outcomes')
+        rows:
+          - {player_id: p1, sessions_7d: 4, purchases_7d: 1, revenue_usd_7d: 10.5}
+          - {player_id: p2, sessions_7d: 2, purchases_7d: 0, revenue_usd_7d: 0.0}
+          - {player_id: p3, sessions_7d: 100, purchases_7d: 9, revenue_usd_7d: 900.0}
+          - {player_id: p4, sessions_7d: 6, purchases_7d: 0, revenue_usd_7d: 0.0}
+          - {player_id: p5, sessions_7d: 3, purchases_7d: 2, revenue_usd_7d: 4.5}
+          - {player_id: p6, sessions_7d: 5, purchases_7d: 0, revenue_usd_7d: 0.0}
+          - {player_id: p7, sessions_7d: 50, purchases_7d: 5, revenue_usd_7d: 500.0}
+    expect:
+      rows:
+        - {arm: control, assigned_date_utc: '2026-04-11', assigned_players: 3, eligible_players: 2, excluded_players: 1, sessions_7d_sum: 6, purchasers: 1, revenue_usd_7d_sum: 10.5, mean_sessions_7d: 3.0, purchase_rate: 0.5, mean_revenue_usd_7d: 5.25, min_arm_config_version: 1, max_arm_config_version: 1}
+        - {arm: control, assigned_date_utc: '2026-04-12', assigned_players: 1, eligible_players: 1, excluded_players: 0, sessions_7d_sum: 6, purchasers: 0, revenue_usd_7d_sum: 0.0, mean_sessions_7d: 6.0, purchase_rate: 0.0, mean_revenue_usd_7d: 0.0, min_arm_config_version: 1, max_arm_config_version: 1}
+        - {arm: variant_b, assigned_date_utc: '2026-04-11', assigned_players: 2, eligible_players: 2, excluded_players: 0, sessions_7d_sum: 8, purchasers: 1, revenue_usd_7d_sum: 4.5, mean_sessions_7d: 4.0, purchase_rate: 0.5, mean_revenue_usd_7d: 2.25, min_arm_config_version: 1, max_arm_config_version: 2}
+        - {arm: variant_c, assigned_date_utc: '2026-04-11', assigned_players: 1, eligible_players: 0, excluded_players: 1, sessions_7d_sum: 0, purchasers: 0, revenue_usd_7d_sum: 0.0, mean_sessions_7d: null, purchase_rate: null, mean_revenue_usd_7d: null, min_arm_config_version: 1, max_arm_config_version: 1}
