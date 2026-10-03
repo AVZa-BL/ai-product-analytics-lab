@@ -229,3 +229,61 @@ models:
       - name: observation_start_at_utc
       - name: observation_end_at_utc
       - name: as_of_at_utc
+
+  - name: int_hybrid_subscription__experiment_first_exposure
+    description: One row per assigned experiment player with first-touch exposure, repeat-exposure count and exposure-versus-first-purchase timing.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: player_id
+        data_tests: [not_null, unique]
+      - name: assignment_id
+        data_tests: [not_null, unique]
+      - name: arm
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [control, variant_b, variant_c]
+      - name: exposure_count
+        data_tests: [not_null]
+      - name: is_exposed_after_first_purchase
+        description: True only when a first purchase exists and the first exposure is later than it; false (not null) when there is no purchase or no exposure.
+        data_tests: [not_null]
+
+unit_tests:
+  - name: experiment_first_exposure_edge_cases
+    description: Paths the generated data never reaches, such as a player who was never exposed.
+    model: int_hybrid_subscription__experiment_first_exposure
+    config:
+      tags: [hybrid_subscription]
+    given:
+      - input: ref('stg_hybrid_subscription__experiment_assignments')
+        rows:
+          - {assignment_id: a1, experiment_id: e, player_id: unexposed_buyer, arm: control, assigned_at_utc: '2026-04-11 00:00:00+00', arm_config_version: 1}
+          - {assignment_id: a2, experiment_id: e, player_id: exposed_after_buy, arm: variant_b, assigned_at_utc: '2026-04-11 00:00:00+00', arm_config_version: 1}
+          - {assignment_id: a3, experiment_id: e, player_id: exposed_before_buy, arm: variant_b, assigned_at_utc: '2026-04-11 00:00:00+00', arm_config_version: 1}
+          - {assignment_id: a4, experiment_id: e, player_id: tied_exposures, arm: variant_c, assigned_at_utc: '2026-04-11 00:00:00+00', arm_config_version: 1}
+          - {assignment_id: a5, experiment_id: e, player_id: exposed_no_buy, arm: control, assigned_at_utc: '2026-04-11 00:00:00+00', arm_config_version: 1}
+      - input: ref('stg_hybrid_subscription__experiment_exposures')
+        rows:
+          - {exposure_id: x1, player_id: exposed_after_buy, exposed_at_utc: '2026-04-11 02:00:00+00', exposure_surface: offer_page}
+          - {exposure_id: x2, player_id: exposed_after_buy, exposed_at_utc: '2026-04-11 03:00:00+00', exposure_surface: offer_page}
+          - {exposure_id: x3, player_id: exposed_before_buy, exposed_at_utc: '2026-04-11 01:00:00+00', exposure_surface: offer_page}
+          - {exposure_id: x5, player_id: tied_exposures, exposed_at_utc: '2026-04-11 01:00:00+00', exposure_surface: offer_page}
+          - {exposure_id: x4, player_id: tied_exposures, exposed_at_utc: '2026-04-11 01:00:00+00', exposure_surface: offer_page}
+          - {exposure_id: x6, player_id: exposed_no_buy, exposed_at_utc: '2026-04-11 01:00:00+00', exposure_surface: offer_page}
+      - input: ref('stg_hybrid_subscription__experiment_outcomes')
+        rows:
+          - {player_id: unexposed_buyer, first_purchase_at_utc: '2026-04-11 05:00:00+00'}
+          - {player_id: exposed_after_buy, first_purchase_at_utc: '2026-04-11 01:00:00+00'}
+          - {player_id: exposed_before_buy, first_purchase_at_utc: '2026-04-11 02:00:00+00'}
+          - {player_id: tied_exposures, first_purchase_at_utc: null}
+          - {player_id: exposed_no_buy, first_purchase_at_utc: null}
+    expect:
+      rows:
+        - {player_id: unexposed_buyer, is_exposed: false, exposure_count: 0, first_exposure_id: null, is_exposed_after_first_purchase: false}
+        - {player_id: exposed_after_buy, is_exposed: true, exposure_count: 2, first_exposure_id: x1, is_exposed_after_first_purchase: true}
+        - {player_id: exposed_before_buy, is_exposed: true, exposure_count: 1, first_exposure_id: x3, is_exposed_after_first_purchase: false}
+        - {player_id: tied_exposures, is_exposed: true, exposure_count: 2, first_exposure_id: x4, is_exposed_after_first_purchase: false}
+        - {player_id: exposed_no_buy, is_exposed: true, exposure_count: 1, first_exposure_id: x6, is_exposed_after_first_purchase: false}
