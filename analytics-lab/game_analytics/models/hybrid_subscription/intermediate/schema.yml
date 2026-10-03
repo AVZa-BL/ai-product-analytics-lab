@@ -251,6 +251,27 @@ models:
         description: True only when a first purchase exists and the first exposure is later than it; false (not null) when there is no purchase or no exposure.
         data_tests: [not_null]
 
+  - name: int_hybrid_subscription__experiment_eligible_population
+    description: All assigned experiment players with segment attributes, a 28-day pre-assignment session count and an eligibility verdict; excluded rows are retained with their reason.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: player_id
+        data_tests: [not_null, unique]
+      - name: platform
+        data_tests: [not_null]
+      - name: pre_sessions_28d
+        description: Canonical sessions in the half-open 672-hour window before assignment. Measured to be uncorrelated with the experiment outcomes (r about 0 at 5,000 players), so it is not a useful CUPED covariate in this dataset.
+        data_tests: [not_null]
+      - name: is_eligible
+        data_tests: [not_null]
+      - name: exclusion_reason
+        description: Null for eligible rows.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [never_exposed, exposed_after_first_purchase]
+
 unit_tests:
   - name: experiment_first_exposure_edge_cases
     description: Paths the generated data never reaches, such as a player who was never exposed.
@@ -287,3 +308,31 @@ unit_tests:
         - {player_id: exposed_before_buy, is_exposed: true, exposure_count: 1, first_exposure_id: x3, is_exposed_after_first_purchase: false}
         - {player_id: tied_exposures, is_exposed: true, exposure_count: 2, first_exposure_id: x4, is_exposed_after_first_purchase: false}
         - {player_id: exposed_no_buy, is_exposed: true, exposure_count: 1, first_exposure_id: x6, is_exposed_after_first_purchase: false}
+  - name: experiment_eligible_population_verdicts_and_window
+    description: Exclusion reasons and the half-open 672-hour pre-assignment window boundaries.
+    model: int_hybrid_subscription__experiment_eligible_population
+    config:
+      tags: [hybrid_subscription]
+    given:
+      - input: ref('int_hybrid_subscription__experiment_first_exposure')
+        rows:
+          - {assignment_id: a1, player_id: clean, assigned_at_utc: '2026-04-30 00:00:00+00', is_exposed: true, is_exposed_after_first_purchase: false}
+          - {assignment_id: a2, player_id: never_exposed, assigned_at_utc: '2026-04-30 00:00:00+00', is_exposed: false, is_exposed_after_first_purchase: false}
+          - {assignment_id: a3, player_id: late_exposed, assigned_at_utc: '2026-04-30 00:00:00+00', is_exposed: true, is_exposed_after_first_purchase: true}
+      - input: ref('stg_hybrid_subscription__players')
+        rows:
+          - {player_id: clean, platform: android, acquisition_channel: organic, prior_payer_status: prior_payer}
+          - {player_id: never_exposed, platform: ios, acquisition_channel: paid, prior_payer_status: prior_nonpayer}
+          - {player_id: late_exposed, platform: android, acquisition_channel: paid, prior_payer_status: prior_nonpayer}
+      - input: ref('stg_hybrid_subscription__sessions')
+        rows:
+          - {session_id: s_inside_start, player_id: clean, started_at_utc: '2026-04-02 00:00:00+00'}
+          - {session_id: s_inside_end, player_id: clean, started_at_utc: '2026-04-29 23:59:59+00'}
+          - {session_id: s_too_early, player_id: clean, started_at_utc: '2026-04-01 23:59:59+00'}
+          - {session_id: s_at_assignment, player_id: clean, started_at_utc: '2026-04-30 00:00:00+00'}
+          - {session_id: s_other_player, player_id: late_exposed, started_at_utc: '2026-04-20 00:00:00+00'}
+    expect:
+      rows:
+        - {player_id: clean, platform: android, pre_sessions_28d: 2, is_eligible: true, exclusion_reason: null}
+        - {player_id: never_exposed, platform: ios, pre_sessions_28d: 0, is_eligible: false, exclusion_reason: never_exposed}
+        - {player_id: late_exposed, platform: android, pre_sessions_28d: 1, is_eligible: false, exclusion_reason: exposed_after_first_purchase}
