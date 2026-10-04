@@ -24,3 +24,25 @@ models:
           - accepted_values:
               arguments:
                 values: [contained, clear]
+
+unit_tests:
+  - name: incident_mart_publishes_experiment_incident_attributes
+    description: Category, severity, affected metric, containment text and status of the three experiment incidents, from mock audit counts that give both a contained and a clear status.
+    model: mart_hybrid_subscription__data_quality_incidents
+    config:
+      tags: [hybrid_subscription]
+    given:
+      - input: ref('int_hybrid_subscription__quality_audit')
+        rows:
+          - {incident_code: experiment_exposure_after_purchase, affected_rows: 5}
+          - {incident_code: experiment_sample_ratio_mismatch, affected_rows: 0}
+          - {incident_code: experiment_mid_test_config_change, affected_rows: 3}
+      - input: ref('fct_hybrid_subscription__subscription_entitlements')
+        rows:
+          - {is_canceled_pending_expiry: false}
+    expect:
+      rows:
+        - {incident_id: experiment_exposure_after_purchase, incident_code: experiment_exposure_after_purchase, incident_category: experiment_exposure_timing, severity: high, affected_rows: 5, affected_metric: eligible_population_outcomes, containment_rule: 'Exclude the player from outcome figures, retain the row with its exclusion reason, and publish assigned and excluded counts.', decision_status: contained}
+        - {incident_id: experiment_sample_ratio_mismatch, incident_code: experiment_sample_ratio_mismatch, incident_category: experiment_assignment_integrity, severity: high, affected_rows: 0, affected_metric: arm_comparison_validity, containment_rule: 'Publish the statistic and flag, and set every difference against control to NULL for the experiment.', decision_status: clear}
+        - {incident_id: experiment_mid_test_config_change, incident_code: experiment_mid_test_config_change, incident_category: experiment_configuration, severity: medium, affected_rows: 3, affected_metric: pooled_arm_outcomes, containment_rule: 'Disclose, do not correct: publish has_config_change and the version columns by date; outcomes stay pooled across versions.', decision_status: contained}
+        - {incident_id: cancellation_pending_expiry, incident_code: cancellation_pending_expiry, incident_category: entitlement_semantics, severity: medium, affected_rows: 0, affected_metric: active_subscription_entitlement, containment_rule: 'Preserve access through contractual period end; cancellation disables renewal only.', decision_status: clear}

@@ -19,11 +19,16 @@ select
         when 'post_subscription_exposure' then 'experiment_eligibility'
         when 'cancellation_pending_expiry' then 'entitlement_semantics'
         when 'analysis_population_exclusion' then 'analysis_eligibility'
+        when 'experiment_exposure_after_purchase' then 'experiment_exposure_timing'
+        when 'experiment_sample_ratio_mismatch' then 'experiment_assignment_integrity'
+        when 'experiment_mid_test_config_change' then 'experiment_configuration'
     end as incident_category,
     case incident_code
         when 'missing_subscription_grant_link' then 'high'
         when 'post_subscription_exposure' then 'high'
         when 'mixed_timestamp_mismatch' then 'high'
+        when 'experiment_exposure_after_purchase' then 'high'
+        when 'experiment_sample_ratio_mismatch' then 'high'
         else 'medium'
     end as severity,
     affected_rows,
@@ -34,6 +39,9 @@ select
         when 'post_subscription_exposure' then 'incrementality_eligibility'
         when 'cancellation_pending_expiry' then 'active_subscription_entitlement'
         when 'analysis_population_exclusion' then 'matched_outcome_estimates'
+        when 'experiment_exposure_after_purchase' then 'eligible_population_outcomes'
+        when 'experiment_sample_ratio_mismatch' then 'arm_comparison_validity'
+        when 'experiment_mid_test_config_change' then 'pooled_arm_outcomes'
     end as affected_metric,
     case incident_code
         when 'duplicate_store_webhook'
@@ -48,6 +56,12 @@ select
             then 'Preserve access through contractual period end; cancellation disables renewal only.'
         when 'analysis_population_exclusion'
             then 'Exclude invalid identity/covariates, ineligible exposure and incomplete source windows; retain all exclusion reasons and counts in population summary.'
+        when 'experiment_exposure_after_purchase'
+            then 'Exclude the player from outcome figures, retain the row with its exclusion reason, and publish assigned and excluded counts.'
+        when 'experiment_sample_ratio_mismatch'
+            then 'Publish the statistic and flag, and set every difference against control to NULL for the experiment.'
+        when 'experiment_mid_test_config_change'
+            then 'Disclose, do not correct: publish has_config_change and the version columns by date; outcomes stay pooled across versions.'
     end as containment_rule,
     case
         when affected_rows > 0 then 'contained'
