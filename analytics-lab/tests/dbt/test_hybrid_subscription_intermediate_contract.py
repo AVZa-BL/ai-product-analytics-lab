@@ -15,8 +15,15 @@ EXPECTED_MODELS = {
     "int_hybrid_subscription__match_population_summary",
     "int_hybrid_subscription__source_watermarks",
     "int_hybrid_subscription__governed_observation_boundary",
+    "int_hybrid_subscription__experiment_first_exposure",
+    "int_hybrid_subscription__experiment_eligible_population",
+    "int_hybrid_subscription__experiment_srm",
 }
 EXPECTED_TESTS = {
+    "assert_experiment_exposures_reconcile.sql",
+    "assert_experiment_population_covers_assignments.sql",
+    "assert_experiment_srm_is_consistent.sql",
+    "assert_experiment_population_carries_assignments.sql",
     "assert_cancellation_preserves_entitlement.sql",
     "assert_entitlements_do_not_overlap.sql",
     "assert_grant_reconciliation_is_complete.sql",

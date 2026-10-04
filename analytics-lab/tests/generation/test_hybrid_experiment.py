@@ -8,6 +8,7 @@ to test, which the structural checks below confirm.
 import dataclasses
 import functools
 import hashlib
+import math
 from datetime import date
 from pathlib import Path
 
@@ -44,12 +45,18 @@ def config(scale: int, seed: int = 42, days: int = 180) -> GenerationConfig:
 
 
 @functools.cache
+def scenario_tables(cfg: GenerationConfig) -> dict[str, pd.DataFrame]:
+    """The scenario's own tables. Cached: the generator is slow and deterministic."""
+    return generate(cfg)
+
+
+@functools.cache
 def inputs(cfg: GenerationConfig) -> tuple[pd.DataFrame, frozenset[str], pd.Timestamp]:
     """Players, subscribers and launch time, as the scenario generator derives them.
 
     Cached: the scenario generator is slow and deterministic, and the experiment only reads it.
     """
-    tables = generate(cfg)
+    tables = scenario_tables(cfg)
     started = tables["subscription_events"].query("event_type == 'started'")
     launch = pd.Timestamp(cfg.start_date, tz="UTC") + max(1, cfg.days // 2) * DAY
     return tables["players"], frozenset(started.player_id), launch
@@ -640,3 +647,146 @@ def test_the_ground_truth_is_plain_json_data(reference: dict) -> None:
     truth = ground_truth(reference["launch"])
 
     assert json.loads(json.dumps(truth)) == truth
+
+
+# --- The figures quoted in the documentation --------------------------------------------
+
+EXPERIMENT_DOC = Path("docs/metrics/hybrid_subscription_experiment.md")
+
+
+def outcome_figures(frame: pd.DataFrame, window_start: pd.Timestamp) -> dict:
+    """The outcome figures the readout document quotes, for one population of players.
+
+    Run on every assigned player (what the generator produces) and on the eligible players
+    (what the marts cover), so that the document can show both without either going stale.
+    """
+    shares = {}
+    for arm in ARMS:
+        revenue = frame[frame.arm == arm].revenue_usd_7d.sort_values(ascending=False).to_numpy()
+        shares[arm] = revenue[: (len(revenue) + 99) // 100].sum() / revenue.sum()
+
+    week = 1 + (pd.to_datetime(frame.assigned_at_utc) - window_start).dt.days // 7
+    by_week = frame.groupby([week.rename("week"), "arm"]).sessions_7d
+    mean = by_week.mean().unstack()
+    spread, size = by_week.std().unstack(), by_week.count().unstack()
+    lift = (mean.variant_b - mean.control).loc[[1, 2, 3]]
+    standard_error = np.sqrt(
+        spread.variant_b**2 / size.variant_b + spread.control**2 / size.control
+    ).loc[[1, 2, 3]]
+
+    onset = window_start + PLANTED.srm_onset_day * DAY
+    after = frame[pd.to_datetime(frame.assigned_at_utc) >= onset].groupby("arm").sessions_7d.mean()
+    return {
+        "shares": shares,
+        "lift": lift,
+        "standard_error": standard_error,
+        "bias": after.variant_c - after.control,
+    }
+
+
+def test_the_experiment_document_quotes_figures_the_generator_still_produces(
+    reference: dict, small: ExperimentSimulation
+) -> None:
+    """Every figure in the document's planted-problems table is recomputed here.
+
+    That is done for both populations, all assigned players and eligible players. So are the
+    CI-scale top-1% count and the correlation bound, and each must appear in the document
+    verbatim. The standard error and the correlation bound are also checked as ranges.
+    Statements about other seeds are not recomputed, and the document says so.
+
+    Figures written down once and never re-checked went stale in an earlier description of
+    this work, which is why this guard exists.
+    """
+    text = EXPERIMENT_DOC.read_text()
+    sim = reference["sim"]
+    assignments, outcome = assigned(sim), outcomes(sim)
+    merged = assignments.merge(outcome, on="player_id")
+    n = len(assignments)
+    counts = assignments.arm.value_counts().reindex(ARMS)
+    purchasers = int((outcome.purchases_7d > 0).sum())
+    late = len(sim.late_exposure_player_ids)
+    revenue = outcome.revenue_usd_7d.sort_values(ascending=False).to_numpy()
+    top_share = revenue[: -(-len(revenue) // 100)].sum() / revenue.sum()
+
+    # Every logged player is exposed, so "eligible" is "not first exposed after the first purchase".
+    assert set(assignments.player_id) <= set(sim.tables["experiment_exposures"].player_id)
+    window_start = experiment_window(reference["launch"])[0]
+    everyone = outcome_figures(merged, window_start)
+    eligible = outcome_figures(
+        merged[~merged.player_id.isin(sim.late_exposure_player_ids)], window_start
+    )
+
+    small_assigned = assigned(small)
+    small_late = len(small.late_exposure_player_ids)
+    small_p = stats.chisquare(small_assigned.arm.value_counts().reindex(ARMS)).pvalue
+    small_eligible = small_assigned.arm.value_counts().reindex(ARMS) - (
+        small_assigned[small_assigned.player_id.isin(small.late_exposure_player_ids)]
+        .arm.value_counts()
+        .reindex(ARMS)
+        .fillna(0)
+    )
+    top_counts = {(int(count) + 99) // 100 for count in small_eligible}
+    assert len(top_counts) == 1, "the document says the CI-scale top 1% is the same for every arm"
+    version_two = int(
+        ((assignments.arm == "variant_b") & (assignments.arm_config_version == 2)).sum()
+    )
+
+    sessions = scenario_tables(reference["cfg"])["sessions"]
+    pre = merged.merge(
+        sessions.assign(started=pd.to_datetime(sessions.started_at_utc))[["player_id", "started"]],
+        on="player_id",
+    )
+    assigned_at = pd.to_datetime(pre.assigned_at_utc)
+    in_window = (pre.started >= assigned_at - 28 * DAY) & (pre.started < assigned_at)
+    pre_sessions = in_window.groupby(pre.player_id).sum().reindex(merged.player_id).to_numpy()
+    correlations = {
+        column: abs(np.corrcoef(pre_sessions, merged[column])[0, 1])
+        for column in ("sessions_7d", "purchases_7d", "revenue_usd_7d")
+    }
+
+    def signed(values: pd.Series) -> str:
+        return ", ".join(f"{value:+.2f}" for value in values)
+
+    words = {1: "one", 2: "two", 3: "three"}
+    quoted = {
+        "arm counts": " / ".join(f"{counts[arm]:,}" for arm in ARMS) + f" of {n:,}",
+        "reference p": f"p = {stats.chisquare(counts).pvalue:.1e}",
+        "CI scale p": f"(561 assigned players) p = {small_p:.3f}",
+        "late exposure": f"{late} of {n:,} assigned players ({late / n:.1%})",
+        "late share of purchasers": f"{late / purchasers:.1%} of the {purchasers} purchasers",
+        "CI late exposure": (
+            f"{small_late} of {len(small_assigned)} ({small_late / len(small_assigned):.1%})"
+        ),
+        "top 1% share, all assigned": f"hold {top_share:.1%} of revenue",
+        "top 1% share, eligible per arm": (
+            " / ".join(f"{eligible['shares'][arm]:.1%}" for arm in ARMS) + " of the arm's revenue"
+        ),
+        "kurtosis": f"excess kurtosis {stats.kurtosis(revenue):.0f}",
+        "novelty, all assigned": (
+            "variant_b` minus control sessions by assignment week: "
+            + signed(everyone["lift"])
+            + " over all assigned players"
+        ),
+        "novelty, eligible": signed(eligible["lift"]) + " over eligible players",
+        "standard error": f"a standard error of about {everyone['standard_error'].mean():.2f}",
+        "config version 2": (
+            f"{version_two:,} of the {int(counts['variant_b']):,} `variant_b` players"
+        ),
+        "arm C bias": (
+            f"is {everyone['bias']:+.2f} for seed 42 over all assigned players "
+            f"and {eligible['bias']:+.2f} over eligible players"
+        ),
+        "CI top 1% count": f"it is {words[top_counts.pop()]} players per arm",
+        "correlation bound": (
+            f"absolute correlation below {math.ceil(max(correlations.values()) * 100) / 100:.2f}"
+        ),
+    }
+    for label, figure in quoted.items():
+        assert figure in text, f"{label}: the document should contain {figure!r}"
+
+    assert len(small_assigned) == 561
+    for figures in (everyone, eligible):
+        assert ((figures["standard_error"] > 0.2) & (figures["standard_error"] < 0.3)).all()
+        # "within one standard error of zero"
+        assert abs(figures["lift"].iloc[2]) < figures["standard_error"].iloc[2]
+    assert max(correlations.values()) < 0.03, correlations

@@ -46,7 +46,7 @@ bash scripts/validation/run_subscription_checks.sh
 bash scripts/validation/run_hybrid_subscription_checks.sh
 ```
 
-Expect `PASS=153`, `PASS=102` and `PASS=348`. The hybrid build takes about two minutes; the other two about thirty seconds each.
+Expect `PASS=153`, `PASS=102` and `PASS=429`, each with `ERROR=0`; the hybrid count grows whenever models or tests are added, and `ERROR=0` is what matters. The hybrid build takes about two to three minutes; the other two about thirty seconds each.
 
 Each script generates deterministic synthetic Parquet into `data/raw/`, then builds only that scenario's models and tests. They share `game_analytics/dev.duckdb`, so running all three leaves all three schemas available at once.
 

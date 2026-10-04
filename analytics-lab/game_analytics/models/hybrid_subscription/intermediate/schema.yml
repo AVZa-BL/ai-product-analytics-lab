@@ -229,3 +229,232 @@ models:
       - name: observation_start_at_utc
       - name: observation_end_at_utc
       - name: as_of_at_utc
+
+  - name: int_hybrid_subscription__experiment_first_exposure
+    description: One row per assigned experiment player with first-touch exposure, repeat-exposure count and exposure-versus-first-purchase timing.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: player_id
+        data_tests: [not_null, unique]
+      - name: assignment_id
+        data_tests: [not_null, unique]
+      - name: arm
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [control, variant_b, variant_c]
+      - name: exposure_count
+        data_tests: [not_null]
+      - name: is_exposed_after_first_purchase
+        description: True only when a first purchase exists and the first exposure is later than it; false (not null) when there is no purchase or no exposure.
+        data_tests: [not_null]
+
+  - name: int_hybrid_subscription__experiment_eligible_population
+    description: All assigned experiment players with segment attributes, a 28-day pre-assignment session count and an eligibility verdict; excluded rows are retained with their reason.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: player_id
+        data_tests: [not_null, unique]
+      - name: platform
+        data_tests: [not_null]
+      - name: pre_sessions_28d
+        description: Canonical sessions in the half-open 672-hour window before assignment. Measured to be uncorrelated with the experiment outcomes (r about 0 at 5,000 players), so it is not a useful CUPED covariate in this dataset.
+        data_tests: [not_null]
+      - name: is_eligible
+        data_tests: [not_null]
+      - name: exclusion_reason
+        description: Null for eligible rows.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [never_exposed, exposed_after_first_purchase]
+
+  - name: int_hybrid_subscription__experiment_srm
+    description: One row per experiment with the chi-square sample-ratio check of assigned players against an equal split across control, variant_b and variant_c. The p-value formula exp(-x/2) is exact only for 2 degrees of freedom, so the arm list is fixed at three; arm_count is 3 by construction (an arm with no assignments counts as 0) and its test fails only if that list is edited.
+    config:
+      tags: [hybrid_subscription]
+    columns:
+      - name: experiment_id
+        data_tests: [not_null, unique]
+      - name: arm_count
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [3]
+      - name: p_value
+        data_tests: [not_null]
+      - name: is_srm_flagged
+        description: True when p is below 0.001, a conventional SRM alarm level that is stricter than the usual 0.05 because the check runs on every experiment.
+        data_tests: [not_null]
+
+unit_tests:
+  - name: experiment_first_exposure_edge_cases
+    description: Paths the generated data never reaches (a player never exposed, an exposure at the same instant as the first purchase, exposure ids out of time order, same-instant exposures listed with the lowest id first and last, an assignment with no outcomes row), and every pass-through column compared.
+    model: int_hybrid_subscription__experiment_first_exposure
+    config:
+      tags: [hybrid_subscription]
+    given:
+      - input: ref('stg_hybrid_subscription__experiment_assignments')
+        rows:
+          - {assignment_id: a1, experiment_id: e, player_id: unexposed_buyer, arm: control, assigned_at_utc: '2026-04-11 00:00:00+00', arm_config_version: 1}
+          - {assignment_id: a2, experiment_id: e, player_id: exposed_after_buy, arm: variant_b, assigned_at_utc: '2026-04-11 00:30:00+00', arm_config_version: 2}
+          - {assignment_id: a3, experiment_id: e, player_id: exposed_before_buy, arm: variant_b, assigned_at_utc: '2026-04-11 00:45:00+00', arm_config_version: 1}
+          - {assignment_id: a4, experiment_id: e, player_id: tied_exposures, arm: variant_c, assigned_at_utc: '2026-04-11 00:15:00+00', arm_config_version: 1}
+          - {assignment_id: a5, experiment_id: e, player_id: exposed_no_buy, arm: control, assigned_at_utc: '2026-04-11 00:10:00+00', arm_config_version: 1}
+          - {assignment_id: a6, experiment_id: e, player_id: exposed_at_purchase, arm: control, assigned_at_utc: '2026-04-11 00:20:00+00', arm_config_version: 1}
+          - {assignment_id: a7, experiment_id: e, player_id: no_outcome_row, arm: variant_c, assigned_at_utc: '2026-04-11 00:25:00+00', arm_config_version: 1}
+          - {assignment_id: a8, experiment_id: e, player_id: tied_low_id_first, arm: variant_b, assigned_at_utc: '2026-04-11 00:35:00+00', arm_config_version: 1}
+      - input: ref('stg_hybrid_subscription__experiment_exposures')
+        rows:
+          - {exposure_id: x1, player_id: exposed_after_buy, exposed_at_utc: '2026-04-11 03:00:00+00', exposure_surface: banner}
+          - {exposure_id: x2, player_id: exposed_after_buy, exposed_at_utc: '2026-04-11 02:00:00+00', exposure_surface: offer_page}
+          - {exposure_id: x3, player_id: exposed_before_buy, exposed_at_utc: '2026-04-11 01:00:00+00', exposure_surface: offer_page}
+          - {exposure_id: x5, player_id: tied_exposures, exposed_at_utc: '2026-04-11 01:00:00+00', exposure_surface: offer_page}
+          - {exposure_id: x4, player_id: tied_exposures, exposed_at_utc: '2026-04-11 01:00:00+00', exposure_surface: offer_page}
+          - {exposure_id: x6, player_id: exposed_no_buy, exposed_at_utc: '2026-04-11 01:00:00+00', exposure_surface: offer_page}
+          - {exposure_id: x7, player_id: exposed_at_purchase, exposed_at_utc: '2026-04-11 01:00:00+00', exposure_surface: offer_page}
+          - {exposure_id: x8, player_id: no_outcome_row, exposed_at_utc: '2026-04-11 01:30:00+00', exposure_surface: offer_page}
+          - {exposure_id: y1, player_id: tied_low_id_first, exposed_at_utc: '2026-04-11 01:15:00+00', exposure_surface: offer_page}
+          - {exposure_id: y2, player_id: tied_low_id_first, exposed_at_utc: '2026-04-11 01:15:00+00', exposure_surface: banner}
+      - input: ref('stg_hybrid_subscription__experiment_outcomes')
+        rows:
+          - {player_id: unexposed_buyer, first_purchase_at_utc: '2026-04-11 05:00:00+00'}
+          - {player_id: exposed_after_buy, first_purchase_at_utc: '2026-04-11 01:00:00+00'}
+          - {player_id: exposed_before_buy, first_purchase_at_utc: '2026-04-11 02:00:00+00'}
+          - {player_id: tied_exposures, first_purchase_at_utc: null}
+          - {player_id: exposed_no_buy, first_purchase_at_utc: null}
+          - {player_id: exposed_at_purchase, first_purchase_at_utc: '2026-04-11 01:00:00+00'}
+          - {player_id: tied_low_id_first, first_purchase_at_utc: null}
+    expect:
+      rows:
+        - {experiment_id: e, assignment_id: a1, player_id: unexposed_buyer, arm: control, assigned_at_utc: '2026-04-11 00:00:00+00', arm_config_version: 1, is_exposed: false, exposure_count: 0, first_exposure_id: null, first_exposed_at_utc: null, first_exposure_surface: null, first_purchase_at_utc: '2026-04-11 05:00:00+00', is_exposed_after_first_purchase: false}
+        - {experiment_id: e, assignment_id: a2, player_id: exposed_after_buy, arm: variant_b, assigned_at_utc: '2026-04-11 00:30:00+00', arm_config_version: 2, is_exposed: true, exposure_count: 2, first_exposure_id: x2, first_exposed_at_utc: '2026-04-11 02:00:00+00', first_exposure_surface: offer_page, first_purchase_at_utc: '2026-04-11 01:00:00+00', is_exposed_after_first_purchase: true}
+        - {experiment_id: e, assignment_id: a3, player_id: exposed_before_buy, arm: variant_b, assigned_at_utc: '2026-04-11 00:45:00+00', arm_config_version: 1, is_exposed: true, exposure_count: 1, first_exposure_id: x3, first_exposed_at_utc: '2026-04-11 01:00:00+00', first_exposure_surface: offer_page, first_purchase_at_utc: '2026-04-11 02:00:00+00', is_exposed_after_first_purchase: false}
+        - {experiment_id: e, assignment_id: a4, player_id: tied_exposures, arm: variant_c, assigned_at_utc: '2026-04-11 00:15:00+00', arm_config_version: 1, is_exposed: true, exposure_count: 2, first_exposure_id: x4, first_exposed_at_utc: '2026-04-11 01:00:00+00', first_exposure_surface: offer_page, first_purchase_at_utc: null, is_exposed_after_first_purchase: false}
+        - {experiment_id: e, assignment_id: a5, player_id: exposed_no_buy, arm: control, assigned_at_utc: '2026-04-11 00:10:00+00', arm_config_version: 1, is_exposed: true, exposure_count: 1, first_exposure_id: x6, first_exposed_at_utc: '2026-04-11 01:00:00+00', first_exposure_surface: offer_page, first_purchase_at_utc: null, is_exposed_after_first_purchase: false}
+        - {experiment_id: e, assignment_id: a6, player_id: exposed_at_purchase, arm: control, assigned_at_utc: '2026-04-11 00:20:00+00', arm_config_version: 1, is_exposed: true, exposure_count: 1, first_exposure_id: x7, first_exposed_at_utc: '2026-04-11 01:00:00+00', first_exposure_surface: offer_page, first_purchase_at_utc: '2026-04-11 01:00:00+00', is_exposed_after_first_purchase: false}
+        - {experiment_id: e, assignment_id: a7, player_id: no_outcome_row, arm: variant_c, assigned_at_utc: '2026-04-11 00:25:00+00', arm_config_version: 1, is_exposed: true, exposure_count: 1, first_exposure_id: x8, first_exposed_at_utc: '2026-04-11 01:30:00+00', first_exposure_surface: offer_page, first_purchase_at_utc: null, is_exposed_after_first_purchase: false}
+        - {experiment_id: e, assignment_id: a8, player_id: tied_low_id_first, arm: variant_b, assigned_at_utc: '2026-04-11 00:35:00+00', arm_config_version: 1, is_exposed: true, exposure_count: 2, first_exposure_id: y1, first_exposed_at_utc: '2026-04-11 01:15:00+00', first_exposure_surface: offer_page, first_purchase_at_utc: null, is_exposed_after_first_purchase: false}
+  - name: experiment_first_exposure_tie_break
+    description: First touch among same-instant exposures is the lowest exposure_id. Twenty-four players each have three exposures at one instant, with the lowest id listed second, so taking the first listed, the last listed or a random row fails.
+    model: int_hybrid_subscription__experiment_first_exposure
+    config:
+      tags: [hybrid_subscription]
+    given:
+      - input: ref('stg_hybrid_subscription__experiment_assignments')
+        format: sql
+        rows: |
+          select 'e' as experiment_id, 'a_' || player_id as assignment_id, player_id, 'control' as arm,
+              timestamptz '2026-04-11 00:00:00+00' as assigned_at_utc, 1 as arm_config_version
+          from (select 'p' || lpad(cast(i as varchar), 2, '0') as player_id from range(24) t(i))
+      - input: ref('stg_hybrid_subscription__experiment_exposures')
+        format: sql
+        rows: |
+          with players as (select 'p' || lpad(cast(i as varchar), 2, '0') as player_id from range(24) t(i))
+          select 'x_' || player_id || '_b' as exposure_id, player_id,
+              timestamptz '2026-04-11 01:00:00+00' as exposed_at_utc, 'offer_page' as exposure_surface from players
+          union all
+          select 'x_' || player_id || '_a', player_id,
+              timestamptz '2026-04-11 01:00:00+00', 'offer_page' from players
+          union all
+          select 'x_' || player_id || '_c', player_id,
+              timestamptz '2026-04-11 01:00:00+00', 'offer_page' from players
+      - input: ref('stg_hybrid_subscription__experiment_outcomes')
+        format: sql
+        rows: |
+          select 'p' || lpad(cast(i as varchar), 2, '0') as player_id,
+              cast(null as timestamptz) as first_purchase_at_utc
+          from range(24) t(i)
+    expect:
+      format: sql
+      rows: |
+        select 'a_' || player_id as assignment_id, 'e' as experiment_id, player_id, 'control' as arm,
+            timestamptz '2026-04-11 00:00:00+00' as assigned_at_utc, 1 as arm_config_version,
+            'x_' || player_id || '_a' as first_exposure_id,
+            timestamptz '2026-04-11 01:00:00+00' as first_exposed_at_utc,
+            'offer_page' as first_exposure_surface, 3 as exposure_count, true as is_exposed,
+            cast(null as timestamptz) as first_purchase_at_utc,
+            false as is_exposed_after_first_purchase
+        from (select 'p' || lpad(cast(i as varchar), 2, '0') as player_id from range(24) t(i))
+  - name: experiment_eligible_population_verdicts_and_window
+    description: Exclusion reasons, the half-open 672-hour pre-assignment window boundaries, every segment attribute, and an assigned player missing from the players table (kept, not dropped).
+    model: int_hybrid_subscription__experiment_eligible_population
+    config:
+      tags: [hybrid_subscription]
+    given:
+      - input: ref('int_hybrid_subscription__experiment_first_exposure')
+        rows:
+          - {assignment_id: a1, experiment_id: e, player_id: clean, arm: control, assigned_at_utc: '2026-04-30 00:00:00+00', arm_config_version: 1, is_exposed: true, is_exposed_after_first_purchase: false}
+          - {assignment_id: a2, experiment_id: e, player_id: never_exposed, arm: variant_b, assigned_at_utc: '2026-04-30 00:00:00+00', arm_config_version: 2, is_exposed: false, is_exposed_after_first_purchase: false}
+          - {assignment_id: a3, experiment_id: e, player_id: late_exposed, arm: variant_c, assigned_at_utc: '2026-04-30 00:00:00+00', arm_config_version: 1, is_exposed: true, is_exposed_after_first_purchase: true}
+          - {assignment_id: a4, experiment_id: e, player_id: no_player_row, arm: control, assigned_at_utc: '2026-04-30 00:00:00+00', arm_config_version: 1, is_exposed: true, is_exposed_after_first_purchase: false}
+      - input: ref('stg_hybrid_subscription__players')
+        rows:
+          - {player_id: clean, platform: android, acquisition_channel: organic, prior_payer_status: prior_payer}
+          - {player_id: never_exposed, platform: ios, acquisition_channel: paid, prior_payer_status: prior_nonpayer}
+          - {player_id: late_exposed, platform: android, acquisition_channel: referral, prior_payer_status: prior_nonpayer}
+      - input: ref('stg_hybrid_subscription__sessions')
+        rows:
+          - {session_id: s_inside_start, player_id: clean, started_at_utc: '2026-04-02 00:00:00+00'}
+          - {session_id: s_inside_end, player_id: clean, started_at_utc: '2026-04-29 23:59:59+00'}
+          - {session_id: s_too_early, player_id: clean, started_at_utc: '2026-04-01 23:59:59+00'}
+          - {session_id: s_at_assignment, player_id: clean, started_at_utc: '2026-04-30 00:00:00+00'}
+          - {session_id: s_other_player, player_id: late_exposed, started_at_utc: '2026-04-20 00:00:00+00'}
+    expect:
+      rows:
+        - {experiment_id: e, assignment_id: a1, player_id: clean, arm: control, assigned_at_utc: '2026-04-30 00:00:00+00', arm_config_version: 1, platform: android, acquisition_channel: organic, prior_payer_status: prior_payer, pre_sessions_28d: 2, is_eligible: true, exclusion_reason: null}
+        - {experiment_id: e, assignment_id: a2, player_id: never_exposed, arm: variant_b, assigned_at_utc: '2026-04-30 00:00:00+00', arm_config_version: 2, platform: ios, acquisition_channel: paid, prior_payer_status: prior_nonpayer, pre_sessions_28d: 0, is_eligible: false, exclusion_reason: never_exposed}
+        - {experiment_id: e, assignment_id: a3, player_id: late_exposed, arm: variant_c, assigned_at_utc: '2026-04-30 00:00:00+00', arm_config_version: 1, platform: android, acquisition_channel: referral, prior_payer_status: prior_nonpayer, pre_sessions_28d: 1, is_eligible: false, exclusion_reason: exposed_after_first_purchase}
+        - {experiment_id: e, assignment_id: a4, player_id: no_player_row, arm: control, assigned_at_utc: '2026-04-30 00:00:00+00', arm_config_version: 1, platform: null, acquisition_channel: null, prior_payer_status: null, pre_sessions_28d: 0, is_eligible: true, exclusion_reason: null}
+  - name: experiment_srm_counts_and_threshold
+    description: Exact chi-square values and the zero-arm case. The alarm threshold itself is pinned by experiment_srm_alarm_threshold_boundary.
+    model: int_hybrid_subscription__experiment_srm
+    config:
+      tags: [hybrid_subscription]
+    given:
+      - input: ref('stg_hybrid_subscription__experiment_assignments')
+        format: csv
+        rows: |
+          assignment_id,experiment_id,arm
+          even_1,even,control
+          even_2,even,variant_b
+          even_3,even,variant_c
+          skew_1,skew,control
+          skew_2,skew,control
+          skew_3,skew,control
+          skew_4,skew,variant_b
+          skew_5,skew,variant_b
+          skew_6,skew,variant_c
+          empty_arm_1,empty_arm,control
+          empty_arm_2,empty_arm,control
+          empty_arm_3,empty_arm,control
+          empty_arm_4,empty_arm,variant_b
+          empty_arm_5,empty_arm,variant_b
+          empty_arm_6,empty_arm,variant_b
+    expect:
+      rows:
+        - {experiment_id: even, assigned_players: 3, arm_count: 3, chi_square: 0, is_srm_flagged: false}
+        - {experiment_id: skew, assigned_players: 6, arm_count: 3, chi_square: 1, is_srm_flagged: false}
+        - {experiment_id: empty_arm, assigned_players: 6, arm_count: 3, chi_square: 3, is_srm_flagged: false}
+  - name: experiment_srm_alarm_threshold_boundary
+    description: Alarm threshold either side of p = 0.001 (chi-square 13.8155) to within 0.002%, counts 79/86/127 of 292 players (chi-square 13.81507, p 0.0010002, not flagged) and 62/93/51 of 206 players (chi-square 13.81553, p 0.00099999, flagged).
+    model: int_hybrid_subscription__experiment_srm
+    config:
+      tags: [hybrid_subscription]
+    given:
+      - input: ref('stg_hybrid_subscription__experiment_assignments')
+        format: sql
+        rows: |
+          select 'below_c_' || i as assignment_id, 'below' as experiment_id, 'control' as arm from range(79) t(i)
+          union all select 'below_b_' || i, 'below', 'variant_b' from range(86) t(i)
+          union all select 'below_v_' || i, 'below', 'variant_c' from range(127) t(i)
+          union all select 'above_c_' || i, 'above', 'control' from range(62) t(i)
+          union all select 'above_b_' || i, 'above', 'variant_b' from range(93) t(i)
+          union all select 'above_v_' || i, 'above', 'variant_c' from range(51) t(i)
+    expect:
+      rows:
+        - {experiment_id: below, assigned_players: 292, is_srm_flagged: false}
+        - {experiment_id: above, assigned_players: 206, is_srm_flagged: true}
