@@ -471,16 +471,16 @@ Milestone 3 builds the synthetic experiment that the results reviewer will be ju
 ### 19.4 The sample-ratio check in SQL
 
 - The check compares assigned players with an equal split across the three arms. With three arms the chi-square has 2 degrees of freedom, so the p-value is exactly `exp(-chi_square / 2)`. It is flagged at p < 0.001.
-- The equal split is an assumption, because the warehouse holds no pre-registered allocation. The results reviewer recomputes the check against the allocation registered in the spec (sections 9 and 11); the SQL check does not bind it.
+- The equal split is an assumption, because the warehouse holds no pre-registered allocation. The results reviewer recomputes the check against the allocation registered in the spec (sections 6 and 9); the SQL check does not bind it.
 - When the check is flagged, every difference against control is NULL for every arm of that experiment, because an arm comparison is not valid then.
 - At the 1,000-player scale that continuous integration builds, the mismatch is present but not detectable (p about 0.03), and the planted novelty reversal is not visible. A results-review fixture therefore needs the 5,000-player scale, which the generator takes as `--scale 5000`. Milestone 4 chooses how Referee reads the data and at what scale; milestone 3 defines no file or table interface.
 
 ### 19.5 Incidents
 
 - Three incidents join the shared incident mart, as section 10 asks for the configuration change: `experiment_exposure_after_purchase` (high), `experiment_sample_ratio_mismatch` (high) and `experiment_mid_test_config_change` (medium). The `experiment_` prefix keeps them apart from `post_subscription_exposure`, which concerns marketing-campaign exposure.
-- The mart's status logic is the shared generic one: any affected rows means `contained`. For the configuration change, `contained` means disclosed, not corrected: the readout flags it and the outcomes stay pooled across versions.
+- The mart's status logic is the shared generic one: any affected rows means `contained`. For the configuration change, `contained` means disclosed, not corrected: the readout flags it and the outcomes stay pooled across versions. The incident counts players by the version they were assigned under, as the readout does; it does not look at the version in force when a player was first exposed.
 - The sample-ratio incident counts the experiment's assigned players when the flag is set and zero otherwise, so it is `clear` at the 1,000-player scale and `contained` at 5,000. A reader must not take `clear` there to mean absent.
-- The committed diagnostic results and decision memo are a dated snapshot of an earlier build and list six incidents, while the live mart lists nine. They were not regenerated. Whoever next executes the notebook must update the memo's incident table, which a test requires to match the JSON.
+- The committed diagnostic results and decision memo are a dated snapshot of an earlier build and list six incidents, while the live mart lists nine. They were not regenerated. Whoever next executes the notebook must also update the provenance that committed tests pin (source version, execution time, validation record) and the memo's incident table, which a test requires to match the JSON.
 
 ### 19.6 What the planted problems measure
 

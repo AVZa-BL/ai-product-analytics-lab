@@ -121,6 +121,10 @@ def test_the_milestone_3_amendment_names_the_lab_files_and_incident_codes_that_e
     assert "analytics-lab/docs/metrics/hybrid_subscription_experiment.md" in names
     for name in names:
         assert (ROOT.parent / name).exists(), name
-    for code in re.findall(r"`(experiment_[a-z_]+)`", amendment):
-        if code.startswith(("experiment_exposure", "experiment_sample", "experiment_mid")):
-            assert f"when '{code}'" in mart, code
+    for code in (
+        "experiment_exposure_after_purchase",
+        "experiment_sample_ratio_mismatch",
+        "experiment_mid_test_config_change",
+    ):
+        assert f"`{code}`" in amendment, f"{code} is not named in the amendment"
+        assert f"when '{code}'" in mart, f"{code} is not in the mart"
