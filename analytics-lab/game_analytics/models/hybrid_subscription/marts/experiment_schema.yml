@@ -89,16 +89,20 @@ unit_tests:
         - {arm: variant_b, assigned_date_utc: '2026-04-11', assigned_players: 2, eligible_players: 2, excluded_players: 0, sessions_7d_sum: 8, purchasers: 1, revenue_usd_7d_sum: 4.5, mean_sessions_7d: 4.0, purchase_rate: 0.5, mean_revenue_usd_7d: 2.25, min_arm_config_version: 1, max_arm_config_version: 2}
         - {arm: variant_c, assigned_date_utc: '2026-04-11', assigned_players: 1, eligible_players: 0, excluded_players: 1, sessions_7d_sum: 0, purchasers: 0, revenue_usd_7d_sum: 0.0, mean_sessions_7d: null, purchase_rate: null, mean_revenue_usd_7d: null, min_arm_config_version: 1, max_arm_config_version: 1}
   - name: experiment_readout_rates_differences_and_containment
-    description: Rates and concentration from exact inputs, differences against control, NULL differences when the sample-ratio check is flagged, config-change flag, and exclusion of ineligible revenue from concentration.
+    description: Totals reaggregated across several daily rows, rates and concentration from exact inputs, differences against control for two arms, NULL differences when the sample-ratio check is flagged (with a control that differs from the unflagged experiment's), the config-change flag across days and for an arm that is wholly on version 2, the published sample-ratio columns, and exclusion of ineligible revenue from concentration.
     model: mart_hybrid_subscription__experiment_readout
     config:
       tags: [hybrid_subscription]
     given:
       - input: ref('mart_hybrid_subscription__experiment_arm_daily')
         rows:
-          - {experiment_id: ok, arm: control, assigned_players: 3, eligible_players: 2, excluded_players: 1, sessions_7d_sum: 8, purchasers: 1, revenue_usd_7d_sum: 20.0, min_arm_config_version: 1, max_arm_config_version: 1}
-          - {experiment_id: ok, arm: variant_b, assigned_players: 2, eligible_players: 2, excluded_players: 0, sessions_7d_sum: 12, purchasers: 2, revenue_usd_7d_sum: 50.0, min_arm_config_version: 1, max_arm_config_version: 2}
-          - {experiment_id: bad, arm: control, assigned_players: 3, eligible_players: 2, excluded_players: 1, sessions_7d_sum: 8, purchasers: 1, revenue_usd_7d_sum: 20.0, min_arm_config_version: 1, max_arm_config_version: 1}
+          - {experiment_id: ok, arm: control, assigned_players: 2, eligible_players: 1, excluded_players: 1, sessions_7d_sum: 3, purchasers: 1, revenue_usd_7d_sum: 15.0, min_arm_config_version: 1, max_arm_config_version: 1}
+          - {experiment_id: ok, arm: control, assigned_players: 2, eligible_players: 1, excluded_players: 1, sessions_7d_sum: 5, purchasers: 0, revenue_usd_7d_sum: 5.0, min_arm_config_version: 1, max_arm_config_version: 1}
+          - {experiment_id: ok, arm: variant_b, assigned_players: 1, eligible_players: 1, excluded_players: 0, sessions_7d_sum: 5, purchasers: 1, revenue_usd_7d_sum: 40.0, min_arm_config_version: 1, max_arm_config_version: 2}
+          - {experiment_id: ok, arm: variant_b, assigned_players: 1, eligible_players: 1, excluded_players: 0, sessions_7d_sum: 7, purchasers: 1, revenue_usd_7d_sum: 10.0, min_arm_config_version: 2, max_arm_config_version: 2}
+          - {experiment_id: ok, arm: variant_c, assigned_players: 2, eligible_players: 2, excluded_players: 0, sessions_7d_sum: 10, purchasers: 2, revenue_usd_7d_sum: 40.0, min_arm_config_version: 2, max_arm_config_version: 2}
+          - {experiment_id: bad, arm: control, assigned_players: 2, eligible_players: 1, excluded_players: 1, sessions_7d_sum: 10, purchasers: 1, revenue_usd_7d_sum: 30.0, min_arm_config_version: 1, max_arm_config_version: 1}
+          - {experiment_id: bad, arm: control, assigned_players: 1, eligible_players: 1, excluded_players: 0, sessions_7d_sum: 10, purchasers: 1, revenue_usd_7d_sum: 30.0, min_arm_config_version: 1, max_arm_config_version: 1}
           - {experiment_id: bad, arm: variant_b, assigned_players: 2, eligible_players: 2, excluded_players: 0, sessions_7d_sum: 12, purchasers: 2, revenue_usd_7d_sum: 50.0, min_arm_config_version: 1, max_arm_config_version: 1}
           - {experiment_id: empty, arm: control, assigned_players: 1, eligible_players: 0, excluded_players: 1, sessions_7d_sum: 0, purchasers: 0, revenue_usd_7d_sum: 0.0, min_arm_config_version: 1, max_arm_config_version: 1}
           - {experiment_id: norev, arm: control, assigned_players: 2, eligible_players: 2, excluded_players: 0, sessions_7d_sum: 6, purchasers: 0, revenue_usd_7d_sum: 0.0, min_arm_config_version: 1, max_arm_config_version: 1}
@@ -107,8 +111,11 @@ unit_tests:
           - {experiment_id: ok, player_id: ok_c1, arm: control, is_eligible: true}
           - {experiment_id: ok, player_id: ok_c2, arm: control, is_eligible: true}
           - {experiment_id: ok, player_id: ok_c3, arm: control, is_eligible: false}
+          - {experiment_id: ok, player_id: ok_c4, arm: control, is_eligible: false}
           - {experiment_id: ok, player_id: ok_b1, arm: variant_b, is_eligible: true}
           - {experiment_id: ok, player_id: ok_b2, arm: variant_b, is_eligible: true}
+          - {experiment_id: ok, player_id: ok_v1, arm: variant_c, is_eligible: true}
+          - {experiment_id: ok, player_id: ok_v2, arm: variant_c, is_eligible: true}
           - {experiment_id: bad, player_id: bad_c1, arm: control, is_eligible: true}
           - {experiment_id: bad, player_id: bad_c2, arm: control, is_eligible: true}
           - {experiment_id: bad, player_id: bad_c3, arm: control, is_eligible: false}
@@ -122,10 +129,13 @@ unit_tests:
           - {player_id: ok_c1, revenue_usd_7d: 15.0}
           - {player_id: ok_c2, revenue_usd_7d: 5.0}
           - {player_id: ok_c3, revenue_usd_7d: 900.0}
+          - {player_id: ok_c4, revenue_usd_7d: 800.0}
           - {player_id: ok_b1, revenue_usd_7d: 40.0}
           - {player_id: ok_b2, revenue_usd_7d: 10.0}
-          - {player_id: bad_c1, revenue_usd_7d: 15.0}
-          - {player_id: bad_c2, revenue_usd_7d: 5.0}
+          - {player_id: ok_v1, revenue_usd_7d: 30.0}
+          - {player_id: ok_v2, revenue_usd_7d: 10.0}
+          - {player_id: bad_c1, revenue_usd_7d: 45.0}
+          - {player_id: bad_c2, revenue_usd_7d: 15.0}
           - {player_id: bad_c3, revenue_usd_7d: 900.0}
           - {player_id: bad_b1, revenue_usd_7d: 40.0}
           - {player_id: bad_b2, revenue_usd_7d: 10.0}
@@ -140,12 +150,13 @@ unit_tests:
           - {experiment_id: norev, chi_square: 0.0, p_value: 1.0, is_srm_flagged: false}
     expect:
       rows:
-        - {experiment_id: ok, arm: control, assigned_players: 3, assigned_share: 0.6, eligible_players: 2, excluded_players: 1, is_srm_flagged: false, has_config_change: false, mean_sessions_7d: 4.0, purchase_rate: 0.5, mean_revenue_usd_7d: 10.0, revenue_top1pct_share: 0.75, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
-        - {experiment_id: ok, arm: variant_b, assigned_players: 2, assigned_share: 0.4, eligible_players: 2, excluded_players: 0, is_srm_flagged: false, has_config_change: true, mean_sessions_7d: 6.0, purchase_rate: 1.0, mean_revenue_usd_7d: 25.0, revenue_top1pct_share: 0.8, mean_sessions_7d_difference_vs_control: 2.0, purchase_rate_difference_vs_control: 0.5, mean_revenue_usd_7d_difference_vs_control: 15.0}
-        - {experiment_id: bad, arm: control, assigned_players: 3, assigned_share: 0.6, eligible_players: 2, excluded_players: 1, is_srm_flagged: true, has_config_change: false, mean_sessions_7d: 4.0, purchase_rate: 0.5, mean_revenue_usd_7d: 10.0, revenue_top1pct_share: 0.75, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
-        - {experiment_id: bad, arm: variant_b, assigned_players: 2, assigned_share: 0.4, eligible_players: 2, excluded_players: 0, is_srm_flagged: true, has_config_change: false, mean_sessions_7d: 6.0, purchase_rate: 1.0, mean_revenue_usd_7d: 25.0, revenue_top1pct_share: 0.8, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
-        - {experiment_id: empty, arm: control, assigned_players: 1, assigned_share: 1.0, eligible_players: 0, excluded_players: 1, is_srm_flagged: false, has_config_change: false, mean_sessions_7d: null, purchase_rate: null, mean_revenue_usd_7d: null, revenue_top1pct_share: null, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
-        - {experiment_id: norev, arm: control, assigned_players: 2, assigned_share: 1.0, eligible_players: 2, excluded_players: 0, is_srm_flagged: false, has_config_change: false, mean_sessions_7d: 3.0, purchase_rate: 0.0, mean_revenue_usd_7d: 0.0, revenue_top1pct_share: null, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
+        - {experiment_id: ok, arm: control, assigned_players: 4, assigned_share: 0.5, eligible_players: 2, excluded_players: 2, experiment_srm_chi_square: 1.0, experiment_srm_p_value: 0.5, is_srm_flagged: false, has_config_change: false, mean_sessions_7d: 4.0, purchase_rate: 0.5, mean_revenue_usd_7d: 10.0, revenue_top1pct_share: 0.75, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
+        - {experiment_id: ok, arm: variant_b, assigned_players: 2, assigned_share: 0.25, eligible_players: 2, excluded_players: 0, experiment_srm_chi_square: 1.0, experiment_srm_p_value: 0.5, is_srm_flagged: false, has_config_change: true, mean_sessions_7d: 6.0, purchase_rate: 1.0, mean_revenue_usd_7d: 25.0, revenue_top1pct_share: 0.8, mean_sessions_7d_difference_vs_control: 2.0, purchase_rate_difference_vs_control: 0.5, mean_revenue_usd_7d_difference_vs_control: 15.0}
+        - {experiment_id: ok, arm: variant_c, assigned_players: 2, assigned_share: 0.25, eligible_players: 2, excluded_players: 0, experiment_srm_chi_square: 1.0, experiment_srm_p_value: 0.5, is_srm_flagged: false, has_config_change: false, mean_sessions_7d: 5.0, purchase_rate: 1.0, mean_revenue_usd_7d: 20.0, revenue_top1pct_share: 0.75, mean_sessions_7d_difference_vs_control: 1.0, purchase_rate_difference_vs_control: 0.5, mean_revenue_usd_7d_difference_vs_control: 10.0}
+        - {experiment_id: bad, arm: control, assigned_players: 3, assigned_share: 0.6, eligible_players: 2, excluded_players: 1, experiment_srm_chi_square: 40.0, experiment_srm_p_value: 0.0000000020611536224385579, is_srm_flagged: true, has_config_change: false, mean_sessions_7d: 10.0, purchase_rate: 1.0, mean_revenue_usd_7d: 30.0, revenue_top1pct_share: 0.75, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
+        - {experiment_id: bad, arm: variant_b, assigned_players: 2, assigned_share: 0.4, eligible_players: 2, excluded_players: 0, experiment_srm_chi_square: 40.0, experiment_srm_p_value: 0.0000000020611536224385579, is_srm_flagged: true, has_config_change: false, mean_sessions_7d: 6.0, purchase_rate: 1.0, mean_revenue_usd_7d: 25.0, revenue_top1pct_share: 0.8, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
+        - {experiment_id: empty, arm: control, assigned_players: 1, assigned_share: 1.0, eligible_players: 0, excluded_players: 1, experiment_srm_chi_square: 0.0, experiment_srm_p_value: 1.0, is_srm_flagged: false, has_config_change: false, mean_sessions_7d: null, purchase_rate: null, mean_revenue_usd_7d: null, revenue_top1pct_share: null, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
+        - {experiment_id: norev, arm: control, assigned_players: 2, assigned_share: 1.0, eligible_players: 2, excluded_players: 0, experiment_srm_chi_square: 0.0, experiment_srm_p_value: 1.0, is_srm_flagged: false, has_config_change: false, mean_sessions_7d: 3.0, purchase_rate: 0.0, mean_revenue_usd_7d: 0.0, revenue_top1pct_share: null, mean_sessions_7d_difference_vs_control: null, purchase_rate_difference_vs_control: null, mean_revenue_usd_7d_difference_vs_control: null}
   - name: experiment_readout_top_one_percent_rounds_up
     description: With 150 eligible players the top 1% is 2 players (ceiling of 1.5), holding 150 of 600 revenue; with exactly 100 it is 1 player, holding 50 of 100.
     model: mart_hybrid_subscription__experiment_readout
@@ -156,6 +167,8 @@ unit_tests:
         rows:
           - {experiment_id: big, arm: control, assigned_players: 150, eligible_players: 150, excluded_players: 0, sessions_7d_sum: 0, purchasers: 52, revenue_usd_7d_sum: 600.0, min_arm_config_version: 1, max_arm_config_version: 1}
           - {experiment_id: exact, arm: control, assigned_players: 100, eligible_players: 100, excluded_players: 0, sessions_7d_sum: 0, purchasers: 2, revenue_usd_7d_sum: 100.0, min_arm_config_version: 1, max_arm_config_version: 1}
+          - {experiment_id: odd, arm: control, assigned_players: 101, eligible_players: 101, excluded_players: 0, sessions_7d_sum: 0, purchasers: 2, revenue_usd_7d_sum: 160.0, min_arm_config_version: 1, max_arm_config_version: 1}
+          - {experiment_id: seven, arm: control, assigned_players: 700, eligible_players: 700, excluded_players: 0, sessions_7d_sum: 0, purchasers: 8, revenue_usd_7d_sum: 360.0, min_arm_config_version: 1, max_arm_config_version: 1}
       - input: ref('int_hybrid_subscription__experiment_eligible_population')
         format: sql
         rows: |
@@ -165,6 +178,12 @@ unit_tests:
           union all
           select 'exact', 'q' || lpad(cast(i as varchar), 3, '0'), 'control', true
           from range(100) t(i)
+          union all
+          select 'odd', 'r' || lpad(cast(i as varchar), 3, '0'), 'control', true
+          from range(101) t(i)
+          union all
+          select 'seven', 's' || lpad(cast(i as varchar), 3, '0'), 'control', true
+          from range(700) t(i)
       - input: ref('stg_hybrid_subscription__experiment_outcomes')
         format: sql
         rows: |
@@ -174,11 +193,21 @@ unit_tests:
           union all
           select 'q' || lpad(cast(i as varchar), 3, '0'), case when i < 2 then 50.0 else 0.0 end
           from range(100) t(i)
+          union all
+          select 'r' || lpad(cast(i as varchar), 3, '0'), case when i = 0 then 100.0 when i = 1 then 60.0 else 0.0 end
+          from range(101) t(i)
+          union all
+          select 's' || lpad(cast(i as varchar), 3, '0'), case when i < 8 then (8 - i) * 10.0 else 0.0 end
+          from range(700) t(i)
       - input: ref('int_hybrid_subscription__experiment_srm')
         rows:
           - {experiment_id: big, chi_square: 0.0, p_value: 1.0, is_srm_flagged: false}
           - {experiment_id: exact, chi_square: 0.0, p_value: 1.0, is_srm_flagged: false}
+          - {experiment_id: odd, chi_square: 0.0, p_value: 1.0, is_srm_flagged: false}
+          - {experiment_id: seven, chi_square: 0.0, p_value: 1.0, is_srm_flagged: false}
     expect:
       rows:
         - {experiment_id: big, arm: control, assigned_players: 150, revenue_top1pct_share: 0.25}
         - {experiment_id: exact, arm: control, assigned_players: 100, revenue_top1pct_share: 0.5}
+        - {experiment_id: odd, arm: control, assigned_players: 101, revenue_top1pct_share: 1.0}
+        - {experiment_id: seven, arm: control, assigned_players: 700, revenue_top1pct_share: 0.9722222222222222}

@@ -61,3 +61,42 @@ join (
     group by experiment_id, arm
 ) assignments using (experiment_id, arm)
 where readout.has_config_change != assignments.changed
+
+union all
+
+-- Outcome figures recomputed from staging with their own eligibility rule, per experiment and arm.
+select 'outcome_figures_disagree_with_staging'
+from readout
+join (
+    select
+        experiment_id,
+        arm,
+        count(*) filter (where eligible) as eligible_players,
+        count(*) filter (where not eligible) as excluded_players,
+        sum(sessions_7d) filter (where eligible) as sessions,
+        count(*) filter (where eligible and purchases_7d > 0) as purchasers,
+        sum(revenue_usd_7d) filter (where eligible) as revenue
+    from (
+        select
+            assignment.experiment_id,
+            assignment.arm,
+            outcome.sessions_7d,
+            outcome.purchases_7d,
+            outcome.revenue_usd_7d,
+            first_touch.first_exposed_at_utc is not null
+                and not coalesce(first_touch.first_exposed_at_utc > outcome.first_purchase_at_utc, false) as eligible
+        from {{ ref('stg_hybrid_subscription__experiment_assignments') }} assignment
+        left join (
+            select player_id, min(exposed_at_utc) as first_exposed_at_utc
+            from {{ ref('stg_hybrid_subscription__experiment_exposures') }}
+            group by player_id
+        ) first_touch using (player_id)
+        left join {{ ref('stg_hybrid_subscription__experiment_outcomes') }} outcome using (player_id)
+    ) players
+    group by experiment_id, arm
+) recount using (experiment_id, arm)
+where readout.eligible_players != recount.eligible_players
+    or readout.excluded_players != recount.excluded_players
+    or abs(readout.mean_sessions_7d - recount.sessions / nullif(recount.eligible_players, 0)) > 1e-9
+    or abs(readout.purchase_rate - recount.purchasers / nullif(recount.eligible_players, 0)) > 1e-9
+    or abs(readout.mean_revenue_usd_7d - recount.revenue / nullif(recount.eligible_players, 0)) > 1e-9

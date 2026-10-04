@@ -23,6 +23,7 @@ EXPECTED_TESTS = {
     "assert_experiment_exposures_reconcile.sql",
     "assert_experiment_population_covers_assignments.sql",
     "assert_experiment_srm_is_consistent.sql",
+    "assert_experiment_population_carries_assignments.sql",
     "assert_cancellation_preserves_entitlement.sql",
     "assert_entitlements_do_not_overlap.sql",
     "assert_grant_reconciliation_is_complete.sql",
