@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-28
 **Status:** Approved design (Alexander Zatey), pending implementation plan
-**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. 2 (2026-09-30): milestone 2 decisions, see section 17. 3 (2026-10-02): milestone 2c decisions, see section 18. Sections 0 to 15 are unchanged.
+**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. 2 (2026-09-30): milestone 2 decisions, see section 17. 3 (2026-10-02): milestone 2c decisions, see section 18. 4 (2026-10-04): milestone 3 decisions, see section 19. Sections 0 to 15 are unchanged.
 **Scope:** New module inside `ai-product-analytics-lab`; first milestone is the experiment spec schema
 
 This document is the handoff from the design conversation into Claude Code. It is self-contained: nothing outside this file and the repository is needed to start.
@@ -442,3 +442,50 @@ One consequence of PyYAML implementing YAML 1.1: a number such as `5e-2` or `1e-
 - Each example's text and JSON output is stored in `referee/tests/golden/` and compared by a test, with checks of what the files must mean so that one regenerated from a broken build still fails. The two examples are checked to differ in exactly nine fields.
 
 Delivered in: 2c.
+
+
+## 19. Amendment 4: milestone 3 decisions (2026-10-04)
+
+Milestone 3 builds the synthetic experiment that the results reviewer will be judged on. These are the decisions it made that sections 0 to 18 do not record. Section 10 is left as written; where it disagrees with this section, this section wins.
+
+### 19.1 Delivery
+
+- Section 13 names one branch for milestone 3. It was delivered in three changes: 3a, the generator, the raw tables, their source declarations and the staging models; 3b-1, the intermediate models, the two marts and the document that says what each planted problem looks like in them; 3b-2, the incident entries and this amendment.
+- Everything lives in the analytics lab, in the hybrid subscription scenario. Nothing in the Referee package changed in milestone 3 except this document and the test that checks it.
+
+### 19.2 Three raw tables, not two
+
+- Section 10 names two tables. A third, `experiment_outcomes` (one row per logged player: sessions, purchases and revenue in the seven days after assignment, and the first purchase time), was added. Novelty and heavy-tailed revenue need outcomes that depend on the arm, and rewriting the scenario's existing `store_transactions` would have changed all eight existing tables, whose contents are pinned by fingerprints.
+- The experiment draws from its own random stream, so the eight existing tables have the same content as before the experiment existed. A test pins each table's content with a fingerprint.
+- Players who never subscribe are assigned to `control`, `variant_b` or `variant_c` by hashing the player ID with a salt, over a 21-day window that opens ten days after the subscription launch. The tables carry UTC timestamps only; no timestamp defect is planted in them.
+- A player lost to the bucketing bug has no row in any experiment table. The absence is the evidence.
+- A hybrid scenario shorter than 90 days is refused with a `ValueError`, because the experiment does not fit in it.
+
+### 19.3 Five models, not four
+
+- Section 10 names four dbt models. A fifth, `int_hybrid_subscription__experiment_srm`, was added: the incident audit sits in the intermediate layer and cannot read a mart without breaking the layering, and computing the statistic twice would let the copies drift.
+- `int_…__experiment_eligible_population` keeps every assigned player and flags exclusions with a reason (`never_exposed`, `exposed_after_first_purchase`) instead of dropping them. Section 10's "pre-period covariates attached" is delivered as segment attributes and a 28-day session count measured over 672 elapsed hours before assignment.
+- That session count is uncorrelated with the outcomes (an absolute correlation below 0.03), because outcomes are generated independently of the scenario's `sessions` table. It cannot demonstrate variance reduction on this data, so milestone 4 must not rely on it for CUPED here. Making it informative would change the raw contract and is a separate change.
+- The marts are descriptive only. They publish counts, means, rates and point differences, with no p-values, intervals or verdicts for effects. The one test they run is the sample-ratio check, described next.
+
+### 19.4 The sample-ratio check in SQL
+
+- The check compares assigned players with an equal split across the three arms. With three arms the chi-square has 2 degrees of freedom, so the p-value is exactly `exp(-chi_square / 2)`. It is flagged at p < 0.001.
+- The equal split is an assumption, because the warehouse holds no pre-registered allocation. The results reviewer recomputes the check against the allocation registered in the spec (sections 9 and 11); the SQL check does not bind it.
+- When the check is flagged, every difference against control is NULL for every arm of that experiment, because an arm comparison is not valid then.
+- At the 1,000-player scale that continuous integration builds, the mismatch is present but not detectable (p about 0.03), and the planted novelty reversal is not visible. A results-review fixture therefore needs the 5,000-player scale, which the generator takes as `--scale 5000`. Milestone 4 chooses how Referee reads the data and at what scale; milestone 3 defines no file or table interface.
+
+### 19.5 Incidents
+
+- Three incidents join the shared incident mart, as section 10 asks for the configuration change: `experiment_exposure_after_purchase` (high), `experiment_sample_ratio_mismatch` (high) and `experiment_mid_test_config_change` (medium). The `experiment_` prefix keeps them apart from `post_subscription_exposure`, which concerns marketing-campaign exposure.
+- The mart's status logic is the shared generic one: any affected rows means `contained`. For the configuration change, `contained` means disclosed, not corrected: the readout flags it and the outcomes stay pooled across versions.
+- The sample-ratio incident counts the experiment's assigned players when the flag is set and zero otherwise, so it is `clear` at the 1,000-player scale and `contained` at 5,000. A reader must not take `clear` there to mean absent.
+- The committed diagnostic results and decision memo are a dated snapshot of an earlier build and list six incidents, while the live mart lists nine. They were not regenerated. Whoever next executes the notebook must update the memo's incident table, which a test requires to match the JSON.
+
+### 19.6 What the planted problems measure
+
+- The sizes of the five planted problems are in the generator's `PlantedParameters`, and `ground_truth()` returns the plan as data. The measured figures, for seed 42 at 5,000 players and for both populations (all assigned players and eligible players), are in `analytics-lab/docs/metrics/hybrid_subscription_experiment.md`. A test recomputes them from the generator and requires their exact text to appear there, so they are not repeated here.
+- Some of what section 10 plants is weak at that scale. The week-3 novelty reversal is within one standard error of zero (the lift fades to about zero; a negative value is not established), and the bias from the bucketing bug is small next to the mismatch itself, which is what invalidates the arm. Milestone 4's rules should be judged against what is detectable, not against what was planted.
+- Section 10's mapping of problems to rules is unchanged. No results rule yet covers exposure after purchase or the configuration change; milestone 4 decides whether one should.
+
+Delivered in: 3a, 3b-1, 3b-2.
