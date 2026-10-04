@@ -24,7 +24,7 @@ models:
       - name: mean_sessions_7d
         description: Eligible players only. NULL when there are none.
       - name: min_arm_config_version
-        description: A min and max that differ within one row mean the arm changed configuration that day.
+        description: Compare across dates. A step from 1 to 2 between consecutive dates is the configuration change; a min and max that differ within one row would mean it happened inside that date.
 
   - name: mart_hybrid_subscription__experiment_readout
     description: One row per experiment and arm. Arm totals, the experiment's sample-ratio check, a config-change flag, outcome means over eligible players, revenue concentration, and point differences against control that are NULL for control and whenever the sample-ratio check is flagged. Descriptive only; it carries no uncertainty, so a difference here is not evidence of an effect.

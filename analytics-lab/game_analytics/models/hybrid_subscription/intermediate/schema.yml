@@ -273,7 +273,7 @@ models:
                 values: [never_exposed, exposed_after_first_purchase]
 
   - name: int_hybrid_subscription__experiment_srm
-    description: One row per experiment with the chi-square sample-ratio check of assigned players against an equal split. The p-value formula exp(-x/2) is exact only for 2 degrees of freedom, so arm_count is pinned to 3.
+    description: One row per experiment with the chi-square sample-ratio check of assigned players against an equal split across control, variant_b and variant_c. The p-value formula exp(-x/2) is exact only for 2 degrees of freedom, so the arm list is fixed at three; arm_count is 3 by construction (an arm with no assignments counts as 0) and its test fails only if that list is edited.
     config:
       tags: [hybrid_subscription]
     columns:
