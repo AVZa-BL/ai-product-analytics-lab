@@ -95,9 +95,9 @@ def test_the_amendment_states_the_pinned_fingerprint_and_the_exit_statuses() -> 
 def test_the_design_header_points_at_every_amendment() -> None:
     header = DESIGN.split("**Scope:**")[0]
 
-    for number in (16, 17, 18, 19):
+    for number in (16, 17, 18, 19, 20):
         assert f"see section {number}" in header
-    assert all(f"\n## {number}. Amendment" in DESIGN for number in (16, 17, 18, 19))
+    assert all(f"\n## {number}. Amendment" in DESIGN for number in (16, 17, 18, 19, 20))
 
 
 def test_the_amendment_names_the_files_it_says_exist() -> None:
@@ -110,7 +110,7 @@ def test_the_amendment_names_the_files_it_says_exist() -> None:
 
 
 def test_the_milestone_3_amendment_names_the_lab_files_and_incident_codes_that_exist() -> None:
-    amendment = DESIGN.split("\n## 19. Amendment")[1]  # not "## 19.", which "### 19.1" contains
+    amendment = DESIGN.split("\n## 19. Amendment")[1].split("\n## 20. Amendment")[0]
     names = re.findall(r"`(analytics-lab/[\w/.\-]+)`", amendment)
     mart = (
         ROOT.parent
@@ -128,3 +128,22 @@ def test_the_milestone_3_amendment_names_the_lab_files_and_incident_codes_that_e
     ):
         assert f"`{code}`" in amendment, f"{code} is not named in the amendment"
         assert f"when '{code}'" in mart, f"{code} is not in the mart"
+
+
+def test_the_milestone_4_amendment_names_rules_and_files_that_exist_and_none_built_yet() -> None:
+    amendment = DESIGN.split("\n## 20. Amendment")[1]  # not "## 20.", which "### 20.1" contains
+    rule_ids = set(re.findall(r"RES-0\d\d", amendment))
+    seed_list = DESIGN.split("## 8. Rule catalogue")[1].split("## 9.")[0]
+    catalogue = set(re.findall(r"RES-0\d\d", seed_list))
+    names = re.findall(r"`(analytics-lab/[\w/.\-]+)`", amendment)
+
+    assert {"RES-007", "RES-012", "RES-013"} <= rule_ids
+    assert "analytics-lab/docs/architecture/hybrid_subscription_raw_contract.md" in names
+    assert rule_ids - {"RES-012", "RES-013"} <= catalogue, "section 20 names a rule section 8 lacks"
+    assert not {"RES-012", "RES-013"} & catalogue, "section 8 must keep the seed list as written"
+    for name in names:
+        assert (ROOT.parent / name).exists(), name
+    assert "1,000 rows" in amendment and "feat/referee-results-data" in amendment
+    assert not ({"RES-012", "RES-013"} & {rule.id for rule in ALL_RULES}), (
+        "the results rules arrive in 4b; update this test and section 20.4 when they do"
+    )
