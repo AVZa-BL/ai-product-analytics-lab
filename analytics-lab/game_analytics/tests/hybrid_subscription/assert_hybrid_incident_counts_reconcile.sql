@@ -41,6 +41,55 @@ with expected as (
 
     select 'analysis_population_exclusion', count(*) filter (where not is_population_eligible)
     from {{ ref('int_hybrid_subscription__analysis_population') }}
+
+    union all
+
+    select
+        'experiment_exposure_after_purchase',
+        count(*) filter (where first_exposed_at_utc > first_purchase_at_utc)
+    from (
+        select
+            exposure.player_id,
+            min(exposure.exposed_at_utc) as first_exposed_at_utc,
+            max(outcome.first_purchase_at_utc) as first_purchase_at_utc
+        from {{ ref('stg_hybrid_subscription__experiment_exposures') }} exposure
+        join {{ ref('stg_hybrid_subscription__experiment_outcomes') }} outcome using (player_id)
+        group by exposure.player_id
+    )
+
+    union all
+
+    select
+        'experiment_sample_ratio_mismatch',
+        cast(coalesce(sum(total) filter (where exp(-chi_square / 2) < 0.001), 0) as bigint)
+    from (
+        select
+            c + b + v as total,
+            (
+                power(c - (c + b + v) / 3.0, 2)
+                + power(b - (c + b + v) / 3.0, 2)
+                + power(v - (c + b + v) / 3.0, 2)
+            ) / ((c + b + v) / 3.0) as chi_square
+        from (
+            select
+                count(*) filter (where arm = 'control') as c,
+                count(*) filter (where arm = 'variant_b') as b,
+                count(*) filter (where arm = 'variant_c') as v
+            from {{ ref('stg_hybrid_subscription__experiment_assignments') }}
+            group by experiment_id
+        )
+    )
+
+    union all
+
+    select 'experiment_mid_test_config_change', count(*)
+    from {{ ref('stg_hybrid_subscription__experiment_assignments') }} assignment
+    join (
+        select experiment_id, arm, min(arm_config_version) as initial_version
+        from {{ ref('stg_hybrid_subscription__experiment_assignments') }}
+        group by experiment_id, arm
+    ) initial using (experiment_id, arm)
+    where assignment.arm_config_version > initial.initial_version
 )
 select
     coalesce(expected.incident_code, actual.incident_code) as incident_code,

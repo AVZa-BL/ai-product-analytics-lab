@@ -95,14 +95,36 @@ def test_the_amendment_states_the_pinned_fingerprint_and_the_exit_statuses() -> 
 def test_the_design_header_points_at_every_amendment() -> None:
     header = DESIGN.split("**Scope:**")[0]
 
-    assert "see section 16" in header and "see section 17" in header and "see section 18" in header
-    assert all(f"\n## {number}. Amendment" in DESIGN for number in (16, 17, 18))
+    for number in (16, 17, 18, 19):
+        assert f"see section {number}" in header
+    assert all(f"\n## {number}. Amendment" in DESIGN for number in (16, 17, 18, 19))
 
 
 def test_the_amendment_names_the_files_it_says_exist() -> None:
-    amendment = DESIGN.split("\n## 18. Amendment")[1]  # not "## 18.", which "### 18.1" contains
+    amendment = DESIGN.split("\n## 18. Amendment")[1].split("\n## 19. Amendment")[0]
     names = re.findall(r"`(referee/[\w/.\-]+)`", amendment)
 
     assert {"referee/examples/", "referee/tests/golden/"} <= set(names)
     for name in names:
         assert (ROOT.parent / name).exists(), name
+
+
+def test_the_milestone_3_amendment_names_the_lab_files_and_incident_codes_that_exist() -> None:
+    amendment = DESIGN.split("\n## 19. Amendment")[1]  # not "## 19.", which "### 19.1" contains
+    names = re.findall(r"`(analytics-lab/[\w/.\-]+)`", amendment)
+    mart = (
+        ROOT.parent
+        / "analytics-lab/game_analytics/models/hybrid_subscription/marts"
+        / "mart_hybrid_subscription__data_quality_incidents.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "analytics-lab/docs/metrics/hybrid_subscription_experiment.md" in names
+    for name in names:
+        assert (ROOT.parent / name).exists(), name
+    for code in (
+        "experiment_exposure_after_purchase",
+        "experiment_sample_ratio_mismatch",
+        "experiment_mid_test_config_change",
+    ):
+        assert f"`{code}`" in amendment, f"{code} is not named in the amendment"
+        assert f"when '{code}'" in mart, f"{code} is not in the mart"

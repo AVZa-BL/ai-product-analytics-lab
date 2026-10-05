@@ -5,7 +5,10 @@ with expected as (
         ('mixed_timestamp_mismatch', false),
         ('missing_subscription_grant_link', true),
         ('post_subscription_exposure', true),
-        ('cancellation_pending_expiry', true)
+        ('cancellation_pending_expiry', true),
+        ('experiment_exposure_after_purchase', true),
+        ('experiment_sample_ratio_mismatch', false),
+        ('experiment_mid_test_config_change', true)
     ) as required(incident_code, requires_affected_rows)
 )
 select expected.incident_code
