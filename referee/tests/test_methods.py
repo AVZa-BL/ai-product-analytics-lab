@@ -4,14 +4,20 @@ import itertools
 import math
 import random
 
+import numpy as np
 import pytest
 from scipy import stats
 from statsmodels.stats.proportion import confint_proportions_2indep, proportions_ztest
 from statsmodels.stats.weightstats import CompareMeans, DescrStatsW
 
+from referee import methods
 from referee.methods import (
     SRM_ALPHA,
     StatsError,
+    bootstrap_difference,
+    heavy_tail_measures,
+    ratio_difference,
+    ratio_estimate,
     srm_test,
     two_proportion_difference,
     welch_difference,
@@ -26,7 +32,7 @@ def test_the_planted_mismatch_gives_the_figure_the_experiment_document_publishes
 
     assert result.chi_square == pytest.approx(42.23866855524079, rel=1e-12)
     assert result.degrees_of_freedom == 2
-    assert result.p_value == pytest.approx(6.729606364817086e-10, rel=1e-9)
+    assert result.p_value == pytest.approx(6.729606364817086e-10, rel=1e-9, abs=0)
     assert f"{result.p_value:.1e}" == "6.7e-10" and result.flagged
 
 
@@ -34,7 +40,7 @@ def test_with_three_arms_the_p_value_is_the_closed_form_the_lab_sql_uses() -> No
     for counts in ([997, 1046, 781], [340, 330, 331], [100, 200, 300]):
         result = srm_test(counts, [1 / 3] * 3)
 
-        assert result.p_value == pytest.approx(math.exp(-result.chi_square / 2), rel=1e-12)
+        assert result.p_value == pytest.approx(math.exp(-result.chi_square / 2), rel=1e-12, abs=0)
 
 
 @pytest.mark.parametrize("seed", range(12))
@@ -50,7 +56,7 @@ def test_it_agrees_with_scipy_for_two_to_five_arms_and_unequal_allocations(seed:
     reference = stats.chisquare(counts, f_exp=[total * share for share in allocation])
 
     assert ours.chi_square == pytest.approx(reference.statistic, rel=1e-12)
-    assert ours.p_value == pytest.approx(reference.pvalue, rel=1e-9)
+    assert ours.p_value == pytest.approx(reference.pvalue, rel=1e-9, abs=0)
     assert ours.degrees_of_freedom == arms - 1
     assert ours.expected == pytest.approx([total * share for share in allocation])
 
@@ -127,7 +133,7 @@ def test_it_agrees_with_scipy_and_statsmodels_on_unequal_groups_and_variances(se
     )
 
     assert ours.t_statistic == pytest.approx(scipy_result.statistic, rel=1e-10)
-    assert ours.p_value == pytest.approx(scipy_result.pvalue, rel=1e-8)
+    assert ours.p_value == pytest.approx(scipy_result.pvalue, rel=1e-8, abs=0)
     assert ours.degrees_of_freedom == pytest.approx(scipy_result.df, rel=1e-10)
     assert (ours.ci_low, ours.ci_high) == pytest.approx((low, high), rel=1e-9)
     assert ours.confidence == 0.95
@@ -141,7 +147,7 @@ def test_a_heavy_tailed_sample_still_matches_scipy() -> None:
     ours = welch_difference(treatment, control)
 
     assert ours.p_value == pytest.approx(
-        stats.ttest_ind(treatment, control, equal_var=False).pvalue
+        stats.ttest_ind(treatment, control, equal_var=False).pvalue, rel=1e-9, abs=0
     )
 
 
@@ -240,7 +246,7 @@ def test_it_agrees_with_statsmodels_on_random_counts(seed: int) -> None:
     low, high = confint_proportions_2indep(x1, n1, x2, n2, method="wald", alpha=0.05)
 
     assert ours.z_statistic == pytest.approx(z, rel=1e-10)
-    assert ours.p_value == pytest.approx(p, rel=1e-8)
+    assert ours.p_value == pytest.approx(p, rel=1e-8, abs=0)
     assert (ours.ci_low, ours.ci_high) == pytest.approx((low, high), rel=1e-9)
 
 
@@ -250,7 +256,7 @@ def test_swapping_the_groups_negates_the_difference_and_keeps_the_p_value_for_pr
 
     assert backward.difference == -forward.difference
     assert backward.z_statistic == -forward.z_statistic
-    assert backward.p_value == pytest.approx(forward.p_value, rel=1e-12)
+    assert backward.p_value == pytest.approx(forward.p_value, rel=1e-12, abs=0)
     assert (backward.ci_low, backward.ci_high) == pytest.approx(
         (-forward.ci_high, -forward.ci_low), rel=1e-12
     )
@@ -278,3 +284,337 @@ def test_counts_that_cannot_be_tested_are_refused_with_the_reason(
 def test_an_alpha_outside_zero_to_one_is_refused_for_proportions() -> None:
     with pytest.raises(StatsError, match="alpha"):
         two_proportion_difference(3, 10, 2, 10, alpha=1.5)
+
+
+# --- Heavy tails -------------------------------------------------------------------------
+
+
+def _lognormal(seed: int, n: int, sigma: float = 1.7) -> list[float]:
+    rng = random.Random(seed)
+    return [rng.lognormvariate(0.0, sigma) for _ in range(n)]
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_the_excess_kurtosis_is_what_scipy_returns_by_default(seed: int) -> None:
+    values = _lognormal(seed, 300 + 100 * seed)
+
+    assert heavy_tail_measures(values).excess_kurtosis == pytest.approx(
+        stats.kurtosis(values), rel=1e-9
+    )
+
+
+def test_a_normal_sample_has_excess_kurtosis_near_zero_and_a_lognormal_one_far_above() -> None:
+    rng = random.Random(2)
+    normal = [rng.gauss(50.0, 5.0) for _ in range(20_000)]
+
+    assert abs(heavy_tail_measures(normal).excess_kurtosis) < 0.2
+    assert heavy_tail_measures(_lognormal(2, 20_000)).excess_kurtosis > 100
+
+
+@pytest.mark.parametrize(
+    ("n", "top_count"),
+    [(2, 1), (99, 1), (100, 1), (101, 2), (199, 2), (200, 2), (201, 3), (1000, 10)],
+)
+def test_the_top_percent_is_the_ceiling_of_the_count_the_lab_readout_uses(
+    n: int, top_count: int
+) -> None:
+    result = heavy_tail_measures([float(i) for i in range(1, n + 1)])
+
+    assert result.top_count == top_count == (n + 99) // 100
+    assert result.top_share == pytest.approx(
+        sum(range(n - top_count + 1, n + 1)) / sum(range(1, n + 1))
+    )
+
+
+def test_the_top_share_agrees_with_an_independent_numpy_computation() -> None:
+    values = _lognormal(9, 777)
+    ranked = np.sort(np.asarray(values))[::-1]
+    k = math.ceil(777 * 5 / 100)
+
+    result = heavy_tail_measures(values, top_percent=5)
+
+    assert result.top_count == k and result.top_percent == 5
+    assert result.top_share == pytest.approx(ranked[:k].sum() / ranked.sum(), rel=1e-12)
+
+
+def test_ties_and_zeros_are_handled() -> None:
+    values = [0.0] * 90 + [10.0] * 10  # a tenth of the units hold everything
+
+    result = heavy_tail_measures(values, top_percent=10)
+
+    assert result.top_share == 1.0 and result.top_count == 10
+
+
+@pytest.mark.parametrize(
+    ("values", "top_percent", "fragment"),
+    [
+        ([1.0], 1, "at least 2"),
+        ([3.0, 3.0, 3.0], 1, "do not vary"),
+        ([0.0, 0.0, 0.0], 1, "sum to 0"),
+        ([1.0, -2.0, 5.0], 1, "non-negative"),
+        ([1.0, math.nan, 5.0], 1, "finite"),
+        ([1.0, 2.0, 5.0], 0, "from 1 to 99"),
+        ([1.0, 2.0, 5.0], 100, "from 1 to 99"),
+        ([1.0, 2.0, 5.0], 2.5, "from 1 to 99"),
+        ([1.0, 2.0, 5.0], True, "from 1 to 99"),
+    ],
+)
+def test_values_that_have_no_tail_to_describe_are_refused_with_the_reason(
+    values: list, top_percent: object, fragment: str
+) -> None:
+    with pytest.raises(StatsError, match=fragment):
+        heavy_tail_measures(values, top_percent=top_percent)
+
+
+# --- The bootstrap -----------------------------------------------------------------------
+
+GOLDEN_TREATMENT = [1.0, 2.0, 4.0, 8.0, 16.0, 3.0, 5.0, 9.0]
+GOLDEN_CONTROL = [2.0, 2.5, 3.0, 3.5, 1.0, 6.0, 0.5]
+
+
+def test_one_answer_is_pinned_so_a_changed_random_stream_is_noticed() -> None:
+    result = bootstrap_difference(GOLDEN_TREATMENT, GOLDEN_CONTROL, seed=12345, resamples=1000)
+
+    assert result.difference == pytest.approx(3.357142857142857, rel=1e-14)
+    assert result.ci_low == pytest.approx(0.14241071428571425, rel=1e-12)
+    assert result.ci_high == pytest.approx(6.929910714285714, rel=1e-12)
+    assert (result.confidence, result.resamples, result.seed) == (0.95, 1000, 12345)
+
+
+def test_the_same_seed_gives_the_same_interval_and_another_seed_a_different_one() -> None:
+    a, b = _lognormal(1, 200), _lognormal(2, 200)
+
+    first = bootstrap_difference(a, b, seed=7, resamples=2000)
+
+    assert bootstrap_difference(a, b, seed=7, resamples=2000) == first
+    other = bootstrap_difference(a, b, seed=8, resamples=2000)
+    assert other.difference == first.difference and other.ci_low != first.ci_low
+
+
+def test_how_the_draws_are_chunked_does_not_change_the_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    a, b = _lognormal(3, 150), _lognormal(4, 120)
+    whole = bootstrap_difference(a, b, seed=5, resamples=1000)
+
+    monkeypatch.setattr(methods, "_CHUNK_ELEMENTS", 700)  # a few rows at a time
+    assert bootstrap_difference(a, b, seed=5, resamples=1000) == whole
+    monkeypatch.setattr(methods, "_CHUNK_ELEMENTS", 1)  # one row at a time
+    assert bootstrap_difference(a, b, seed=5, resamples=1000) == whole
+
+
+def test_every_index_is_in_range_and_the_draws_are_uniform() -> None:
+    rng = np.random.PCG64(np.random.SeedSequence(0))
+    values = np.arange(10, dtype=float)
+
+    means = methods._bootstrap_means(values, 20_000, rng)
+
+    assert 0.0 <= means.min() and means.max() <= 9.0
+    # the mean of resampled means is the mean of the values, to within its standard error
+    assert means.mean() == pytest.approx(4.5, abs=4 * values.std() / math.sqrt(10 * 20_000))
+    # and every index is reachable: a resample of a single repeated value is possible
+    tiny = methods._bootstrap_means(np.array([0.0, 1.0]), 4_000, np.random.PCG64(1))
+    assert set(np.unique(tiny)) == {0.0, 0.5, 1.0}
+
+
+def test_it_is_close_to_welchs_interval_on_a_normal_sample() -> None:
+    rng = random.Random(8)
+    a = [rng.gauss(1.0, 2.0) for _ in range(500)]
+    b = [rng.gauss(0.0, 2.0) for _ in range(500)]
+
+    boot, welch = bootstrap_difference(a, b, seed=1, resamples=10_000), welch_difference(a, b)
+
+    width = welch.ci_high - welch.ci_low
+    assert boot.difference == welch.difference
+    assert boot.ci_low == pytest.approx(welch.ci_low, abs=0.05 * width)
+    assert boot.ci_high == pytest.approx(welch.ci_high, abs=0.05 * width)
+
+
+def test_it_agrees_with_scipys_percentile_bootstrap_up_to_simulation_noise() -> None:
+    a, b = _lognormal(5, 300, 1.0), _lognormal(6, 250, 1.0)
+
+    ours = bootstrap_difference(a, b, seed=3, resamples=10_000)
+    theirs = stats.bootstrap(
+        (np.asarray(a), np.asarray(b)),
+        lambda x, y, axis: x.mean(axis=axis) - y.mean(axis=axis),
+        method="percentile",
+        n_resamples=10_000,
+        random_state=np.random.default_rng(3),
+        vectorized=True,
+    ).confidence_interval
+
+    width = theirs.high - theirs.low
+    assert ours.ci_low == pytest.approx(theirs.low, abs=0.06 * width)
+    assert ours.ci_high == pytest.approx(theirs.high, abs=0.06 * width)
+
+
+def test_a_skewed_sample_gets_an_interval_that_is_not_symmetric_about_the_difference() -> None:
+    a, b = _lognormal(7, 80, 1.7), _lognormal(8, 80, 1.7)
+
+    result = bootstrap_difference(a, b, seed=2, resamples=10_000)
+    welch = welch_difference(a, b)
+
+    assert (result.ci_high - result.difference) != pytest.approx(
+        result.difference - result.ci_low, rel=0.05
+    )
+    assert (welch.ci_high - welch.difference) == pytest.approx(
+        welch.difference - welch.ci_low, rel=1e-9
+    )
+
+
+def test_the_interval_covers_the_true_difference_about_as_often_as_it_claims() -> None:
+    rng = random.Random(10)
+    covered = 0
+    runs = 200
+    for run in range(runs):
+        a = [rng.gauss(0.5, 1.0) for _ in range(40)]
+        b = [rng.gauss(0.0, 1.0) for _ in range(40)]
+        result = bootstrap_difference(a, b, seed=run, alpha=0.10, resamples=1000)
+        covered += result.ci_low <= 0.5 <= result.ci_high
+
+    assert 0.82 <= covered / runs <= 0.97  # a 90% interval; 3 binomial errors either side
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "fragment"),
+    [
+        ({"seed": -1}, "seed"),
+        ({"seed": 1.5}, "seed"),
+        ({"seed": True}, "seed"),
+        ({"seed": 1, "resamples": 100}, "fewer than 5 resamples"),
+        ({"seed": 1, "alpha": 0.0}, "alpha"),
+        ({"seed": 1, "alpha": 1.0}, "alpha"),
+    ],
+)
+def test_a_bootstrap_that_cannot_be_trusted_is_refused_with_the_reason(
+    kwargs: dict, fragment: str
+) -> None:
+    with pytest.raises(StatsError, match=fragment):
+        bootstrap_difference([1.0, 2.0, 3.0], [2.0, 3.0, 4.0], **kwargs)
+
+
+def test_groups_too_small_or_not_finite_are_refused_by_the_bootstrap() -> None:
+    with pytest.raises(StatsError, match="at least 2"):
+        bootstrap_difference([1.0], [1.0, 2.0], seed=1)
+    with pytest.raises(StatsError, match="at least 2"):
+        bootstrap_difference([1.0, 2.0], [], seed=1)
+    with pytest.raises(StatsError, match="finite"):
+        bootstrap_difference([1.0, math.inf], [1.0, 2.0], seed=1)
+
+
+# --- The delta method --------------------------------------------------------------------
+
+
+def _units(seed: int, n: int, ratio: float) -> tuple[list[float], list[float]]:
+    """Per-unit denominators that vary a lot and numerators that follow them noisily."""
+    rng = random.Random(seed)
+    denominator = [rng.lognormvariate(1.0, 0.8) for _ in range(n)]
+    numerator = [ratio * x + rng.gauss(0.0, 1.5) for x in denominator]
+    return numerator, denominator
+
+
+def test_with_a_constant_denominator_it_reduces_to_the_error_of_a_mean() -> None:
+    numerator = [1.0, 4.0, 2.0, 8.0, 5.0]
+    denominator = [2.0] * 5
+
+    estimate = ratio_estimate(numerator, denominator)
+
+    sample_sd = float(np.std(numerator, ddof=1))
+    assert estimate.ratio == pytest.approx(np.mean(numerator) / 2.0)
+    assert estimate.std_error == pytest.approx(sample_sd / math.sqrt(5) / 2.0)
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_its_standard_error_matches_a_paired_bootstrap_of_the_ratio(seed: int) -> None:
+    numerator, denominator = _units(seed, 2000, 0.8)
+    y, x = np.asarray(numerator), np.asarray(denominator)
+    rng = np.random.default_rng(seed)
+    resampled = []
+    for _ in range(3000):
+        index = rng.integers(0, len(y), len(y))
+        resampled.append(y[index].mean() / x[index].mean())
+
+    estimate = ratio_estimate(numerator, denominator)
+
+    assert estimate.ratio == pytest.approx(y.mean() / x.mean(), rel=1e-12)
+    assert estimate.std_error == pytest.approx(np.std(resampled, ddof=1), rel=0.04)
+
+
+def test_the_error_of_the_ratio_is_not_the_error_of_the_unit_level_ratios() -> None:
+    numerator, denominator = _units(1, 1500, 0.8)
+    unit_ratios = [y / x for y, x in zip(numerator, denominator, strict=True)]
+    naive = float(np.std(unit_ratios, ddof=1)) / math.sqrt(len(unit_ratios))
+
+    assert ratio_estimate(numerator, denominator).std_error != pytest.approx(naive, rel=0.2)
+
+
+def test_scaling_the_numerator_scales_the_ratio_and_its_error_together() -> None:
+    numerator, denominator = _units(2, 400, 0.5)
+
+    base = ratio_estimate(numerator, denominator)
+    scaled = ratio_estimate([3.0 * y for y in numerator], denominator)
+
+    assert scaled.ratio == pytest.approx(3.0 * base.ratio, rel=1e-12)
+    assert scaled.std_error == pytest.approx(3.0 * base.std_error, rel=1e-12)
+
+
+def test_a_difference_of_ratios_combines_the_two_errors_and_detects_a_real_difference() -> None:
+    y1, x1 = _units(3, 3000, 0.9)
+    y0, x0 = _units(4, 3000, 0.8)
+
+    result = ratio_difference(y1, x1, y0, x0)
+    one, zero = ratio_estimate(y1, x1), ratio_estimate(y0, x0)
+
+    assert result.difference == pytest.approx(one.ratio - zero.ratio)
+    assert result.std_error == pytest.approx(math.sqrt(one.std_error**2 + zero.std_error**2))
+    assert result.z_statistic == pytest.approx(result.difference / result.std_error)
+    assert result.p_value == pytest.approx(
+        2 * stats.norm.sf(abs(result.z_statistic)), rel=1e-9, abs=0
+    )
+    assert result.ci_low < 0.1 < result.ci_high and result.p_value < 0.05
+    assert result.confidence == 0.95
+
+
+def test_a_modest_difference_gets_a_two_sided_p_value_that_is_not_extreme() -> None:
+    y1, x1 = _units(11, 120, 0.85)
+    y0, x0 = _units(12, 120, 0.80)
+
+    result = ratio_difference(y1, x1, y0, x0)
+
+    assert 0.01 < result.p_value < 0.9
+    assert result.p_value == pytest.approx(
+        2 * stats.norm.sf(abs(result.z_statistic)), rel=1e-12, abs=0
+    )
+
+
+def test_equal_ratios_are_not_called_different_in_calibration() -> None:
+    rejected = 0
+    runs = 200
+    for run in range(runs):
+        y1, x1 = _units(1000 + run, 300, 0.8)
+        y0, x0 = _units(5000 + run, 300, 0.8)
+        rejected += ratio_difference(y1, x1, y0, x0).p_value < 0.05
+
+    assert 0.01 <= rejected / runs <= 0.10  # a 5% test, within about 3 binomial errors
+
+
+@pytest.mark.parametrize(
+    ("numerator", "denominator", "fragment"),
+    [
+        ([1.0, 2.0], [1.0], "one denominator per numerator"),
+        ([1.0], [1.0], "at least 2 units"),
+        ([1.0, 2.0], [1.0, -1.0], "mean denominator is 0"),
+        ([2.0, 4.0, 6.0], [1.0, 2.0, 3.0], "does not vary"),
+        ([1.0, math.nan], [1.0, 2.0], "finite"),
+    ],
+)
+def test_a_ratio_that_cannot_be_estimated_is_refused_with_the_reason(
+    numerator: list, denominator: list, fragment: str
+) -> None:
+    with pytest.raises(StatsError, match=fragment):
+        ratio_estimate(numerator, denominator)
+
+
+def test_an_alpha_outside_zero_to_one_is_refused_for_ratios() -> None:
+    with pytest.raises(StatsError, match="alpha"):
+        ratio_difference([1.0, 3.0], [1.0, 2.0], [2.0, 5.0], [1.0, 2.0], alpha=0.0)

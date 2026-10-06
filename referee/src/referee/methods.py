@@ -6,6 +6,10 @@ that cannot give a meaningful answer for its input raises `StatsError` instead o
 or a confident-looking number: a confidence interval of zero width from data with no variation
 would claim certainty the data cannot give.
 
+The bootstrap draws its own indices from the raw output of numpy's PCG64 generator, because
+numpy does not promise that `Generator.integers` keeps its output between versions, and a
+changed output would silently change every interval in every saved report.
+
 Sums use `math.fsum`, which is exactly rounded and so does not depend on the order of the values
 or on the platform. The distribution functions come from `scipy.stats`; their last digits can
 differ between scipy versions, so reports round what they print.
@@ -17,6 +21,7 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+import numpy as np
 from scipy import stats
 
 SRM_ALPHA = 0.001  # section 9: the threshold used in the Kohavi, Tang and Xu treatment of SRM
@@ -219,6 +224,220 @@ def two_proportion_difference(
         n_control=n_control,
         rate_treatment=rate_a,
         rate_control=rate_b,
+        difference=difference,
+        std_error=std_error,
+        z_statistic=z_statistic,
+        p_value=float(2 * stats.norm.sf(abs(z_statistic))),
+        ci_low=difference - margin,
+        ci_high=difference + margin,
+        confidence=1 - alpha,
+    )
+
+
+# --- How heavy the tail of a metric is -----------------------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class HeavyTail:
+    n: int
+    excess_kurtosis: float
+    top_percent: int
+    top_count: int
+    top_share: float
+
+
+def heavy_tail_measures(values: Sequence[float], *, top_percent: int = 1) -> HeavyTail:
+    """How concentrated and how heavy-tailed a non-negative metric is. A description, not a test.
+
+    `excess_kurtosis` is m4 / m2^2 - 3 with the moments taken about the mean and divided by n
+    (what `scipy.stats.kurtosis` returns by default), so it is 0 for a normal distribution.
+    `top_share` is the share of the total held by the largest `ceil(n * top_percent / 100)`
+    values, the same rule the lab's readout uses for revenue. Both are noisy for small groups.
+    Raises `StatsError` for fewer than 2 values, no variation, a negative value or a total of 0.
+    """
+    if (
+        isinstance(top_percent, bool)
+        or not isinstance(top_percent, int)
+        or not 1 <= top_percent <= 99
+    ):
+        raise StatsError(f"top_percent must be a whole number from 1 to 99, got {top_percent!r}")
+    numbers = _finite(values, "values")
+    if len(numbers) < 2:
+        raise StatsError(f"values needs at least 2 values, got {len(numbers)}")
+    if min(numbers) < 0:
+        raise StatsError("the top share is defined for non-negative values only")
+    total = math.fsum(numbers)
+    if total == 0:
+        raise StatsError("the values sum to 0, so no value holds a share of the total")
+    n = len(numbers)
+    mean = total / n
+    second = math.fsum((v - mean) ** 2 for v in numbers) / n
+    if second == 0:
+        raise StatsError("the values do not vary, so the kurtosis is undefined")
+    fourth = math.fsum((v - mean) ** 4 for v in numbers) / n
+    top_count = (n * top_percent + 99) // 100
+    top = sorted(numbers, reverse=True)[:top_count]
+    return HeavyTail(
+        n=n,
+        excess_kurtosis=fourth / second**2 - 3.0,
+        top_percent=top_percent,
+        top_count=top_count,
+        top_share=math.fsum(top) / total,
+    )
+
+
+# --- A seeded percentile bootstrap for a difference in means -------------------------------
+
+_CHUNK_ELEMENTS = 2_000_000  # indices drawn at a time; the answer does not depend on it
+
+
+@dataclass(frozen=True, kw_only=True)
+class BootstrapInterval:
+    difference: float
+    ci_low: float
+    ci_high: float
+    confidence: float
+    resamples: int
+    seed: int
+
+
+def _bootstrap_means(values: np.ndarray, resamples: int, generator: np.random.PCG64) -> np.ndarray:
+    """The mean of `resamples` samples drawn with replacement, taken one after another.
+
+    An index is the high 32 bits of a raw 64-bit output times the group size, shifted down 32
+    bits: exact integer arithmetic, uniform to within size / 2^32, and always in range. The
+    draws are consumed in a fixed order, so the result does not depend on how they are chunked.
+    """
+    size = len(values)
+    rows_per_chunk = max(1, _CHUNK_ELEMENTS // size)
+    means = np.empty(resamples)
+    done = 0
+    while done < resamples:
+        rows = min(rows_per_chunk, resamples - done)
+        raw = generator.random_raw(rows * size)
+        indices = ((raw >> np.uint64(32)) * np.uint64(size)) >> np.uint64(32)
+        means[done : done + rows] = values[indices.reshape(rows, size)].sum(axis=1) / size
+        done += rows
+    return means
+
+
+def bootstrap_difference(
+    treatment: Sequence[float],
+    control: Sequence[float],
+    *,
+    seed: int,
+    alpha: float = 0.05,
+    resamples: int = 10_000,
+) -> BootstrapInterval:
+    """A percentile bootstrap (1 - alpha) interval for mean(treatment) - mean(control).
+
+    Each group is resampled with replacement `resamples` times; the interval runs from the
+    alpha/2 to the 1 - alpha/2 quantile of the resampled differences. The same values and seed
+    give the same interval on any machine with the same numpy, and a test pins one such answer
+    so that a changed random stream is noticed. The interval depends on the order of the values
+    (the loader puts them in a canonical order). The percentile method is a rough interval for
+    small groups; it is reported next to Welch's, not instead of it. Raises `StatsError` when a
+    group has fewer than 2 values or fewer than 5 resamples would fall in each tail.
+    """
+    _check_alpha(alpha)
+    if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
+        raise StatsError(f"seed must be a whole number of at least 0, got {seed!r}")
+    if isinstance(resamples, bool) or not isinstance(resamples, int) or resamples * alpha / 2 < 5:
+        raise StatsError(
+            f"resamples={resamples!r} leaves fewer than 5 resamples in each tail at alpha={alpha}"
+        )
+    a = np.asarray(_finite(treatment, "treatment"))
+    b = np.asarray(_finite(control, "control"))
+    for name, group in (("treatment", a), ("control", b)):
+        if len(group) < 2:
+            raise StatsError(f"{name} needs at least 2 values, got {len(group)}")
+    generator = np.random.PCG64(np.random.SeedSequence(seed))
+    differences = _bootstrap_means(a, resamples, generator) - _bootstrap_means(
+        b, resamples, generator
+    )
+    low, high = np.quantile(differences, [alpha / 2, 1 - alpha / 2])
+    return BootstrapInterval(
+        difference=math.fsum(a.tolist()) / len(a) - math.fsum(b.tolist()) / len(b),
+        ci_low=float(low),
+        ci_high=float(high),
+        confidence=1 - alpha,
+        resamples=resamples,
+        seed=seed,
+    )
+
+
+# --- A difference in ratios, by the delta method -------------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class RatioEstimate:
+    n: int
+    ratio: float
+    std_error: float
+
+
+def ratio_estimate(numerator: Sequence[float], denominator: Sequence[float]) -> RatioEstimate:
+    """The ratio mean(numerator) / mean(denominator) of per-unit quantities, and its error.
+
+    By the delta method, Var(Y/X) is about (1 / mu_X^2) * (var_Y - 2 R cov_XY + R^2 var_X) / n,
+    where R = mu_Y / mu_X and the variances and covariance are per unit. This is not the
+    variance of the unit-level ratios Y_i / X_i, which answers a different question whenever the
+    denominators differ. Reference: Deng, Knoblich and Lu, "Applying the Delta Method in Metric
+    Analytics" (2018, arXiv:1803.06336). Raises `StatsError` for fewer than 2 units, a mean
+    denominator of 0, or no variation in the ratio.
+    """
+    y, x = _finite(numerator, "numerator"), _finite(denominator, "denominator")
+    if len(y) != len(x):
+        raise StatsError(f"need one denominator per numerator, got {len(y)} and {len(x)}")
+    n = len(y)
+    if n < 2:
+        raise StatsError(f"need at least 2 units, got {n}")
+    mean_y, mean_x = math.fsum(y) / n, math.fsum(x) / n
+    if mean_x == 0:
+        raise StatsError("the mean denominator is 0, so the ratio is undefined")
+    var_y = math.fsum((v - mean_y) ** 2 for v in y) / (n - 1)
+    var_x = math.fsum((v - mean_x) ** 2 for v in x) / (n - 1)
+    cov = math.fsum((a - mean_y) * (b - mean_x) for a, b in zip(y, x, strict=True)) / (n - 1)
+    ratio = mean_y / mean_x
+    variance = (var_y - 2 * ratio * cov + ratio**2 * var_x) / (n * mean_x**2)
+    if variance <= 0:  # a tiny negative value is rounding; zero means the ratio never varies
+        raise StatsError("the ratio does not vary across units, so its standard error is 0")
+    return RatioEstimate(n=n, ratio=ratio, std_error=math.sqrt(variance))
+
+
+@dataclass(frozen=True, kw_only=True)
+class RatioDifference:
+    ratio_treatment: float
+    ratio_control: float
+    difference: float
+    std_error: float
+    z_statistic: float
+    p_value: float
+    ci_low: float
+    ci_high: float
+    confidence: float
+
+
+def ratio_difference(
+    numerator_treatment: Sequence[float],
+    denominator_treatment: Sequence[float],
+    numerator_control: Sequence[float],
+    denominator_control: Sequence[float],
+    *,
+    alpha: float = 0.05,
+) -> RatioDifference:
+    """Treatment minus control for a ratio metric: the groups are independent, so the variances
+    of the two ratios add, and the test and interval use the normal approximation."""
+    _check_alpha(alpha)
+    treatment = ratio_estimate(numerator_treatment, denominator_treatment)
+    control = ratio_estimate(numerator_control, denominator_control)
+    std_error = math.hypot(treatment.std_error, control.std_error)
+    difference = treatment.ratio - control.ratio
+    z_statistic = difference / std_error
+    margin = float(stats.norm.ppf(1 - alpha / 2)) * std_error
+    return RatioDifference(
+        ratio_treatment=treatment.ratio,
+        ratio_control=control.ratio,
         difference=difference,
         std_error=std_error,
         z_statistic=z_statistic,
