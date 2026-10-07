@@ -18,6 +18,7 @@ differ between scipy versions, so reports round what they print.
 from __future__ import annotations
 
 import math
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -34,6 +35,27 @@ class StatsError(ValueError):
 def _check_alpha(alpha: float) -> None:
     if not 0 < alpha < 1:
         raise StatsError(f"alpha must be between 0 and 1, got {alpha!r}")
+
+
+def _is_constant(values: Sequence[float]) -> bool:
+    """True when the values are equal up to a few units of floating-point rounding.
+
+    Exact repeats of a number such as 0.7 do not average back to 0.7 (`fsum([0.7] * 3) / 3`
+    is not 0.7), so their variance comes out as rounding noise of about 1e-32 instead of 0 and
+    an exact test for 0 misses them. The tolerance is relative, so it holds at any scale.
+    """
+    low, high = min(values), max(values)
+    return high - low <= 8 * sys.float_info.epsilon * max(abs(low), abs(high))
+
+
+def _is_whole(value: float) -> bool:
+    """A whole number, as an int, a numpy integer or a float without a fraction; not a bool."""
+    if isinstance(value, bool | np.bool_):
+        return False
+    try:
+        return math.isfinite(value) and int(value) == value
+    except (TypeError, ValueError, OverflowError):
+        return False
 
 
 def _finite(values: Sequence[float], name: str) -> list[float]:
@@ -64,13 +86,13 @@ def srm_test(
     The expected count of an arm is the total times its allocated share; the statistic is
     sum((observed - expected)^2 / expected) on (arms - 1) degrees of freedom, and the mismatch
     is flagged when p < alpha. An arm with no assignments counts as 0 rather than being left
-    out, so a vanished arm is the strongest possible mismatch. Reference: Fabijan et al.,
+    out, so a vanished arm shows up as the mismatch it is. Reference: Fabijan et al.,
     "Diagnosing Sample Ratio Mismatch in Online Controlled Experiments" (KDD 2019).
     """
     _check_alpha(alpha)
     if len(observed) != len(allocation) or len(observed) < 2:
         raise StatsError("need one count per arm for at least two arms, and one share per count")
-    if any(isinstance(n, bool) or int(n) != n or n < 0 for n in observed):
+    if not all(_is_whole(n) and n >= 0 for n in observed):
         raise StatsError(f"counts must be whole numbers of at least 0, got {list(observed)!r}")
     shares = _finite(allocation, "allocation")
     if any(share <= 0 for share in shares) or abs(math.fsum(shares) - 1.0) > 1e-9:
@@ -117,6 +139,8 @@ class MeanDifference:
 def _mean_and_variance(values: list[float], name: str) -> tuple[float, float]:
     if len(values) < 2:
         raise StatsError(f"{name} needs at least 2 values, got {len(values)}")
+    if _is_constant(values):
+        return values[0], 0.0
     mean = math.fsum(values) / len(values)
     variance = math.fsum((value - mean) ** 2 for value in values) / (len(values) - 1)
     return mean, variance
@@ -203,6 +227,8 @@ def two_proportion_difference(
         ("treatment", successes_treatment, n_treatment),
         ("control", successes_control, n_control),
     ):
+        if not (_is_whole(successes) and _is_whole(n)):
+            raise StatsError(f"{name}: counts must be whole numbers, got {successes} and {n}")
         if n < 1 or not 0 <= successes <= n:
             raise StatsError(f"{name}: {successes} successes out of {n} is not possible")
     rate_a, rate_b = successes_treatment / n_treatment, successes_control / n_control
@@ -272,7 +298,7 @@ def heavy_tail_measures(values: Sequence[float], *, top_percent: int = 1) -> Hea
     n = len(numbers)
     mean = total / n
     second = math.fsum((v - mean) ** 2 for v in numbers) / n
-    if second == 0:
+    if second == 0 or _is_constant(numbers):
         raise StatsError("the values do not vary, so the kurtosis is undefined")
     fourth = math.fsum((v - mean) ** 4 for v in numbers) / n
     top_count = (n * top_percent + 99) // 100
@@ -346,11 +372,13 @@ def bootstrap_difference(
         raise StatsError(
             f"resamples={resamples!r} leaves fewer than 5 resamples in each tail at alpha={alpha}"
         )
-    a = np.asarray(_finite(treatment, "treatment"))
-    b = np.asarray(_finite(control, "control"))
-    for name, group in (("treatment", a), ("control", b)):
+    treated, controls = _finite(treatment, "treatment"), _finite(control, "control")
+    for name, group in (("treatment", treated), ("control", controls)):
         if len(group) < 2:
             raise StatsError(f"{name} needs at least 2 values, got {len(group)}")
+    if _is_constant(treated) and _is_constant(controls):
+        raise StatsError("neither group varies, so the interval would have no width")
+    a, b = np.asarray(treated), np.asarray(controls)
     generator = np.random.PCG64(np.random.SeedSequence(seed))
     differences = _bootstrap_means(a, resamples, generator) - _bootstrap_means(
         b, resamples, generator
@@ -400,7 +428,10 @@ def ratio_estimate(numerator: Sequence[float], denominator: Sequence[float]) -> 
     cov = math.fsum((a - mean_y) * (b - mean_x) for a, b in zip(y, x, strict=True)) / (n - 1)
     ratio = mean_y / mean_x
     variance = (var_y - 2 * ratio * cov + ratio**2 * var_x) / (n * mean_x**2)
-    if variance <= 0:  # a tiny negative value is rounding; zero means the ratio never varies
+    # Rounding leaves a residue of either sign when y is exactly proportional to x (or both are
+    # constant); anything below 1e-13 of the variance of the two inputs is that residue.
+    residue = 1e-13 * (var_y + ratio**2 * var_x) / (n * mean_x**2)
+    if variance <= residue or (_is_constant(y) and _is_constant(x)):
         raise StatsError("the ratio does not vary across units, so its standard error is 0")
     return RatioEstimate(n=n, ratio=ratio, std_error=math.sqrt(variance))
 
@@ -535,8 +566,8 @@ def cohort_heterogeneity(
 # --- Several comparisons at once -----------------------------------------------------------
 #
 # Dunnett's test, which section 9 names as the less conservative choice for several arms
-# against one control, is not implemented: it needs the raw samples (scipy.stats.dunnett takes
-# them), and the rules chosen for milestone 4 work from p-values.
+# against one control, is not implemented: the corrections here work from p-values, and
+# scipy.stats.dunnett (which takes the samples) can be added if a rule needs it.
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -583,7 +614,8 @@ def benjamini_hochberg(p_values: Sequence[float], *, alpha: float = 0.05) -> Adj
     With m comparisons and the p-values sorted ascending, the adjusted value of the i-th is the
     smallest of m * p_j / j over all j from i upward, capped at 1; ties share one value. It is
     less conservative than Bonferroni and assumes independent or positively dependent tests.
-    Reference: Benjamini and Hochberg, "Controlling the false discovery rate" (1995).
+    Reference: Benjamini and Hochberg, "Controlling the false discovery rate" (1995); that it
+    also holds under positive dependence is Benjamini and Yekutieli (2001).
     """
     _check_alpha(alpha)
     values = _check_p_values(p_values)

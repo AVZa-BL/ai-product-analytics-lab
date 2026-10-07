@@ -503,7 +503,7 @@ Milestone 4 builds the results review. These are the decisions made before it st
 
 ### 20.2 What Referee reads
 
-- `review-results` reads a directory of three CSV files in full: `experiment_assignments.csv`, `experiment_exposures.csv` and `experiment_outcomes.csv`. They have the columns of the lab's raw tables of the same names, which `analytics-lab/docs/architecture/hybrid_subscription_raw_contract.md` documents (UTF-8, a header row, ISO 8601 UTC timestamps). The analytics lab, not Referee, writes them from its Parquet tables. Referee reads no Parquet and has no dependency on the lab.
+- `review-results` reads a directory of three CSV files in full: `experiment_assignments.csv`, `experiment_exposures.csv` and `experiment_outcomes.csv`. They carry the columns of the lab's raw tables of the same names, which `analytics-lab/docs/architecture/hybrid_subscription_raw_contract.md` describes as Parquet tables. The CSV form is defined by the loader, `referee/src/referee/data.py`: UTF-8, a header row, the columns it requires, and ISO 8601 timestamps with a zero UTC offset. The analytics lab, not Referee, writes them from its Parquet tables. Referee reads no Parquet and has no dependency on the lab.
 - The input is never truncated or sampled. A statistic computed from some of the rows is not the statistic of the experiment, and the first rows are the earliest assignments, which is where a novelty effect sits.
 - The data's `experiment_id` column selects the experiment. The lab's id (`hybrid_offer_page`) differs from the spec's example id, so the command takes the data's id explicitly and, when it is absent, lists the ids the files contain.
 - The files carry one row per player in the assignments and the outcomes tables, so the outcomes are joined to the arm through the assignments. The outcomes hold seven-day totals only, with no daily series.
@@ -526,6 +526,7 @@ Milestone 4 builds the results review. These are the decisions made before it st
 
 - A daily outcomes table is not added. It would allow a curve by days since exposure within a player, but it changes the generator's tables and the lab's raw contract, and the cohort test answers the question the rule asks.
 - Open for 4b: the thresholds. RES-007's significance level, and whether and where RES-012 escalates from a warning to a blocker (no published threshold for the share of late-exposed players is known to the author, so any value is a judgement and is written as one). Open for 4c: the writer of the three CSV files in the lab.
-- `scipy` becomes a core dependency in 4a, for the chi-squared distribution of the sample-ratio check, as section 17.5 anticipated. `statsmodels` stays a development dependency, used to validate the statistics.
+- `scipy` and `numpy` become core dependencies in 4a. `scipy` supplies the distributions (chi-squared for the sample-ratio check and the cohort test, t and normal for the intervals and tests), as section 17.5 anticipated for the sample-ratio check; `numpy` draws the bootstrap resamples. `statsmodels` stays a development dependency, used to validate the statistics.
+- Dunnett's test, which section 9 names, is not implemented (section 9 allows that). The corrections are Bonferroni and Benjamini-Hochberg, applied to p-values.
 
 Delivered in: 4a (this amendment), 4b, 4c.

@@ -6,10 +6,17 @@ experiment is read. Nothing here samples, truncates or caps: a statistic compute
 the rows is not the statistic of the experiment, and the first rows are the earliest
 assignments, which is where a novelty effect sits.
 
-A file that does not match the contract is refused with a `DataError` that lists every
-problem found, each with its file, line and column, so one run shows what to fix. Rows come
-back in a canonical order (by player, not by file position), so a seeded bootstrap gives the
-same answer however the export was sorted.
+A file that does not match the contract is refused with a `DataError` listing the problems
+found, each with its file and, where it has one, its line and column. They come in two stages:
+every bad cell, short row and missing file or column is listed first (a CSV syntax error ends
+the reading of its file at that point), and only when there are none are the rules across the
+files checked, so fixing one stage can show the next. `total` counts the problems of the stage
+that failed. Rows come back in a canonical order (by player, not by file position), so a
+seeded bootstrap gives the same answer however the export was sorted.
+
+A file cut short in the middle of its last line is refused, because the last row is then
+missing or incomplete. A cut that lands exactly between two rows, or inside the last cell of
+the last row, cannot be told from a complete file.
 """
 
 from __future__ import annotations
@@ -109,10 +116,27 @@ class _Problems:
             raise DataError(self.kept, self.total)
 
 
+def _lines(handle: Iterator[str], seen: list) -> Iterator[str]:
+    """The lines of a file; `seen` becomes [lines read so far, the last one].
+
+    The last line tells a cut-off ending, and the count locates a syntax error, which
+    `csv.DictReader.line_num` does not (it is updated only after a row is read).
+    """
+    for text in handle:
+        seen[0] += 1
+        seen[1] = text
+        yield text
+
+
 def _rows(
     directory: Path, name: str, problems: _Problems
 ) -> Iterator[tuple[int, dict[str, str | None]]]:
-    """Yield (line, row) for each data row of a file, or record why it cannot be read."""
+    """Yield (line, row) for each data row of a file, or record why it cannot be read.
+
+    `line` is the line on which the record ends, which is its only line unless a quoted field
+    contains a newline. A short final row of a file that does not end in a newline is marked
+    with the key "\0cut": the file was most likely cut off in the middle of it.
+    """
     path = directory / name
     try:
         handle = path.open(encoding="utf-8-sig", newline="")
@@ -122,9 +146,12 @@ def _rows(
     except OSError as error:
         problems.add(f"{name}: cannot be opened ({error.strerror or error})")
         return
+    seen: list = [0, ""]
     with handle:
         try:
-            reader = csv.DictReader(handle, restkey="\0extra", restval=None, strict=True)
+            reader = csv.DictReader(
+                _lines(handle, seen), restkey="\0extra", restval=None, strict=True
+            )
             header = reader.fieldnames
             if not header:
                 problems.add(f"{name}: the file is empty; it needs a header row")
@@ -137,20 +164,35 @@ def _rows(
             if missing:
                 problems.add(f"{name}: missing required columns {missing}")
                 return
+            held: tuple[int, dict[str, str | None]] | None = None
             for row in reader:
-                yield reader.line_num, row
-        except (csv.Error, UnicodeDecodeError) as error:
-            problems.add(f"{name}: not readable as UTF-8 CSV ({error})")
+                if held is not None:
+                    yield held
+                held = (reader.line_num, row)
+            if held is not None:
+                line, row = held
+                if None in row.values() and not seen[1].endswith(("\n", "\r")):
+                    row["\0cut"] = ""
+                yield line, row
+        except UnicodeDecodeError as error:
+            problems.add(f"{name}: not readable as UTF-8 ({error})")
+        except csv.Error as error:
+            where = f"{name}:{seen[0]}" if seen[0] else name
+            problems.add(f"{where}: not readable as CSV ({error}); reading of this file stops here")
 
 
 def list_experiment_ids(directory: str | Path) -> tuple[str, ...]:
-    """The experiment IDs the three files contain, sorted. Reads only the ID column."""
+    """The experiment IDs the three files contain, sorted.
+
+    Every row is read, but only the `experiment_id` values are kept; a row that is cut off
+    before the end of its ID does not count.
+    """
     ids: set[str] = set()
     problems = _Problems()
     for name in _REQUIRED:
         for _, row in _rows(Path(directory), name, problems):
             value = row.get("experiment_id")
-            if value:
+            if value and "\0cut" not in row:
                 ids.add(value)
     problems.raise_if_any()
     return tuple(sorted(ids))
@@ -240,10 +282,24 @@ def _read[T](
 ) -> list[tuple[int, T]]:
     """Every row of `experiment_id` in a file, built by `build`, with its line number.
 
-    Rows of other experiments are skipped without being checked.
+    Rows of other experiments are skipped without being checked, but a row that ends before
+    its `experiment_id` cell, or the cut-off last row of a file, belongs to no experiment and
+    is a problem.
     """
     built: list[tuple[int, T]] = []
     for line, row in _rows(directory, name, problems):
+        if "\0cut" in row:
+            problems.add(
+                f"{name}:{line}: the file ends in the middle of a row "
+                "(fewer fields than the header)"
+            )
+            continue
+        if row.get("experiment_id") is None:
+            problems.add(
+                f"{name}:{line}: column 'experiment_id': the row has no value "
+                "(fewer fields than the header)"
+            )
+            continue
         if row.get("experiment_id") != experiment_id:
             continue
         if "\0extra" in row:
@@ -258,9 +314,11 @@ def _read[T](
 def load_export(directory: str | Path, experiment_id: str) -> ExperimentData:
     """Read every row of `experiment_id` from the three files in `directory`.
 
-    Raises `DataError` listing every problem found: a missing file or column, a value that is
-    not what its column promises, a player assigned twice, an exposure or outcome for a player
-    who was never assigned, or an assigned player with no outcome.
+    Raises `DataError` listing the problems found, in two stages (see the module docstring):
+    first a missing file or column, a value that is not what its column promises, a short or
+    cut-off row or a CSV syntax error; then, once there are none, a player assigned twice, an
+    exposure or outcome for a player who was never assigned, or an assigned player with no
+    outcome.
     """
     folder = Path(directory)
     if not folder.is_dir():

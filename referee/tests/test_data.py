@@ -348,7 +348,7 @@ def test_a_file_that_is_not_utf8_is_refused_by_name(tmp_path: Path) -> None:
     (tmp_path / data.EXPOSURES_FILE).write_bytes(b"experiment_id,player_id\n\xff\xfe,p1\n")
 
     assert any(
-        p.startswith("experiment_exposures.csv: not readable as UTF-8 CSV")
+        p.startswith("experiment_exposures.csv: not readable as UTF-8 (")
         for p in _problems(tmp_path)
     )
 
@@ -431,3 +431,285 @@ def test_an_experiment_id_that_only_one_file_holds_is_listed_too(tmp_path: Path)
         "x1",
         "y2",
     )
+
+
+# --- A file cut short, and what a short row means -------------------------------------------
+
+
+def _replace_last_line(path: Path, text: str) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    path.write_text("".join(lines[:-1]) + text, encoding="utf-8")
+
+
+def test_a_final_row_cut_off_inside_its_experiment_id_is_a_problem_not_a_silent_loss(
+    tmp_path: Path,
+) -> None:
+    export(tmp_path)
+    _replace_last_line(tmp_path / data.EXPOSURES_FILE, "e")  # was "e1,p4,2026-04-26 ..."
+
+    assert _problems(tmp_path) == (
+        "experiment_exposures.csv:5: the file ends in the middle of a row "
+        "(fewer fields than the header)",
+    )
+
+
+@pytest.mark.parametrize("cut", ["e1", "e1,p4", "e1,p4,2026-04-26 12:3", "other,p4", "e"])
+def test_any_cut_of_the_last_line_that_leaves_a_short_unterminated_row_is_reported(
+    tmp_path: Path, cut: str
+) -> None:
+    export(tmp_path)
+    _replace_last_line(tmp_path / data.EXPOSURES_FILE, cut)
+
+    (problem,) = _problems(tmp_path)
+
+    assert "the file ends in the middle of a row" in problem
+
+
+def test_the_cut_fragment_is_not_listed_as_an_experiment(tmp_path: Path) -> None:
+    export(tmp_path)
+    _replace_last_line(tmp_path / data.EXPOSURES_FILE, "hybrid_")
+
+    assert list_experiment_ids(tmp_path) == ("e1",)
+
+
+def test_a_complete_last_row_with_no_trailing_newline_is_read(tmp_path: Path) -> None:
+    export(tmp_path)
+    for name in (data.ASSIGNMENTS_FILE, data.EXPOSURES_FILE, data.OUTCOMES_FILE):
+        path = tmp_path / name
+        path.write_text(path.read_text(encoding="utf-8").rstrip("\n"), encoding="utf-8")
+
+    loaded = load_export(tmp_path, "e1")
+
+    assert (len(loaded.assignments), len(loaded.exposures), len(loaded.outcomes)) == (4, 4, 4)
+
+
+def test_a_crlf_file_with_a_terminated_last_row_is_read(tmp_path: Path) -> None:
+    export(tmp_path)
+    for name in (data.ASSIGNMENTS_FILE, data.EXPOSURES_FILE, data.OUTCOMES_FILE):
+        path = tmp_path / name
+        path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+
+    assert len(load_export(tmp_path, "e1").exposures) == 4
+
+
+def test_a_short_row_that_ends_before_its_experiment_id_cell_is_a_problem(
+    tmp_path: Path,
+) -> None:
+    # as in the lab's export, the exposure's own id comes first and the experiment id second
+    columns = ["exposure_id", "experiment_id", "player_id", "exposed_at_utc"]
+    exposures = [{"exposure_id": f"x{i}", **row} for i, row in enumerate(_exposures())]
+    export(tmp_path, exposures=exposures, exposure_columns=columns)
+    path = tmp_path / data.EXPOSURES_FILE
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    lines.insert(2, "x9\n")  # terminated, in the middle, and over before the experiment_id cell
+    path.write_text("".join(lines), encoding="utf-8")
+
+    (problem,) = _problems(tmp_path)
+
+    assert problem == (
+        "experiment_exposures.csv:3: column 'experiment_id': the row has no value "
+        "(fewer fields than the header)"
+    )
+
+
+def test_a_short_row_of_another_experiment_in_the_middle_of_a_file_is_still_skipped(
+    tmp_path: Path,
+) -> None:
+    export(tmp_path)
+    path = tmp_path / data.EXPOSURES_FILE
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    lines.insert(2, "other,p9\n")  # short, complete other id, in the middle, terminated
+    path.write_text("".join(lines), encoding="utf-8")
+
+    assert len(load_export(tmp_path, "e1").exposures) == 4
+
+
+def test_a_csv_syntax_error_names_its_line_and_says_reading_of_the_file_stops(
+    tmp_path: Path,
+) -> None:
+    export(tmp_path)
+    path = tmp_path / data.OUTCOMES_FILE
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    lines[2] = 'e1,p2,"5"x,1,4.99,2026-04-12 10:00:00+00\n'  # text after a closing quote
+    path.write_text("".join(lines), encoding="utf-8")
+
+    (problem,) = _problems(tmp_path)
+
+    assert problem.startswith("experiment_outcomes.csv:3: not readable as CSV")
+    assert "reading of this file stops here" in problem
+
+
+def test_the_two_stages_of_problems_are_reported_one_after_the_other(tmp_path: Path) -> None:
+    assignments = [
+        *_assignments(),
+        _row(ASSIGNMENT_COLUMNS, "e1", "p2", "control", "2026-04-20 00:00:00+00", 1),
+    ]
+    outcomes = _outcomes()
+    outcomes[0]["sessions_7d"] = "x"
+    export(tmp_path, assignments=assignments, outcomes=outcomes)
+
+    first = _problems(tmp_path)
+    export(tmp_path, assignments=assignments)  # the bad cell is fixed
+    second = _problems(tmp_path)
+
+    assert len(first) == 1 and "must be a whole number" in first[0]
+    assert len(second) == 1 and "is assigned twice" in second[0]
+
+
+def test_a_short_last_row_that_is_terminated_and_belongs_to_another_experiment_is_skipped(
+    tmp_path: Path,
+) -> None:
+    export(tmp_path)
+    path = tmp_path / data.EXPOSURES_FILE
+    path.write_text(path.read_text(encoding="utf-8") + "other,p9\n", encoding="utf-8")
+
+    assert len(load_export(tmp_path, "e1").exposures) == 4
+
+
+def test_a_short_terminated_last_row_that_ends_before_its_id_is_an_id_problem_not_a_cut(
+    tmp_path: Path,
+) -> None:
+    columns = ["exposure_id", "experiment_id", "player_id", "exposed_at_utc"]
+    exposures = [{"exposure_id": f"x{i}", **row} for i, row in enumerate(_exposures())]
+    export(tmp_path, exposures=exposures, exposure_columns=columns)
+    path = tmp_path / data.EXPOSURES_FILE
+    path.write_text(path.read_text(encoding="utf-8") + "x9\n", encoding="utf-8")
+
+    (problem,) = _problems(tmp_path)
+
+    assert "column 'experiment_id': the row has no value" in problem
+
+
+def test_a_file_with_old_style_carriage_return_line_ends_is_read_and_its_cut_is_still_seen(
+    tmp_path: Path,
+) -> None:
+    export(tmp_path)
+    path = tmp_path / data.EXPOSURES_FILE
+    text = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r")
+    path.write_bytes(text + b"other,p9\r")  # a terminated short row of another experiment
+    assert len(load_export(tmp_path, "e1").exposures) == 4
+
+    path.write_bytes(text + b"e1,p4")  # an unterminated one
+    assert "the file ends in the middle of a row" in _problems(tmp_path)[0]
+
+
+def test_a_complete_row_with_an_empty_experiment_id_is_a_different_experiment_and_skipped(
+    tmp_path: Path,
+) -> None:
+    exposures = [*_exposures(), _row(EXPOSURE_COLUMNS, "", "p9", "2026-04-11 00:05:00+00", 1)]
+
+    assert len(load_export(export(tmp_path, exposures=exposures), "e1").exposures) == 4
+
+
+# --- What the reviewers found unpinned in the loader ---------------------------------------
+
+
+def test_a_directory_may_be_given_as_a_string_as_the_command_line_will(tmp_path: Path) -> None:
+    export(tmp_path)
+
+    assert load_export(str(tmp_path), "e1") == load_export(tmp_path, "e1")
+    assert list_experiment_ids(str(tmp_path)) == ("e1",)
+
+
+def test_a_file_that_cannot_be_opened_is_named(tmp_path: Path) -> None:
+    export(tmp_path)
+    (tmp_path / data.EXPOSURES_FILE).unlink()
+    (tmp_path / data.EXPOSURES_FILE).mkdir()  # a directory where the file should be
+
+    assert any(
+        p.startswith("experiment_exposures.csv: cannot be opened") for p in _problems(tmp_path)
+    )
+
+
+def test_a_negative_config_version_on_an_exposure_is_refused(tmp_path: Path) -> None:
+    rows = _exposures()
+    rows[0]["arm_config_version"] = "-1"
+
+    (problem,) = _problems(export(tmp_path, exposures=rows))
+
+    assert problem.startswith(
+        "experiment_exposures.csv:2: column 'arm_config_version': must be at least 0"
+    )
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_two_exposures_at_the_same_instant_come_back_in_a_fixed_order_whatever_the_file_order(
+    tmp_path: Path, reverse: bool
+) -> None:
+    same = [
+        _row(EXPOSURE_COLUMNS, "e1", "p1", "2026-04-11 00:05:00+00", 2),
+        _row(EXPOSURE_COLUMNS, "e1", "p1", "2026-04-11 00:05:00+00", 1),
+    ]
+    rows = [*_exposures()[1:], *(same[::-1] if reverse else same)]
+
+    loaded = load_export(export(tmp_path, exposures=rows), "e1")
+
+    assert [e.config_version for e in loaded.exposures if e.player_id == "p1"] == [1, 2]
+
+
+def test_the_problems_of_the_second_stage_come_in_a_fixed_order_with_exact_text(
+    tmp_path: Path,
+) -> None:
+    assignments = [
+        *_assignments(),
+        _row(ASSIGNMENT_COLUMNS, "e1", "p2", "control", "2026-04-20 00:00:00+00", 1),
+    ]
+    outcomes = [*_outcomes()[:3], _row(OUTCOME_COLUMNS, "e1", "ghost", 1, 0, "0.0", "")]
+    exposures = [*_exposures(), _row(EXPOSURE_COLUMNS, "e1", "ghost", "2026-04-11 00:05:00+00", 1)]
+
+    with pytest.raises(DataError) as caught:
+        load_export(
+            export(tmp_path, assignments=assignments, outcomes=outcomes, exposures=exposures), "e1"
+        )
+
+    assert caught.value.problems == (
+        "experiment_assignments.csv:6: player_id 'p2' is assigned twice (first on line 3)",
+        "experiment_outcomes.csv:5: player_id 'ghost' was never assigned",
+        "experiment_assignments.csv:5: player_id 'p4' has no outcome row",
+        "experiment_exposures.csv:6: player_id 'ghost' was never assigned",
+    )
+    assert caught.value.total == 4
+
+
+def test_the_error_message_is_singular_for_one_problem_and_starts_with_the_first() -> None:
+    one = DataError(["a: first"], 1)
+    many = DataError(["a: first", "b: second"], 2)
+
+    assert str(one) == "the experiment export has 1 problem; first: a: first"
+    assert str(many) == "the experiment export has 2 problems; first: a: first"
+
+
+def test_the_listing_keeps_ten_thousand_problems_by_default() -> None:
+    assert data._MAX_PROBLEMS_KEPT == 10_000
+
+
+def test_a_directory_that_is_missing_and_an_experiment_that_is_absent_each_count_as_one_problem(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(DataError) as nowhere:
+        load_export(tmp_path / "nowhere", "e1")
+    export(tmp_path)
+    with pytest.raises(DataError) as absent:
+        load_export(tmp_path, "missing")
+
+    assert nowhere.value.total == 1 and absent.value.total == 1
+
+
+def test_a_malformed_row_of_another_experiment_does_not_block_loading(tmp_path: Path) -> None:
+    export(tmp_path)
+    path = tmp_path / data.OUTCOMES_FILE
+    path.write_text(
+        path.read_text(encoding="utf-8") + "other,p9,1,0,0.0,,extra,fields,here\n", encoding="utf-8"
+    )
+
+    assert len(load_export(tmp_path, "e1").outcomes) == 4
+
+
+def test_listing_the_experiments_of_an_export_with_a_missing_file_is_refused(
+    tmp_path: Path,
+) -> None:
+    export(tmp_path)
+    (tmp_path / data.OUTCOMES_FILE).unlink()
+
+    with pytest.raises(DataError, match="missing"):
+        list_experiment_ids(tmp_path)

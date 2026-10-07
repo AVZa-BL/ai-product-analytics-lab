@@ -4,6 +4,7 @@ import json
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -141,9 +142,20 @@ def test_the_milestone_4_amendment_names_rules_and_files_that_exist_and_none_bui
     assert "analytics-lab/docs/architecture/hybrid_subscription_raw_contract.md" in names
     assert rule_ids - {"RES-012", "RES-013"} <= catalogue, "section 20 names a rule section 8 lacks"
     assert not {"RES-012", "RES-013"} & catalogue, "section 8 must keep the seed list as written"
-    for name in names:
+    for name in [*names, *re.findall(r"`(referee/[\w/.\-]+)`", amendment)]:
         assert (ROOT.parent / name).exists(), name
+    assert "referee/src/referee/data.py" in amendment
     assert "1,000 rows" in amendment and "feat/referee-results-data" in amendment
     assert not ({"RES-012", "RES-013"} & {rule.id for rule in ALL_RULES}), (
         "the results rules arrive in 4b; update this test and section 20.4 when they do"
     )
+
+
+def test_the_readme_names_every_runtime_dependency_the_project_declares() -> None:
+    declared = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    requirements = declared["project"]["dependencies"]
+    names = [re.match(r"[A-Za-z0-9_.-]+", requirement).group(0) for requirement in requirements]
+
+    assert {"numpy", "pyyaml", "scipy"} <= {n.lower() for n in names}
+    for name in names:
+        assert name.lower() in README.lower(), f"the README does not name the dependency {name}"

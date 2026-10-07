@@ -899,3 +899,230 @@ def test_input_that_cannot_be_corrected_is_refused_with_the_reason(
 ) -> None:
     with pytest.raises(StatsError, match=fragment):
         method(p_values, alpha=alpha)
+
+
+# --- Groups with no variation, whose floating-point mean is not their value -----------------
+
+# Non-round constants such as 0.7: fsum([0.7] * 3) / 3 is not 0.7, so an exact test for a zero
+# variance misses them. About one in ten of these cents values and sizes is affected.
+CONSTANTS = [(cents / 100, n) for cents in range(1, 200) for n in (2, 3, 5, 10, 29)]
+
+
+def test_the_scan_of_constants_really_contains_groups_whose_mean_is_not_their_value() -> None:
+    affected = [(v, n) for v, n in CONSTANTS if math.fsum([v] * n) / n != v]
+
+    assert len(affected) > 50  # the cases below are not passing by luck
+
+
+def test_two_constant_groups_are_refused_by_welch_whatever_the_value() -> None:
+    for value, n in CONSTANTS:
+        with pytest.raises(StatsError, match="neither group varies"):
+            welch_difference([value] * n, [value] * n)
+        with pytest.raises(StatsError, match="neither group varies"):
+            welch_difference([value] * n, [value * 2] * (n + 1))
+
+
+def test_the_examples_the_review_found_are_refused() -> None:
+    for treatment, control in (
+        ([0.7] * 3, [1.4] * 5),
+        ([0.1] * 3, [0.1] * 3),
+        ([0.1] * 3, [0.2] * 7),
+    ):
+        with pytest.raises(StatsError, match="neither group varies"):
+            welch_difference(treatment, control)
+
+
+@pytest.mark.filterwarnings("ignore:Precision loss")  # scipy's own warning about its reference
+def test_a_constant_group_against_a_varying_one_is_still_compared() -> None:
+    varying = [1.0, 2.0, 3.5]  # sample variance 19/12, so the error is that group's alone
+    for value, n in CONSTANTS[::7]:
+        result = welch_difference([value] * n, varying)
+        reference = stats.ttest_ind([value] * n, varying, equal_var=False)
+
+        assert result.std_error == pytest.approx(math.sqrt(19 / 12 / 3), rel=1e-9)
+        assert result.p_value == pytest.approx(reference.pvalue, rel=1e-6, abs=0)
+
+
+def test_a_constant_sample_has_no_kurtosis_whatever_the_value() -> None:
+    for value, n in CONSTANTS:
+        with pytest.raises(StatsError, match="do not vary"):
+            heavy_tail_measures([value] * n)
+
+
+def test_a_ratio_that_is_exactly_proportional_to_its_denominator_has_no_error() -> None:
+    denominators = [0.1 * k for k in (1, 2, 3, 4, 5, 7)]
+    for factor_cents in range(1, 150):
+        factor = factor_cents / 100
+        with pytest.raises(StatsError, match="does not vary"):
+            ratio_estimate([factor * d for d in denominators], denominators)
+
+
+def test_a_ratio_of_two_constants_has_no_error_whatever_the_values() -> None:
+    for value, n in CONSTANTS:  # all of them: some sizes leave no rounding residue to catch
+        with pytest.raises(StatsError, match="does not vary"):
+            ratio_estimate([value] * n, [value / 3 + 0.1] * n)
+
+
+def test_two_constant_groups_have_no_bootstrap_interval() -> None:
+    for value, n in CONSTANTS[::9]:
+        with pytest.raises(StatsError, match="neither group varies"):
+            bootstrap_difference([value] * n, [value] * n, seed=1)
+
+
+@pytest.mark.parametrize("scale", [1e-15, 1e-9, 1.0, 1e9])
+@pytest.mark.parametrize("offset", [0.0, 1.0])
+def test_real_spread_is_never_mistaken_for_no_variation_at_any_scale(
+    scale: float, offset: float
+) -> None:
+    rng = random.Random(31)
+    a = [offset * scale + scale * rng.gauss(0.0, 1e-3) for _ in range(40)]
+    b = [offset * scale + scale * rng.gauss(0.0, 1e-3) for _ in range(35)]
+
+    welch = welch_difference(a, b)
+    reference = stats.ttest_ind(a, b, equal_var=False)
+
+    assert welch.p_value == pytest.approx(reference.pvalue, rel=1e-6, abs=0)
+    assert heavy_tail_measures([abs(v) + scale for v in a]).excess_kurtosis == pytest.approx(
+        stats.kurtosis([abs(v) + scale for v in a]), rel=1e-9
+    )
+    assert bootstrap_difference(a, b, seed=2, resamples=400).ci_low < welch.ci_high
+
+
+def test_a_ratio_with_a_little_real_noise_still_has_an_error_at_any_scale() -> None:
+    for scale in (1e-9, 1.0, 1e9):
+        rng = random.Random(5)
+        denominators = [scale * (1 + rng.random()) for _ in range(200)]
+        numerators = [0.8 * d + scale * rng.gauss(0, 1e-3) for d in denominators]
+
+        assert ratio_estimate(numerators, denominators).std_error > 0
+
+
+# --- Counts must be whole numbers --------------------------------------------------------
+
+
+def test_a_fractional_count_is_refused_by_the_proportion_test_and_the_sample_ratio_test() -> None:
+    with pytest.raises(StatsError, match="whole numbers"):
+        two_proportion_difference(1.5, 10, 2, 10)
+    with pytest.raises(StatsError, match="whole numbers"):
+        two_proportion_difference(1, 10.5, 2, 10)
+    with pytest.raises(StatsError, match="whole numbers"):
+        srm_test([10.5, 12], [0.5, 0.5])
+
+
+@pytest.mark.parametrize("bad", [math.nan, math.inf, np.bool_(True), True, "7"])
+def test_counts_that_are_not_numbers_or_are_booleans_are_refused(bad: object) -> None:
+    with pytest.raises(StatsError):
+        srm_test([10, bad], [0.5, 0.5])
+    with pytest.raises(StatsError):
+        two_proportion_difference(bad, 10, 2, 10)
+
+
+def test_whole_counts_in_other_forms_are_accepted() -> None:
+    assert srm_test([np.int64(40), 60.0], [0.5, 0.5]).observed == (40, 60)
+    assert (
+        two_proportion_difference(np.int64(30), np.int32(200), 20.0, 200).difference
+        == two_proportion_difference(30, 200, 20, 200).difference
+    )
+
+
+def test_values_that_differ_only_by_rounding_noise_are_not_a_spread() -> None:
+    noise = [0.1 + 0.2, 0.3, 0.1 * 3, 0.3000000000000001]  # four spellings of "about 0.3"
+
+    with pytest.raises(StatsError, match="neither group varies"):
+        welch_difference(noise, noise)
+    with pytest.raises(StatsError, match="do not vary"):
+        heavy_tail_measures(noise)
+    with pytest.raises(StatsError, match="neither group varies"):
+        bootstrap_difference(noise, noise, seed=1)
+
+
+def test_a_tiny_real_spread_on_a_large_offset_is_still_a_spread() -> None:
+    small = [k * 1e-9 for k in range(1, 11)]
+    other = [k * 1e-9 for k in range(2, 12)]
+
+    shifted = welch_difference([1.0 + v for v in small], [1.0 + v for v in other])
+    plain = welch_difference(small, other)
+
+    assert shifted.t_statistic == pytest.approx(plain.t_statistic, rel=1e-4)  # 1e-9 is 1e6 ulps
+
+
+def test_one_constant_group_against_a_varying_one_gets_a_bootstrap_interval() -> None:
+    result = bootstrap_difference([5.0] * 10, [1.0, 2.0, 3.5], seed=1, resamples=400)
+
+    assert result.ci_low < result.ci_high
+
+
+# --- What the reviewers found unpinned: intervals, defaults and echoed fields -----------------
+
+
+def test_the_interval_of_a_difference_of_ratios_is_the_difference_plus_or_minus_z_errors() -> None:
+    y1, x1 = _units(3, 400, 0.9)
+    y0, x0 = _units(4, 400, 0.8)
+
+    for alpha in (0.05, 0.10, 0.01):
+        result = ratio_difference(y1, x1, y0, x0, alpha=alpha)
+        margin = stats.norm.ppf(1 - alpha / 2) * result.std_error
+
+        assert result.ci_low == pytest.approx(result.difference - margin, rel=1e-12)
+        assert result.ci_high == pytest.approx(result.difference + margin, rel=1e-12)
+        assert result.confidence == pytest.approx(1 - alpha)
+
+
+def test_the_default_confidence_of_every_interval_is_95_percent() -> None:
+    a, b = _lognormal(1, 60, 1.0), _lognormal(2, 60, 1.0)
+    y1, x1 = _units(3, 80, 0.9)
+    y0, x0 = _units(4, 80, 0.8)
+
+    assert welch_difference(a, b).confidence == 0.95
+    assert two_proportion_difference(30, 200, 20, 200).confidence == 0.95
+    assert bootstrap_difference(a, b, seed=1).confidence == 0.95
+    assert ratio_difference(y1, x1, y0, x0).confidence == 0.95
+    assert bonferroni([0.01]).alpha == 0.05 and benjamini_hochberg([0.01]).alpha == 0.05
+    assert srm_test([10, 10], [0.5, 0.5]).flagged is False  # the default threshold is 0.001
+    assert srm_test([50, 150], [0.5, 0.5]).flagged is True
+
+
+def test_the_proportion_interval_at_the_default_matches_a_95_percent_wald_interval() -> None:
+    result = two_proportion_difference(30, 200, 20, 200)
+    margin = 1.959963984540054 * math.sqrt(0.15 * 0.85 / 200 + 0.10 * 0.90 / 200)
+
+    assert result.ci_low == pytest.approx(0.05 - margin, rel=1e-12)
+    assert result.ci_high == pytest.approx(0.05 + margin, rel=1e-12)
+
+
+def test_the_bootstrap_defaults_to_ten_thousand_resamples() -> None:
+    result = bootstrap_difference([1.0, 2.0, 4.0], [2.0, 3.0, 3.5], seed=1)
+
+    assert result.resamples == 10_000
+
+
+@pytest.mark.parametrize(("resamples", "accepted"), [(199, False), (200, True)])
+def test_the_bootstrap_needs_five_resamples_in_each_tail_exactly(
+    resamples: int, accepted: bool
+) -> None:
+    def call() -> object:
+        return bootstrap_difference([1.0, 2.0, 4.0], [2.0, 3.0, 3.5], seed=1, resamples=resamples)
+
+    if accepted:
+        assert call().resamples == resamples
+    else:
+        with pytest.raises(StatsError, match="fewer than 5 resamples"):
+            call()
+
+
+def test_results_echo_the_sizes_and_counts_they_were_computed_from() -> None:
+    assert srm_test([40, 60], [0.5, 0.5]).observed == (40, 60)
+    assert heavy_tail_measures([1.0, 2.0, 3.0, 10.0, 0.0]).n == 5
+    assert ratio_estimate([1.0, 2.0, 4.0, 5.0], [1.0, 2.0, 3.0, 4.0]).n == 4
+    assert cohort_heterogeneity([1.0, 2.0, 4.0], [0.1, 0.1, 0.1]).cohorts == 3
+    result = two_proportion_difference(30, 200, 20, 250)
+    assert (result.n_treatment, result.n_control) == (200, 250)
+
+
+def test_the_delta_method_error_for_varying_denominators_is_exact_on_a_hand_worked_case() -> None:
+    # y = 1, 2, 4, 5 and x = 1, 2, 3, 4: means 3 and 2.5, variances 10/3 and 5/3, covariance 7/3,
+    # ratio 1.2, so Var = (10/3 - 2 * 1.2 * 7/3 + 1.44 * 5/3) / (4 * 2.5^2) = 2/375
+    estimate = ratio_estimate([1.0, 2.0, 4.0, 5.0], [1.0, 2.0, 3.0, 4.0])
+
+    assert estimate.ratio == pytest.approx(1.2, rel=1e-12)
+    assert estimate.std_error == pytest.approx(math.sqrt(2 / 375), rel=1e-12)
