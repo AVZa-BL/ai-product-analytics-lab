@@ -25,3 +25,27 @@ def test_ci_lints_and_tests_referee() -> None:
     commands = [step.get("run", "") for step in _referee_job()["steps"]]
     assert "ruff check src tests" in commands
     assert "python -m pytest -q" in commands
+
+
+def _job(name: str) -> dict:
+    return yaml.safe_load(CI.read_text())["jobs"][name]
+
+
+def _python_version(job: dict) -> str:
+    return job["steps"][1]["with"]["python-version"]  # the setup-python step
+
+
+def test_the_linux_job_keeps_its_name_and_runner() -> None:
+    """A branch-protection rule may require this exact job name, so it must not be renamed."""
+    assert _job("referee-quality-gate")["runs-on"] == "ubuntu-latest"
+
+
+def test_the_same_gate_runs_on_macos_as_a_job_of_its_own() -> None:
+    """The statistics depend on compiled numeric libraries, so CI checks them on macOS too."""
+    linux, macos = _job("referee-quality-gate"), _job("referee-quality-gate-macos")
+
+    assert macos["runs-on"] == "macos-latest"
+    assert macos["defaults"] == linux["defaults"]
+    assert [s.get("run") for s in macos["steps"]] == [s.get("run") for s in linux["steps"]]
+    assert [s.get("uses") for s in macos["steps"]] == [s.get("uses") for s in linux["steps"]]
+    assert _python_version(macos) == _python_version(linux)
