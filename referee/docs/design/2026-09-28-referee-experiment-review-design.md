@@ -528,6 +528,6 @@ Milestone 4 builds the results review. These are the decisions made before it st
 - A daily outcomes table is not added. It would allow a curve by days since exposure within a player, but it changes the generator's tables and the lab's raw contract, and the cohort test answers the question the rule asks.
 - Open for 4b: the thresholds. RES-007's significance level, and whether and where RES-012 escalates from a warning to a blocker (no published threshold for the share of late-exposed players is known to the author, so any value is a judgement and is written as one). Open for 4c: the writer of the three CSV files in the lab.
 - `scipy` and `numpy` become core dependencies in 4a. `scipy` supplies the distributions (chi-squared for the sample-ratio check and the cohort test, t and normal for the intervals and tests), as section 17.5 anticipated for the sample-ratio check; `numpy` draws the bootstrap resamples. `statsmodels` stays a development dependency, used to validate the statistics.
-- Dunnett's test, which section 9 names, is not implemented (section 9 allows that). The corrections are Bonferroni and Benjamini-Hochberg, applied to p-values.
+- Dunnett's test, which section 9 names, is not implemented (section 9 allows that). The corrections are Bonferroni, Benjamini-Hochberg and, when the dependence between the tests is unknown, Benjamini-Yekutieli, applied to p-values.
 
 Delivered in: 4a (this amendment), 4b, 4c.

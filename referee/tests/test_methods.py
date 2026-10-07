@@ -17,6 +17,7 @@ from referee.methods import (
     SRM_ALPHA,
     StatsError,
     benjamini_hochberg,
+    benjamini_yekutieli,
     bonferroni,
     bootstrap_difference,
     cohort_heterogeneity,
@@ -1126,3 +1127,87 @@ def test_the_delta_method_error_for_varying_denominators_is_exact_on_a_hand_work
 
     assert estimate.ratio == pytest.approx(1.2, rel=1e-12)
     assert estimate.std_error == pytest.approx(math.sqrt(2 / 375), rel=1e-12)
+
+
+# --- Any scale, and a correction that assumes nothing about dependence ----------------------
+
+
+@pytest.mark.parametrize("scale", [1e-80, 1e-30, 1e30, 1e80])
+def test_welch_gives_the_same_t_and_degrees_of_freedom_at_any_scale(scale: float) -> None:
+    a, b = [1.0, 2.0, 4.0, 8.0, 3.0], [2.0, 2.5, 3.0, 7.0]
+
+    base = welch_difference(a, b)
+    scaled = welch_difference([v * scale for v in a], [v * scale for v in b])
+
+    assert scaled.t_statistic == pytest.approx(base.t_statistic, rel=1e-9)
+    assert scaled.degrees_of_freedom == pytest.approx(base.degrees_of_freedom, rel=1e-9)
+    assert scaled.p_value == pytest.approx(base.p_value, rel=1e-9, abs=0)
+    assert scaled.ci_low == pytest.approx(base.ci_low * scale, rel=1e-9)
+
+
+def test_the_degrees_of_freedom_are_the_welch_satterthwaite_ones_on_a_hand_case() -> None:
+    # variances 4 and 2 over sizes 3 and 2: parts 4/3 and 1, so (7/3)^2 / ((4/3)^2 / 2 + 1^2 / 1)
+    result = welch_difference([2, 4, 6], [1, 3])
+
+    assert result.degrees_of_freedom == pytest.approx(
+        (7 / 3) ** 2 / ((4 / 3) ** 2 / 2 + 1), rel=1e-12
+    )
+
+
+@pytest.mark.parametrize("size", [1e-200, 1e-160, 1e-154, 1e200])
+def test_standard_errors_outside_floating_point_range_give_a_clear_error_not_a_crash(
+    size: float,
+) -> None:
+    with pytest.raises(StatsError, match="too small or too large"):
+        cohort_heterogeneity([1.0, 2.0, 3.0], [size, size, size])
+    with pytest.raises(StatsError, match="too small or too large"):
+        cohort_heterogeneity([1.0, 2.0], [1.0, size])
+
+
+def test_a_hand_worked_benjamini_yekutieli() -> None:
+    raw = [0.01, 0.04, 0.03, 0.005]
+    harmonic = 1 + 1 / 2 + 1 / 3 + 1 / 4
+
+    result = benjamini_yekutieli(raw)
+
+    assert result.method == "benjamini_yekutieli" and result.alpha == 0.05
+    assert result.adjusted == pytest.approx(tuple(a * harmonic for a in (0.02, 0.04, 0.04, 0.02)))
+    assert result.rejected == (True, False, False, True)
+    assert result.p_values == tuple(raw)
+
+
+@pytest.mark.parametrize("seed", range(12))
+def test_benjamini_yekutieli_agrees_with_statsmodels(seed: int) -> None:
+    rng = random.Random(500 + seed)
+    raw = [
+        rng.choice([0.0, 1.0, rng.random() ** 3, rng.random()]) for _ in range(rng.randint(1, 15))
+    ]
+    raw += raw[:2]
+    alpha = rng.choice([0.01, 0.05, 0.1])
+
+    ours = benjamini_yekutieli(raw, alpha=alpha)
+    reject, adjusted, _, _ = multipletests(raw, alpha=alpha, method="fdr_by")
+
+    assert ours.adjusted == pytest.approx(adjusted, rel=1e-12, abs=0)
+    assert list(ours.rejected) == list(reject)
+
+
+def test_the_correction_that_assumes_nothing_is_never_less_conservative() -> None:
+    raw = [0.2, 0.001, 0.5, 0.03, 0.03, 0.9]
+
+    by, bh = benjamini_yekutieli(raw), benjamini_hochberg(raw)
+
+    assert all(y >= h for y, h in zip(by.adjusted, bh.adjusted, strict=True))
+    assert all(y <= 1.0 for y in by.adjusted)
+    assert benjamini_yekutieli([0.03]).adjusted == (0.03,)  # one comparison: no correction
+
+
+@pytest.mark.parametrize(
+    ("p_values", "alpha", "fragment"),
+    [([], 0.05, "at least one"), ([0.5, 1.1], 0.05, "between 0 and 1"), ([0.5], 0.0, "alpha")],
+)
+def test_benjamini_yekutieli_refuses_what_the_others_refuse(
+    p_values: list, alpha: float, fragment: str
+) -> None:
+    with pytest.raises(StatsError, match=fragment):
+        benjamini_yekutieli(p_values, alpha=alpha)

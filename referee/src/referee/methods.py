@@ -166,7 +166,10 @@ def welch_difference(
             "neither group varies, so the standard error is 0 and nothing can be tested"
         )
     std_error = math.sqrt(part_a + part_b)
-    degrees = (part_a + part_b) ** 2 / (part_a**2 / (len(a) - 1) + part_b**2 / (len(b) - 1))
+    # Welch-Satterthwaite, written with each part as a share of the total so that squaring
+    # cannot underflow or overflow when the variances are far from 1.
+    share_a, share_b = part_a / (part_a + part_b), part_b / (part_a + part_b)
+    degrees = 1.0 / (share_a**2 / (len(a) - 1) + share_b**2 / (len(b) - 1))
     difference = mean_a - mean_b
     t_statistic = difference / std_error
     margin = float(stats.t.ppf(1 - alpha / 2, degrees)) * std_error
@@ -538,17 +541,27 @@ def cohort_heterogeneity(
     if len(set(x)) < 2:
         raise StatsError("the cohorts need at least 2 different positions to have a trend")
 
-    weight = [1.0 / error**2 for error in se]
-    total_weight = math.fsum(weight)
-    pooled = math.fsum(w * v for w, v in zip(weight, d, strict=True)) / total_weight
-    q_statistic = math.fsum(w * (v - pooled) ** 2 for w, v in zip(weight, d, strict=True))
+    # Weights are 1 / se^2, so standard errors far from 1 can underflow to a zero weight or
+    # overflow a sum. Any such failure is one clear error, not a crash from inside the sums.
+    try:
+        weight = [1.0 / error**2 for error in se]
+        total_weight = math.fsum(weight)
+        pooled = math.fsum(w * v for w, v in zip(weight, d, strict=True)) / total_weight
+        q_statistic = math.fsum(w * (v - pooled) ** 2 for w, v in zip(weight, d, strict=True))
+        x_bar = math.fsum(w * p for w, p in zip(weight, x, strict=True)) / total_weight
+        spread = math.fsum(w * (p - x_bar) ** 2 for w, p in zip(weight, x, strict=True))
+        if not (spread > 0 and math.isfinite(q_statistic)):  # an infinite spread fails below
+            raise ArithmeticError
+        slope = (
+            math.fsum(w * (p - x_bar) * v for w, p, v in zip(weight, x, d, strict=True)) / spread
+        )
+        slope_error = 1.0 / math.sqrt(spread)
+        slope_z = slope / slope_error
+    except (ArithmeticError, ValueError):  # zero division, overflow, a non-finite sum
+        raise StatsError(
+            "the standard errors are too small or too large to weigh the cohorts"
+        ) from None
     degrees = k - 1
-
-    x_bar = math.fsum(w * p for w, p in zip(weight, x, strict=True)) / total_weight
-    spread = math.fsum(w * (p - x_bar) ** 2 for w, p in zip(weight, x, strict=True))
-    slope = math.fsum(w * (p - x_bar) * v for w, p, v in zip(weight, x, d, strict=True)) / spread
-    slope_error = 1.0 / math.sqrt(spread)
-    slope_z = slope / slope_error
     return CohortHeterogeneity(
         cohorts=k,
         pooled_difference=pooled,
@@ -608,6 +621,25 @@ def bonferroni(p_values: Sequence[float], *, alpha: float = 0.05) -> Adjusted:
     )
 
 
+def _step_up(values: list[float], *, method: str, alpha: float, inflation: float) -> Adjusted:
+    """The step-up adjustment shared by Benjamini-Hochberg (inflation 1) and Yekutieli."""
+    m = len(values)
+    order = sorted(range(m), key=lambda i: values[i])
+    adjusted = [0.0] * m
+    running = 1.0
+    for rank in range(m, 0, -1):
+        index = order[rank - 1]
+        running = min(running, values[index] * m * inflation / rank)
+        adjusted[index] = running
+    return Adjusted(
+        method=method,
+        alpha=alpha,
+        p_values=tuple(values),
+        adjusted=tuple(adjusted),
+        rejected=tuple(a <= alpha for a in adjusted),
+    )
+
+
 def benjamini_hochberg(p_values: Sequence[float], *, alpha: float = 0.05) -> Adjusted:
     """Benjamini-Hochberg: controls the expected share of false positives among the discoveries.
 
@@ -615,22 +647,25 @@ def benjamini_hochberg(p_values: Sequence[float], *, alpha: float = 0.05) -> Adj
     smallest of m * p_j / j over all j from i upward, capped at 1; ties share one value. It is
     less conservative than Bonferroni and assumes independent or positively dependent tests.
     Reference: Benjamini and Hochberg, "Controlling the false discovery rate" (1995); that it
-    also holds under positive dependence is Benjamini and Yekutieli (2001).
+    also holds under positive dependence is Benjamini and Yekutieli (2001). When the dependence
+    between the tests is unknown, for example arms compared with one shared control, use
+    `benjamini_yekutieli`, which holds under any dependence.
+    """
+    _check_alpha(alpha)
+    return _step_up(
+        _check_p_values(p_values), method="benjamini_hochberg", alpha=alpha, inflation=1.0
+    )
+
+
+def benjamini_yekutieli(p_values: Sequence[float], *, alpha: float = 0.05) -> Adjusted:
+    """Benjamini-Yekutieli: false-discovery-rate control under any dependence between the tests.
+
+    It is Benjamini-Hochberg with every adjusted value multiplied by 1 + 1/2 + ... + 1/m, so it
+    is more conservative; the price of not assuming anything about the dependence. Reference:
+    Benjamini and Yekutieli, "The control of the false discovery rate in multiple testing under
+    dependency" (Annals of Statistics, 2001).
     """
     _check_alpha(alpha)
     values = _check_p_values(p_values)
-    m = len(values)
-    order = sorted(range(m), key=lambda i: values[i])
-    adjusted = [0.0] * m
-    running = 1.0
-    for rank in range(m, 0, -1):
-        index = order[rank - 1]
-        running = min(running, values[index] * m / rank)
-        adjusted[index] = running
-    return Adjusted(
-        method="benjamini_hochberg",
-        alpha=alpha,
-        p_values=tuple(values),
-        adjusted=tuple(adjusted),
-        rejected=tuple(a <= alpha for a in adjusted),
-    )
+    harmonic = math.fsum(1.0 / k for k in range(1, len(values) + 1))
+    return _step_up(values, method="benjamini_yekutieli", alpha=alpha, inflation=harmonic)
