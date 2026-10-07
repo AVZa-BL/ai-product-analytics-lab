@@ -446,3 +446,159 @@ def ratio_difference(
         ci_high=difference + margin,
         confidence=1 - alpha,
     )
+
+
+# --- Does an effect change from one cohort to the next? ------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class CohortHeterogeneity:
+    """Whether an arm's difference against control varies across cohorts, and whether it trends.
+
+    `q_statistic` is Cochran's Q, which asks whether the cohorts' differences are all equal;
+    `slope` is the weighted straight-line trend of the difference across the cohorts' positions
+    (for example the week of first exposure), which asks the narrower question of whether it
+    rises or falls steadily.
+    """
+
+    cohorts: int
+    pooled_difference: float
+    q_statistic: float
+    degrees_of_freedom: int
+    q_p_value: float
+    i_squared: float
+    slope: float
+    slope_std_error: float
+    slope_z_statistic: float
+    slope_p_value: float
+
+
+def cohort_heterogeneity(
+    differences: Sequence[float],
+    std_errors: Sequence[float],
+    *,
+    positions: Sequence[float] | None = None,
+) -> CohortHeterogeneity:
+    """Cochran's Q and a weighted trend for one arm's difference in each of several cohorts.
+
+    Each cohort contributes its estimated difference and that estimate's standard error; the
+    cohorts must be made of different units, so that the estimates are independent. Weights are
+    1 / se^2, Q = sum(w (d - pooled)^2) is compared with a chi-square on (cohorts - 1) degrees of
+    freedom, and I^2 = max(0, (Q - df) / Q) is the share of the variation beyond chance. The
+    slope is weighted least squares of the difference on `positions` (default 0, 1, 2, ...) with
+    the standard errors taken as known, so its error is 1 / sqrt(sum(w (x - xbar)^2)).
+    Reference: Cochran, "The combination of estimates from different experiments" (1954);
+    Higgins and Thompson, "Quantifying heterogeneity in a meta-analysis" (2002). The test has
+    little power with few or small cohorts, and a significant result says the difference changes,
+    not why. Raises `StatsError` for fewer than 2 cohorts or an unusable standard error.
+    """
+    d = _finite(differences, "differences")
+    se = _finite(std_errors, "std_errors")
+    if len(d) != len(se):
+        raise StatsError(f"need one standard error per difference, got {len(d)} and {len(se)}")
+    k = len(d)
+    if k < 2:
+        raise StatsError(f"need at least 2 cohorts, got {k}")
+    if any(error <= 0 for error in se):
+        raise StatsError("every standard error must be above 0")
+    x = list(range(k)) if positions is None else _finite(positions, "positions")
+    if len(x) != k:
+        raise StatsError(f"need one position per cohort, got {len(x)} for {k}")
+    if len(set(x)) < 2:
+        raise StatsError("the cohorts need at least 2 different positions to have a trend")
+
+    weight = [1.0 / error**2 for error in se]
+    total_weight = math.fsum(weight)
+    pooled = math.fsum(w * v for w, v in zip(weight, d, strict=True)) / total_weight
+    q_statistic = math.fsum(w * (v - pooled) ** 2 for w, v in zip(weight, d, strict=True))
+    degrees = k - 1
+
+    x_bar = math.fsum(w * p for w, p in zip(weight, x, strict=True)) / total_weight
+    spread = math.fsum(w * (p - x_bar) ** 2 for w, p in zip(weight, x, strict=True))
+    slope = math.fsum(w * (p - x_bar) * v for w, p, v in zip(weight, x, d, strict=True)) / spread
+    slope_error = 1.0 / math.sqrt(spread)
+    slope_z = slope / slope_error
+    return CohortHeterogeneity(
+        cohorts=k,
+        pooled_difference=pooled,
+        q_statistic=q_statistic,
+        degrees_of_freedom=degrees,
+        q_p_value=float(stats.chi2.sf(q_statistic, degrees)),
+        i_squared=max(0.0, (q_statistic - degrees) / q_statistic) if q_statistic > 0 else 0.0,
+        slope=slope,
+        slope_std_error=slope_error,
+        slope_z_statistic=slope_z,
+        slope_p_value=float(2 * stats.norm.sf(abs(slope_z))),
+    )
+
+
+# --- Several comparisons at once -----------------------------------------------------------
+#
+# Dunnett's test, which section 9 names as the less conservative choice for several arms
+# against one control, is not implemented: it needs the raw samples (scipy.stats.dunnett takes
+# them), and the rules chosen for milestone 4 work from p-values.
+
+
+@dataclass(frozen=True, kw_only=True)
+class Adjusted:
+    """Adjusted p-values in the order the raw ones were given, and which stay significant."""
+
+    method: str
+    alpha: float
+    p_values: tuple[float, ...]
+    adjusted: tuple[float, ...]
+    rejected: tuple[bool, ...]
+
+
+def _check_p_values(p_values: Sequence[float]) -> list[float]:
+    values = _finite(p_values, "p_values")
+    if not values:
+        raise StatsError("need at least one p-value")
+    if any(not 0.0 <= p <= 1.0 for p in values):
+        raise StatsError(f"p-values must be between 0 and 1, got {values!r}")
+    return values
+
+
+def bonferroni(p_values: Sequence[float], *, alpha: float = 0.05) -> Adjusted:
+    """Bonferroni: each p-value times the number of comparisons, capped at 1.
+
+    It controls the chance of any false positive among the comparisons. A comparison stays
+    significant when its adjusted p-value is at most `alpha`.
+    """
+    _check_alpha(alpha)
+    values = _check_p_values(p_values)
+    adjusted = tuple(min(1.0, p * len(values)) for p in values)
+    return Adjusted(
+        method="bonferroni",
+        alpha=alpha,
+        p_values=tuple(values),
+        adjusted=adjusted,
+        rejected=tuple(a <= alpha for a in adjusted),
+    )
+
+
+def benjamini_hochberg(p_values: Sequence[float], *, alpha: float = 0.05) -> Adjusted:
+    """Benjamini-Hochberg: controls the expected share of false positives among the discoveries.
+
+    With m comparisons and the p-values sorted ascending, the adjusted value of the i-th is the
+    smallest of m * p_j / j over all j from i upward, capped at 1; ties share one value. It is
+    less conservative than Bonferroni and assumes independent or positively dependent tests.
+    Reference: Benjamini and Hochberg, "Controlling the false discovery rate" (1995).
+    """
+    _check_alpha(alpha)
+    values = _check_p_values(p_values)
+    m = len(values)
+    order = sorted(range(m), key=lambda i: values[i])
+    adjusted = [0.0] * m
+    running = 1.0
+    for rank in range(m, 0, -1):
+        index = order[rank - 1]
+        running = min(running, values[index] * m / rank)
+        adjusted[index] = running
+    return Adjusted(
+        method="benjamini_hochberg",
+        alpha=alpha,
+        p_values=tuple(values),
+        adjusted=tuple(adjusted),
+        rejected=tuple(a <= alpha for a in adjusted),
+    )

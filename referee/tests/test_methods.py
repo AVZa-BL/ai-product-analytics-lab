@@ -7,6 +7,8 @@ import random
 import numpy as np
 import pytest
 from scipy import stats
+from statsmodels.stats.meta_analysis import combine_effects
+from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.proportion import confint_proportions_2indep, proportions_ztest
 from statsmodels.stats.weightstats import CompareMeans, DescrStatsW
 
@@ -14,7 +16,10 @@ from referee import methods
 from referee.methods import (
     SRM_ALPHA,
     StatsError,
+    benjamini_hochberg,
+    bonferroni,
     bootstrap_difference,
+    cohort_heterogeneity,
     heavy_tail_measures,
     ratio_difference,
     ratio_estimate,
@@ -618,3 +623,279 @@ def test_a_ratio_that_cannot_be_estimated_is_refused_with_the_reason(
 def test_an_alpha_outside_zero_to_one_is_refused_for_ratios() -> None:
     with pytest.raises(StatsError, match="alpha"):
         ratio_difference([1.0, 3.0], [1.0, 2.0], [2.0, 5.0], [1.0, 2.0], alpha=0.0)
+
+
+# --- Cohort heterogeneity ----------------------------------------------------------------
+
+# variant_b and variant_c against control by assignment week in the lab's seed-42 5,000-player
+# data: the readout's published differences (+1.52, +0.64, -0.17 for variant_b), to 3 places.
+PLANTED_FADE = ([1.519, 0.645, -0.174], [0.257, 0.239, 0.260])
+NO_FADE = ([0.080, 0.158, 0.823], [0.254, 0.247, 0.315])
+
+
+def test_a_hand_worked_example_with_equal_weights() -> None:
+    result = cohort_heterogeneity([1.0, 2.0, 3.0], [1.0, 1.0, 1.0])
+
+    assert result.pooled_difference == 2.0
+    assert result.q_statistic == pytest.approx(2.0)
+    assert result.degrees_of_freedom == 2
+    assert result.q_p_value == pytest.approx(math.exp(-1.0), rel=1e-12, abs=0)  # 2 df: exp(-Q/2)
+    assert result.i_squared == 0.0
+    assert result.slope == pytest.approx(1.0)
+    assert result.slope_std_error == pytest.approx(1 / math.sqrt(2))
+    assert result.slope_z_statistic == pytest.approx(math.sqrt(2))
+    assert result.slope_p_value == pytest.approx(0.1573, abs=5e-4)
+
+
+def test_a_hand_worked_example_with_unequal_weights() -> None:
+    # weights 1 and 1/4: pooled 0.6, Q = 0.36 + 0.25 * 2.4^2 = 1.8; slope 3 with error 1/sqrt(0.2)
+    result = cohort_heterogeneity([0.0, 3.0], [1.0, 2.0])
+
+    assert result.pooled_difference == pytest.approx(0.6)
+    assert result.q_statistic == pytest.approx(1.8)
+    assert result.slope == pytest.approx(3.0)
+    assert result.slope_std_error == pytest.approx(1 / math.sqrt(0.2))
+    assert result.q_p_value == pytest.approx(result.slope_p_value, rel=1e-9)  # two cohorts: z^2 = Q
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_q_and_i_squared_agree_with_statsmodels_meta_analysis(seed: int) -> None:
+    rng = random.Random(seed)
+    k = rng.randint(2, 8)
+    differences = [rng.gauss(0.5, 1.0) for _ in range(k)]
+    errors = [rng.uniform(0.1, 0.8) for _ in range(k)]
+
+    ours = cohort_heterogeneity(differences, errors)
+    reference = combine_effects(np.asarray(differences), np.asarray(errors) ** 2)
+    test = reference.test_homogeneity()
+    fixed = reference.summary_frame().loc["fixed effect", "eff"]
+
+    assert ours.q_statistic == pytest.approx(reference.q, rel=1e-10)
+    assert ours.q_p_value == pytest.approx(test.pvalue, rel=1e-9, abs=0)
+    assert ours.i_squared == pytest.approx(max(0.0, reference.i2), rel=1e-9, abs=1e-12)
+    assert ours.pooled_difference == pytest.approx(fixed, rel=1e-10)
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_the_slope_and_its_error_agree_with_weighted_least_squares_in_matrix_form(
+    seed: int,
+) -> None:
+    rng = random.Random(100 + seed)
+    k = rng.randint(3, 7)
+    positions = sorted(rng.sample(range(0, 20), k))  # uneven gaps
+    differences = [rng.gauss(0.0, 1.0) for _ in range(k)]
+    errors = [rng.uniform(0.2, 1.0) for _ in range(k)]
+
+    ours = cohort_heterogeneity(differences, errors, positions=positions)
+    design = np.column_stack([np.ones(k), np.asarray(positions, dtype=float)])
+    weights = np.diag(1.0 / np.asarray(errors) ** 2)
+    covariance = np.linalg.inv(design.T @ weights @ design)
+    beta = covariance @ design.T @ weights @ np.asarray(differences)
+
+    assert ours.slope == pytest.approx(beta[1], rel=1e-9)
+    assert ours.slope_std_error == pytest.approx(math.sqrt(covariance[1, 1]), rel=1e-9)
+
+
+def test_the_planted_fade_in_variant_b_is_detected_and_variant_c_is_not() -> None:
+    fade = cohort_heterogeneity(*PLANTED_FADE)
+    none = cohort_heterogeneity(*NO_FADE)
+
+    # a hand calculation from the published values, and the unrounded 5,000-player result
+    # (Q 21.52, slope -0.847 with error 0.183) which these rounded inputs approximate
+    assert fade.q_statistic == pytest.approx(21.46, abs=0.01)
+    assert fade.q_p_value < 1e-4 and fade.i_squared > 0.9
+    assert fade.slope == pytest.approx(-0.847, abs=0.005)
+    assert fade.slope_z_statistic == pytest.approx(-4.63, abs=0.02) and fade.slope_p_value < 1e-5
+    assert none.q_statistic == pytest.approx(3.84, abs=0.05)
+    assert none.q_p_value > 0.1 and none.slope_p_value > 0.05
+
+
+def test_the_same_fade_at_a_fifth_of_the_players_is_not_detected() -> None:
+    # standard errors grow by sqrt(5) when there are a fifth as many players (section 20.4)
+    differences, errors = PLANTED_FADE
+    small = cohort_heterogeneity(differences, [e * math.sqrt(5) for e in errors])
+
+    assert small.q_statistic == pytest.approx(21.46 / 5, abs=0.01)
+    assert small.q_p_value > 0.05
+
+
+def test_the_order_of_the_cohorts_does_not_matter_when_their_positions_travel_with_them() -> None:
+    differences, errors = [0.4, 1.1, -0.3, 0.9], [0.2, 0.3, 0.25, 0.4]
+    positions = [0.0, 1.0, 2.0, 3.0]
+    order = [2, 0, 3, 1]
+
+    base = cohort_heterogeneity(differences, errors, positions=positions)
+    shuffled = cohort_heterogeneity(
+        [differences[i] for i in order],
+        [errors[i] for i in order],
+        positions=[positions[i] for i in order],
+    )
+
+    assert shuffled.q_statistic == pytest.approx(base.q_statistic, rel=1e-12)
+    assert shuffled.slope == pytest.approx(base.slope, rel=1e-12)
+
+
+def test_adding_a_constant_changes_neither_q_nor_the_slope_and_scaling_changes_neither_z() -> None:
+    differences, errors = [0.4, 1.1, -0.3], [0.2, 0.3, 0.25]
+
+    base = cohort_heterogeneity(differences, errors)
+    shifted = cohort_heterogeneity([d + 7.0 for d in differences], errors)
+    scaled = cohort_heterogeneity([d * 3 for d in differences], [e * 3 for e in errors])
+
+    assert shifted.q_statistic == pytest.approx(base.q_statistic, rel=1e-12)
+    assert shifted.slope == pytest.approx(base.slope, rel=1e-12)
+    assert shifted.pooled_difference == pytest.approx(base.pooled_difference + 7.0)
+    assert scaled.q_statistic == pytest.approx(base.q_statistic, rel=1e-12)
+    assert scaled.slope_z_statistic == pytest.approx(base.slope_z_statistic, rel=1e-12)
+
+
+def test_a_cohort_with_no_information_has_no_say() -> None:
+    base = cohort_heterogeneity([1.0, 1.2, 0.8], [0.1, 0.1, 0.1])
+    plus_noise = cohort_heterogeneity([1.0, 1.2, 0.8, 50.0], [0.1, 0.1, 0.1, 1e6])
+
+    assert plus_noise.pooled_difference == pytest.approx(base.pooled_difference, rel=1e-6)
+    assert plus_noise.q_statistic == pytest.approx(base.q_statistic, abs=1e-3)
+
+
+def test_identical_differences_give_q_zero_and_p_one() -> None:
+    result = cohort_heterogeneity([0.5, 0.5, 0.5], [0.1, 0.2, 0.3])
+
+    assert result.q_statistic == 0.0 and result.q_p_value == 1.0 and result.i_squared == 0.0
+    assert result.slope == pytest.approx(0.0, abs=1e-12)  # rounding, not exactly 0.0
+    assert result.slope_p_value == pytest.approx(1.0, abs=1e-9)
+
+
+def test_i_squared_is_zero_not_negative_when_the_cohorts_vary_less_than_chance_allows() -> None:
+    result = cohort_heterogeneity([1.0, 1.1, 0.9, 1.05], [0.5, 0.5, 0.5, 0.5])
+
+    assert 0 < result.q_statistic < result.degrees_of_freedom  # (Q - df) / Q would be negative
+    assert result.i_squared == 0.0
+
+
+def test_when_every_cohort_has_the_same_true_effect_it_rejects_about_five_percent() -> None:
+    rng = random.Random(21)
+    rejected_q = rejected_slope = 0
+    runs = 1000
+    errors = [0.25, 0.24, 0.26]
+    for _ in range(runs):
+        differences = [rng.gauss(0.6, e) for e in errors]
+        result = cohort_heterogeneity(differences, errors)
+        rejected_q += result.q_p_value < 0.05
+        rejected_slope += result.slope_p_value < 0.05
+
+    assert 0.03 <= rejected_q / runs <= 0.075 and 0.03 <= rejected_slope / runs <= 0.075
+
+
+def test_it_finds_a_real_trend_far_more_often_than_chance() -> None:
+    rng = random.Random(22)
+    errors = [0.25, 0.24, 0.26]
+    found = sum(
+        cohort_heterogeneity(
+            [rng.gauss(1.5 - 0.85 * week, e) for week, e in enumerate(errors)], errors
+        ).slope_p_value
+        < 0.05
+        for _ in range(500)
+    )
+
+    assert found / 500 > 0.95
+
+
+@pytest.mark.parametrize(
+    ("args", "kwargs", "fragment"),
+    [
+        (([1.0], [0.1]), {}, "at least 2 cohorts"),
+        (([1.0, 2.0], [0.1]), {}, "one standard error per difference"),
+        (([1.0, 2.0], [0.1, 0.0]), {}, "above 0"),
+        (([1.0, 2.0], [0.1, -0.2]), {}, "above 0"),
+        (([1.0, math.nan], [0.1, 0.1]), {}, "finite"),
+        (([1.0, 2.0], [0.1, math.inf]), {}, "finite"),
+        (([1.0, 2.0, 3.0], [0.1, 0.1, 0.1]), {"positions": [0, 1]}, "one position per cohort"),
+        (([1.0, 2.0, 3.0], [0.1, 0.1, 0.1]), {"positions": [4, 4, 4]}, "2 different positions"),
+    ],
+)
+def test_cohorts_that_cannot_be_compared_are_refused_with_the_reason(
+    args: tuple, kwargs: dict, fragment: str
+) -> None:
+    with pytest.raises(StatsError, match=fragment):
+        cohort_heterogeneity(*args, **kwargs)
+
+
+# --- Several comparisons at once ---------------------------------------------------------
+
+
+def test_a_hand_worked_example_of_both_corrections() -> None:
+    raw = [0.01, 0.04, 0.03, 0.005]
+
+    bonf, bh = bonferroni(raw), benjamini_hochberg(raw)
+
+    assert bonf.adjusted == pytest.approx((0.04, 0.16, 0.12, 0.02))
+    assert bonf.rejected == (True, False, False, True)
+    assert bh.adjusted == pytest.approx((0.02, 0.04, 0.04, 0.02))
+    assert bh.rejected == (True, True, True, True)
+    assert bonf.p_values == bh.p_values == tuple(raw)
+    assert (bonf.method, bh.method, bonf.alpha) == ("bonferroni", "benjamini_hochberg", 0.05)
+
+
+@pytest.mark.parametrize("seed", range(12))
+def test_both_corrections_agree_with_statsmodels(seed: int) -> None:
+    rng = random.Random(seed)
+    raw = [
+        rng.choice([0.0, 1.0, rng.random() ** 3, rng.random()]) for _ in range(rng.randint(1, 15))
+    ]
+    raw += raw[:2]  # ties
+    alpha = rng.choice([0.01, 0.05, 0.1])
+
+    for ours, method in (
+        (bonferroni(raw, alpha=alpha), "bonferroni"),
+        (benjamini_hochberg(raw, alpha=alpha), "fdr_bh"),
+    ):
+        reject, adjusted, _, _ = multipletests(raw, alpha=alpha, method=method)
+
+        assert ours.adjusted == pytest.approx(adjusted, rel=1e-12, abs=0)
+        assert list(ours.rejected) == list(reject)
+
+
+def test_adjusted_p_values_keep_the_order_of_the_input_and_never_fall_below_the_raw_ones() -> None:
+    raw = [0.2, 0.001, 0.5, 0.03, 0.03, 0.9]
+
+    for method in (bonferroni, benjamini_hochberg):
+        adjusted = method(raw).adjusted
+
+        assert all(a >= p for a, p in zip(adjusted, raw, strict=True))
+        assert all(a <= 1.0 for a in adjusted)
+        for i, first in enumerate(raw):  # a smaller p-value never gets a larger adjusted one
+            for j, second in enumerate(raw):
+                if first <= second:
+                    assert adjusted[i] <= adjusted[j] + 1e-15
+    assert all(
+        bh <= bf
+        for bh, bf in zip(benjamini_hochberg(raw).adjusted, bonferroni(raw).adjusted, strict=True)
+    )
+
+
+def test_one_comparison_needs_no_correction() -> None:
+    assert bonferroni([0.03]).adjusted == (0.03,) and benjamini_hochberg([0.03]).adjusted == (0.03,)
+
+
+def test_the_decision_is_at_most_alpha_not_below_it() -> None:
+    assert bonferroni([0.025, 0.9], alpha=0.05).rejected == (True, False)  # adjusted is 0.05
+    assert benjamini_hochberg([0.025, 0.9], alpha=0.05).rejected == (True, False)
+
+
+@pytest.mark.parametrize("method", [bonferroni, benjamini_hochberg])
+@pytest.mark.parametrize(
+    ("p_values", "alpha", "fragment"),
+    [
+        ([], 0.05, "at least one"),
+        ([0.5, -0.1], 0.05, "between 0 and 1"),
+        ([0.5, 1.1], 0.05, "between 0 and 1"),
+        ([0.5, math.nan], 0.05, "finite"),
+        ([0.5], 0.0, "alpha"),
+        ([0.5], 1.0, "alpha"),
+    ],
+)
+def test_input_that_cannot_be_corrected_is_refused_with_the_reason(
+    method, p_values: list, alpha: float, fragment: str
+) -> None:
+    with pytest.raises(StatsError, match=fragment):
+        method(p_values, alpha=alpha)
