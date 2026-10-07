@@ -1,0 +1,2 @@
+# the manifest pins these files byte for byte, so git must not rewrite their line endings
+* -text

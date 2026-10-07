@@ -1,0 +1,24 @@
+{
+  "experiment_id": "hybrid_offer_page",
+  "generator": {
+    "scenario": "hybrid_subscription",
+    "seed": 42,
+    "start_date": "2026-01-01",
+    "days": 180,
+    "scale": 5000
+  },
+  "files": {
+    "experiment_assignments.csv": {
+      "rows": 2824,
+      "sha256": "193cbcb077b20cf851413da04f419230ebb433d1bc057d9cc92eaad510c6cebd"
+    },
+    "experiment_exposures.csv": {
+      "rows": 3974,
+      "sha256": "2f8e9ea1fb3bf574ff2a0521b24408e44640deca95456b7dfed0e6c93d834757"
+    },
+    "experiment_outcomes.csv": {
+      "rows": 2824,
+      "sha256": "4f813f3a333841c27262b8764acc02c795c67c25c723ba8e1da568076d8f7259"
+    }
+  }
+}

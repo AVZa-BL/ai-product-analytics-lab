@@ -65,3 +65,26 @@ jobs:
         run: ruff check src tests
       - name: Test
         run: python -m pytest -q
+
+  # The same gate on macOS. Referee's statistics run on numpy and scipy, whose compiled code and
+  # floating-point behaviour differ between platforms, and a report must give the same numbers
+  # wherever it is made. A separate job, not a matrix on the one above, keeps that job's name,
+  # which a branch-protection rule may require.
+  referee-quality-gate-macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: referee
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: referee/pyproject.toml
+      - name: Install project
+        run: python -m pip install -e '.[dev]'
+      - name: Lint
+        run: ruff check src tests
+      - name: Test
+        run: python -m pytest -q

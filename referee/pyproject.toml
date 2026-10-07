@@ -7,7 +7,7 @@ name = "referee"
 version = "0.1.0"
 description = "Deterministic review of A/B/n experiment designs and readouts"
 requires-python = ">=3.12,<3.13"
-dependencies = ["pyyaml>=6,<7"]
+dependencies = ["numpy>=2.1,<3", "pyyaml>=6,<7", "scipy>=1.14,<2"]
 
 [project.optional-dependencies]
 dev = [

@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-28
 **Status:** Approved design (Alexander Zatey), pending implementation plan
-**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. 2 (2026-09-30): milestone 2 decisions, see section 17. 3 (2026-10-02): milestone 2c decisions, see section 18. 4 (2026-10-04): milestone 3 decisions, see section 19. Sections 0 to 15 are unchanged.
+**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. 2 (2026-09-30): milestone 2 decisions, see section 17. 3 (2026-10-02): milestone 2c decisions, see section 18. 4 (2026-10-04): milestone 3 decisions, see section 19. 5 (2026-10-05): milestone 4 decisions, see section 20. Sections 0 to 15 are unchanged.
 **Scope:** New module inside `ai-product-analytics-lab`; first milestone is the experiment spec schema
 
 This document is the handoff from the design conversation into Claude Code. It is self-contained: nothing outside this file and the repository is needed to start.
@@ -489,3 +489,45 @@ Milestone 3 builds the synthetic experiment that the results reviewer will be ju
 - Section 10's mapping of problems to rules is unchanged. No results rule yet covers exposure after purchase or the configuration change; milestone 4 decides whether one should.
 
 Delivered in: 3a, 3b-1, 3b-2.
+
+---
+
+## 20. Amendment 5: milestone 4 decisions (2026-10-05)
+
+Milestone 4 builds the results review. These are the decisions made before it starts that sections 0 to 19 do not record. Section 13 names one branch for it; where this section disagrees with sections 8 to 13, this section wins.
+
+### 20.1 Delivery
+
+- Milestone 4 is delivered in three changes, each needing the one before it: 4a `feat/referee-results-data`, which reads the data and implements the statistics; 4b `feat/referee-results-rules`, the results rules; 4c `feat/referee-results-cli`, the report, the `review-results` command and the decision memo.
+- This amendment is delivered in 4a. The thresholds the rules need are chosen in 4b and written down there.
+
+### 20.2 What Referee reads
+
+- `review-results` reads a directory of three CSV files in full: `experiment_assignments.csv`, `experiment_exposures.csv` and `experiment_outcomes.csv`. They carry the columns of the lab's raw tables of the same names, which `analytics-lab/docs/architecture/hybrid_subscription_raw_contract.md` describes as Parquet tables. The CSV form is defined by the loader, `referee/src/referee/data.py`: UTF-8, a header row, the columns it requires, and ISO 8601 timestamps with a zero UTC offset. The analytics lab, not Referee, writes them from its Parquet tables. Referee reads no Parquet and has no dependency on the lab.
+- The input is never truncated or sampled. A statistic computed from some of the rows is not the statistic of the experiment, and the first rows are the earliest assignments, which is where a novelty effect sits.
+- The data's `experiment_id` column selects the experiment. The lab's id (`hybrid_offer_page`) differs from the spec's example id, so the command takes the data's id explicitly and, when it is absent, lists the ids the files contain.
+- The files carry one row per player in the assignments and the outcomes tables, so the outcomes are joined to the arm through the assignments. The outcomes hold seven-day totals only, with no daily series.
+- Referee's own tests read a committed real export of the lab's 5,000-player experiment, `referee/tests/data/hybrid_offer_page_5000/`, written by DuckDB from the lab's generator (seed 42; its `PROVENANCE.md` gives the commands and a manifest pins the files byte for byte), so the loader and the statistics are tested on the lab's own output in CI. It is a snapshot: regenerating it is a deliberate act.
+- Referee assumes no scale. The planted problems are detectable at 5,000 players and mostly not at 1,000 (section 19.4), so a fixture that is meant to find them uses 5,000. How long reading takes at larger sizes is measured in 4a and reported there.
+
+### 20.3 What is capped
+
+- Only what a person reads is capped. A text report lists at most 1,000 rows per listing and says so (for example, "showing 1,000 of 120,000; the full list is in the JSON report"). The JSON report holds every row.
+- The cap changes no computation, count, finding or recommendation. A test runs a review with the cap at 1,000 and without it and requires the same numbers and the same verdict.
+
+### 20.4 Three results rules
+
+- RES-007, which section 8 already lists, is the effect over time. It is defined as a test of whether an arm's difference against control differs between cohorts of players grouped by the week of their first exposure (Cochran's Q across the cohorts, with the slope per week reported next to it), not as a check that the last week is negative. The week-3 lift in the planted data is within one standard error of zero, so a sign check would miss a fade that the cohort test detects. At 1,000 players the standard errors are about 2.2 times larger and the test is not expected to detect it.
+- RES-012 is new: players first exposed after their first purchase, in the seven-day window the outcomes cover. It is a warning that reports the count, the share of assigned players and of purchasers, and how the estimate changes without them. It is the results-time counterpart of DES-007 (section 8): a purchase made before the player first saw the change cannot be an effect of it.
+- RES-013 is new: an arm's configuration version changes during the test. It is a warning that reports the versions by cohort week and, where one week holds both versions, the difference between them. The exposures table carries the version too, so the rule may use the version in force at first exposure.
+- Section 8's rule list does not change otherwise. The IDs RES-012 and RES-013 are the next two unused.
+- In the planted data the configuration change confounds RES-007 for `variant_b`: the change is at day 12 of the 21-day window, so with weeks counted from the first assignment the first week holds only version 1, the second both, and the third only version 2 (measured at 5,000 players, seed 42; a Referee test pins the counts on the committed export, by week of assignment and by week of first exposure). A fade in that arm cannot be attributed to novelty alone. When RES-013 fires for an arm, a RES-007 finding for the same arm says so.
+
+### 20.5 What stays out, and what stays open
+
+- A daily outcomes table is not added. It would allow a curve by days since exposure within a player, but it changes the generator's tables and the lab's raw contract, and the cohort test answers the question the rule asks.
+- Open for 4b: the thresholds. RES-007's significance level, and whether and where RES-012 escalates from a warning to a blocker (no published threshold for the share of late-exposed players is known to the author, so any value is a judgement and is written as one). Open for 4c: the writer of the three CSV files in the lab.
+- `scipy` and `numpy` become core dependencies in 4a. `scipy` supplies the distributions (chi-squared for the sample-ratio check and the cohort test, t and normal for the intervals and tests), as section 17.5 anticipated for the sample-ratio check; `numpy` draws the bootstrap resamples. `statsmodels` stays a development dependency, used to validate the statistics.
+- Dunnett's test, which section 9 names, is not implemented (section 9 allows that). The corrections are Bonferroni, Benjamini-Hochberg and, when the dependence between the tests is unknown, Benjamini-Yekutieli, applied to p-values.
+
+Delivered in: 4a (this amendment), 4b, 4c.
