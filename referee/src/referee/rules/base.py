@@ -13,18 +13,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from referee.findings import Finding, Severity
-from referee.power import AlphaAdjustment, PowerError, PowerPlan, plan_power
+from referee.power import PowerError, PowerPlan, plan_power, power_alpha_adjustment
 from referee.spec import ExperimentSpec
-
-
-def power_alpha_adjustment(spec: ExperimentSpec) -> AlphaAdjustment:
-    """The adjustment the power plan uses for what the spec declares.
-
-    Only an explicit "none" turns the adjustment off. An absent field and "bonferroni" plan
-    with Bonferroni, and so does "dunnett", which is slightly less conservative but is not
-    implemented here: the plan may ask for a few more units than Dunnett would.
-    """
-    return "none" if spec.design.alpha_adjustment == "none" else "bonferroni"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -49,11 +39,14 @@ class ReviewContext:
         return cls(spec=spec, plan=plan, power_error=None)
 
 
-Check = Callable[[ReviewContext], dict[str, Any] | None]
+type Check[Context] = Callable[[Context], dict[str, Any] | None]
 
 
 @dataclass(frozen=True, kw_only=True)
-class Rule:
+class Rule[Context]:
+    """A rule over some context: a `ReviewContext` for the design review, a `ResultsContext`
+    (see `referee.results`) for the results review."""
+
     id: str
     severity: Severity
     title: str
@@ -61,7 +54,7 @@ class Rule:
     why_it_matters: str
     remediation: str
     references: tuple[str, ...]
-    check: Check
+    check: Check[Context]
 
     def __post_init__(self) -> None:
         # Build a throwaway finding so a malformed rule fails when it is defined, not the
@@ -81,6 +74,6 @@ class Rule:
             references=self.references,
         )
 
-    def evaluate(self, context: ReviewContext) -> Finding | None:
+    def evaluate(self, context: Context) -> Finding | None:
         evidence = self.check(context)
         return None if evidence is None else self.finding(evidence)
