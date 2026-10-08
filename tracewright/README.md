@@ -18,11 +18,13 @@ All example data is synthetic. The repository contains no production, customer, 
 
 ## What is verified, and what is not
 
-- **Verified by tests (offline):** the schema and its validation, the document loader, the evidence check, the collision/type/naming checks and the merge, the repair loop, the report files (golden files), the CSV importer, and the **real Anthropic SDK against a mocked HTTP transport** (request body, streaming parse, refusals, truncation, every error class).
+- **Verified by tests (offline):** the schema and its validation, the document loader, the evidence check, the collision/type/naming checks and the merge, the repair loop, the report files (golden files), the CSV importer, and the **real Anthropic SDK against a mocked HTTP transport**: the request body (including repair feedback), the streaming parse (including thinking blocks), a refusal, a truncated or otherwise unfinished response, an empty one, HTTP errors 400, 401, 403, 404, 429 and 500, a connection that fails before or during the response, and missing credentials or a missing profile. The tests run with the Anthropic credentials of the machine removed from the environment and from the home directory, and a test that opens a non-local network connection fails.
 - **Not verified:** a live call to a model. No API credentials were available where this was built, so `propose` has never run against the real API. The request shape follows the SDK documentation and is accepted by the SDK, but the API's own validation of it has not been exercised.
 - **Not evaluated:** how good the proposals are. The worked example below is **hand-written** to show what the output looks like and to exercise the checks; it is not model output. Judge proposal quality on your own documents before trusting it.
 
 ## Try it without a model
+
+Once, from this folder, with Python 3.12: `python3.12 -m venv .venv && . .venv/bin/activate && python -m pip install -e .` (the model SDK is not needed for `--replay`).
 
 The example is a made-up feature, "Alliance Treasure Hunt", for a made-up strategy game. `--replay` reads two saved responses instead of calling a model: the first has the mistakes a careless draft would have, the second fixes them.
 
@@ -53,7 +55,8 @@ python -m tracewright propose --doc my-feature.md --doc balance.pdf \
 
 - `--doc` is repeatable: Markdown, text, CSV, JSON, YAML, or PDF. Nothing is truncated; a file that is too large is refused with the limit.
 - `--plan` is optional. If you track in a spreadsheet, [`import-plan`](docs/import-csv.md) turns a CSV into a plan file. With no plan, the proposal creates one and names its own identity keys.
-- `--model` (default `claude-opus-5-5`), `--effort` (default `high`), `--max-repairs` (default 2).
+- `--model` (default `claude-opus-5-5`), `--effort` (default `high`), `--max-repairs` 0 to 5 (default 2), `--owner` (recorded on the proposed events), `--force` (overwrite results of an earlier run in `--out`).
+- **What is sent:** every document, your whole plan, and the previous proposal on each repair round go to the Anthropic API. Do not use it on documents you may not send there. [`docs/propose.md`](docs/propose.md#privacy-what-leaves-your-machine) has the details; with `--replay` nothing is sent.
 
 How it works, every check, the output files, security notes and cost: [`docs/propose.md`](docs/propose.md).
 
@@ -61,7 +64,7 @@ How it works, every check, the output files, security notes and cost: [`docs/pro
 | --- | --- |
 | 0 | A proposal with no blocking problem was written |
 | 1 | A blocking problem remains after repair; the report says UNRESOLVED |
-| 2 | An input cannot be read or is invalid |
+| 2 | An input cannot be read or is invalid (a document, the plan, a `--replay` file, or `--out`) |
 | 3 | A failure inside Tracewright itself |
 | 4 | The model could not be reached, refused, or was cut off |
 
@@ -82,7 +85,9 @@ A plan holds `identity_keys` (the properties that tie an event to a user or devi
 
 - A proposal is a model's reading of your documents. The checks catch invented quotes, name and type clashes and rule violations; they cannot tell whether an event is the *right* one or whether the model understood the design. Read the reasons, not just the event list.
 - A quote that is found proves the words are in the document, nothing more. Quotes from PDFs cannot be searched and are reported as not machine-checked.
-- GOV-001 recognises personal data by property **name** only; it misses a personal value with an innocent name. Treat a hit as a question.
+- Reuse is checked by property name and type. The `pii` flag, allowed values and meaning of a reused property, and the status of a reused event (for example `deprecated`), are not compared with your plan.
+- If your existing plan has a blocker of its own, a proposal can still be OK; the report names it, and `review-plan` on the merged plan will still say REVISE.
+- GOV-001 recognises personal data by property **name** only (words split at underscores and camelCase boundaries); it misses a personal value with an innocent name and flags some harmless names (`phone_model`, `ip_country`). Treat a hit as a question.
 - The rules encode common conventions (`object_action` snake_case names, one type per property name, an owner and a trigger per event), not a standard. Severities are defaults.
 - Tracewright reads plans and documents, never the data the product actually sends.
 - `proceed` and `ok` mean no listed objection was raised, not that the tracking is correct or worth having.

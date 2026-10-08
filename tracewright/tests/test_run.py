@@ -113,3 +113,48 @@ def test_the_proposer_is_called_with_the_request_unchanged():
     request = example_request()
     run_proposal(request, Spy())
     assert seen == [request] and isinstance(seen[0], ProposalRequest)
+
+
+def test_each_attempt_is_reported_as_it_finishes():
+    first, final = replay_attempts()
+    seen = []
+    proposer = Recording(dumps(first), dumps(final))
+    result = run_proposal(
+        example_request(),
+        proposer,
+        on_attempt=lambda a: seen.append((a.number, len(a.feedback_sent))),
+    )
+    assert seen == [(1, 4), (2, 0)] and result.status == "ok"
+
+
+def test_a_failed_repair_round_says_what_was_completed_and_lost():
+    first = replay_attempts()[0]
+    seen = []
+
+    class FailsSecond:
+        def __init__(self):
+            self.calls = 0
+
+        def propose(self, request, feedback):
+            self.calls += 1
+            if self.calls == 2:
+                raise ProposerError("the API returned an error (HTTP 529)")
+            usage = {"input_tokens": 9000, "output_tokens": 4000}
+            return ProposerResponse(text=dumps(first), usage=usage)
+
+    with pytest.raises(ProposerError) as caught:
+        run_proposal(example_request(), FailsSecond(), on_attempt=seen.append)
+    message = str(caught.value)
+    assert "repair round 1 failed after 1 completed attempt(s)" in message
+    assert "discarded" in message and "HTTP 529" in message
+    assert len(seen) == 1  # the first attempt was reported before the second failed
+
+
+def test_a_failure_on_the_first_call_is_not_wrapped():
+    class Down:
+        def propose(self, request, feedback):
+            raise ProposerError("no credentials")
+
+    with pytest.raises(ProposerError) as caught:
+        run_proposal(example_request(), Down())
+    assert str(caught.value) == "no credentials"

@@ -80,3 +80,19 @@ def test_a_deprecated_event_needs_no_identity_or_docs(raw_plan):
 
 def test_no_metrics_means_no_unused_event_finding(raw_plan):
     assert run("COV-004", raw_plan, lambda r: r.update(metrics=[])) is None
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["userEmail", "Email", "IP", "ipAddress", "IPAddress", "phoneNumber", "SSN", "firstName",
+     "fullname", "firstname", "DOB", "BirthDate", "birthday", "passportNumber"],
+)
+def test_gov_001_sees_camel_case_and_joined_spellings(raw_plan, name):
+    assert run("GOV-001", raw_plan, add_prop(name)) is not None
+
+
+@pytest.mark.parametrize(
+    "name", ["shipping_method", "tip", "ship_to", "description", "mailbox_id", "strip_count"]
+)
+def test_gov_001_does_not_match_inside_words(raw_plan, name):
+    assert run("GOV-001", raw_plan, add_prop(name)) is None

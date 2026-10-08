@@ -259,7 +259,7 @@ events:
     - battle
     - daily_quest
     - pack
-  - name: amount
+  - name: fragment_amount
     type: integer
     required: true
     description: Fragments credited.

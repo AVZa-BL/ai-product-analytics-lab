@@ -208,14 +208,14 @@
             "reuses_existing": false
           },
           {
-            "name": "amount",
+            "name": "fragment_amount",
             "type": "integer",
             "required": true,
             "pii": false,
             "allowed_values": [],
             "description": "Fragments credited.",
             "rationale": "Pace of the hunt and size of each source.",
-            "reuses_existing": true
+            "reuses_existing": false
           }
         ]
       },
@@ -550,7 +550,7 @@
   },
   "problems": [],
   "introduced_findings": [],
-  "merged_plan_sha256": "1f2e65be9be25c1c0117c57ade3853202782701568d0003fcd68acc1a2dc1ed8",
+  "merged_plan_sha256": "faf2e7910bd84a0ce5e2cb2c407e2ea0f285fbe2110f9cd4894af64856b628e5",
   "review_of_merged_plan": {
     "recommendation": "proceed",
     "blocking_rule_ids": []

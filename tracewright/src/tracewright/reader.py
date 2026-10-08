@@ -12,6 +12,11 @@ from typing import Any
 
 _ID_PATTERN = re.compile(r"^[a-z0-9_]+$")
 
+# Control characters (tab and line breaks allowed) and the bidirectional overrides and isolates.
+# Text that carries them is refused rather than cleaned: a terminal or an editor would act on
+# them, and silently stripping would make the files disagree with what was read.
+_UNSAFE_TEXT = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]")
+
 
 class Node:
     """A mapping being read: collects violations with their path and tracks unread keys."""
@@ -43,6 +48,9 @@ class Node:
             return None
         if not isinstance(value, str) or (not allow_empty and not value.strip()):
             self.fail(key, f"must be non-empty text, got {value!r}")
+            return None
+        if _UNSAFE_TEXT.search(value):
+            self.fail(key, f"contains a control or direction-override character: {value!r}")
             return None
         return value.strip()
 
@@ -109,15 +117,16 @@ class Node:
         if value is None:
             return None
         ok = isinstance(value, list) and (allow_empty or value) and all(
-            isinstance(item, str) and item.strip() for item in value
+            isinstance(item, str) and item.strip() and not _UNSAFE_TEXT.search(item)
+            for item in value
         )
         if not ok:
             kind = "a list of text" if allow_empty else "a non-empty list of text"
-            self.fail(key, f"must be {kind}, got {value!r}")
+            self.fail(key, f"must be {kind} without control characters, got {value!r}")
             return None
         return tuple(item.strip() for item in value)
 
     def reject_unknown(self) -> None:
         for key in self.data:
             if key not in self._seen:
-                self.fail(str(key), "is not a known field")
+                self.fail(repr(key)[1:-1], "is not a known field")

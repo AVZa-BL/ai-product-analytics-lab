@@ -22,8 +22,10 @@ from tracewright.review import review_plan
 
 ProblemSeverity = Literal["blocker", "warning", "info"]
 
-# A finding the model cannot fix, because the fix is a fact only the team has.
-UNREPAIRABLE_RULES = frozenset({"DOC-002"})
+# Findings the model cannot clear, because the fix is a fact only the team holds or a change to
+# the existing plan: who owns an event (DOC-002), or that an event the plan lists as "planned"
+# has shipped (COV-003). They are reported, never sent back.
+UNREPAIRABLE_RULES = frozenset({"DOC-002", "COV-003"})
 
 
 # Every problem code, with what it means. docs/propose.md lists the same codes; a test keeps the
@@ -32,6 +34,7 @@ PROBLEM_CODES: dict[str, str] = {
     "DUPLICATE": "An event name appears twice in the proposal, or in more than one list.",
     "COLLISION": "A new event has the name of an event the plan already has.",
     "UNKNOWN_EVENT": "An extended or reused event is not in the existing plan.",
+    "AMBIGUOUS_EVENT": "A name matches two plan events that differ only in letter case.",
     "DUPLICATE_PROPERTY": "An extended event adds a property it already has.",
     "IDENTITY": "There is no existing plan, and identity_keys or feature.id is missing.",
     "METRIC_COLLISION": "A proposed metric has the name of a metric the plan already has.",
@@ -121,8 +124,8 @@ def check_proposal(
             ]
         else:
             review = review_plan(shipped)
-            known = {_finding_key(f) for f in baseline.findings} if baseline else set()
-            introduced = tuple(f for f in review.findings if _finding_key(f) not in known)
+            old = baseline.findings if baseline else ()
+            introduced = tuple(f for f in review.findings if _is_introduced(f, old))
     return CheckResult(
         problems=tuple(problems),
         grounding=grounding,
@@ -133,16 +136,46 @@ def check_proposal(
     )
 
 
-def _finding_key(finding: Finding) -> tuple[str, str]:
-    import json
+def _is_introduced(finding: Finding, baseline: Sequence[Finding]) -> bool:
+    """Whether the proposal is responsible for this finding of the merged plan.
 
-    return finding.rule_id, json.dumps(finding.evidence, sort_keys=True)
+    A finding the plan already had, with the same evidence, is not the proposal's doing. One
+    rule needs a finer test: SCH-001 lists every event of every conflicting property, so a
+    proposal that merely reuses a property the plan already has in two types would change the
+    evidence without making anything worse, and the model cannot repair the plan's own
+    conflict. There, only a new conflicting property, or a new type on a conflicting one, counts.
+    """
+    same_rule = [b for b in baseline if b.rule_id == finding.rule_id]
+    if finding.rule_id == "SCH-001":
+        known: dict[str, set[str]] = {}
+        for b in same_rule:
+            for name, types in b.evidence.get("properties", {}).items():
+                known.setdefault(name, set()).update(types)
+        return any(
+            set(types) - known.get(name, set())
+            for name, types in finding.evidence.get("properties", {}).items()
+        )
+    return not any(b.evidence == finding.evidence for b in same_rule)
+
+
+def _resolve(name: str, names: Sequence[str]) -> tuple[str | None, list[str]]:
+    """Which plan event a name means: an exact match, else the one match that differs only in
+    letter case. Returns (name, []) when it is clear, (None, []) when there is none, and
+    (None, candidates) when two or more events differ only in case and none matches exactly."""
+    if name in names:
+        return name, []
+    folded = [n for n in names if _key(n) == _key(name)]
+    if len(folded) == 1:
+        return folded[0], []
+    return None, folded
 
 
 def _structure(proposal: Proposal, plan: TrackingPlan | None) -> tuple[list[Problem], Proposal]:
     """Structural problems, and the proposal with the offending entries removed for review."""
     problems: list[Problem] = []
-    existing = {_key(e.name): e for e in plan.events} if plan else {}
+    events_by_name = {e.name: e for e in plan.events} if plan else {}
+    plan_names = list(events_by_name)
+    plan_keys = {_key(n) for n in plan_names}
 
     def blocker(code: str, subject: str, message: str) -> None:
         problems.append(Problem(code=code, severity="blocker", subject=subject, message=message))
@@ -165,7 +198,7 @@ def _structure(proposal: Proposal, plan: TrackingPlan | None) -> tuple[list[Prob
                 )
                 continue
             seen[key] = label
-            if label == "new_events" and key in existing:
+            if label == "new_events" and key in plan_keys:
                 blocker(
                     "COLLISION",
                     item.name,
@@ -173,16 +206,28 @@ def _structure(proposal: Proposal, plan: TrackingPlan | None) -> tuple[list[Prob
                     "to add properties or reused_events to rely on it",
                 )
                 continue
-            if label != "new_events" and key not in existing:
-                blocker(
-                    "UNKNOWN_EVENT",
-                    item.name,
-                    f"{label} names {item.name!r}, which is not in the existing plan; "
-                    "check the spelling or propose it as a new event",
-                )
-                continue
+            target: str | None = None
+            if label != "new_events":
+                target, candidates = _resolve(item.name, plan_names)
+                if candidates:
+                    blocker(
+                        "AMBIGUOUS_EVENT",
+                        item.name,
+                        f"{label} names {item.name!r}, which matches {candidates} in the plan, "
+                        "events that differ only in letter case; use the exact name of one",
+                    )
+                    continue
+                if target is None:
+                    blocker(
+                        "UNKNOWN_EVENT",
+                        item.name,
+                        f"{label} names {item.name!r}, which is not in the existing plan; "
+                        "check the spelling or propose it as a new event",
+                    )
+                    continue
             if label == "extended_events":
-                have = {_key(p.name) for p in existing[key].properties}
+                assert target is not None
+                have = {_key(p.name) for p in events_by_name[target].properties}
                 fresh = []
                 for prop in item.add_properties:
                     if _key(prop.name) in have:
@@ -382,8 +427,9 @@ def merge(
             raw["owner"] = owner
     events: list[dict[str, Any]] = raw["events"]
     for item in proposal.extended_events:
+        target, _ = _resolve(item.name, [e["name"] for e in events])
         for event in events:
-            if _key(event["name"]) == _key(item.name):
+            if event["name"] == target:
                 event.setdefault("properties", []).extend(
                     _property_dict(p) for p in item.add_properties
                 )

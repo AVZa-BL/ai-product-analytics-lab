@@ -9,6 +9,7 @@ never edits a proposal itself and never hides a problem to make the result look 
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from tracewright.propose.check import CheckResult, check_proposal, repair_feedback
@@ -17,6 +18,7 @@ from tracewright.propose.proposers import Proposer
 from tracewright.propose.request import (
     Feedback,
     ProposalRequest,
+    ProposerError,
     ProposerResponse,
 )
 
@@ -73,14 +75,28 @@ def run_proposal(
     *,
     max_repairs: int = 2,
     owner: str | None = None,
+    on_attempt: Callable[[Attempt], None] | None = None,
 ) -> ProposalResult:
-    """Propose, check and repair. Raises ProposerError if the model cannot be reached."""
+    """Propose, check and repair. Raises ProposerError if the model cannot be reached.
+
+    `on_attempt` is called as each attempt finishes, so a caller can show progress and spent
+    tokens even if a later round fails. A failure in a repair round is raised with a message
+    that says how many earlier attempts were completed and are discarded.
+    """
     if max_repairs < 0:
         raise ValueError("max_repairs must be 0 or more")
     attempts: list[Attempt] = []
     feedback: Feedback | None = None
     for number in range(1, max_repairs + 2):
-        response = proposer.propose(request, feedback)
+        try:
+            response = proposer.propose(request, feedback)
+        except ProposerError as error:
+            if not attempts:
+                raise
+            raise ProposerError(
+                f"repair round {number - 1} failed after {len(attempts)} completed attempt(s), "
+                f"whose results are discarded: {error}"
+            ) from error
         proposal, parse_problems = parse_response(response.text)
         check = None
         if proposal is not None:
@@ -93,16 +109,17 @@ def run_proposal(
             problems = problems[:MAX_FEEDBACK_LINES] + [
                 f"... and {extra} more problems of the same kinds; fix the pattern, not just these"
             ]
-        attempts.append(
-            Attempt(
-                number=number,
-                response=response,
-                proposal=proposal,
-                parse_problems=parse_problems,
-                check=check,
-                feedback_sent=tuple(problems),
-            )
+        attempt = Attempt(
+            number=number,
+            response=response,
+            proposal=proposal,
+            parse_problems=parse_problems,
+            check=check,
+            feedback_sent=tuple(problems),
         )
+        attempts.append(attempt)
+        if on_attempt is not None:
+            on_attempt(attempt)
         if not problems:
             break
         feedback = Feedback(previous_text=response.text, problems=tuple(problems))

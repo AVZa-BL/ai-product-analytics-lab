@@ -110,7 +110,7 @@ the product actually sends.
 ### GOV-001: Property name suggests personal data but is not marked pii
 
 - **Severity:** blocker
-- **Fires when:** A property is not marked pii: true and its name contains a personal-data word such as email, phone, address, ip, ssn, password, passport, dob, birthdate or surname, or a pair such as first_name or full_name.
+- **Fires when:** A property is not marked pii: true and its name, split into words at underscores and at camelCase boundaries, contains a personal-data word such as email, phone, address, ip, ssn, password, passport, dob, birthdate, birthday or surname, a joined spelling such as firstname or phonenumber, or a pair such as first_name, last_name, full_name or ip_address.
 - **Why it matters:** Personal data sent to analytics without a recorded decision is a privacy risk and a compliance question (data minimisation). The check is by name, so it can be wrong in both directions: it will miss a personal value with an innocent name.
 - **What to do:** If the property holds personal data, set pii: true and record the lawful basis outside this plan, or stop sending it. If it does not, rename it so it is not mistaken for personal data.
 

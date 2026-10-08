@@ -56,6 +56,8 @@ class Document:
 def load_document(path: str | Path) -> Document:
     """Read one document. Raises DocumentError for anything it will not guess about."""
     file = Path(path)
+    if file.is_dir():
+        raise DocumentError(f"{file}: is a directory; pass each document with its own --doc")
     if _UNSAFE_NAME.search(file.name):
         raise DocumentError(
             f"{file}: the file name contains a control character, quote, backslash, < or >; "
@@ -68,7 +70,11 @@ def load_document(path: str | Path) -> Document:
             f"{file}: unsupported format {suffix or '(no extension)'!r}; "
             f"supported: {allowed}. Convert other formats (for example .docx) to text or PDF first"
         )
+    limit = MAX_PDF_BYTES if suffix == PDF_SUFFIX else MAX_TEXT_BYTES
     try:
+        size = file.stat().st_size
+        if size > limit:  # refuse before reading, so a huge file costs no memory
+            raise DocumentError(_too_big(file, size, suffix))
         raw = file.read_bytes()
     except OSError as error:
         raise DocumentError(f"{file}: cannot be read: {error.strerror or error}") from error
@@ -77,19 +83,10 @@ def load_document(path: str | Path) -> Document:
         raise DocumentError(f"{file}: is empty")
 
     if suffix == PDF_SUFFIX:
-        if len(raw) > MAX_PDF_BYTES:
-            raise DocumentError(
-                f"{file}: is {len(raw):,} bytes; the limit for a PDF is {MAX_PDF_BYTES:,}"
-            )
         if not raw.startswith(b"%PDF-"):
             raise DocumentError(f"{file}: does not look like a PDF (no %PDF- header)")
         return Document(name=file.name, kind="pdf", text=None, data=raw, sha256=digest)
 
-    if len(raw) > MAX_TEXT_BYTES:
-        raise DocumentError(
-            f"{file}: is {len(raw):,} bytes; the limit for a text document is {MAX_TEXT_BYTES:,}. "
-            "Split it, or pass only the sections about the feature (Tracewright never truncates)"
-        )
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError as error:
@@ -99,6 +96,15 @@ def load_document(path: str | Path) -> Document:
     if "\x00" in text:
         raise DocumentError(f"{file}: contains NUL characters; it is not a text document")
     return Document(name=file.name, kind="text", text=text, data=None, sha256=digest)
+
+
+def _too_big(file: Path, size: int, suffix: str) -> str:
+    if suffix == PDF_SUFFIX:
+        return f"{file}: is {size:,} bytes; the limit for a PDF is {MAX_PDF_BYTES:,}"
+    return (
+        f"{file}: is {size:,} bytes; the limit for a text document is {MAX_TEXT_BYTES:,}. "
+        "Split it, or pass only the sections about the feature (Tracewright never truncates)"
+    )
 
 
 def load_documents(paths: list[str] | tuple[str, ...]) -> tuple[Document, ...]:

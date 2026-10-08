@@ -89,3 +89,18 @@ def test_a_file_name_that_could_confuse_the_prompt_is_refused(tmp_path, name):
         pytest.skip("the file system cannot hold this name")
     with pytest.raises(DocumentError, match="file name"):
         load_document(f)
+
+
+def test_a_directory_is_not_a_document(tmp_path):
+    with pytest.raises(DocumentError, match="is a directory"):
+        load_document(tmp_path)
+
+
+def test_a_huge_file_is_refused_without_being_read(tmp_path, monkeypatch):
+    f = tmp_path / "big.md"
+    f.write_bytes(b"x" * (MAX_TEXT_BYTES + 1))
+    reads = []
+    monkeypatch.setattr(type(f), "read_bytes", lambda self: reads.append(self) or b"")
+    with pytest.raises(DocumentError, match="limit"):
+        load_document(f)
+    assert not reads

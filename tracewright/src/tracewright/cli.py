@@ -9,6 +9,7 @@ an uncaught Python exception exits with 1, which a pipeline would read as "the p
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import traceback
 from collections.abc import Sequence
@@ -75,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     propose.add_argument(
         "--max-repairs", type=int, default=2, metavar="N",
-        help="how many times a failing proposal is sent back (default: 2)",
+        help="how many times a failing proposal is sent back, 0 to 5 (default: 2)",
     )
     propose.add_argument(
         "--replay", metavar="FILE",
@@ -99,7 +100,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     imp.add_argument("--owner", help="default owner for every event")
     imp.add_argument("--out", metavar="FILE", help="write here instead of standard output")
+    imp.add_argument("--force", action="store_true", help="overwrite --out if it exists")
     return parser
+
+
+def _out_problem(out: Path) -> str | None:
+    """Why --out cannot be written, found before any paid model call; None when it can."""
+    probe = out
+    while not probe.exists() and not probe.is_symlink():
+        parent = probe.parent
+        if parent == probe:
+            break
+        probe = parent
+    if not probe.is_dir():
+        return f"{probe} is not a directory"
+    if not os.access(probe, os.W_OK | os.X_OK):
+        return f"{probe} is not writable"
+    return None
 
 
 def _plan_error(path: str, error: PlanError) -> str:
@@ -148,6 +165,14 @@ def _import_plan(args: argparse.Namespace) -> int:
         return EXIT_UNREADABLE
     text = render_plan_yaml(plan)
     if args.out:
+        target = Path(args.out)
+        if (target.exists() or target.is_symlink()) and not args.force:
+            print(
+                f"tracewright: error: {target} already exists; use --force to overwrite it, "
+                "or choose another --out",
+                file=sys.stderr,
+            )
+            return EXIT_UNREADABLE
         try:
             Path(args.out).write_text(text, encoding="utf-8")
         except OSError as error:
@@ -185,7 +210,13 @@ def _propose(args: argparse.Namespace) -> int:
     if out.exists() and not out.is_dir():
         print(f"tracewright: error: --out {out} exists and is not a directory", file=sys.stderr)
         return EXIT_UNREADABLE
-    clashes = [name for name in OUTPUT_FILES if (out / name).exists()]
+    problem = _out_problem(out)
+    if problem:
+        print(f"tracewright: error: cannot write to {out}: {problem}", file=sys.stderr)
+        return EXIT_UNREADABLE
+    clashes = [
+        name for name in OUTPUT_FILES if (out / name).exists() or (out / name).is_symlink()
+    ]
     if clashes and not args.force:
         print(
             f"tracewright: error: {out} already holds {clashes}; use --force to overwrite, "
@@ -212,11 +243,24 @@ def _propose(args: argparse.Namespace) -> int:
                 model=args.model or DEFAULT_MODEL, effort=args.effort or DEFAULT_EFFORT
             )
         )
+    except ProposerError as error:
+        # A replay file that cannot be read, like any other unreadable input, is a usage error.
+        print(f"tracewright: error: {error}", file=sys.stderr)
+        return EXIT_UNREADABLE
+
+    def report_attempt(attempt) -> None:
+        usage = attempt.response.usage
+        extra = f" ({usage['input_tokens']:,} in, {usage['output_tokens']:,} out)" if usage else ""
+        print(f"attempt {attempt.number}: {len(attempt.feedback_sent)} problem(s){extra}",
+              file=sys.stderr)
+
+    try:
         result = run_proposal(
             ProposalRequest(documents=documents, plan=plan),
             proposer,
             max_repairs=args.max_repairs,
             owner=args.owner,
+            on_attempt=report_attempt,
         )
     except ProposerError as error:
         print(f"tracewright: error: {error}", file=sys.stderr)
@@ -230,21 +274,24 @@ def _propose(args: argparse.Namespace) -> int:
             "merged-plan.yaml": merged_plan_yaml(result),
             "plan.diff": plan_diff(result),
         }
-        written = []
+        written, removed = [], []
         for name, content in files.items():
             if content is not None:
                 (out / name).write_text(content, encoding="utf-8")
                 written.append(name)
+        # With --force the directory may hold files of an earlier run. The ones this run did not
+        # produce would sit next to a report that says they were not written, so they go.
+        for name in files:
+            if name not in written and ((out / name).exists() or (out / name).is_symlink()):
+                (out / name).unlink()
+                removed.append(name)
     except OSError as error:
         print(f"tracewright: error: cannot write to {out}: {error.strerror or error}",
               file=sys.stderr)
         return EXIT_UNREADABLE
 
-    for attempt in result.attempts:
-        usage = attempt.response.usage
-        extra = f" ({usage['input_tokens']:,} in, {usage['output_tokens']:,} out)" if usage else ""
-        print(f"attempt {attempt.number}: {len(attempt.feedback_sent)} problem(s){extra}",
-              file=sys.stderr)
+    if removed:
+        print(f"removed {', '.join(removed)} left over from an earlier run", file=sys.stderr)
     print(f"status: {result.status}; wrote {', '.join(written)} to {out}")
     return EXIT_OK if result.status == "ok" else EXIT_BLOCKED
 

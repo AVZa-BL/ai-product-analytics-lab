@@ -43,7 +43,7 @@ Evidence for 7 event(s): 6 quoted from the documents and found, 0 quoted but not
 | `player_id` | string | yes | no | reused | Opaque id of the acting player. Ties the event to a player, as on every existing event. |
 | `hunt_id` | string | yes | no | new | Id of one hunt of one alliance. Joins all events of a hunt together; a hunt is the unit the success criteria are measured on. |
 | `source` | enum: battle, daily_quest, pack | yes | no | new | Where the fragments came from. The Fragment Pack criterion is the share of fragments with source pack. |
-| `amount` | integer | yes | no | reused | Fragments credited. Pace of the hunt and size of each source. |
+| `fragment_amount` | integer | yes | no | new | Fragments credited. Pace of the hunt and size of each source. |
 
 ### `treasure_chest_opened` (must)
 
@@ -158,10 +158,9 @@ Evidence for 7 event(s): 6 quoted from the documents and found, 0 quoted but not
 
 ## Automatic checks
 
-No problems found.
+No problems found in the proposal.
 
-
-The existing plan already has 1 finding(s) from `tracewright review-plan`; those are not counted against this proposal. The merged plan was reviewed as if the feature had shipped.
+The existing plan already has 1 finding(s) from `tracewright review-plan` (0 blocker, 1 warning, 0 info). They are not counted against this proposal, unless the proposal changes a finding, in which case that finding is shown whole. The merged plan was reviewed as if the feature had shipped.
 
 ## Provenance
 

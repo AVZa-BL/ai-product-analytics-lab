@@ -27,6 +27,7 @@ from tracewright.propose.run import ProposalResult
 
 REPORT_VERSION = 1
 _PRIORITY_ORDER = {"must": 0, "should": 1, "could": 2}
+_SEVERITIES = ("blocker", "warning", "info")
 _EVIDENCE_LABEL = {
     "found": "quote found in the document",
     "missing": "QUOTE NOT FOUND",
@@ -39,9 +40,14 @@ _EVIDENCE_LABEL = {
 
 
 def _line(text: str) -> str:
-    """One line of model text, safe in running Markdown."""
+    """One line of model text, safe in running Markdown.
+
+    Line breaks and runs of spaces become one space, `<` is written as an entity (no raw HTML),
+    and square brackets are escaped, which is what turns `[text](url)` and `![alt](url)` into
+    plain text instead of a live link or an image that a viewer would fetch.
+    """
     flat = re.sub(r"\s+", " ", text).strip()
-    return flat.replace("<", "&lt;")
+    return flat.replace("<", "&lt;").replace("[", "\\[").replace("]", "\\]")
 
 
 def _cell(text: str) -> str:
@@ -50,6 +56,10 @@ def _cell(text: str) -> str:
 
 def _code(text: str) -> str:
     return "`" + re.sub(r"\s+", " ", text).replace("`", "'").strip() + "`"
+
+
+def _code_cell(text: str) -> str:
+    return _code(text).replace("|", "\\|")
 
 
 def _quote(text: str) -> str:
@@ -177,7 +187,7 @@ def _property_table(properties: Iterable[ProposedProperty]) -> list[str]:
         if p.type == "enum" and p.allowed_values:
             kind = "enum: " + ", ".join(p.allowed_values)
         lines.append(
-            f"| {_code(p.name)} | {_cell(kind)} | {'yes' if p.required else 'no'} "
+            f"| {_code_cell(p.name)} | {_cell(kind)} | {'yes' if p.required else 'no'} "
             f"| {'yes' if p.pii else 'no'} | {'reused' if p.reuses_existing else 'new'} "
             f"| {_cell(p.description + ' ' + p.rationale)} |"
         )
@@ -309,7 +319,7 @@ def _checks(result: ProposalResult, had_plan: bool) -> list[str]:
         return []
     lines = ["## Automatic checks", ""]
     if not check.problems and not check.introduced:
-        lines += ["No problems found.", ""]
+        lines += ["No problems found in the proposal.", ""]
     for problem in check.problems:
         if problem.severity == "info" and problem.code == "EVIDENCE_UNVERIFIABLE":
             continue
@@ -323,16 +333,27 @@ def _checks(result: ProposalResult, had_plan: bool) -> list[str]:
             f"Evidence: {_code(json.dumps(finding.evidence, sort_keys=True))}. "
             f"What to do: {_line(finding.remediation)}"
         )
-    if check.baseline_review is not None:
-        existing = len(check.baseline_review.findings)
+    baseline = check.baseline_review
+    if lines[-1] != "":
+        lines.append("")
+    if baseline is not None:
+        counts = {s: sum(f.severity == s for f in baseline.findings) for s in _SEVERITIES}
         lines += [
-            "",
-            f"The existing plan already has {existing} finding(s) from `tracewright review-plan`; "
-            "those are not counted against this proposal. The merged plan was reviewed as if "
-            "the feature had shipped.",
+            f"The existing plan already has {len(baseline.findings)} finding(s) from "
+            f"`tracewright review-plan` ({counts['blocker']} blocker, {counts['warning']} "
+            f"warning, {counts['info']} info). They are not counted against this proposal, "
+            "unless the proposal changes a finding, in which case that finding is shown whole. "
+            "The merged plan was reviewed as if the feature had shipped.",
         ]
+        if baseline.recommendation == "revise":
+            lines += [
+                "",
+                "**The existing plan has a blocker of its own, so `review-plan` on the merged "
+                f"plan will still recommend REVISE** (blocking: "
+                f"{', '.join(baseline.blocking_rule_ids)}). Fixing it is outside this proposal.",
+            ]
     elif not had_plan:
-        lines += ["", "There was no existing plan; the proposal was reviewed as a new plan."]
+        lines += ["There was no existing plan; the proposal was reviewed as a new plan."]
     lines.append("")
     return lines
 

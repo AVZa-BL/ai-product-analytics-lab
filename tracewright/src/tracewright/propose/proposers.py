@@ -31,7 +31,8 @@ def _sdk() -> Any:
         import anthropic
     except ImportError as error:
         raise ProposerError(
-            "the anthropic package is not installed; run: pip install 'tracewright[llm]'"
+            "the anthropic package is not installed; from the tracewright/ folder run: "
+            "python -m pip install -e '.[llm]'"
         ) from error
     return anthropic
 
@@ -126,9 +127,11 @@ class AnthropicProposer:
         self, request: ProposalRequest, feedback: Feedback | None
     ) -> ProposerResponse:
         anthropic = _sdk()
-        client = self._get_client()
+        import httpx2  # a dependency of the SDK, so present whenever the SDK is
+
         body = self.request_body(request, feedback)
         try:
+            client = self._get_client()
             with client.messages.stream(**body) as stream:
                 message = stream.get_final_message()
         except TypeError as error:
@@ -164,6 +167,17 @@ class AnthropicProposer:
             ) from error
         except anthropic.APIConnectionError as error:
             raise ProposerError(f"could not reach the API: {error}") from error
+        except httpx2.TransportError as error:
+            # A connection that drops while the response is streaming surfaces as a transport
+            # error of the HTTP library, not as an SDK error.
+            raise ProposerError(
+                f"the connection failed while the response was arriving "
+                f"({type(error).__name__}: {error}); nothing was proposed, try again"
+            ) from error
+        except anthropic.AnthropicError as error:
+            # What is left of the SDK's own errors, for example a credential profile that is
+            # selected but missing or unusable.
+            raise ProposerError(f"the Anthropic SDK reported an error: {error}") from error
         return self._response(message)
 
     def _response(self, message: Any) -> ProposerResponse:
@@ -180,6 +194,14 @@ class AnthropicProposer:
             raise ProposerError(
                 f"the response hit the {self.max_tokens:,}-token output limit and is incomplete; "
                 "split the document or propose the feature in parts"
+            )
+        if message.stop_reason != "end_turn":
+            # Anything but a finished answer (a context-window cutoff, a paused turn, a stream
+            # that ended without a stop reason) is not a proposal to parse and repair.
+            raise ProposerError(
+                f"the response ended with stop_reason {message.stop_reason!r}, not a finished "
+                "answer; if the reason is model_context_window_exceeded, the documents are too "
+                "large for the model's context window: pass only the sections about the feature"
             )
         text = "".join(block.text for block in message.content if block.type == "text")
         if not text.strip():

@@ -16,13 +16,17 @@ PROPERTY_NAME = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
 # Name parts that usually mean personal data. A heuristic, so a hit is a question, not a verdict.
 PII_TOKENS = frozenset(
     {
-        "email", "phone", "ssn", "password", "passport",
-        "dob", "birthdate", "surname", "address", "ip",
+        "email", "phone", "ssn", "password", "passport", "dob", "birthdate", "birthday",
+        "surname", "address", "ip",
+        # joined spellings, which a snake_case split cannot take apart
+        "firstname", "lastname", "fullname", "phonenumber", "emailaddress", "ipaddress",
     }
 )
 PII_PAIRS = frozenset(
     {("first", "name"), ("last", "name"), ("full", "name"), ("birth", "date"), ("ip", "address")}
 )
+_CAMEL_LOWER_UPPER = re.compile(r"([a-z0-9])([A-Z])")
+_CAMEL_ACRONYM = re.compile(r"([A-Z]+)([A-Z][a-z])")
 
 
 def _live(plan: TrackingPlan) -> tuple[Event, ...]:
@@ -31,7 +35,9 @@ def _live(plan: TrackingPlan) -> tuple[Event, ...]:
 
 
 def _looks_like_pii(name: str) -> bool:
-    parts = name.split("_")
+    # camelCase and PascalCase are split like snake_case, so userEmail and IPAddress are seen.
+    spaced = _CAMEL_ACRONYM.sub(r"\1_\2", _CAMEL_LOWER_UPPER.sub(r"\1_\2", name))
+    parts = spaced.lower().split("_")
     return any(part in PII_TOKENS for part in parts) or any(
         pair in PII_PAIRS for pair in zip(parts, parts[1:], strict=False)
     )
@@ -235,9 +241,11 @@ GOV_001 = Rule(
     severity="blocker",
     title="Property name suggests personal data but is not marked pii",
     fires_when=(
-        "A property is not marked pii: true and its name contains a personal-data word such as "
-        "email, phone, address, ip, ssn, password, passport, dob, birthdate or surname, or a pair "
-        "such as first_name or full_name."
+        "A property is not marked pii: true and its name, split into words at underscores and at "
+        "camelCase boundaries, contains a personal-data word such as email, phone, address, ip, "
+        "ssn, password, passport, dob, birthdate, birthday or surname, a joined spelling such as "
+        "firstname or phonenumber, or a pair such as first_name, last_name, full_name or "
+        "ip_address."
     ),
     why_it_matters=(
         "Personal data sent to analytics without a recorded decision is a privacy risk and a "

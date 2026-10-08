@@ -29,9 +29,17 @@ describes the event itself.
 | `trigger`, `owner`, `status` | event | Say it on any row of the event; if repeated it must agree. `status` is `active`, `planned` or `deprecated`. |
 
 All columns except `event` are optional. A column that is not in the table is refused, so a typo
-in a header does not silently drop data. Every error names the row (row 1 is the header).
+in a header does not silently drop data.
 
-The file must be UTF-8 and at most 5 MB. See [`examples/current-tracking.csv`](../examples/current-tracking.csv).
+**Errors.** Problems in a row's own fields name the row (row 1 is the header): an empty event, a
+bad `true`/`false`, an unknown `type`, a property declared twice, a row with more cells than the
+header (usually an unquoted comma in a value), conflicting event fields, or type, `required`, `pii`
+or `allowed_values` filled in on a row with no property name. A problem that is found only when the
+whole plan is validated, such as a bad `--id`, is reported by field path.
+
+**Format.** Comma-separated, UTF-8, at most 5 MB. Excel in some locales writes semicolons; save as
+"CSV UTF-8 (Comma delimited)". The importer does not guess the delimiter. `--out` is not
+overwritten unless `--force` is given, because the generated YAML is meant to be edited by hand. See [`examples/current-tracking.csv`](../examples/current-tracking.csv).
 
 ## What the importer does not do
 
