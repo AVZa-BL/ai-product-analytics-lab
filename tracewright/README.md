@@ -14,7 +14,29 @@ All example data is synthetic. The repository contains no production, customer, 
 | --- | --- | --- |
 | 1 | Tracking-plan schema, 12 review rules, `review-plan` | Done |
 | 2 | `propose`: feature documents + current plan → proposal with types and reasons; `import-plan` from CSV | Done, see *What is verified* |
-| 3 | Compare a plan with events actually observed in an export (drift) | Planned |
+| 3 | Run `propose` on a real design document with a real model, and judge the proposals against what an analyst would write | Next. Needs an API key and one real document |
+| 4 | Read the current tracking from a **Google Sheet** (map the sheet's own columns), instead of a hand-made CSV | Planned. Needs the sheet's column layout, see *Next* |
+| 5 | Compare a plan with events actually observed in an export (drift) | Planned |
+
+## Next
+
+Nothing in this section is built. It records what comes next and what is needed to start.
+
+**Google Sheets as the input for the current tracking (milestone 4).** The tracking calls and their specifications live in a Google Sheet. Today `propose` reads a plan file, and `import-plan` reads one fixed CSV layout ([`docs/import-csv.md`](docs/import-csv.md)), so a real sheet will not load as it is: its headers will differ from ours, and any unknown column is refused. What decides the design is the sheet's actual layout, so before building I need, from you:
+
+1. The **header row** of the sheet (column names only, no data needed), and whether it is one tab for all events or one tab per event or area.
+2. Where the **specification** lives: free text in one column, or separate columns for trigger, owner and so on.
+3. How the **property types** are written (for example `string`, `int`, `bool`, or something else).
+4. How the tool should **reach** the sheet: by you exporting a tab to CSV (works today, see below), or by the tool reading the sheet directly. Reading it directly needs Google credentials that you set up (an OAuth login or a service account with read access to that sheet) and a new dependency; I would not start that without your decision.
+
+A likely design, not decided: a small mapping from your headers to ours that you confirm once, optionally proposed by the model from the header row and the first rows. It is a proposal for you to correct, because a wrong guess about a column silently corrupts the plan.
+
+**What works today for Google files** (nothing to build):
+
+- *Tracking sheet:* open the tab, **File, Download, Comma Separated Values (.csv)**, rename the headers to the columns in [`docs/import-csv.md`](docs/import-csv.md), then run `import-plan`.
+- *Design document in Google Docs:* **File, Download, Plain Text (.txt)** or **PDF Document (.pdf)**, then pass it with `--doc`.
+
+**Milestone 3 first, in practice:** run `propose` once on one real document and read the result as the analyst who would have written it. That tells us whether the proposals are good enough to be worth connecting to more inputs.
 
 ## What is verified, and what is not
 

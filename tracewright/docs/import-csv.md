@@ -41,6 +41,17 @@ whole plan is validated, such as a bad `--id`, is reported by field path.
 "CSV UTF-8 (Comma delimited)". The importer does not guess the delimiter. `--out` is not
 overwritten unless `--force` is given, because the generated YAML is meant to be edited by hand. See [`examples/current-tracking.csv`](../examples/current-tracking.csv).
 
+## Getting your tracking out of Google Sheets today
+
+The importer reads a CSV file, not a Google Sheet directly (reading a sheet directly is planned, see the README, *Next*). To use a sheet now:
+
+1. Open the tab that holds the tracking calls. The export covers one tab at a time.
+2. **File, Download, Comma Separated Values (.csv)**. The file is UTF-8 and comma-separated, which is what the importer requires.
+3. Make the first row use the column names above (`event`, `property`, `type`, and so on). A header the importer does not know is refused, so a sheet with its own headers must be renamed first; keep a copy of the original.
+4. Run `import-plan` and read the YAML it writes before trusting it. The importer checks the structure, not whether the sheet is right.
+
+Several tabs mean several exports; combine them into one CSV with the same header, or import one at a time into separate plans. A Google Doc with a design description is exported with **File, Download, Plain Text (.txt)** or **PDF Document (.pdf)** and passed to `propose --doc`.
+
 ## What the importer does not do
 
 It reads the structure, not the data: nothing checks that the events in the CSV are really being
