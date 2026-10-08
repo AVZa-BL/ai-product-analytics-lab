@@ -13,6 +13,7 @@ import math
 import random
 import shutil
 from collections import Counter, defaultdict
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -325,3 +326,13 @@ def test_eleven_variant_b_players_were_first_exposed_on_a_different_version_than
     )
 
     assert differs == Counter({"variant_b": 11})
+
+
+def test_every_outcome_window_is_the_seven_days_after_the_assignment_and_no_export_time_is_given(
+    export: ExperimentData,
+) -> None:
+    assigned = {a.player_id: a.assigned_at for a in export.assignments}
+
+    assert all(o.window_end == assigned[o.player_id] + timedelta(days=7) for o in export.outcomes)
+    assert max(o.window_end for o in export.outcomes) == max(assigned.values()) + timedelta(days=7)
+    assert export.exported_at is None  # the lab's manifest does not say when it was written
