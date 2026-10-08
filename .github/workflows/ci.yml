@@ -9,7 +9,7 @@ on:
   pull_request:
 
 # Jobs run in the lab's folder, analytics-lab/, unless they override this (the referee
-# and linesman jobs do). `uses` steps and actions/checkout still operate on the repository root.
+# and tracewright jobs do). `uses` steps and actions/checkout still operate on the repository root.
 defaults:
   run:
     working-directory: analytics-lab
@@ -89,18 +89,18 @@ jobs:
       - name: Test
         run: python -m pytest -q
 
-  linesman-quality-gate:
+  tracewright-quality-gate:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: linesman
+        working-directory: tracewright
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: linesman/pyproject.toml
+          cache-dependency-path: tracewright/pyproject.toml
       - name: Install project
         run: python -m pip install -e '.[dev]'
       - name: Lint

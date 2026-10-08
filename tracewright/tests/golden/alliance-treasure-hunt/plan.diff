@@ -1,0 +1,228 @@
+--- existing-plan.yaml
++++ merged-plan.yaml
+@@ -160,6 +160,11 @@
+     required: true
+     description: ISO 4217 code.
+     pii: false
++  - name: hunt_id
++    type: string
++    required: false
++    description: Hunt the purchase was made for; empty for other purchases.
++    pii: false
+ - name: push_opened
+   status: active
+   description: A player opens the app from a push notification.
+@@ -173,6 +178,180 @@
+     type: string
+     required: true
+     description: Push campaign id.
++    pii: false
++- name: treasure_hunt_started
++  status: planned
++  description: An alliance leader starts a Treasure Hunt for the alliance.
++  trigger: The server confirms the 500 Ember Coins entry cost was taken from the alliance vault and the
++    hunt is created.
++  properties:
++  - name: player_id
++    type: string
++    required: true
++    description: Opaque id of the acting player.
++    pii: false
++  - name: alliance_id
++    type: string
++    required: true
++    description: Opaque id of the alliance.
++    pii: false
++  - name: hunt_id
++    type: string
++    required: true
++    description: Id of one hunt of one alliance.
++    pii: false
++  - name: alliance_size
++    type: integer
++    required: true
++    description: Members of the alliance at the start.
++    pii: false
++  - name: entry_cost
++    type: integer
++    required: true
++    description: Ember Coins paid from the vault.
++    pii: false
++- name: treasure_hunt_screen_viewed
++  status: planned
++  description: A player opens the hunt screen.
++  trigger: The hunt screen is shown to the player.
++  properties:
++  - name: player_id
++    type: string
++    required: true
++    description: Opaque id of the acting player.
++    pii: false
++  - name: alliance_id
++    type: string
++    required: true
++    description: Opaque id of the alliance.
++    pii: false
++  - name: is_leader
++    type: boolean
++    required: true
++    description: Whether the viewer is the alliance leader.
++    pii: false
++  - name: hunt_active
++    type: boolean
++    required: true
++    description: Whether the alliance has a running hunt.
++    pii: false
++- name: map_fragment_earned
++  status: planned
++  description: A player receives Map Fragments.
++  trigger: The server credits Map Fragments to the player.
++  properties:
++  - name: player_id
++    type: string
++    required: true
++    description: Opaque id of the acting player.
++    pii: false
++  - name: hunt_id
++    type: string
++    required: true
++    description: Id of one hunt of one alliance.
++    pii: false
++  - name: source
++    type: enum
++    required: true
++    description: Where the fragments came from.
++    pii: false
++    allowed_values:
++    - battle
++    - daily_quest
++    - pack
++  - name: amount
++    type: integer
++    required: true
++    description: Fragments credited.
++    pii: false
++- name: treasure_chest_opened
++  status: planned
++  description: A player exchanges ten Map Fragments and opens a Treasure Chest.
++  trigger: The chest-opening animation completes and the reward is granted.
++  properties:
++  - name: player_id
++    type: string
++    required: true
++    description: Opaque id of the acting player.
++    pii: false
++  - name: hunt_id
++    type: string
++    required: true
++    description: Id of one hunt of one alliance.
++    pii: false
++  - name: chest_tier
++    type: enum
++    required: true
++    description: Tier of the chest.
++    pii: false
++    allowed_values:
++    - bronze
++    - silver
++    - gold
++  - name: reward_type
++    type: enum
++    required: true
++    description: What the chest contained.
++    pii: false
++    allowed_values:
++    - ember_coins
++    - gems
++    - speedups
++    - hero_shards
++  - name: reward_amount
++    type: integer
++    required: true
++    description: Whole units of the reward.
++    pii: false
++- name: treasure_milestone_reached
++  status: planned
++  description: An alliance reaches a chest milestone.
++  trigger: The server records the 100th, 250th or 500th opened chest of the hunt.
++  properties:
++  - name: player_id
++    type: string
++    required: true
++    description: Opaque id of the acting player.
++    pii: false
++  - name: alliance_id
++    type: string
++    required: true
++    description: Opaque id of the alliance.
++    pii: false
++  - name: hunt_id
++    type: string
++    required: true
++    description: Id of one hunt of one alliance.
++    pii: false
++  - name: milestone
++    type: integer
++    required: true
++    description: 'Chest count of the milestone: 100, 250 or 500.'
++    pii: false
++- name: treasure_share_forfeited
++  status: planned
++  description: A member loses their share of a milestone reward by leaving the alliance early.
++  trigger: The server withholds a milestone reward because the member left within two hours of the milestone.
++  properties:
++  - name: player_id
++    type: string
++    required: true
++    description: Opaque id of the acting player.
++    pii: false
++  - name: alliance_id
++    type: string
++    required: true
++    description: Opaque id of the alliance.
++    pii: false
++  - name: hunt_id
++    type: string
++    required: true
++    description: Id of one hunt of one alliance.
++    pii: false
++  - name: milestone
++    type: integer
++    required: true
++    description: Milestone whose reward was forfeited.
+     pii: false
+ metrics:
+ - name: d7_retention
+@@ -197,3 +376,32 @@
+ - name: push_engagement
+   events:
+   - push_opened
++- name: hunt_start_rate_eligible_alliances
++  events:
++  - treasure_hunt_screen_viewed
++  - treasure_hunt_started
++  - alliance_joined
++- name: hunt_funnel
++  events:
++  - treasure_hunt_started
++  - map_fragment_earned
++  - treasure_chest_opened
++  - treasure_milestone_reached
++- name: fragment_pack_share
++  events:
++  - map_fragment_earned
++  - purchase_completed
++- name: non_participant_d7_retention
++  events:
++  - session_started
++  - map_fragment_earned
++  - treasure_chest_opened
++- name: early_leave_forfeit_rate
++  events:
++  - treasure_share_forfeited
++  - treasure_milestone_reached
++  - alliance_left
++- name: event_economy_injection
++  events:
++  - treasure_chest_opened
++  - currency_spent

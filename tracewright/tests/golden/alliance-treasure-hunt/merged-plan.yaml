@@ -1,0 +1,407 @@
+tracewright_plan_version: 1
+id: realm_of_ember_core
+title: Realm of Ember core tracking
+owner: live-ops-analytics
+identity_keys:
+- player_id
+events:
+- name: session_started
+  status: active
+  description: A play session begins.
+  trigger: The app comes to the foreground after at least 30 minutes away, or is cold started.
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    description: Opaque player id.
+    pii: false
+  - name: platform
+    type: enum
+    required: false
+    description: Device platform.
+    pii: false
+    allowed_values:
+    - ios
+    - android
+  - name: app_version
+    type: string
+    required: false
+    description: Installed app version.
+    pii: false
+- name: quest_completed
+  status: active
+  description: A player completes a quest.
+  trigger: The quest reward screen is shown.
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    pii: false
+  - name: quest_id
+    type: string
+    required: true
+    description: Quest identifier.
+    pii: false
+  - name: quest_type
+    type: enum
+    required: false
+    pii: false
+    allowed_values:
+    - daily
+    - weekly
+    - story
+- name: battle_finished
+  status: active
+  description: A battle ends.
+  trigger: The battle result screen is shown.
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    pii: false
+  - name: battle_type
+    type: enum
+    required: false
+    pii: false
+    allowed_values:
+    - pve
+    - pvp
+    - alliance_war
+  - name: result
+    type: enum
+    required: false
+    pii: false
+    allowed_values:
+    - win
+    - loss
+    - draw
+  - name: duration_seconds
+    type: integer
+    required: false
+    description: Battle length in seconds.
+    pii: false
+- name: alliance_joined
+  status: active
+  description: A player joins an alliance.
+  trigger: The server confirms the membership.
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    pii: false
+  - name: alliance_id
+    type: string
+    required: true
+    description: Opaque alliance id.
+    pii: false
+  - name: alliance_size
+    type: integer
+    required: false
+    description: Members after the join.
+    pii: false
+- name: alliance_left
+  status: active
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    pii: false
+  - name: alliance_id
+    type: string
+    required: true
+    pii: false
+- name: currency_spent
+  status: active
+  description: A player spends an in-game currency.
+  trigger: The server confirms the spend.
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    pii: false
+  - name: currency
+    type: enum
+    required: false
+    pii: false
+    allowed_values:
+    - ember_coins
+    - gems
+  - name: amount
+    type: integer
+    required: true
+    description: Whole units spent.
+    pii: false
+  - name: sink
+    type: string
+    required: true
+    description: Where the currency went.
+    pii: false
+- name: purchase_completed
+  status: active
+  description: A real-money purchase succeeds.
+  trigger: The store confirms the purchase.
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    pii: false
+  - name: product_id
+    type: string
+    required: true
+    description: Store product id.
+    pii: false
+  - name: price_minor
+    type: integer
+    required: true
+    description: Price in minor units.
+    pii: false
+  - name: currency_code
+    type: string
+    required: true
+    description: ISO 4217 code.
+    pii: false
+  - name: hunt_id
+    type: string
+    required: false
+    description: Hunt the purchase was made for; empty for other purchases.
+    pii: false
+- name: push_opened
+  status: active
+  description: A player opens the app from a push notification.
+  trigger: The app is opened through a notification.
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    pii: false
+  - name: campaign_id
+    type: string
+    required: true
+    description: Push campaign id.
+    pii: false
+- name: treasure_hunt_started
+  status: planned
+  description: An alliance leader starts a Treasure Hunt for the alliance.
+  trigger: The server confirms the 500 Ember Coins entry cost was taken from the alliance vault and the
+    hunt is created.
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    description: Opaque id of the acting player.
+    pii: false
+  - name: alliance_id
+    type: string
+    required: true
+    description: Opaque id of the alliance.
+    pii: false
+  - name: hunt_id
+    type: string
+    required: true
+    description: Id of one hunt of one alliance.
+    pii: false
+  - name: alliance_size
+    type: integer
+    required: true
+    description: Members of the alliance at the start.
+    pii: false
+  - name: entry_cost
+    type: integer
+    required: true
+    description: Ember Coins paid from the vault.
+    pii: false
+- name: treasure_hunt_screen_viewed
+  status: planned
+  description: A player opens the hunt screen.
+  trigger: The hunt screen is shown to the player.
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    description: Opaque id of the acting player.
+    pii: false
+  - name: alliance_id
+    type: string
+    required: true
+    description: Opaque id of the alliance.
+    pii: false
+  - name: is_leader
+    type: boolean
+    required: true
+    description: Whether the viewer is the alliance leader.
+    pii: false
+  - name: hunt_active
+    type: boolean
+    required: true
+    description: Whether the alliance has a running hunt.
+    pii: false
+- name: map_fragment_earned
+  status: planned
+  description: A player receives Map Fragments.
+  trigger: The server credits Map Fragments to the player.
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    description: Opaque id of the acting player.
+    pii: false
+  - name: hunt_id
+    type: string
+    required: true
+    description: Id of one hunt of one alliance.
+    pii: false
+  - name: source
+    type: enum
+    required: true
+    description: Where the fragments came from.
+    pii: false
+    allowed_values:
+    - battle
+    - daily_quest
+    - pack
+  - name: amount
+    type: integer
+    required: true
+    description: Fragments credited.
+    pii: false
+- name: treasure_chest_opened
+  status: planned
+  description: A player exchanges ten Map Fragments and opens a Treasure Chest.
+  trigger: The chest-opening animation completes and the reward is granted.
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    description: Opaque id of the acting player.
+    pii: false
+  - name: hunt_id
+    type: string
+    required: true
+    description: Id of one hunt of one alliance.
+    pii: false
+  - name: chest_tier
+    type: enum
+    required: true
+    description: Tier of the chest.
+    pii: false
+    allowed_values:
+    - bronze
+    - silver
+    - gold
+  - name: reward_type
+    type: enum
+    required: true
+    description: What the chest contained.
+    pii: false
+    allowed_values:
+    - ember_coins
+    - gems
+    - speedups
+    - hero_shards
+  - name: reward_amount
+    type: integer
+    required: true
+    description: Whole units of the reward.
+    pii: false
+- name: treasure_milestone_reached
+  status: planned
+  description: An alliance reaches a chest milestone.
+  trigger: The server records the 100th, 250th or 500th opened chest of the hunt.
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    description: Opaque id of the acting player.
+    pii: false
+  - name: alliance_id
+    type: string
+    required: true
+    description: Opaque id of the alliance.
+    pii: false
+  - name: hunt_id
+    type: string
+    required: true
+    description: Id of one hunt of one alliance.
+    pii: false
+  - name: milestone
+    type: integer
+    required: true
+    description: 'Chest count of the milestone: 100, 250 or 500.'
+    pii: false
+- name: treasure_share_forfeited
+  status: planned
+  description: A member loses their share of a milestone reward by leaving the alliance early.
+  trigger: The server withholds a milestone reward because the member left within two hours of the milestone.
+  properties:
+  - name: player_id
+    type: string
+    required: true
+    description: Opaque id of the acting player.
+    pii: false
+  - name: alliance_id
+    type: string
+    required: true
+    description: Opaque id of the alliance.
+    pii: false
+  - name: hunt_id
+    type: string
+    required: true
+    description: Id of one hunt of one alliance.
+    pii: false
+  - name: milestone
+    type: integer
+    required: true
+    description: Milestone whose reward was forfeited.
+    pii: false
+metrics:
+- name: d7_retention
+  events:
+  - session_started
+- name: quest_completion
+  events:
+  - quest_completed
+- name: battle_participation
+  events:
+  - battle_finished
+- name: alliance_activity
+  events:
+  - alliance_joined
+  - alliance_left
+- name: economy_sinks
+  events:
+  - currency_spent
+- name: revenue
+  events:
+  - purchase_completed
+- name: push_engagement
+  events:
+  - push_opened
+- name: hunt_start_rate_eligible_alliances
+  events:
+  - treasure_hunt_screen_viewed
+  - treasure_hunt_started
+  - alliance_joined
+- name: hunt_funnel
+  events:
+  - treasure_hunt_started
+  - map_fragment_earned
+  - treasure_chest_opened
+  - treasure_milestone_reached
+- name: fragment_pack_share
+  events:
+  - map_fragment_earned
+  - purchase_completed
+- name: non_participant_d7_retention
+  events:
+  - session_started
+  - map_fragment_earned
+  - treasure_chest_opened
+- name: early_leave_forfeit_rate
+  events:
+  - treasure_share_forfeited
+  - treasure_milestone_reached
+  - alliance_left
+- name: event_economy_injection
+  events:
+  - treasure_chest_opened
+  - currency_spent

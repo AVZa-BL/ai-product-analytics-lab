@@ -1,0 +1,9 @@
+event,property,type,required,pii,allowed_values,description,trigger,owner,status
+level_completed,,,,,,A player finishes a level.,The result screen is shown.,progression-analytics,active
+level_completed,player_id,string,true,false,,Opaque player id.,,,
+level_completed,level_id,string,true,false,,Level identifier.,,,
+level_completed,stars,integer,false,false,,Stars earned (0-3).,,,
+level_completed,difficulty,enum,false,false,easy|normal|hard,Difficulty chosen.,,,
+shop_opened,,,,,,The shop screen is opened.,The shop screen is shown.,monetisation-analytics,
+shop_opened,player_id,string,true,false,,Opaque player id.,,,
+shop_opened,entry_point,enum,false,false,menu|level_end|push,Where the shop was opened from.,,,
