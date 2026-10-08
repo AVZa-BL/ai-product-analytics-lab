@@ -159,3 +159,26 @@ def test_an_unresolved_proposal_writes_no_plan_and_no_diff():
 def test_a_good_proposal_writes_both():
     result = run(final_proposal())
     assert merged_plan_yaml(result) and plan_diff(result)
+
+
+def test_the_report_warns_that_review_plan_will_flag_the_planned_events(capsys):
+    import pathlib
+    import tempfile
+
+    from tracewright.cli import main
+
+    report = render_markdown(run(final_proposal()))
+    assert "marks the new events `planned`" in report and "COV-003" in report
+    # ...and what it says is true: review-plan on the written plan does report COV-003.
+    result = run(final_proposal())
+    with tempfile.TemporaryDirectory() as folder:
+        path = pathlib.Path(folder) / "merged.yaml"
+        path.write_text(merged_plan_yaml(result), encoding="utf-8")
+        main(["review-plan", str(path), "--format", "json"])
+    assert '"COV-003"' in capsys.readouterr().out
+
+
+def test_the_note_is_absent_when_no_metric_uses_a_new_event():
+    data = small_proposal()
+    data["metrics"] = []
+    assert "marks the new events" not in render_markdown(run(data))

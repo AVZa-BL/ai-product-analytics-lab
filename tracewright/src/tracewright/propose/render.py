@@ -354,6 +354,18 @@ def _checks(result: ProposalResult, had_plan: bool) -> list[str]:
             ]
     elif not had_plan:
         lines += ["There was no existing plan; the proposal was reviewed as a new plan."]
+    proposal = result.final.proposal
+    new_names = {e.name for e in proposal.new_events} if proposal else set()
+    if check.merged_plan is not None and any(
+        name in new_names for metric in proposal.metrics for name in metric.events
+    ):
+        lines += [
+            "",
+            "`merged-plan.yaml` marks the new events `planned`, because they have not shipped. "
+            "Running `tracewright review-plan merged-plan.yaml` therefore also reports COV-003 "
+            "(warning: a metric depends on a planned event) for the new metrics. That is "
+            "expected; it clears when you set those events to `active` at release.",
+        ]
     lines.append("")
     return lines
 

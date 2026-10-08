@@ -162,6 +162,8 @@ No problems found in the proposal.
 
 The existing plan already has 1 finding(s) from `tracewright review-plan` (0 blocker, 1 warning, 0 info). They are not counted against this proposal, unless the proposal changes a finding, in which case that finding is shown whole. The merged plan was reviewed as if the feature had shipped.
 
+`merged-plan.yaml` marks the new events `planned`, because they have not shipped. Running `tracewright review-plan merged-plan.yaml` therefore also reports COV-003 (warning: a metric depends on a planned event) for the new metrics. That is expected; it clears when you set those events to `active` at release.
+
 ## Provenance
 
 - Document `gdd.md`: text, 1,804 bytes, sha256 `d4cd0631b6fdb4f3cbdd186a95b7fc69bc035e419a2adb98e4240652e4f92a1b`
