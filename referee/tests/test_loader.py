@@ -319,3 +319,19 @@ def test_an_error_without_a_position_is_reported_with_the_source_alone() -> None
     assert _where("spec.yaml", None) == "spec.yaml"
     assert _problem("spec.yaml", yaml.MarkedYAMLError(problem="boom")) == "spec.yaml: boom"
     assert _problem("spec.yaml", yaml.YAMLError("first line\nsecond")) == "spec.yaml: first line"
+
+
+def test_an_unquoted_utc_start_which_yaml_reads_as_a_datetime_is_accepted() -> None:
+    quoted = SECTION_6_YAML + '  start_utc: "2026-11-02T00:00:00Z"\n'
+    unquoted = SECTION_6_YAML + "  start_utc: 2026-11-02T00:00:00Z\n"
+
+    assert parse_spec(unquoted).design.start_utc == "2026-11-02T00:00:00Z"
+    assert parse_spec(unquoted).sha256() == parse_spec(quoted).sha256()
+
+
+def test_an_unquoted_date_as_the_start_is_refused_because_it_names_no_instant() -> None:
+    with pytest.raises(SpecError) as caught:
+        parse_spec(SECTION_6_YAML + "  start_utc: 2026-11-02\n")
+
+    assert len(caught.value.violations) == 1
+    assert caught.value.violations[0].startswith("design.start_utc: must be an ISO 8601 timestamp")

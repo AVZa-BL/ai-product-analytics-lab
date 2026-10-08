@@ -36,8 +36,10 @@ SECTION_6_SHA256 = "b0332774feccd582db109bfffff10e1330ce418ab28471ccb625fe0b00af
 OPTIONAL_FIELDS = [
     "population.exposure_timing",
     "population.interference",
+    "population.kind",
     "design.alpha_adjustment",
     "design.pre_period_covariate",
+    "design.start_utc",
     "procedure.stopping_rule",
     "procedure.srm_check_cadence",
     "procedure.bucketing_salt",
@@ -117,7 +119,10 @@ def test_nothing_unset_leaves_a_trace(raw_spec: dict) -> None:
 
     assert None not in list(_walk(produced))
     assert "procedure" not in produced
-    assert not any(key in produced["population"] for key in ("exposure_timing", "interference"))
+    assert not any(
+        key in produced["population"] for key in ("exposure_timing", "interference", "kind")
+    )
+    assert "start_utc" not in produced["design"]
 
 
 def test_a_declared_optional_field_is_written(clean_raw_spec: dict) -> None:
@@ -319,3 +324,33 @@ def test_adding_a_guardrail_changes_the_fingerprint(raw_spec: dict) -> None:
     )
 
     assert _spec(raw_spec).sha256() != SECTION_6_SHA256
+
+
+def test_a_declared_start_is_written_in_one_form_and_changes_the_fingerprint(
+    raw_spec: dict,
+) -> None:
+    spellings = ["2026-11-02T00:00:00Z", "2026-11-02T00:00:00+00:00", "2026-11-02 00:00:00.000Z"]
+    fingerprints = set()
+    for spelling in spellings:
+        declared = copy.deepcopy(raw_spec)
+        _set(declared, "design.start_utc", spelling)
+        spec = _spec(declared)
+        fingerprints.add(spec.sha256())
+        assert spec.to_dict()["design"]["start_utc"] == "2026-11-02T00:00:00Z"
+        assert _spec(spec.to_dict()) == spec
+
+    later = copy.deepcopy(raw_spec)
+    _set(later, "design.start_utc", "2026-11-03T00:00:00Z")
+
+    assert len(fingerprints) == 1 and fingerprints != {SECTION_6_SHA256}
+    assert _spec(later).sha256() not in fingerprints | {SECTION_6_SHA256}
+
+
+def test_a_declared_population_kind_is_part_of_the_fingerprint(raw_spec: dict) -> None:
+    fingerprints = set()
+    for kind in ("new_users", "existing_users", "mixed"):
+        declared = copy.deepcopy(raw_spec)
+        _set(declared, "population.kind", kind)
+        fingerprints.add(_spec(declared).sha256())
+
+    assert len(fingerprints) == 3 and SECTION_6_SHA256 not in fingerprints

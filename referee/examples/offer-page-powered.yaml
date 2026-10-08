@@ -28,6 +28,7 @@ population:
   exposure_trigger: offer_page_view
   exposure_timing: pre_treatment # the trigger fires before the variant can act
   interference: none_expected # one player's offer page does not change another's
+  # kind: existing_users # optional: new_users | existing_users | mixed. Declared here, not checked by Referee
 
 arms:
   - {name: control, allocation: 0.5, is_control: true}
@@ -55,6 +56,7 @@ design:
   planned_duration_days: 98
   min_duration_days: 14
   pre_period_covariate: subscription_conversion_7d_pre_28d # illustrative name
+  # start_utc: 2026-11-02T00:00:00Z # optional: the test's start in UTC, registered before launch
 
 procedure:
   stopping_rule: fixed_horizon
