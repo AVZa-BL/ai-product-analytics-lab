@@ -74,17 +74,14 @@ def test_the_merged_cell_sheet_needs_fill_down(capsys, tmp_path):
     assert {p.name for e in load_plan(plan_file).events for p in e.properties} >= {"contact_email"}
 
 
-def test_map_names_a_column_the_aliases_would_not_find(capsys):
-    csv = SHEETS.parent.parent / "tests" / "_tmp.csv"
+def test_map_names_a_column_the_aliases_would_not_find(capsys, tmp_path):
+    csv = tmp_path / "signals.csv"
     csv.write_text("Signal,Arg,Kind\nlevel_done,player_id,string\n", encoding="utf-8")
-    try:
-        code, _, err = run(capsys, str(csv), *ARGS)
-        assert code == 2 and "no column looks like the event name" in err
-        code, out, err = run(capsys, str(csv), *ARGS, "--map", "event=Signal", "--map",
-                             "property=Arg", "--map", "type=Kind")
-        assert code == 0 and "event <- column A 'Signal'" in err and "level_done" in out
-    finally:
-        csv.unlink()
+    code, _, err = run(capsys, str(csv), *ARGS)
+    assert code == 2 and "no column looks like the event name" in err
+    code, out, err = run(capsys, str(csv), *ARGS, "--map", "event=Signal", "--map",
+                         "property=Arg", "--map", "type=Kind")
+    assert code == 0 and "event <- column A 'Signal'" in err and "level_done" in out
 
 
 def test_bad_options_are_usage_errors_not_crashes(capsys):
@@ -196,3 +193,56 @@ def test_sheet_to_plan_to_proposal(capsys, google, tmp_path):
     merged = load_plan(out_dir / "merged-plan.yaml")
     names = {e.name for e in merged.events}
     assert {"shop_opened", "purchase_made", "daily_gift_redeemed"} <= names
+
+
+# --- what the dry run shows, and the ways out ---------------------------------------------------
+
+
+def test_dry_run_shows_how_each_event_and_property_was_read(capsys):
+    code, out, _ = run(capsys, FLAT, *ARGS, "--ignore-other-columns", "--dry-run")
+    assert code == 0
+    assert "how the cells were read (name:type, * required, ! personal data):" in out
+    assert "  level_completed (active): player_id:string*, level_id:string*, stars:integer," in out
+    assert "difficulty:enum[easy|normal|hard]" in out
+    assert "  shop_opened (planned):" in out  # "To do" read as planned
+
+
+def test_a_list_type_stops_the_import_and_a_dry_run_shows_the_same_problem(capsys, tmp_path):
+    sheet = tmp_path / "s.csv"
+    sheet.write_text("Event,Property,Type\nlevel_done,item_ids,string[]\n", encoding="utf-8")
+    for extra in ([], ["--dry-run"]):
+        code, _, err = run(capsys, str(sheet), *ARGS, *extra)
+        assert code == 2 and "row 2: 'string[]' is a list" in err and "--type-map" in err
+    code, out, _ = run(capsys, str(sheet), *ARGS, "--type-map", "string[]=string", "--dry-run")
+    assert code == 0 and "item_ids:string" in out
+
+
+def test_notes_about_status_and_banner_rows_reach_the_person(capsys, tmp_path):
+    sheet = tmp_path / "s.csv"
+    sheet.write_text(
+        "Event,Property,Status\n=== MONETISATION ===,,\nshop_opened,player_id,To do\n"
+        "shop_closed,player_id,\n", encoding="utf-8")
+    code, _, err = run(capsys, str(sheet), *ARGS, "--dry-run")
+    assert code == 0
+    assert "status: no status cell for 2 event(s): '=== MONETISATION ===', 'shop_closed'" in err
+    assert "have no properties and nothing else: '=== MONETISATION ==='" in err
+
+
+def test_ignore_column_and_a_column_letter_work_from_the_command_line(capsys, tmp_path):
+    sheet = tmp_path / "s.csv"
+    sheet.write_text(
+        "Event,Description,Property,Type,Description\na_b,about event,p,string,about p\n",
+        encoding="utf-8")
+    code, _, err = run(capsys, str(sheet), *ARGS)
+    assert code == 2 and "--map description=@B" in err and "--ignore-column @E" in err
+    code, out, _ = run(
+        capsys, str(sheet), *ARGS, "--map", "description=@E", "--ignore-column", "@B"
+    )
+    assert code == 0 and "description: about p" in out
+
+
+def test_a_malformed_token_is_a_clear_error_and_never_shown(capsys, google, monkeypatch):
+    monkeypatch.setenv("GOOGLE_SHEETS_ACCESS_TOKEN", "ya29.SECRET\nSECOND-LINE")
+    code, out, err = run(capsys, URL, *ARGS)
+    assert code == 2 and "does not look like an access token" in err
+    assert "SECRET" not in out + err and "Traceback" not in err and google.calls == []

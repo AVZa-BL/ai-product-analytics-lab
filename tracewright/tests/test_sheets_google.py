@@ -245,10 +245,77 @@ def test_an_api_answer_that_is_not_json_or_has_the_wrong_shape():
         read_google_sheet(URL, token=TOKEN, fetch=bad_values)
 
 
-def test_too_many_tabs_are_refused():
-    many = tabs_reply(*[f"T{i}" for i in range(google.MAX_TABS + 1)])
-    with pytest.raises(SheetError, match="limit is 50"):
-        read_google_sheet(URL, token=TOKEN, fetch=FakeGoogle({API: many}))
+def many_tabs_fake(count):
+    titles = [f"T{i}" for i in range(count)]
+    return FakeGoogle({f"{API}?fields=": tabs_reply(*titles),
+                       f"{API}/values/": json_reply({"values": [["Event"]]})})
+
+
+def test_all_tabs_over_the_limit_is_refused_and_says_to_name_the_ones_needed():
+    with pytest.raises(SheetError, match=r"--all-tabs would read 51 tabs; the limit is 50.*--tab"):
+        read_google_sheet(URL, all_tabs=True, token=TOKEN, fetch=many_tabs_fake(51))
+
+
+def test_a_sheet_with_many_tabs_is_fine_when_one_is_named_or_the_first_is_wanted():
+    fake = many_tabs_fake(60)
+    (named,), _ = read_google_sheet(URL, tabs=["T7"], token=TOKEN, fetch=fake)
+    assert named.label == "Google Sheet, tab 'T7'"
+    (by_gid,), _ = read_google_sheet(f"{URL}#gid=107", token=TOKEN, fetch=many_tabs_fake(60))
+    assert by_gid.label == "Google Sheet, tab 'T7'"
+    (first,), notes = read_google_sheet(URL, token=TOKEN, fetch=many_tabs_fake(60))
+    assert first.label == "Google Sheet, tab 'T0'" and "and 54 more" in notes[0]
+
+
+def test_a_header_row_shorter_than_a_data_row_is_padded_on_the_api_path():
+    # The API leaves out trailing empty cells, so a column with data but no header text makes the
+    # header shorter than a data row. A CSV export is rectangular; the API path must match it.
+    fake = api_fake([["Event", "Property", "Type"], ["a_b", "p", "string", "a note"]], "T")
+    (table,), _ = read_google_sheet(URL, token=TOKEN, fetch=fake)
+    assert table.header == ("Event", "Property", "Type", "")
+    assert table.rows == ((2, ("a_b", "p", "string", "a note")),)
+
+
+def test_padding_uses_only_rows_below_the_header():
+    wide_title = ["a", "b", "c", "d", "e", "f"]
+    fake = api_fake([wide_title, ["Event", "Property"], ["a_b", "p"]], "T")
+    (table,), _ = read_google_sheet(URL, header_row=2, token=TOKEN, fetch=fake)
+    assert table.header == ("Event", "Property")
+
+
+def test_an_empty_link_shared_tab_says_it_is_empty_not_that_the_header_row_is_wrong():
+    with pytest.raises(SheetError, match="is empty"):
+        read_google_sheet(URL, fetch=FakeGoogle({EXPORT: csv_reply("\n  \n")}))
+
+
+def test_a_gid_with_absurdly_many_digits_is_a_clear_error():
+    with pytest.raises(SheetError, match="not a tab number"):
+        parse_sheet_url(f"{URL}#gid={'9' * 5000}")
+
+
+# --- the token is checked before it is used, and the check never shows it -----------------------
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["ya29.line\nbreak", "ya29.line\rbreak", "has space", "Bearer ya29.abc",
+     "\u201cya29.quoted\u201d", "ya29.\u200bzero-width", "tab\there"],
+)
+def test_a_token_that_cannot_be_a_token_is_refused_without_echoing_it(bad, monkeypatch):
+    monkeypatch.setenv("GOOGLE_SHEETS_ACCESS_TOKEN", bad)
+    fake = FakeGoogle()
+    with pytest.raises(SheetError) as caught:
+        read_google_sheet(URL, fetch=fake)
+    message = str(caught.value)
+    assert "does not look like an access token" in message
+    assert bad not in message and "ya29" not in message  # the value is never shown
+    assert fake.calls == []  # nothing was sent
+
+
+def test_a_realistic_token_is_accepted():
+    fake = api_fake([["Event"]], "T")
+    realistic = "ya29.a0AfH6SMB-x_y.z~1/2+3=ABCdef"
+    read_google_sheet(URL, token=realistic, fetch=fake)
+    assert fake.calls[0][1]["Authorization"] == f"Bearer {realistic}"
 
 
 # --- the real network code, against a server on this machine ----------------------------------
@@ -275,6 +342,18 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/csv")
             self.end_headers()
             self.wfile.write(b"x" * (google.MAX_BYTES + 10))
+        elif self.path.startswith("/short"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Length", "100")
+            self.end_headers()
+            self.wfile.write(b"Event\na\n")  # promises 100 bytes, sends 8, closes
+        elif self.path.startswith("/chunk-cut"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.send_header("Transfer-Encoding", "chunked")
+            self.end_headers()
+            self.wfile.write(b"5\r\nEvent\r\n20\r\nonly part of this chunk")  # then closes
         elif self.path.startswith("/denied"):
             self.send_response(403)
             self.send_header("Content-Type", "application/json")
@@ -367,3 +446,19 @@ def test_the_token_is_never_in_an_error_message_for_any_failure():
             messages.append(str(error))
     assert len(messages) == 3 and not any(TOKEN in m for m in messages)
     assert "[token]" in messages[1]  # Google echoed it; it was scrubbed
+
+
+def test_a_download_cut_short_is_not_taken_for_the_whole_sheet(server):
+    with pytest.raises(SheetError, match="cut short"):
+        default_fetch(f"{server}/short", {}, True)
+
+
+def test_a_malformed_or_cut_off_answer_is_a_clear_error_not_a_traceback(server):
+    with pytest.raises(SheetError, match="cut off or malformed"):
+        default_fetch(f"{server}/chunk-cut", {}, True)
+
+
+def test_the_token_is_sent_with_a_token_request_and_with_no_other(server):
+    default_fetch(f"{server}/ok", {"Authorization": f"Bearer {TOKEN}"}, False)
+    default_fetch(f"{server}/ok", {"Accept": "text/csv"}, True)
+    assert [seen["auth"] for seen in Handler.seen] == [f"Bearer {TOKEN}", None]

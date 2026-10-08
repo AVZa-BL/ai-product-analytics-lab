@@ -78,3 +78,70 @@ def test_allowed_values_may_be_separated_several_ways(text, expected):
 @pytest.mark.parametrize("header", ["Event Name*", "event_name", "EVENT NAME", " event-name "])
 def test_headers_are_compared_without_case_space_or_punctuation(header):
     assert values.key(header) == "eventname"
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["string[]", "int[]", "String []", "uuid[]", "number[][]", "List<string>", "Array<int>"],
+)
+def test_list_notation_is_refused_not_read_as_a_scalar(text):
+    with pytest.raises(ValueError, match="is a list, and a plan has no lists"):
+        values.property_type(text)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("integer [0-3]", "integer"), ("int[5]", "integer"), ("string (max 50)", "string")],
+)
+def test_a_length_or_range_after_the_type_is_still_ignored(text, expected):
+    assert values.property_type(text) == expected
+
+
+def test_a_refused_notation_can_be_accepted_on_purpose_and_matches_the_cell_exactly():
+    assert values.property_type("string[]", {"string[]": "string"}) == "string"
+    assert values.property_type("int[]", {"INT[]": "string"}) == "string"
+    with pytest.raises(ValueError):  # a different notation is still refused
+        values.property_type("bool[]", {"string[]": "string"})
+
+
+@pytest.mark.parametrize("text", ["enum (menu | level_end | push)", "Enum [a, b]"])
+def test_an_enum_that_lists_its_values_in_the_type_cell_is_refused(text):
+    with pytest.raises(ValueError, match="allowed-values column"):
+        values.property_type(text)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("\u2705", True), ("\u2714\ufe0f", True), ("\u2611\ufe0f", True), ("\u274c", False),
+     ("\u2612", False), ("\u2716", None)],
+)
+def test_the_usual_tick_emoji(text, expected):
+    if expected is None:  # a heavy multiplication X looks too much like a bare 'x' (= yes)
+        with pytest.raises(ValueError):
+            values.flag(text)
+    else:
+        assert values.flag(text) is expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["[easy, normal, hard]", "easy (default) | normal", "easy, hard, etc.", "easy | normal | ...",
+     '"a", "b"', "'a' | 'b'", "{a} | {b}"],
+)
+def test_allowed_values_written_as_notation_are_refused(text):
+    with pytest.raises(ValueError, match="looks like notation"):
+        values.split_values(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["N/A", "n/a", "-", "\u2014", "none", "None", "TBD", "(none)", "no properties",
+     "player_id (string)", "a, b", "a; b", "a | b", "level_id\nitem_id"],
+)
+def test_a_property_cell_that_is_not_one_property_name_is_refused(text):
+    assert values.property_name_problem(text)
+
+
+@pytest.mark.parametrize("text", ["player_id", "Level ID", "level.id", "item-count", "price_minor"])
+def test_ordinary_property_names_pass(text):
+    assert values.property_name_problem(text) is None

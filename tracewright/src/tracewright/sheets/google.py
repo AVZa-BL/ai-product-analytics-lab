@@ -14,12 +14,15 @@ here from the sheet's id, so a crafted address cannot point the tool at another 
 are followed only inside Google's own domains, and never when a token is attached.
 
 Nothing here could be run against a real Google account while it was written. The request and
-response shapes follow Google's published API; the tests check them against recorded shapes, not
-against Google. The first real use is the real test.
+response shapes follow Google's published API as the author knew it; the tests check them against
+shapes the author wrote down, not against Google (one probe with a made-up token confirmed only
+that the API answers a bad token with HTTP 401 and an error message). The first real use is the
+real test.
 """
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import re
@@ -84,7 +87,10 @@ def parse_sheet_url(url: str) -> SheetRef:
     gid = None
     for part in (match.group("query"), match.group("fragment")):
         if part and (found := _GID.search(part)):
-            gid = int(found.group(1))
+            try:
+                gid = int(found.group(1))
+            except ValueError as error:  # more digits than a number may have
+                raise SheetError("the gid in the address is not a tab number") from error
             break
     return SheetRef(sheet_id=match.group("id"), gid=gid)
 
@@ -135,6 +141,12 @@ def default_fetch(url: str, headers: dict[str, str], follow_redirects: bool) -> 
             error.close()
     except SheetError:
         raise
+    except http.client.HTTPException as error:
+        # A malformed or cut-off answer (IncompleteRead, BadStatusLine, LineTooLong, ...).
+        raise SheetError(
+            f"Google's answer was cut off or malformed ({type(error).__name__}); nothing was "
+            "read. Try again"
+        ) from error
     except urllib.error.URLError as error:
         raise SheetError(f"could not reach Google: {error.reason}") from error
     except TimeoutError as error:
@@ -147,6 +159,14 @@ def _read(reply: HTTPResponse | urllib.error.HTTPError, url: str, status: int) -
     body = reply.read(MAX_BYTES + 1)
     if len(body) > MAX_BYTES:
         raise SheetError(f"the sheet is larger than {MAX_BYTES:,} bytes; the limit is a safeguard")
+    # read(n) returns what arrived without complaint when the server closes early, so a download
+    # cut short would otherwise be parsed as a complete, shorter sheet.
+    promised = reply.headers.get("Content-Length", "")
+    if promised.isdigit() and len(body) < int(promised):
+        raise SheetError(
+            "the download was cut short before the whole sheet arrived; nothing was read. "
+            "Try again"
+        )
     return Response(
         status=status, url=url, content_type=reply.headers.get("Content-Type", ""), body=body
     )
@@ -178,6 +198,8 @@ def read_public_tab(ref: SheetRef, header_row: int = 1, fetch: Fetch | None = No
         text = reply.body.decode("utf-8-sig")
     except UnicodeDecodeError as error:
         raise SheetError(f"{label}: the export is not valid UTF-8 (byte {error.start})") from error
+    if not text.strip():
+        raise SheetError(f"{label} is empty")
     return read_csv_text(text, label, header_row)
 
 
@@ -214,7 +236,7 @@ def _api_get(path: str, token: str, fetch: Fetch | None) -> dict:
         raise SheetError(_api_error(reply))
     try:
         data = json.loads(reply.body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+    except (UnicodeDecodeError, ValueError) as error:
         raise SheetError("the Sheets API answered with something that is not JSON") from error
     if not isinstance(data, dict):
         raise SheetError("the Sheets API answered with an unexpected shape")
@@ -226,7 +248,7 @@ def _api_error(reply: Response) -> str:
     try:
         error = json.loads(reply.body.decode("utf-8")).get("error", {})
         detail = str(error.get("message", ""))[:300]
-    except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+    except (UnicodeDecodeError, ValueError, AttributeError):
         pass
     advice = {
         401: "the access token was refused or has expired (they last about an hour); get a new "
@@ -257,8 +279,6 @@ def list_tabs(ref: SheetRef, token: str, fetch: Fetch | None = None) -> list[Tab
     tabs.sort(key=lambda tab: tab.index)
     if not tabs:
         raise SheetError("the sheet has no tabs the API could list")
-    if len(tabs) > MAX_TABS:
-        raise SheetError(f"the sheet has {len(tabs)} tabs; the limit is {MAX_TABS}. Name one")
     return tabs
 
 
@@ -276,6 +296,13 @@ def read_api_tab(
         raise SheetError("the Sheets API returned values in an unexpected shape")
     if not values:
         raise SheetError(f"{_label(tab.gid, tab.title)} is empty")
+    if header_row <= len(values):
+        # The API leaves out trailing empty cells, so a column that has data but no header text
+        # makes the header row shorter than a data row. Pad it, as a CSV export already is.
+        below = values[header_row:]
+        widest = max((len(row) for row in below), default=0)
+        header = values[header_row - 1]
+        values[header_row - 1] = header + [""] * (widest - len(header))
     return table_from_rows(_label(tab.gid, tab.title), values, header_row)
 
 
@@ -284,6 +311,11 @@ def choose_tabs(
 ) -> tuple[list[Tab], list[str]]:
     """The tabs to read and notices for the person. Raises SheetError for an unknown name."""
     if all_tabs:
+        if len(tabs) > MAX_TABS:
+            raise SheetError(
+                f"--all-tabs would read {len(tabs)} tabs; the limit is {MAX_TABS}. "
+                "Name the ones you need with --tab NAME"
+            )
         return tabs, []
     if names:
         chosen = []
@@ -305,8 +337,9 @@ def choose_tabs(
     others = [t.title for t in tabs[1:]]
     notes = []
     if others:
+        listed = others if len(others) <= 5 else [*others[:5], f"... and {len(others) - 5} more"]
         notes.append(
-            f"read only the first tab {first.title!r}; not read: {others}. "
+            f"read only the first tab {first.title!r}; not read: {listed}. "
             "Use --tab NAME or --all-tabs"
         )
     return [first], notes
@@ -328,6 +361,13 @@ def read_google_sheet(
     """
     ref = parse_sheet_url(url)
     token = token if token is not None else os.environ.get(TOKEN_VARIABLE, "").strip() or None
+    plain = bool(token) and token.isascii() and token.isprintable() and token.split() == [token]
+    if token and not plain:
+        # Never echo the value: it may be a mis-paste of something else secret.
+        raise SheetError(
+            f"{TOKEN_VARIABLE} does not look like an access token: it has a space, a line break "
+            "or a character outside plain ASCII. Set it to the bare token (no 'Bearer ', no quotes)"
+        )
     if token:
         try:
             found = list_tabs(ref, token, fetch)

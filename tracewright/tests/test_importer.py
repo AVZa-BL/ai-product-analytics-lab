@@ -42,7 +42,7 @@ def test_flags_accept_common_spellings(tmp_path):
 @pytest.mark.parametrize(
     ("body", "message"),
     [
-        ("a_b,p,string,maybe,,,,,,\n", "row 2: required must be yes/no, true/false"),
+        ("a_b,p,string,maybe,,,,,,\n", "row 2: required is .maybe., which is not a yes or a no"),
         (",p,string,,,,,,,\n", "row 2: the event column is empty"),
         ("a_b,,,,,,,t1,,\na_b,p,string,,,,,t2,,\n", "row 3: trigger of event 'a_b' is 't2'"),
         ("", "no events found"),

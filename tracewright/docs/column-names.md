@@ -52,4 +52,12 @@ Add a word of your own with `--status-map 'Word=planned'`.
 
 ## Yes and no
 
-For `required` and `pii`. Yes: `true`, `t`, `yes`, `y`, `1`, `x`, `required`, `mandatory`, a tick (✓ ✔ ☑). No: `false`, `f`, `no`, `n`, `0`, `optional`, `-`, a cross (✗ ✘ ☐). An empty cell is left unset.
+For `required` and `pii`. Yes: `true`, `t`, `yes`, `y`, `1`, `x`, `required`, `mandatory`, a tick (✓ ✔ ☑ ✅). No: `false`, `f`, `no`, `n`, `0`, `optional`, `-`, a cross (✗ ✘ ☐ ☒ ❌). The emoji variation selector after a tick is ignored. An empty cell is left unset; any other word is refused with its row.
+
+## Cells that are refused, not guessed
+
+- **A property cell that is not one property name:** `(none)`, `-`, `--`, `n.a.`, `n/a`, `na`, `nil`, `no parameters`, `no params`, `no properties`, `none`, `null`, `tbd`, `–`, `—`, or text with a comma, semicolon, bar, line break or opening parenthesis in it (a list of properties, or `name (type)`). Leave the cell empty for an event with no properties.
+- **A type that is a list:** `string[]`, `List<string>` and the like. A length or range after a type (`integer [0-3]`, `string (max 50)`) is ignored.
+- **An `enum` with its values in the type cell** (`enum (a | b)`): put the values in the allowed-values column.
+- **Allowed values written as notation:** brackets, braces, parentheses, quotation marks or `etc.` in a value (`[easy, normal]`, `easy (default)`).
+- **Allowed values on a property whose type is not `enum`.**

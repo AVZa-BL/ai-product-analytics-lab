@@ -115,12 +115,17 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--owner", help="default owner for every event")
     imp.add_argument(
         "--map", action="append", default=[], metavar="NAME=HEADER",
-        help="read the column with this header as NAME (event, property, type, required, pii, "
-        "allowed_values, description, event_description, trigger, owner, status); repeatable",
+        help="read the column with this header (or column letter, @E) as NAME (event, property, "
+        "type, required, pii, allowed_values, description, event_description, trigger, owner, "
+        "status); repeatable",
     )
     imp.add_argument(
         "--ignore-other-columns", action="store_true",
         help="set aside columns that fit no meaning instead of refusing them",
+    )
+    imp.add_argument(
+        "--ignore-column", action="append", default=[], metavar="HEADER|@LETTER",
+        help="set this column aside even if its header is recognised; repeatable",
     )
     imp.add_argument(
         "--header-row", type=int, default=1, metavar="N",
@@ -244,6 +249,7 @@ def _import_plan(args: argparse.Namespace) -> int:
             owner=args.owner,
             overrides=overrides,
             ignore_other_columns=args.ignore_other_columns,
+            ignore_columns=args.ignore_column,
             fill_down=args.fill_down,
             type_map=type_map,
             status_map=status_map,
@@ -261,6 +267,8 @@ def _import_plan(args: argparse.Namespace) -> int:
     events = f"{len(plan.events)} event{'' if len(plan.events) == 1 else 's'}"
     summary = f"{events}, {properties} propert{'y' if properties == 1 else 'ies'}"
     if args.dry_run:
+        print("how the cells were read (name:type, * required, ! personal data):")
+        print("\n".join(result.preview))
         print(f"dry run: would import {summary}; nothing written")
         return EXIT_OK
     print(f"tracewright: read {summary}", file=sys.stderr)

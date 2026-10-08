@@ -44,6 +44,7 @@ class ImportResult:
     plan: TrackingPlan
     mapping: tuple[str, ...]  # one line per table: which column was read as what
     notes: tuple[str, ...]  # things the person should know, not errors
+    preview: tuple[str, ...]  # one line per event: how its cells were read
 
 
 def read_csv_file(path: str | Path, header_row: int = 1) -> Table:
@@ -72,6 +73,7 @@ def import_plan_tables(
     owner: str | None = None,
     overrides: Mapping[str, str] | None = None,
     ignore_other_columns: bool = False,
+    ignore_columns: Sequence[str] = (),
     fill_down: bool = False,
     type_map: Mapping[str, str] | None = None,
     status_map: Mapping[str, str] | None = None,
@@ -81,8 +83,15 @@ def import_plan_tables(
     first_row: dict[str, dict[str, int]] = {}
     mapping: list[str] = []
     notes: list[str] = []
+    layouts: list[dict[str, int]] = []
     for table in tables:
-        layout = resolve_layout(table, overrides, ignore_other_columns=ignore_other_columns)
+        layout = resolve_layout(
+            table,
+            overrides,
+            ignore_other_columns=ignore_other_columns,
+            ignore_columns=ignore_columns,
+        )
+        layouts.append(layout.columns)
         mapping.append(f"{table.label} (header on row {table.header_row}):")
         mapping.extend(f"  {line}" for line in layout.describe(table))
         reader = _Reader(
@@ -103,9 +112,57 @@ def import_plan_tables(
     }
     if owner:
         data["owner"] = owner
+    notes.extend(_notes(events, any("status" in lay for lay in layouts)))
+    plan = TrackingPlan.from_dict(data)
     return ImportResult(
-        plan=TrackingPlan.from_dict(data), mapping=tuple(mapping), notes=tuple(notes)
+        plan=plan, mapping=tuple(mapping), notes=tuple(notes), preview=tuple(_preview(plan))
     )
+
+
+def _names(names: list[str]) -> str:
+    shown = ", ".join(repr(n) for n in names[:5])
+    return shown + (f" and {len(names) - 5} more" if len(names) > 5 else "")
+
+
+def _notes(events: dict[str, dict[str, Any]], has_status_column: bool) -> list[str]:
+    """What the person should check, found without guessing: neither is an error."""
+    notes = []
+    if has_status_column:
+        unset = [n for n, e in events.items() if "status" not in e]
+        if unset:
+            notes.append(
+                f"status: no status cell for {len(unset)} event(s): {_names(unset)}. They are "
+                "read as active, the plan default. (A status cell merged over several events "
+                "reaches only the first; --fill-down fills the event name only.)"
+            )
+    event_info = ("description", "trigger", "owner", "status")
+    bare = [
+        n for n, e in events.items() if not e["properties"] and not any(k in e for k in event_info)
+    ]
+    if bare:
+        notes.append(
+            f"{len(bare)} event(s) have no properties and nothing else: {_names(bare)}. If one "
+            "is a section title, a legend or a note rather than an event, remove its row"
+        )
+    return notes
+
+
+def _preview(plan: TrackingPlan) -> list[str]:
+    """How each event was read: name, status, and each property with its type."""
+    lines = []
+    for event in plan.events:
+        shown = []
+        for prop in event.properties[:30]:
+            mark = ("*" if prop.required else "") + ("!" if prop.pii else "")
+            kind = prop.type
+            if prop.allowed_values:
+                kind += "[" + "|".join(prop.allowed_values) + "]"
+            shown.append(f"{prop.name}:{kind}{mark}")
+        more = len(event.properties) - 30
+        tail = f", ... and {more} more" if more > 0 else ""
+        listed = ", ".join(shown) or "no properties"
+        lines.append(f"  {event.name} ({event.status}): {listed}{tail}")
+    return lines
 
 
 def import_plan_csv(
@@ -218,6 +275,9 @@ class _Reader:
             self.event_field(event, "description", description, name, where)
             return
 
+        problem = values.property_name_problem(prop)
+        if problem:
+            raise CsvImportError(f"{where}: {problem}")
         kind = self.property_type(where, self.cell(cells, "type"))
         seen = first_row.setdefault(name, {})
         if prop in seen:
@@ -232,8 +292,9 @@ class _Reader:
                 flag = values.flag(self.cell(cells, column))
             except ValueError as error:
                 raise CsvImportError(
-                    f"{where}: {column} must be yes/no, true/false, 1/0 or a tick, got "
-                    f"{self.cell(cells, column)!r}"
+                    f"{where}: {column} is {self.cell(cells, column)!r}, which is not a yes or a "
+                    "no that is recognised (the words are listed in docs/column-names.md; "
+                    "change the cell, a checkbox gives TRUE or FALSE)"
                 ) from error
             if flag is not None:
                 entry[column] = flag
@@ -241,7 +302,17 @@ class _Reader:
             entry["description"] = description
         elif description:
             entry["description"] = description
-        allowed = values.split_values(self.cell(cells, "allowed_values"))
+        try:
+            allowed = values.split_values(self.cell(cells, "allowed_values"))
+        except ValueError as error:
+            raise CsvImportError(
+                f"{where}: allowed values of property {prop!r}: {error}"
+            ) from error
+        if allowed and kind != "enum":
+            raise CsvImportError(
+                f"{where}: property {prop!r} has allowed values but its type is {kind!r}; "
+                "write the type as enum in the sheet, or clear the allowed-values cell"
+            )
         if allowed:
             entry["allowed_values"] = allowed
         events[name]["properties"].append(entry)

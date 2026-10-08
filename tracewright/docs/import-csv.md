@@ -35,7 +35,7 @@ Use `--dry-run` to see how your columns were read before anything is written.
 
 All columns except `event` are optional. A column that fits no meaning is refused, so a typo in a
 header does not silently drop data; `--ignore-other-columns` sets such columns aside, and the
-columns used and set aside are always listed on standard error.
+columns used and set aside are listed on standard error whenever the columns could be resolved (if the import is refused, the error names the problem instead).
 
 **Errors.** Problems in a row's own fields name the row (row 1 is the header): an empty event, a
 bad `true`/`false`, an unknown `type`, a property declared twice, a row with more cells than the
