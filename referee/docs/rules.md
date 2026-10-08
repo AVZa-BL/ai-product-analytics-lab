@@ -24,7 +24,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 
 ## Summary
 
-21 rules: 7 blockers, 12 warnings, 2 info.
+22 rules: 7 blockers, 13 warnings, 2 info.
 
 | ID | Severity | Title |
 | --- | --- | --- |
@@ -49,6 +49,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 | RES-002 | blocker | Fewer players than the registered sample size |
 | RES-003 | blocker | Ran for less than the registered minimum duration |
 | RES-011 | warning | Sample ratio drifts over time although the total passes |
+| RES-012 | warning | Players first exposed after their first purchase |
 
 ## Hypothesis rules (HYP)
 
@@ -250,6 +251,16 @@ design review does not run these rules.
 - **What to do:** Find what changed in the failing weeks: a release, a change to assignment or logging, a new traffic source, an outage. Decide what to do with those weeks from the cause, never because leaving them out changes the result.
 - **References:**
   - Fabijan et al. Diagnosing Sample Ratio Mismatch in Online Controlled Experiments. KDD 2019.
+  - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+### RES-012: Players first exposed after their first purchase
+
+- **Severity:** warning
+- **Fires when:** At least one assigned player was first exposed after their first purchase in the seven-day outcome window.
+- **Escalates to blocker when:** the share of exposed players who were exposed late differs between the arms: the chi-squared test of homogeneity across the arms has p below 0.001.
+- **Why it matters:** A purchase made before the player first saw the change cannot be an effect of it. These players are left out of the effect analysis, but they are in the arms, so a different number of them in different arms means the change reached the arms differently. It is the results-time counterpart of DES-007.
+- **What to do:** Check how exposure is triggered. If it can follow a purchase, say so in the design and analyse from first exposure. Compare the estimates with and without these players in the evidence, and say which one the conclusion rests on. If the late share differs between arms, find out why before reading the effect.
+- **References:**
   - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
 
 ## How the power plan behind DES-001, DES-004 and DES-005 is computed

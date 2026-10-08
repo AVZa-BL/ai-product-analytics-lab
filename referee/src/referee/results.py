@@ -13,13 +13,15 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Literal
+from typing import Any, Literal
 
 from referee.data import Assignment, ExperimentData, Exposure, Outcome
+from referee.methods import StatsError, two_proportion_difference, welch_difference
 from referee.power import PowerError, PowerPlan, plan_power, power_alpha_adjustment
 from referee.spec import ExperimentSpec
 
 DAYS_PER_BLOCK = 7
+_ESTIMATE_DIGITS = 6
 
 
 class ResultsError(ValueError):
@@ -193,6 +195,39 @@ class ResultsContext:
         if self.plan is None:
             return None
         return dict(self.plan.required_per_arm).get(arm)
+
+
+def effect_estimate(
+    context: ResultsContext, arm: str, players: Iterable[PlayerRecord]
+) -> dict[str, Any]:
+    """The primary metric's difference for `arm` against control among `players`.
+
+    Welch's interval for a continuous metric, the two-proportion interval for a binary one,
+    both at 95% and unadjusted for the number of arms or looks: a description of the
+    estimate, not a test. When the data allow no estimate (a group too small, or no variation)
+    the answer carries the reason in "error" in place of the numbers.
+    """
+    metric = context.metrics[context.spec.primary_metric.name]
+    chosen = list(players)
+    treatment = [metric.value(p) for p in chosen if p.arm == arm]
+    control = [metric.value(p) for p in chosen if p.arm == context.control]
+    counts = {"n_treatment": len(treatment), "n_control": len(control)}
+    try:
+        if metric.kind == "binary":
+            found = two_proportion_difference(
+                round(sum(treatment)), len(treatment), round(sum(control)), len(control)
+            )
+        else:
+            found = welch_difference(treatment, control)
+    except StatsError as error:
+        return {**counts, "error": str(error)}
+    return {
+        **counts,
+        "difference": round(found.difference, _ESTIMATE_DIGITS),
+        "ci_low": round(found.ci_low, _ESTIMATE_DIGITS),
+        "ci_high": round(found.ci_high, _ESTIMATE_DIGITS),
+        "confidence": found.confidence,
+    }
 
 
 def _record(assignment: Assignment, exposure: Exposure | None, outcome: Outcome) -> PlayerRecord:

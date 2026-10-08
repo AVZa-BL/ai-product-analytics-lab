@@ -9,7 +9,14 @@ import pytest
 from results_helpers import ARMS, T0, Row, at, build_data, results_spec
 
 from referee.data import load_export
-from referee.results import METRICS, PlayerRecord, ResultsContext, ResultsError
+from referee.methods import two_proportion_difference, welch_difference
+from referee.results import (
+    METRICS,
+    PlayerRecord,
+    ResultsContext,
+    ResultsError,
+    effect_estimate,
+)
 
 FIXTURE = Path(__file__).parent / "data" / "hybrid_offer_page_5000"
 
@@ -383,3 +390,71 @@ def test_on_the_committed_export_a_registered_start_leaves_out_the_earlier_assig
     assert len(context.ignored_before_start) == expected
     assert len(context.players) == 2824 - expected
     assert context.week_of(context.origin) == 0
+
+
+# --- The estimate the rules quote ---------------------------------------------------------------
+
+
+def _estimate_rows() -> list[Row]:
+    return [
+        *[Row(f"c{i:02d}", "control", sessions=2 + i % 5, purchases=int(i < 6)) for i in range(40)],
+        *[
+            Row(f"b{i:02d}", "variant_b", sessions=3 + i % 7, purchases=int(i < 12))
+            for i in range(40)
+        ],
+        *[Row(f"z{i:02d}", "variant_c", sessions=9) for i in range(40)],
+    ]
+
+
+def test_a_binary_metric_is_estimated_with_the_two_proportion_interval(raw_spec) -> None:
+    context = _context(raw_spec, _estimate_rows())
+
+    got = effect_estimate(context, "variant_b", context.players)
+    expected = two_proportion_difference(12, 40, 6, 40)
+
+    assert got == {
+        "n_treatment": 40,
+        "n_control": 40,
+        "difference": round(expected.difference, 6),
+        "ci_low": round(expected.ci_low, 6),
+        "ci_high": round(expected.ci_high, 6),
+        "confidence": 0.95,
+    }
+
+
+def test_a_continuous_metric_is_estimated_with_welchs_interval(raw_spec) -> None:
+    sessions = {"name": "sessions_7d", "kind": "continuous", "baseline": 4.0, "baseline_std": 2.0}
+    context = _context(raw_spec, _estimate_rows(), primary_metric=sessions)
+
+    got = effect_estimate(context, "variant_b", context.players)
+    expected = welch_difference(
+        [float(3 + i % 7) for i in range(40)], [float(2 + i % 5) for i in range(40)]
+    )
+
+    assert got["difference"] == round(expected.difference, 6)
+    assert (got["ci_low"], got["ci_high"]) == (
+        round(expected.ci_low, 6),
+        round(expected.ci_high, 6),
+    )
+
+
+def test_the_estimate_uses_only_the_players_it_is_given_and_the_two_arms_asked_for(
+    raw_spec,
+) -> None:
+    context = _context(raw_spec, _estimate_rows())
+    some = [p for p in context.players if not p.player_id.endswith("00")]
+
+    got = effect_estimate(context, "variant_b", some)
+
+    assert (got["n_treatment"], got["n_control"]) == (39, 39)  # variant_c is not in it
+    assert effect_estimate(context, "variant_b", [])["n_treatment"] == 0
+
+
+def test_an_estimate_that_cannot_be_made_carries_its_reason_and_the_counts(raw_spec) -> None:
+    context = _context(raw_spec, [Row("c1", "control"), Row("b1", "variant_b")])
+
+    got = effect_estimate(context, "variant_b", context.players)
+
+    assert got["n_treatment"] == got["n_control"] == 1
+    assert "every unit has the same outcome" in got["error"]
+    assert "difference" not in got

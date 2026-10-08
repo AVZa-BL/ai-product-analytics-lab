@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from results_helpers import (
     TWO_ARMS,
+    Row,
     at,
     build_data,
     crowd,
@@ -14,7 +15,7 @@ from results_helpers import (
 )
 
 from referee.data import load_export
-from referee.methods import srm_test
+from referee.methods import homogeneity_test, srm_test, two_proportion_difference, welch_difference
 from referee.results import ResultsContext
 from referee.review import review_results
 from referee.rules import RESULTS_RULES
@@ -578,3 +579,288 @@ def test_res_011_needs_p_strictly_below_the_weekly_level(
     finding = _drift(raw_spec, [(700, 300), (300, 700)])
 
     assert (finding is not None) is fires
+
+
+# --- RES-012: players first exposed after their first purchase ----------------------------------
+
+RES_012 = _rule("RES-012")
+LATE = {"exposed_at": at(0, 5), "purchases": 1, "first_purchase_at": at(0, 1)}
+SESSIONS = {
+    "name": "sessions_7d",
+    "kind": "continuous",
+    "baseline": 4.5,
+    "baseline_std": 3.0,
+}
+
+
+def _late_rows(control_late: int, variant_late: int, *, exposed: int = 500) -> list:
+    """Two arms of `exposed` players, each with the given number of late-exposed ones."""
+    return [
+        *crowd("control", exposed - control_late, prefix="c"),
+        *crowd("control", control_late, prefix="cl", **LATE),
+        *crowd("variant_b", exposed - variant_late, prefix="v"),
+        *crowd("variant_b", variant_late, prefix="vl", **LATE),
+    ]
+
+
+def _res_012(raw_spec, rows, **changes):
+    return evaluate_results(RES_012, results_spec(raw_spec, arms=TWO_ARMS, **changes), rows)
+
+
+def test_res_012_is_a_warning_that_can_become_a_blocker() -> None:
+    assert RES_012.severity == "warning"
+    assert RES_012.escalation is not None and RES_012.escalation.to == "blocker"
+    assert "after their first purchase" in RES_012.fires_when
+
+
+def test_res_012_is_quiet_when_nobody_was_exposed_late(raw_spec) -> None:
+    rows = [
+        *crowd("control", 50),
+        *crowd("variant_b", 50, purchases=1, first_purchase_at=at(0, 9)),  # bought after exposure
+    ]
+
+    assert _res_012(raw_spec, rows) is None
+
+
+@pytest.mark.parametrize(
+    ("exposed_hours", "fires"),
+    [(1.0, False), (1.0001, True), (0.5, False)],
+    ids=["at-the-instant", "just-after", "before"],
+)
+def test_res_012_one_player_exposed_after_buying_is_enough(
+    raw_spec, exposed_hours: float, fires: bool
+) -> None:
+    late = {"purchases": 1, "first_purchase_at": at(0, 1), "exposed_at": at(0, exposed_hours)}
+    rows = [
+        *crowd("control", 20),
+        *crowd("variant_b", 19),
+        *crowd("variant_b", 1, prefix="x", **late),
+    ]
+
+    assert (_res_012(raw_spec, rows) is not None) is fires
+
+
+def test_res_012_reports_counts_and_shares(raw_spec) -> None:
+    on_time_buyer = {"purchases": 1, "first_purchase_at": at(0, 9)}
+    rows = [
+        *crowd("control", 70, prefix="c"),
+        *crowd("control", 20, prefix="cb", **on_time_buyer),
+        *crowd("control", 10, prefix="cl", **LATE),
+        *crowd("variant_b", 70, prefix="v"),
+        *crowd("variant_b", 30, prefix="vb", **on_time_buyer),
+        *crowd("variant_b", 20, prefix="never", exposed_at=None),  # not exposed: cannot be late
+    ]
+
+    evidence = _res_012(raw_spec, rows).evidence
+
+    assert evidence["late"] == {"control": 10, "variant_b": 0}
+    assert evidence["exposed"] == {"control": 100, "variant_b": 100}  # the 20 unexposed are out
+    assert evidence["late_share_of_exposed"] == {"control": 0.1, "variant_b": 0.0}
+    assert evidence["late_total"] == 10
+    assert evidence["share_of_assigned"] == round(10 / 220, 4) == 0.0455
+    assert evidence["share_of_purchasers"] == round(10 / 60, 4) == 0.1667  # 20 + 10 + 30 bought
+
+
+def test_res_012_stays_a_warning_when_every_arm_has_the_same_late_share(raw_spec) -> None:
+    finding = _res_012(raw_spec, _late_rows(20, 20))
+
+    assert finding is not None and finding.severity == "warning"
+    assert finding.evidence["homogeneity"]["p_value"] == 1.0
+
+
+@pytest.mark.parametrize(
+    ("variant_late", "severity"), [(45, "warning"), (46, "blocker")], ids=["p-0.00134", "p-0.00093"]
+)
+def test_res_012_becomes_a_blocker_when_the_late_share_differs_between_arms(
+    raw_spec, variant_late: int, severity: str
+) -> None:
+    finding = _res_012(raw_spec, _late_rows(20, variant_late))
+
+    assert finding is not None and finding.severity == severity
+    expected = homogeneity_test([20, variant_late], [500, 500])
+    assert finding.evidence["homogeneity"] == {
+        "chi_square": round(expected.chi_square, 4),
+        "degrees_of_freedom": 1,
+        "p_value": expected.p_value,
+        "alpha": 0.001,
+    }
+
+
+@pytest.mark.parametrize(
+    ("p_value", "severity"), [(0.001, "warning"), (0.00099999, "blocker")], ids=["at", "below"]
+)
+def test_res_012_needs_p_strictly_below_a_thousandth_to_block(
+    raw_spec, monkeypatch, p_value: float, severity: str
+) -> None:
+    from referee.methods import HomogeneityResult
+
+    def stub(successes, totals):
+        return HomogeneityResult(
+            successes=tuple(successes),
+            totals=tuple(totals),
+            chi_square=1.0,
+            degrees_of_freedom=1,
+            p_value=p_value,
+        )
+
+    monkeypatch.setattr("referee.rules.results.homogeneity_test", stub)
+
+    assert _res_012(raw_spec, _late_rows(20, 20)).severity == severity
+
+
+def test_res_012_with_one_arm_exposed_has_nothing_to_compare(raw_spec) -> None:
+    rows = [*crowd("control", 30, **LATE), *crowd("control", 30, prefix="c2")]
+    rows += crowd("variant_b", 10, exposed_at=None)  # assigned, never exposed
+
+    finding = _res_012(raw_spec, rows)
+
+    assert finding is not None and finding.severity == "warning"
+    assert finding.evidence["homogeneity"] is None
+    assert finding.evidence["late_share_of_exposed"] == {"control": 0.5, "variant_b": None}
+
+
+def test_res_012_compares_the_arms_that_were_exposed_and_leaves_out_one_nobody_saw(
+    raw_spec,
+) -> None:
+    rows = [
+        *crowd("control", 480, prefix="c"),
+        *crowd("control", 20, prefix="cl", **LATE),
+        *crowd("variant_b", 454, prefix="v"),
+        *crowd("variant_b", 46, prefix="vl", **LATE),
+        *crowd("variant_c", 100, prefix="never", exposed_at=None),  # assigned, never exposed
+    ]
+
+    finding = evaluate_results(RES_012, results_spec(raw_spec), rows)
+
+    assert finding is not None and finding.severity == "blocker"
+    assert finding.evidence["exposed"] == {"control": 500, "variant_b": 500, "variant_c": 0}
+    assert finding.evidence["homogeneity"]["degrees_of_freedom"] == 1
+
+
+def test_res_012_when_every_exposed_player_is_late_there_is_nothing_to_compare(raw_spec) -> None:
+    rows = [*crowd("control", 10, **LATE), *crowd("variant_b", 10, prefix="v", **LATE)]
+
+    finding = _res_012(raw_spec, rows)
+
+    assert finding is not None and finding.evidence["homogeneity"] is None
+    assert finding.severity == "warning"
+
+
+def test_res_012_quotes_the_estimate_with_and_without_the_late_players(raw_spec) -> None:
+    buyer = {"purchases": 1, "first_purchase_at": at(0, 9)}
+    rows = [
+        *crowd("control", 90, prefix="c"),
+        *crowd("control", 10, prefix="cb", **buyer),  # 10 of 100 bought, none exposed late
+        *crowd("variant_b", 80, prefix="v"),
+        *crowd("variant_b", 20, prefix="vb", **buyer),  # 20 of 100 bought on time
+        *crowd("variant_b", 20, prefix="vl", **LATE),  # and 20 more bought before being exposed
+    ]
+
+    estimate = _res_012(raw_spec, rows).evidence["estimate"]
+    without = two_proportion_difference(20, 100, 10, 100)
+    with_late = two_proportion_difference(40, 120, 10, 100)
+
+    assert estimate["metric"] == "purchased_7d" and list(estimate["by_arm"]) == ["variant_b"]
+    got = estimate["by_arm"]["variant_b"]
+    assert got["without_late_exposed"] == {
+        "n_treatment": 100,
+        "n_control": 100,
+        "difference": round(without.difference, 6),
+        "ci_low": round(without.ci_low, 6),
+        "ci_high": round(without.ci_high, 6),
+        "confidence": 0.95,
+    }
+    assert got["with_late_exposed"]["n_treatment"] == 120
+    assert got["with_late_exposed"]["difference"] == round(with_late.difference, 6)
+    assert got["with_late_exposed"]["difference"] > got["without_late_exposed"]["difference"]
+
+
+def test_res_012_estimates_every_non_control_arm(raw_spec) -> None:
+    rows = [
+        *crowd("control", 50),
+        *crowd("variant_b", 50),
+        *crowd("variant_c", 49),
+        *crowd("variant_c", 1, prefix="x", **LATE),
+    ]
+
+    estimate = evaluate_results(RES_012, results_spec(raw_spec), rows).evidence["estimate"]
+
+    assert list(estimate["by_arm"]) == ["variant_b", "variant_c"]
+
+
+def test_res_012_uses_welch_for_a_continuous_primary_metric(raw_spec) -> None:
+    rows = []
+    for i in range(30):
+        rows.append(Row(f"c{i:02d}", "control", sessions=2 + i % 5))
+        rows.append(Row(f"v{i:02d}", "variant_b", sessions=3 + i % 7))
+    rows.append(Row("late", "variant_b", sessions=20, **LATE))
+
+    estimate = _res_012(raw_spec, rows, primary_metric=SESSIONS).evidence["estimate"]
+    control = [float(2 + i % 5) for i in range(30)]
+    variant = [float(3 + i % 7) for i in range(30)]
+    got = estimate["by_arm"]["variant_b"]
+
+    assert estimate["metric"] == "sessions_7d"
+    assert got["without_late_exposed"]["difference"] == round(
+        welch_difference(variant, control).difference, 6
+    )
+    assert got["with_late_exposed"]["difference"] == round(
+        welch_difference([*variant, 20.0], control).difference, 6
+    )
+    assert got["with_late_exposed"]["n_treatment"] == 31
+
+
+def test_res_012_says_why_when_an_estimate_is_impossible_and_still_fires(raw_spec) -> None:
+    finding = _res_012(raw_spec, [Row("c", "control", **LATE), Row("v", "variant_b", **LATE)])
+
+    assert finding is not None
+    by_arm = finding.evidence["estimate"]["by_arm"]["variant_b"]
+    assert "every unit has the same outcome" in by_arm["with_late_exposed"]["error"]
+    assert by_arm["without_late_exposed"]["n_treatment"] == 0
+    assert "error" in by_arm["without_late_exposed"]
+
+
+def test_res_012_evidence_can_be_written_as_json(raw_spec) -> None:
+    finding = _res_012(raw_spec, _late_rows(20, 46))
+
+    assert finding is not None and json.loads(json.dumps(finding.evidence)) == finding.evidence
+
+
+def test_res_012_on_the_committed_export_198_players_are_late_and_evenly_spread(
+    raw_spec, export
+) -> None:
+    finding = RES_012.evaluate(ResultsContext.of(results_spec(raw_spec), export))
+
+    assert finding is not None and finding.severity == "warning"
+    evidence = finding.evidence
+    assert evidence["late"] == {"control": 71, "variant_b": 77, "variant_c": 50}
+    assert evidence["exposed"] == {"control": 997, "variant_b": 1046, "variant_c": 781}
+    assert evidence["late_share_of_exposed"] == {
+        "control": 0.0712,
+        "variant_b": 0.0736,
+        "variant_c": 0.064,
+    }
+    assert evidence["late_total"] == 198
+    assert evidence["share_of_assigned"] == 0.0701 and evidence["share_of_purchasers"] == 0.3542
+    assert evidence["homogeneity"]["p_value"] == pytest.approx(0.72, abs=0.005)
+
+
+def test_res_012_on_the_committed_export_the_late_players_move_the_sessions_estimates(
+    raw_spec, export
+) -> None:
+    spec = results_spec(raw_spec, primary_metric=SESSIONS)
+
+    arms = RES_012.evaluate(ResultsContext.of(spec, export)).evidence["estimate"]["by_arm"]
+
+    b = arms["variant_b"]
+    assert (b["with_late_exposed"]["difference"], b["without_late_exposed"]["difference"]) == (
+        0.681598,
+        0.726217,
+    )
+    c = arms["variant_c"]
+    assert c["with_late_exposed"]["ci_low"] < 0 < c["with_late_exposed"]["ci_high"]
+    assert 0 < c["without_late_exposed"]["ci_low"]  # only without them does the interval clear zero
+    assert (c["with_late_exposed"]["difference"], c["without_late_exposed"]["difference"]) == (
+        0.29555,
+        0.336484,
+    )

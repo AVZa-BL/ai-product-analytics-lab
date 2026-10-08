@@ -20,6 +20,11 @@ _SEVERITY_RANK: dict[str, int] = {"blocker": 0, "warning": 1, "info": 2}
 _RULE_ID = re.compile(r"[A-Z]{3}-[0-9]{3}")
 
 
+def is_more_serious(severity: str, than: str) -> bool:
+    """Whether `severity` is more serious than `than` (a blocker over a warning over info)."""
+    return _SEVERITY_RANK[severity] < _SEVERITY_RANK[than]
+
+
 def _require_text(name: str, value: object) -> None:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} must be a non-empty string, got {value!r}")

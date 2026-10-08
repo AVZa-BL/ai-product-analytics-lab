@@ -11,11 +11,12 @@ from collections import Counter, defaultdict
 from datetime import timedelta
 from typing import Any
 
-from referee.methods import SRM_ALPHA, SrmResult, srm_test
-from referee.results import ResultsContext
-from referee.rules.base import Rule
+from referee.methods import SRM_ALPHA, SrmResult, StatsError, homogeneity_test, srm_test
+from referee.results import ResultsContext, effect_estimate
+from referee.rules.base import Escalation, Rule
 from referee.rules.references import FABIJAN_ET_AL_2019, KOHAVI_TANG_XU_2020
 
+_SHARE_DIGITS = 4
 _CHI_SQUARE_DIGITS = 4
 _EXPECTED_DIGITS = 2
 _DAY = timedelta(days=1)
@@ -89,6 +90,61 @@ def _sample_ratio_drift(context: ResultsContext) -> dict[str, Any] | None:
         "total": {"assigned": assigned, "p_value": total.p_value},
         "allocation": dict(zip(context.arm_names, _allocation(context), strict=True)),
     }
+
+
+def _late_exposure(context: ResultsContext) -> dict[str, Any] | None:
+    """Players first exposed after their first purchase: how many, where, and what they change."""
+    arms = context.arm_names
+    exposed_players = [p for p in context.players if p.exposed]
+    late_players = [p for p in context.players if p.late_exposed]  # late implies exposed
+    if not late_players:
+        return None
+    late = context.count_by_arm(late_players)
+    exposed = context.count_by_arm(exposed_players)
+    purchasers = sum(p.first_purchase_at is not None for p in context.players)
+
+    tested = [arm for arm in arms if exposed[arm] > 0]
+    homogeneity = None
+    try:
+        result = homogeneity_test([late[a] for a in tested], [exposed[a] for a in tested])
+        homogeneity = {
+            "chi_square": round(result.chi_square, _CHI_SQUARE_DIGITS),
+            "degrees_of_freedom": result.degrees_of_freedom,
+            "p_value": result.p_value,
+            "alpha": SRM_ALPHA,
+        }
+    except StatsError:
+        pass  # one arm exposed, or everyone or no one late: there is nothing to compare
+
+    analysed = context.analysed
+    return {
+        "late": late,
+        "exposed": exposed,
+        "late_share_of_exposed": {
+            arm: round(late[arm] / exposed[arm], _SHARE_DIGITS) if exposed[arm] else None
+            for arm in arms
+        },
+        "late_total": len(late_players),
+        "share_of_assigned": round(len(late_players) / len(context.players), _SHARE_DIGITS),
+        "share_of_purchasers": round(len(late_players) / purchasers, _SHARE_DIGITS),
+        "homogeneity": homogeneity,
+        "estimate": {
+            "metric": context.spec.primary_metric.name,
+            "by_arm": {
+                arm: {
+                    "with_late_exposed": effect_estimate(context, arm, exposed_players),
+                    "without_late_exposed": effect_estimate(context, arm, analysed),
+                }
+                for arm in arms
+                if arm != context.control
+            },
+        },
+    }
+
+
+def _late_share_differs(evidence: dict[str, Any]) -> bool:
+    homogeneity = evidence.get("homogeneity")
+    return homogeneity is not None and homogeneity["p_value"] < homogeneity["alpha"]
 
 
 def _fewer_players_than_registered(context: ResultsContext) -> dict[str, Any] | None:
@@ -222,5 +278,36 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         ),
         references=(FABIJAN_ET_AL_2019, KOHAVI_TANG_XU_2020),
         check=_sample_ratio_drift,
+    ),
+    Rule(
+        id="RES-012",
+        severity="warning",
+        title="Players first exposed after their first purchase",
+        fires_when=(
+            "At least one assigned player was first exposed after their first purchase in the "
+            "seven-day outcome window."
+        ),
+        why_it_matters=(
+            "A purchase made before the player first saw the change cannot be an effect of it. "
+            "These players are left out of the effect analysis, but they are in the arms, so "
+            "a different number of them in different arms means the change reached the arms "
+            "differently. It is the results-time counterpart of DES-007."
+        ),
+        remediation=(
+            "Check how exposure is triggered. If it can follow a purchase, say so in the "
+            "design and analyse from first exposure. Compare the estimates with and without "
+            "these players in the evidence, and say which one the conclusion rests on. If the "
+            "late share differs between arms, find out why before reading the effect."
+        ),
+        references=(KOHAVI_TANG_XU_2020,),
+        check=_late_exposure,
+        escalation=Escalation(
+            to="blocker",
+            when=(
+                "the share of exposed players who were exposed late differs between the arms: "
+                "the chi-squared test of homogeneity across the arms has p below 0.001."
+            ),
+            applies=_late_share_differs,
+        ),
     ),
 )

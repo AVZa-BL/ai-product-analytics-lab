@@ -112,6 +112,11 @@ def _rule_block(rule: Rule) -> str:
             "",
             f"- **Severity:** {rule.severity}",
             f"- **Fires when:** {rule.fires_when}",
+            *(
+                [f"- **Escalates to {rule.escalation.to} when:** {rule.escalation.when}"]
+                if rule.escalation
+                else []
+            ),
             f"- **Why it matters:** {rule.why_it_matters}",
             f"- **What to do:** {rule.remediation}",
             *references,

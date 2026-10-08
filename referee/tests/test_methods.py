@@ -22,6 +22,7 @@ from referee.methods import (
     bootstrap_difference,
     cohort_heterogeneity,
     heavy_tail_measures,
+    homogeneity_test,
     ratio_difference,
     ratio_estimate,
     srm_test,
@@ -1211,3 +1212,73 @@ def test_benjamini_yekutieli_refuses_what_the_others_refuse(
 ) -> None:
     with pytest.raises(StatsError, match=fragment):
         benjamini_yekutieli(p_values, alpha=alpha)
+
+
+# --- Do groups share one rate? -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("successes", "totals"),
+    [
+        ([71, 77, 50], [997, 1046, 781]),  # the committed export's late exposure by arm
+        ([10, 30], [100, 100]),
+        ([5, 5, 5, 5], [40, 60, 80, 100]),
+        ([0, 3], [50, 50]),
+        ([99, 98, 100], [100, 100, 100]),
+    ],
+)
+def test_a_homogeneity_test_matches_scipys_chi_square_of_the_two_by_k_table(
+    successes: list[int], totals: list[int]
+) -> None:
+    table = [successes, [n - s for s, n in zip(successes, totals, strict=True)]]
+    statistic, p_value, degrees, _ = stats.chi2_contingency(table, correction=False)
+
+    result = homogeneity_test(successes, totals)
+
+    assert result.chi_square == pytest.approx(statistic, rel=1e-12)
+    assert result.p_value == pytest.approx(p_value, rel=1e-12, abs=0)
+    assert result.degrees_of_freedom == degrees == len(successes) - 1
+    assert result.successes == tuple(successes) and result.totals == tuple(totals)
+
+
+def test_equal_rates_give_a_chi_square_of_zero_and_a_p_value_of_one() -> None:
+    result = homogeneity_test([10, 20, 30], [100, 200, 300])
+
+    assert result.chi_square == pytest.approx(0.0, abs=1e-12)
+    assert result.p_value == pytest.approx(1.0, abs=1e-12)
+
+
+def test_two_groups_agree_with_the_two_proportion_z_test_squared() -> None:
+    result = homogeneity_test([30, 45], [200, 220])
+    z = two_proportion_difference(45, 220, 30, 200).z_statistic
+
+    assert result.chi_square == pytest.approx(z**2, rel=1e-12)
+    assert result.p_value == pytest.approx(2 * stats.norm.sf(abs(z)), rel=1e-12)
+
+
+def test_the_groups_may_come_in_any_order() -> None:
+    forward = homogeneity_test([71, 77, 50], [997, 1046, 781])
+    backward = homogeneity_test([50, 77, 71], [781, 1046, 997])
+
+    assert backward.chi_square == pytest.approx(forward.chi_square, rel=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("successes", "totals", "fragment"),
+    [
+        ([5], [10], "at least two groups"),
+        ([5, 5], [10], "at least two groups"),
+        ([0, 0], [10, 10], "same outcome"),
+        ([10, 10], [10, 10], "same outcome"),
+        ([1, 1], [10, 0], "not possible"),
+        ([1, 11], [10, 10], "not possible"),
+        ([-1, 1], [10, 10], "not possible"),
+        ([1.5, 1], [10, 10], "whole numbers"),
+        ([1, 1], [10.5, 10], "whole numbers"),
+    ],
+)
+def test_a_homogeneity_test_refuses_what_it_cannot_answer(
+    successes: list, totals: list, fragment: str
+) -> None:
+    with pytest.raises(StatsError, match=fragment):
+        homogeneity_test(successes, totals)

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from referee.rules import CATALOGUE, Rule
+from referee.rules import CATALOGUE, Escalation, Rule
 from referee.rules.docs import GROUPS, render_rules_markdown
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -36,6 +36,7 @@ KEY_TERMS = {
     "RES-002": "fewer players than",
     "RES-003": "design.min_duration_days",
     "RES-011": "divided by the number of weeks",
+    "RES-012": "after their first purchase",
 }
 
 
@@ -111,7 +112,7 @@ def test_each_rule_sits_under_its_own_group() -> None:
 def test_the_summary_counts_and_lists_every_rule() -> None:
     text = render_rules_markdown()
 
-    assert "21 rules: 7 blockers, 12 warnings, 2 info." in text
+    assert "22 rules: 7 blockers, 13 warnings, 2 info." in text
     for r in CATALOGUE:
         assert f"| {r.id} | {r.severity} | {r.title} |" in text
 
@@ -181,3 +182,26 @@ def test_a_group_with_no_rules_is_left_out() -> None:
 
 def test_the_catalogue_is_deterministic() -> None:
     assert render_rules_markdown() == render_rules_markdown()
+
+
+def test_an_escalation_is_documented_after_the_fires_when_and_only_for_rules_that_have_one() -> (
+    None
+):
+    escalating = rule(
+        "DES-004", escalation=Escalation(to="blocker", when="it is bad.", applies=lambda e: True)
+    )
+
+    text = render_rules_markdown([escalating, rule("DES-005")])
+
+    assert text.count("Escalates to") == 1
+    lines = text.split("### DES-004")[1].split("### DES-005")[0].splitlines()
+    labels = [line.split(":**")[0] for line in lines if line.startswith("- **")]
+    assert labels[:3] == ["- **Severity", "- **Fires when", "- **Escalates to blocker when"]
+    assert "- **Escalates to blocker when:** it is bad." in text
+
+
+def test_the_committed_catalogue_documents_the_one_escalation_there_is() -> None:
+    escalating = [r.id for r in CATALOGUE if r.escalation is not None]
+
+    assert escalating == ["RES-012"]
+    assert DOC.read_text(encoding="utf-8").count("Escalates to") == 1

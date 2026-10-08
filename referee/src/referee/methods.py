@@ -115,6 +115,53 @@ def srm_test(
     )
 
 
+# --- Do groups share one rate? -------------------------------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class HomogeneityResult:
+    successes: tuple[int, ...]
+    totals: tuple[int, ...]
+    chi_square: float
+    degrees_of_freedom: int
+    p_value: float
+
+
+def homogeneity_test(successes: Sequence[int], totals: Sequence[int]) -> HomogeneityResult:
+    """Pearson's chi-square test that every group has the same rate, without a continuity fix.
+
+    The expected successes of a group are its size times the pooled rate; the statistic is
+    sum((s - e)^2 / (n * rate * (1 - rate))) on (groups - 1) degrees of freedom. It is the
+    test of a 2 x k table of successes and failures. The chi-square approximation is poor when
+    an expected count is below about 5; this function does not hide that. Raises `StatsError`
+    for fewer than two groups, an empty group, impossible counts, or when every unit in every
+    group has the same outcome (the rate would then be 0 or 1 and nothing can differ).
+    """
+    if len(successes) != len(totals) or len(successes) < 2:
+        raise StatsError("need a success count and a size for each of at least two groups")
+    for s, n in zip(successes, totals, strict=True):
+        if not (_is_whole(s) and _is_whole(n)):
+            raise StatsError(f"counts must be whole numbers, got {s} and {n}")
+        if n < 1 or not 0 <= s <= n:
+            raise StatsError(f"{s} successes out of {n} is not possible")
+    successes_all, size_all = sum(int(s) for s in successes), sum(int(n) for n in totals)
+    pooled = successes_all / size_all
+    if pooled in (0.0, 1.0):
+        raise StatsError("every unit has the same outcome, so no group can differ from another")
+    chi_square = math.fsum(
+        (s - n * pooled) ** 2 / (n * pooled * (1 - pooled))
+        for s, n in zip(successes, totals, strict=True)
+    )
+    degrees = len(successes) - 1
+    return HomogeneityResult(
+        successes=tuple(int(s) for s in successes),
+        totals=tuple(int(n) for n in totals),
+        chi_square=chi_square,
+        degrees_of_freedom=degrees,
+        p_value=float(stats.chi2.sf(chi_square, degrees)),
+    )
+
+
 # --- A difference in means (continuous metrics) --------------------------------------------
 
 

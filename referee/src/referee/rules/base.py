@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from referee.findings import Finding, Severity
+from referee.findings import Finding, Severity, is_more_serious
 from referee.power import PowerError, PowerPlan, plan_power, power_alpha_adjustment
 from referee.spec import ExperimentSpec
 
@@ -43,6 +43,19 @@ type Check[Context] = Callable[[Context], dict[str, Any] | None]
 
 
 @dataclass(frozen=True, kw_only=True)
+class Escalation:
+    """When a rule's finding is more serious than the rule's default severity.
+
+    `when` says so in words, for the documentation; `applies` decides from the evidence the
+    rule found, and must cope with an empty one (a rule is test-built at definition).
+    """
+
+    to: Severity
+    when: str
+    applies: Callable[[dict[str, Any]], bool]
+
+
+@dataclass(frozen=True, kw_only=True)
 class Rule[Context]:
     """A rule over some context: a `ReviewContext` for the design review, a `ResultsContext`
     (see `referee.results`) for the results review."""
@@ -55,6 +68,7 @@ class Rule[Context]:
     remediation: str
     references: tuple[str, ...]
     check: Check[Context]
+    escalation: Escalation | None = None
 
     def __post_init__(self) -> None:
         # Build a throwaway finding so a malformed rule fails when it is defined, not the
@@ -62,11 +76,20 @@ class Rule[Context]:
         self.finding({})
         if not isinstance(self.fires_when, str) or not self.fires_when.strip():
             raise ValueError(f"fires_when must be a non-empty string, got {self.fires_when!r}")
+        if self.escalation is not None:
+            if not is_more_serious(self.escalation.to, self.severity):
+                raise ValueError(
+                    f"{self.id} escalates to {self.escalation.to}, which is not more serious "
+                    f"than its severity {self.severity}"
+                )
+            if not self.escalation.when.strip():
+                raise ValueError(f"{self.id}: an escalation must say when it applies")
 
     def finding(self, evidence: dict[str, Any]) -> Finding:
+        escalated = self.escalation is not None and self.escalation.applies(evidence)
         return Finding(
             rule_id=self.id,
-            severity=self.severity,
+            severity=self.escalation.to if escalated else self.severity,
             title=self.title,
             evidence=evidence,
             why_it_matters=self.why_it_matters,

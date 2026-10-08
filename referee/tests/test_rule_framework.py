@@ -6,7 +6,7 @@ import pytest
 
 from referee.findings import Finding
 from referee.review import review_design
-from referee.rules import ALL_RULES, ReviewContext, Rule
+from referee.rules import ALL_RULES, Escalation, ReviewContext, Rule
 from referee.spec import ExperimentSpec
 
 # Design section 8: the IDs and default severities the catalogue promises.
@@ -179,3 +179,62 @@ def test_a_review_leaves_the_spec_untouched(raw_spec: dict) -> None:
     review_design(spec)
 
     assert spec == before
+
+
+# --- A rule whose finding can be more serious than its default --------------------------------
+
+
+def _escalating(**overrides: Any) -> Rule:
+    escalation = Escalation(
+        to="blocker",
+        when="the evidence says severe.",
+        applies=lambda evidence: bool(evidence.get("severe")),
+    )
+    return make_rule(escalation=escalation, **overrides)
+
+
+def test_a_finding_has_the_default_severity_unless_the_evidence_escalates_it() -> None:
+    rule = _escalating()
+
+    assert rule.finding({"severe": False}).severity == "warning"
+    assert rule.finding({}).severity == "warning"
+    assert rule.finding({"severe": True}).severity == "blocker"
+
+
+def test_an_escalation_is_decided_for_each_finding(context: ReviewContext) -> None:
+    quiet = _escalating(check=lambda c: {"severe": False})
+    severe = _escalating(check=lambda c: {"severe": True})
+
+    assert quiet.evaluate(context).severity == "warning"
+    assert severe.evaluate(context).severity == "blocker"
+    assert severe.severity == "warning"  # the rule's own severity is the default
+
+
+def test_a_rule_without_an_escalation_never_changes_severity() -> None:
+    assert make_rule().escalation is None
+    assert make_rule().finding({"severe": True}).severity == "warning"
+
+
+@pytest.mark.parametrize(
+    ("severity", "to"), [("warning", "warning"), ("blocker", "warning"), ("warning", "info")]
+)
+def test_an_escalation_must_go_to_a_more_serious_severity(severity: str, to: str) -> None:
+    escalation = Escalation(to=to, when="never.", applies=lambda evidence: True)
+
+    with pytest.raises(ValueError, match="not more serious"):
+        make_rule(severity=severity, escalation=escalation)
+
+
+def test_an_escalation_must_say_when_it_applies() -> None:
+    escalation = Escalation(to="blocker", when="  ", applies=lambda evidence: True)
+
+    with pytest.raises(ValueError, match="must say when it applies"):
+        make_rule(escalation=escalation)
+
+
+def test_an_escalated_finding_makes_a_design_review_revise(clean_spec: ExperimentSpec) -> None:
+    severe = _escalating(check=lambda c: {"severe": True})
+
+    assert review_design(clean_spec, rules=[severe]).recommendation == "revise"
+    quiet = _escalating(check=lambda c: {"severe": False})
+    assert review_design(clean_spec, rules=[quiet]).recommendation == "proceed"
