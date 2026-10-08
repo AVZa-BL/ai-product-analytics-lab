@@ -6,7 +6,9 @@ in the next change. A rule reads a `ResultsContext` and returns the evidence tha
 
 from __future__ import annotations
 
+import math
 from collections import Counter, defaultdict
+from datetime import timedelta
 from typing import Any
 
 from referee.methods import SRM_ALPHA, srm_test
@@ -16,6 +18,7 @@ from referee.rules.references import FABIJAN_ET_AL_2019, KOHAVI_TANG_XU_2020
 
 _CHI_SQUARE_DIGITS = 4
 _EXPECTED_DIGITS = 2
+_DAY = timedelta(days=1)
 
 
 def _sample_ratio_mismatch(context: ResultsContext) -> dict[str, Any] | None:
@@ -53,6 +56,42 @@ def _sample_ratio_mismatch(context: ResultsContext) -> dict[str, Any] | None:
     }
 
 
+def _fewer_players_than_registered(context: ResultsContext) -> dict[str, Any] | None:
+    """An arm of the effect analysis is smaller than the n the power plan requires of it."""
+    analysed = context.count_by_arm(context.analysed)
+    if context.plan is None:
+        return {"unattainable": True, "reason": context.power_error, "analysed": analysed}
+    required = {arm: context.required_n(arm) for arm in context.arm_names}
+    short = [arm for arm in context.arm_names if analysed[arm] < (required[arm] or 0)]
+    if not short:
+        return None
+    return {
+        "required": required,
+        "analysed": analysed,
+        "assigned": context.count_by_arm(context.players),
+        "short_arms": short,
+        "missing": {arm: (required[arm] or 0) - analysed[arm] for arm in short},
+    }
+
+
+def _shorter_than_the_registered_minimum(context: ResultsContext) -> dict[str, Any] | None:
+    """The assignments span fewer whole days than design.min_duration_days."""
+    first = min(player.assigned_at for player in context.players)
+    last = max(player.assigned_at for player in context.players)
+    observed_days = math.ceil((last - first) / _DAY)
+    design = context.spec.design
+    if observed_days >= design.min_duration_days:
+        return None
+    return {
+        "observed_days": observed_days,
+        "min_duration_days": design.min_duration_days,
+        "planned_duration_days": design.planned_duration_days,
+        "first_assignment": first.isoformat(),
+        "last_assignment": last.isoformat(),
+        "ignored_before_start": list(context.ignored_before_start),
+    }
+
+
 RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
     Rule(
         id="RES-001",
@@ -79,5 +118,51 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         ),
         references=(FABIJAN_ET_AL_2019, KOHAVI_TANG_XU_2020),
         check=_sample_ratio_mismatch,
+    ),
+    Rule(
+        id="RES-002",
+        severity="blocker",
+        title="Fewer players than the registered sample size",
+        fires_when=(
+            "In the effect analysis (assigned, exposed, and not first exposed after the first "
+            "purchase), at least one arm has fewer players than the n per arm that the power "
+            "plan of the spec requires for it, or the design cannot be sized at all."
+        ),
+        why_it_matters=(
+            "The registered sample size is what the experiment needs to detect the registered "
+            "effect with the registered power. With fewer players the test has less power than "
+            "was promised, so a result that is not significant says little about whether the "
+            "effect exists."
+        ),
+        remediation=(
+            "Keep the experiment running until every arm reaches its registered n (the "
+            "evidence says how many are missing). If it must stop, report the result as "
+            "underpowered, with the interval of the effect, and not as evidence of no effect. "
+            "Do not lower the registered n after seeing the data."
+        ),
+        references=(KOHAVI_TANG_XU_2020,),
+        check=_fewer_players_than_registered,
+    ),
+    Rule(
+        id="RES-003",
+        severity="blocker",
+        title="Ran for less than the registered minimum duration",
+        fires_when=(
+            "The observed duration, from the first to the last assignment in whole days "
+            "(rounded up), is shorter than design.min_duration_days."
+        ),
+        why_it_matters=(
+            "The minimum duration is registered so that the run covers the weekly cycle of "
+            "behaviour and gives effects that take time to settle a chance to show. A shorter "
+            "run measures a window that may not represent the usual weeks, and cannot show a "
+            "change over time."
+        ),
+        remediation=(
+            "Run to at least design.min_duration_days, and to a whole number of weeks where "
+            "you can. Do not stop on the day the result looked good. If the registered minimum "
+            "was wrong, say so and why before reading the effect."
+        ),
+        references=(KOHAVI_TANG_XU_2020,),
+        check=_shorter_than_the_registered_minimum,
     ),
 )

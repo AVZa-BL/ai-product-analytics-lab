@@ -24,7 +24,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 
 ## Summary
 
-18 rules: 5 blockers, 11 warnings, 2 info.
+20 rules: 7 blockers, 11 warnings, 2 info.
 
 | ID | Severity | Title |
 | --- | --- | --- |
@@ -46,6 +46,8 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 | PRO-003 | warning | No guardrail metrics declared |
 | PRO-004 | info | Bucketing salt not declared |
 | RES-001 | blocker | Sample ratio mismatch: the arms are not the size the allocation promised |
+| RES-002 | blocker | Fewer players than the registered sample size |
+| RES-003 | blocker | Ran for less than the registered minimum duration |
 
 ## Hypothesis rules (HYP)
 
@@ -219,6 +221,24 @@ design review does not run these rules.
 - **What to do:** Do not read the effect. Find why the counts differ: assignment or bucketing, logging that loses events in one arm, bot or test-account filters, a crash or redirect on one variant, or an exposure rule applied to some arms only. The week-by-week table in the evidence shows whether the mismatch began at a point in time. Fix the cause and rerun the experiment.
 - **References:**
   - Fabijan et al. Diagnosing Sample Ratio Mismatch in Online Controlled Experiments. KDD 2019.
+  - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+### RES-002: Fewer players than the registered sample size
+
+- **Severity:** blocker
+- **Fires when:** In the effect analysis (assigned, exposed, and not first exposed after the first purchase), at least one arm has fewer players than the n per arm that the power plan of the spec requires for it, or the design cannot be sized at all.
+- **Why it matters:** The registered sample size is what the experiment needs to detect the registered effect with the registered power. With fewer players the test has less power than was promised, so a result that is not significant says little about whether the effect exists.
+- **What to do:** Keep the experiment running until every arm reaches its registered n (the evidence says how many are missing). If it must stop, report the result as underpowered, with the interval of the effect, and not as evidence of no effect. Do not lower the registered n after seeing the data.
+- **References:**
+  - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+### RES-003: Ran for less than the registered minimum duration
+
+- **Severity:** blocker
+- **Fires when:** The observed duration, from the first to the last assignment in whole days (rounded up), is shorter than design.min_duration_days.
+- **Why it matters:** The minimum duration is registered so that the run covers the weekly cycle of behaviour and gives effects that take time to settle a chance to show. A shorter run measures a window that may not represent the usual weeks, and cannot show a change over time.
+- **What to do:** Run to at least design.min_duration_days, and to a whole number of weeks where you can. Do not stop on the day the result looked good. If the registered minimum was wrong, say so and why before reading the effect.
+- **References:**
   - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
 
 ## How the power plan behind DES-001, DES-004 and DES-005 is computed

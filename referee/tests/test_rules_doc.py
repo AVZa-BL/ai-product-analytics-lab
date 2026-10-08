@@ -33,6 +33,8 @@ KEY_TERMS = {
     "PRO-003": "no guardrails",
     "PRO-004": "procedure.bucketing_salt",
     "RES-001": "arms[].allocation",
+    "RES-002": "fewer players than",
+    "RES-003": "design.min_duration_days",
 }
 
 
@@ -108,7 +110,7 @@ def test_each_rule_sits_under_its_own_group() -> None:
 def test_the_summary_counts_and_lists_every_rule() -> None:
     text = render_rules_markdown()
 
-    assert "18 rules: 5 blockers, 11 warnings, 2 info." in text
+    assert "20 rules: 7 blockers, 11 warnings, 2 info." in text
     for r in CATALOGUE:
         assert f"| {r.id} | {r.severity} | {r.title} |" in text
 
