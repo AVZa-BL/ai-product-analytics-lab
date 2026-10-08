@@ -422,3 +422,159 @@ def test_res_003_on_the_committed_export_the_run_lasted_21_days(raw_spec, export
     assert finding is not None
     assert finding.evidence["observed_days"] == 21
     assert finding.evidence["last_assignment"] == "2026-05-01T23:37:55+00:00"
+
+
+# --- RES-011: the sample ratio drifts although the total passes -------------------------------
+
+RES_011 = _rule("RES-011")
+
+
+def _weeks(counts: list[tuple[int, int]], *, gaps: tuple[int, ...] = ()) -> list:
+    """Two arms, one (control, variant_b) pair per week; the weeks in `gaps` hold nobody."""
+    rows = []
+    kept = [week for week in range(len(counts) + len(gaps)) if week not in gaps]
+    for week, (control, variant) in zip(kept, counts, strict=True):
+        start = {"assigned_at": at(7 * week), "exposed_at": at(7 * week, 1)}
+        rows += crowd("control", control, prefix=f"c{week}", **start)
+        rows += crowd("variant_b", variant, prefix=f"v{week}", **start)
+    return rows
+
+
+def _drift(raw_spec, counts, **kw):
+    return evaluate_results(RES_011, results_spec(raw_spec, arms=TWO_ARMS), _weeks(counts, **kw))
+
+
+def test_res_011_is_a_warning_about_a_drift_the_total_hides() -> None:
+    assert RES_011.severity == "warning"
+    assert "RES-001 does not fire" in RES_011.fires_when
+
+
+def test_res_011_fires_when_two_opposite_weeks_cancel_in_the_total(raw_spec) -> None:
+    counts = [(700, 300), (300, 700)]  # 1,000 against 1,000 in all
+
+    finding = _drift(raw_spec, counts)
+    total_check = evaluate_results(RES_001, results_spec(raw_spec, arms=TWO_ARMS), _weeks(counts))
+
+    assert total_check is None  # the total passes
+    assert finding is not None
+    assert finding.evidence["failing_weeks"] == [0, 1]
+    assert finding.evidence["weeks_tested"] == 2 and finding.evidence["alpha_per_week"] == 0.0005
+    assert finding.evidence["total"]["assigned"] == {"control": 1000, "variant_b": 1000}
+    assert finding.evidence["total"]["p_value"] == 1.0
+    assert finding.evidence["by_week"][0]["assigned"] == {"control": 700, "variant_b": 300}
+    assert [w["flagged"] for w in finding.evidence["by_week"]] == [True, True]
+
+
+def test_res_011_is_quiet_when_every_week_is_balanced(raw_spec) -> None:
+    assert _drift(raw_spec, [(500, 500)] * 4) is None
+
+
+def test_res_011_leaves_a_failing_total_to_res_001(raw_spec) -> None:
+    counts = [(700, 300), (700, 300)]  # every week and the total fail
+
+    assert _drift(raw_spec, counts) is None
+    assert evaluate_results(RES_001, results_spec(raw_spec, arms=TWO_ARMS), _weeks(counts))
+
+
+@pytest.mark.parametrize(
+    ("week_split", "fires"),
+    [((555, 445), False), ((556, 444), True)],
+    ids=["p-0.000504", "p-0.000397"],
+)
+def test_res_011_tests_each_week_at_a_thousandth_over_two_weeks(
+    raw_spec, week_split: tuple[int, int], fires: bool
+) -> None:
+    control, variant = week_split
+    finding = _drift(raw_spec, [(control, variant), (variant, control)])
+
+    assert (finding is not None) is fires
+
+
+@pytest.mark.parametrize(
+    ("week_split", "fires"),
+    [((557, 443), False), ((558, 442), True)],
+    ids=["p-0.000312", "p-0.000244"],
+)
+def test_res_011_tests_each_week_at_a_thousandth_over_four_weeks(
+    raw_spec, week_split: tuple[int, int], fires: bool
+) -> None:
+    control, variant = week_split
+    finding = _drift(raw_spec, [(control, variant), (variant, control), (500, 500), (500, 500)])
+
+    assert (finding is not None) is fires
+    if finding is not None:
+        assert finding.evidence["alpha_per_week"] == 0.00025
+        assert finding.evidence["failing_weeks"] == [0, 1]  # the mirror week fails the same way
+
+
+def test_res_011_divides_by_the_weeks_that_hold_players_not_by_the_calendar(raw_spec) -> None:
+    # Weeks 0 and 3 hold players and weeks 1 and 2 hold nobody: two weeks are tested, and a
+    # split with p = 0.000397 fails at 0.0005 although it would pass at 0.001 over four weeks.
+    finding = _drift(raw_spec, [(556, 444), (444, 556)], gaps=(1, 2))
+
+    assert finding is not None
+    assert finding.evidence["weeks_tested"] == 2
+    assert [w["week"] for w in finding.evidence["by_week"]] == [0, 3]
+
+
+def test_res_011_marks_which_weeks_failed(raw_spec) -> None:
+    finding = _drift(raw_spec, [(700, 300), (300, 700), (500, 500)])
+
+    assert finding is not None
+    assert finding.evidence["failing_weeks"] == [0, 1]
+    assert [w["flagged"] for w in finding.evidence["by_week"]] == [True, True, False]
+
+
+def test_res_011_ignores_a_single_week_since_it_is_the_total(raw_spec) -> None:
+    assert _drift(raw_spec, [(560, 440)]) is None  # the total fails: RES-001's case
+    assert _drift(raw_spec, [(500, 500)]) is None
+
+
+def test_res_011_evidence_can_be_written_as_json(raw_spec) -> None:
+    finding = _drift(raw_spec, [(700, 300), (300, 700)])
+
+    assert finding is not None and json.loads(json.dumps(finding.evidence)) == finding.evidence
+
+
+def test_res_011_leaves_out_players_assigned_before_the_registered_start(raw_spec) -> None:
+    early = crowd("control", 400, prefix="early", assigned_at=at(-40), exposed_at=at(-40, 1))
+    rows = [*early, *_weeks([(500, 500), (500, 500)])]
+    spec = results_spec(raw_spec, arms=TWO_ARMS, design__start_utc="2026-04-11T00:00:00Z")
+
+    assert evaluate_results(RES_011, spec, rows) is None
+
+
+def test_res_011_is_silent_on_the_committed_export_because_res_001_fires_there(
+    raw_spec, export
+) -> None:
+    context = ResultsContext.of(results_spec(raw_spec), export)
+
+    assert RES_001.evaluate(context) is not None
+    assert RES_011.evaluate(context) is None
+
+
+@pytest.mark.parametrize(
+    ("week_p", "fires"), [(0.0005, False), (0.00049999, True)], ids=["exactly-at", "just-below"]
+)
+def test_res_011_needs_p_strictly_below_the_weekly_level(
+    raw_spec, monkeypatch, week_p: float, fires: bool
+) -> None:
+    """No real counts give a p of exactly 0.0005, so the test supplies the p values."""
+    from referee.methods import SrmResult
+
+    def stub(observed, allocation, *, alpha=0.001):
+        p_value = 1.0 if tuple(observed) == (1000, 1000) else week_p
+        return SrmResult(
+            observed=tuple(observed),
+            expected=(0.0, 0.0),
+            chi_square=0.0,
+            degrees_of_freedom=1,
+            p_value=p_value,
+            flagged=p_value < alpha,
+        )
+
+    monkeypatch.setattr("referee.rules.results.srm_test", stub)
+
+    finding = _drift(raw_spec, [(700, 300), (300, 700)])
+
+    assert (finding is not None) is fires

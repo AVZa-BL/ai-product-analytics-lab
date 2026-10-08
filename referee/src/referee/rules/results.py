@@ -11,7 +11,7 @@ from collections import Counter, defaultdict
 from datetime import timedelta
 from typing import Any
 
-from referee.methods import SRM_ALPHA, srm_test
+from referee.methods import SRM_ALPHA, SrmResult, srm_test
 from referee.results import ResultsContext
 from referee.rules.base import Rule
 from referee.rules.references import FABIJAN_ET_AL_2019, KOHAVI_TANG_XU_2020
@@ -21,26 +21,41 @@ _EXPECTED_DIGITS = 2
 _DAY = timedelta(days=1)
 
 
-def _sample_ratio_mismatch(context: ResultsContext) -> dict[str, Any] | None:
-    """The sample-ratio check of design section 9, on every assigned player (section 21.4)."""
-    arms = context.arm_names
-    allocation = [arm.allocation for arm in context.spec.arms]
-    assigned = context.count_by_arm(context.players)
-    total = srm_test([assigned[arm] for arm in arms], allocation)
-    if not total.flagged:
-        return None
+def _allocation(context: ResultsContext) -> list[float]:
+    return [arm.allocation for arm in context.spec.arms]
 
+
+def _total_sample_ratio(context: ResultsContext) -> tuple[dict[str, int], SrmResult]:
+    """The assigned players per arm, and the sample-ratio test over all of them."""
+    assigned = context.count_by_arm(context.players)
+    total = srm_test([assigned[arm] for arm in context.arm_names], _allocation(context))
+    return assigned, total
+
+
+def _weekly_sample_ratios(context: ResultsContext) -> list[dict[str, Any]]:
+    """The same test for each 7-day week of assignment that holds players, in week order."""
+    arms = context.arm_names
     by_week: dict[int, Counter[str]] = defaultdict(Counter)
     for player in context.players:
         by_week[context.week_of(player.assigned_at)][player.arm] += 1
-    weekly = [
+    return [
         {
             "week": week,
             "assigned": {arm: counts[arm] for arm in arms},
-            "p_value": srm_test([counts[arm] for arm in arms], allocation).p_value,
+            "p_value": srm_test([counts[arm] for arm in arms], _allocation(context)).p_value,
         }
         for week, counts in sorted(by_week.items())
     ]
+
+
+def _sample_ratio_mismatch(context: ResultsContext) -> dict[str, Any] | None:
+    """The sample-ratio check of design section 9, on every assigned player (section 21.4)."""
+    arms = context.arm_names
+    allocation = _allocation(context)
+    assigned, total = _total_sample_ratio(context)
+    if not total.flagged:
+        return None
+    weekly = _weekly_sample_ratios(context)
     return {
         "alpha": SRM_ALPHA,
         "allocation": dict(zip(arms, allocation, strict=True)),
@@ -53,6 +68,26 @@ def _sample_ratio_mismatch(context: ResultsContext) -> dict[str, Any] | None:
         "degrees_of_freedom": total.degrees_of_freedom,
         "p_value": total.p_value,
         "by_week": weekly,
+    }
+
+
+def _sample_ratio_drift(context: ResultsContext) -> dict[str, Any] | None:
+    """The total passes, but a week of assignment fails at 0.001 over the number of weeks."""
+    assigned, total = _total_sample_ratio(context)
+    if total.flagged:
+        return None  # RES-001 reports it, with the same week-by-week table
+    weekly = _weekly_sample_ratios(context)
+    threshold = SRM_ALPHA / len(weekly)
+    failing = [week["week"] for week in weekly if week["p_value"] < threshold]
+    if not failing:
+        return None
+    return {
+        "alpha_per_week": threshold,
+        "weeks_tested": len(weekly),
+        "failing_weeks": failing,
+        "by_week": [{**week, "flagged": week["p_value"] < threshold} for week in weekly],
+        "total": {"assigned": assigned, "p_value": total.p_value},
+        "allocation": dict(zip(context.arm_names, _allocation(context), strict=True)),
     }
 
 
@@ -164,5 +199,28 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         ),
         references=(KOHAVI_TANG_XU_2020,),
         check=_shorter_than_the_registered_minimum,
+    ),
+    Rule(
+        id="RES-011",
+        severity="warning",
+        title="Sample ratio drifts over time although the total passes",
+        fires_when=(
+            "The sample-ratio check over all assigned players passes (RES-001 does not fire), "
+            "but in at least one 7-day week of assignment the chi-squared test of that week's "
+            "counts against arms[].allocation has p below 0.001 divided by the number of weeks "
+            "that hold players."
+        ),
+        why_it_matters=(
+            "A mismatch that begins, ends or reverses partway through can cancel in the total. "
+            "It means assignment or logging changed during the test (a release, a campaign, an "
+            "outage), so the players of the failing weeks are not comparable with the others."
+        ),
+        remediation=(
+            "Find what changed in the failing weeks: a release, a change to assignment or "
+            "logging, a new traffic source, an outage. Decide what to do with those weeks from "
+            "the cause, never because leaving them out changes the result."
+        ),
+        references=(FABIJAN_ET_AL_2019, KOHAVI_TANG_XU_2020),
+        check=_sample_ratio_drift,
     ),
 )

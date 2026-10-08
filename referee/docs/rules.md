@@ -24,7 +24,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 
 ## Summary
 
-20 rules: 7 blockers, 11 warnings, 2 info.
+21 rules: 7 blockers, 12 warnings, 2 info.
 
 | ID | Severity | Title |
 | --- | --- | --- |
@@ -48,6 +48,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 | RES-001 | blocker | Sample ratio mismatch: the arms are not the size the allocation promised |
 | RES-002 | blocker | Fewer players than the registered sample size |
 | RES-003 | blocker | Ran for less than the registered minimum duration |
+| RES-011 | warning | Sample ratio drifts over time although the total passes |
 
 ## Hypothesis rules (HYP)
 
@@ -239,6 +240,16 @@ design review does not run these rules.
 - **Why it matters:** The minimum duration is registered so that the run covers the weekly cycle of behaviour and gives effects that take time to settle a chance to show. A shorter run measures a window that may not represent the usual weeks, and cannot show a change over time.
 - **What to do:** Run to at least design.min_duration_days, and to a whole number of weeks where you can. Do not stop on the day the result looked good. If the registered minimum was wrong, say so and why before reading the effect.
 - **References:**
+  - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+### RES-011: Sample ratio drifts over time although the total passes
+
+- **Severity:** warning
+- **Fires when:** The sample-ratio check over all assigned players passes (RES-001 does not fire), but in at least one 7-day week of assignment the chi-squared test of that week's counts against arms[].allocation has p below 0.001 divided by the number of weeks that hold players.
+- **Why it matters:** A mismatch that begins, ends or reverses partway through can cancel in the total. It means assignment or logging changed during the test (a release, a campaign, an outage), so the players of the failing weeks are not comparable with the others.
+- **What to do:** Find what changed in the failing weeks: a release, a change to assignment or logging, a new traffic source, an outage. Decide what to do with those weeks from the cause, never because leaving them out changes the result.
+- **References:**
+  - Fabijan et al. Diagnosing Sample Ratio Mismatch in Online Controlled Experiments. KDD 2019.
   - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
 
 ## How the power plan behind DES-001, DES-004 and DES-005 is computed
