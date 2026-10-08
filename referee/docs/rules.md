@@ -24,7 +24,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 
 ## Summary
 
-22 rules: 7 blockers, 13 warnings, 2 info.
+23 rules: 7 blockers, 14 warnings, 2 info.
 
 | ID | Severity | Title |
 | --- | --- | --- |
@@ -50,6 +50,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 | RES-003 | blocker | Ran for less than the registered minimum duration |
 | RES-011 | warning | Sample ratio drifts over time although the total passes |
 | RES-012 | warning | Players first exposed after their first purchase |
+| RES-013 | warning | An arm's configuration changed during the test |
 
 ## Hypothesis rules (HYP)
 
@@ -260,6 +261,15 @@ design review does not run these rules.
 - **Escalates to blocker when:** the share of exposed players who were exposed late differs between the arms: the chi-squared test of homogeneity across the arms has p below 0.001.
 - **Why it matters:** A purchase made before the player first saw the change cannot be an effect of it. These players are left out of the effect analysis, but they are in the arms, so a different number of them in different arms means the change reached the arms differently. It is the results-time counterpart of DES-007.
 - **What to do:** Check how exposure is triggered. If it can follow a purchase, say so in the design and analyse from first exposure. Compare the estimates with and without these players in the evidence, and say which one the conclusion rests on. If the late share differs between arms, find out why before reading the effect.
+- **References:**
+  - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+### RES-013: An arm's configuration changed during the test
+
+- **Severity:** warning
+- **Fires when:** Among the players of the effect analysis, at least one arm has players who first saw it on different arm_config_version values: the version at first exposure, or at assignment when the exposures carry none.
+- **Why it matters:** A change of configuration part-way through is a second treatment inside the arm. Players before and after it saw different things, so the arm's effect is an average of two experiences, and a change of that effect over time (RES-007) cannot be told from the effect of the change itself.
+- **What to do:** Find out what changed and when. Analyse the versions separately or restart the test on the final configuration; do not pool the versions and read a trend over weeks as novelty. The difference within a week in the evidence is descriptive only: the versions were not randomised.
 - **References:**
   - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
 

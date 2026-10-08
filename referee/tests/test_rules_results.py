@@ -864,3 +864,231 @@ def test_res_012_on_the_committed_export_the_late_players_move_the_sessions_esti
         0.29555,
         0.336484,
     )
+
+
+# --- RES-013: an arm's configuration changed during the test -----------------------------------
+
+RES_013 = _rule("RES-013")
+
+
+def _on_version(arm: str, count: int, version: int, *, week: int, prefix: str, **fields):
+    """Players of `arm` first exposed in `week` on `version` (and assigned on it too)."""
+    given = {
+        "assigned_version": version,
+        "exposure_version": version,
+        "assigned_at": at(7 * week),
+        "exposed_at": at(7 * week, 1),
+        **fields,
+    }
+    return crowd(arm, count, prefix=prefix, **given)
+
+
+def _res_013(raw_spec, rows, **changes):
+    return evaluate_results(RES_013, results_spec(raw_spec, arms=TWO_ARMS, **changes), rows)
+
+
+def test_res_013_is_a_warning_about_the_arm_configuration() -> None:
+    assert RES_013.severity == "warning" and RES_013.escalation is None
+    assert "arm_config_version" in RES_013.fires_when
+
+
+def test_res_013_is_quiet_when_each_arm_keeps_one_version(raw_spec) -> None:
+    # The two arms are on different versions, which is no change within either.
+    rows = [
+        *_on_version("control", 20, 1, week=0, prefix="c0"),
+        *_on_version("control", 20, 1, week=1, prefix="c1"),
+        *_on_version("variant_b", 20, 3, week=0, prefix="v0"),
+        *_on_version("variant_b", 20, 3, week=1, prefix="v1"),
+    ]
+
+    assert _res_013(raw_spec, rows) is None
+
+
+def test_res_013_reports_the_versions_by_week_of_first_exposure(raw_spec) -> None:
+    rows = [
+        *_on_version("control", 30, 1, week=0, prefix="c"),
+        *_on_version("variant_b", 30, 1, week=0, prefix="v0"),
+        *_on_version("variant_b", 20, 1, week=1, prefix="v1a"),
+        *_on_version("variant_b", 10, 2, week=1, prefix="v1b"),
+        *_on_version("variant_b", 30, 2, week=2, prefix="v2"),
+    ]
+
+    finding = _res_013(raw_spec, rows)
+
+    assert finding is not None
+    assert list(finding.evidence["arms"]) == ["variant_b"]  # control never changed
+    arm = finding.evidence["arms"]["variant_b"]
+    assert arm["versions"] == [{"version": 1, "players": 50}, {"version": 2, "players": 40}]
+    assert arm["by_week"] == [
+        {"week": 0, "versions": [{"version": 1, "players": 30}]},
+        {"week": 1, "versions": [{"version": 1, "players": 20}, {"version": 2, "players": 10}]},
+        {"week": 2, "versions": [{"version": 2, "players": 30}]},
+    ]
+    assert arm["mixed_weeks"] == [1]
+    assert finding.evidence["metric"] == "purchased_7d"
+
+
+def test_res_013_names_the_arm_whichever_arm_changed_even_the_control(raw_spec) -> None:
+    rows = [
+        *_on_version("control", 10, 1, week=0, prefix="c0"),
+        *_on_version("control", 10, 2, week=1, prefix="c1"),
+        *_on_version("variant_b", 20, 1, week=0, prefix="v"),
+    ]
+
+    finding = _res_013(raw_spec, rows)
+
+    assert finding is not None and list(finding.evidence["arms"]) == ["control"]
+
+
+def test_res_013_uses_the_version_at_first_exposure_not_at_assignment(raw_spec) -> None:
+    # Assigned on version 1 just before a change, first exposed after it on version 2.
+    moved = {"assigned_version": 1, "exposure_version": 2}
+    rows = [
+        *_on_version("control", 20, 1, week=0, prefix="c"),
+        *_on_version("variant_b", 20, 1, week=0, prefix="v1"),
+        *crowd("variant_b", 15, prefix="moved", assigned_at=at(6), exposed_at=at(8), **moved),
+    ]
+
+    finding = _res_013(raw_spec, rows)
+
+    assert finding is not None
+    arm = finding.evidence["arms"]["variant_b"]
+    assert arm["versions"] == [{"version": 1, "players": 20}, {"version": 2, "players": 15}]
+    assert arm["assigned_differs"] == 15
+    assert [w["week"] for w in arm["by_week"]] == [0, 1]  # the week of first exposure: 8 days in
+    assert finding.evidence["version_from"] == {"exposure": 55, "assignment": 0}
+
+
+def test_res_013_falls_back_to_the_assigned_version_when_exposures_carry_none(raw_spec) -> None:
+    rows = [
+        *_on_version("control", 20, 1, week=0, prefix="c", exposure_version=None),
+        *_on_version("variant_b", 20, 1, week=0, prefix="v1", exposure_version=None),
+        *_on_version("variant_b", 20, 2, week=1, prefix="v2", exposure_version=None),
+    ]
+
+    finding = _res_013(raw_spec, rows)
+
+    assert finding is not None
+    assert finding.evidence["version_from"] == {"exposure": 0, "assignment": 60}
+    assert finding.evidence["arms"]["variant_b"]["assigned_differs"] == 0
+
+
+def test_res_013_looks_only_at_the_players_of_the_effect_analysis(raw_spec) -> None:
+    late = {"purchases": 1, "first_purchase_at": at(0, 0.5)}
+    rows = [
+        *_on_version("control", 20, 1, week=0, prefix="c"),
+        *_on_version("variant_b", 20, 1, week=0, prefix="v"),
+        *_on_version("variant_b", 10, 2, week=1, prefix="late", **late),  # exposed after buying
+        *crowd("variant_b", 10, prefix="never", exposed_at=None, assigned_version=2),
+    ]
+
+    assert _res_013(raw_spec, rows) is None
+
+
+def test_res_013_describes_the_difference_between_versions_within_a_mixed_week(raw_spec) -> None:
+    buyer = {"purchases": 1, "first_purchase_at": at(8)}
+    rows = [
+        *_on_version("control", 20, 1, week=0, prefix="c"),
+        *_on_version("variant_b", 40, 1, week=0, prefix="v0"),
+        *_on_version("variant_b", 36, 1, week=1, prefix="a"),
+        *_on_version("variant_b", 4, 1, week=1, prefix="ab", **buyer),  # 4 of 40 bought
+        *_on_version("variant_b", 30, 2, week=1, prefix="b"),
+        *_on_version("variant_b", 10, 2, week=1, prefix="bb", **buyer),  # 10 of 40 bought
+    ]
+
+    finding = _res_013(raw_spec, rows)
+    expected = two_proportion_difference(10, 40, 4, 40)
+
+    assert finding is not None
+    (within,) = finding.evidence["arms"]["variant_b"]["within_week"]
+    assert within == {
+        "week": 1,
+        "later_version": 2,
+        "earlier_version": 1,
+        "n_later": 40,
+        "n_earlier": 40,
+        "difference": round(expected.difference, 6),
+        "ci_low": round(expected.ci_low, 6),
+        "ci_high": round(expected.ci_high, 6),
+        "confidence": 0.95,
+    }
+    assert within["difference"] == 0.15  # later minus earlier
+
+
+def test_res_013_compares_every_later_version_with_the_earliest_in_the_week(raw_spec) -> None:
+    rows = [
+        *_on_version("control", 20, 1, week=0, prefix="c"),
+        *_on_version("variant_b", 30, 1, week=0, prefix="a"),
+        *_on_version("variant_b", 30, 2, week=0, prefix="b"),
+        *_on_version("variant_b", 30, 3, week=0, prefix="d"),
+    ]
+
+    finding = _res_013(raw_spec, rows, primary_metric=SESSIONS)
+
+    assert finding is not None
+    within = finding.evidence["arms"]["variant_b"]["within_week"]
+    assert [(w["earlier_version"], w["later_version"]) for w in within] == [(1, 2), (1, 3)]
+
+
+def test_res_013_says_why_when_a_within_week_difference_cannot_be_made(raw_spec) -> None:
+    rows = [
+        *_on_version("control", 20, 1, week=0, prefix="c"),
+        *_on_version("variant_b", 20, 1, week=0, prefix="a"),
+        *_on_version("variant_b", 20, 2, week=0, prefix="b"),  # nobody bought in either version
+    ]
+
+    finding = _res_013(raw_spec, rows)
+
+    assert finding is not None
+    (within,) = finding.evidence["arms"]["variant_b"]["within_week"]
+    assert "every unit has the same outcome" in within["error"] and "difference" not in within
+
+
+def test_res_013_evidence_can_be_written_as_json(raw_spec) -> None:
+    rows = [
+        *_on_version("control", 20, 1, week=0, prefix="c"),
+        *_on_version("variant_b", 20, 1, week=0, prefix="a"),
+        *_on_version("variant_b", 20, 2, week=0, prefix="b"),
+    ]
+
+    finding = _res_013(raw_spec, rows)
+
+    assert finding is not None and json.loads(json.dumps(finding.evidence)) == finding.evidence
+
+
+def test_res_013_on_the_committed_export_variant_b_changes_in_its_second_week(
+    raw_spec, export
+) -> None:
+    spec = results_spec(raw_spec, primary_metric=SESSIONS)
+
+    finding = RES_013.evaluate(ResultsContext.of(spec, export))
+
+    assert finding is not None and finding.severity == "warning"
+    assert list(finding.evidence["arms"]) == ["variant_b"]  # the only arm that changed
+    arm = finding.evidence["arms"]["variant_b"]
+    assert arm["versions"] == [{"version": 1, "players": 540}, {"version": 2, "players": 429}]
+    assert arm["by_week"] == [
+        {"week": 0, "versions": [{"version": 1, "players": 313}]},
+        {"week": 1, "versions": [{"version": 1, "players": 227}, {"version": 2, "players": 104}]},
+        {"week": 2, "versions": [{"version": 2, "players": 325}]},
+    ]
+    assert arm["mixed_weeks"] == [1]
+    # The 11 variant_b players first exposed on another version than they were assigned to
+    # were all exposed after buying, so none of them is in the effect analysis.
+    assert arm["assigned_differs"] == 0
+    (within,) = arm["within_week"]
+    assert (within["n_later"], within["n_earlier"]) == (104, 227)
+    assert within["difference"] == pytest.approx(0.449848, abs=1e-6)
+    assert within["ci_low"] < 0 < within["ci_high"]  # sessions: the versions cannot be told apart
+    assert finding.evidence["version_from"] == {"exposure": 2626, "assignment": 0}
+
+
+def test_a_results_review_of_the_committed_export_lists_every_data_fit_rule_that_fires(
+    raw_spec, export
+) -> None:
+    review = review_results(results_spec(raw_spec), export)
+
+    assert review.verdict == "invalid"
+    assert review.blocking_rule_ids == ("RES-001", "RES-002")
+    assert [f.rule_id for f in review.findings if f.severity == "warning"] == ["RES-012", "RES-013"]
+    assert review.rules_run == ("RES-001", "RES-002", "RES-003", "RES-011", "RES-012", "RES-013")

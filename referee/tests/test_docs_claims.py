@@ -12,7 +12,7 @@ from scipy.stats import chi2, ncx2, norm
 from test_spec_canonical import SECTION_6_SHA256
 
 from referee import cli
-from referee.rules import ALL_RULES
+from referee.rules import ALL_RULES, RESULTS_RULES
 
 ROOT = Path(__file__).resolve().parent.parent
 README = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -132,7 +132,9 @@ def test_the_milestone_3_amendment_names_the_lab_files_and_incident_codes_that_e
         assert f"when '{code}'" in mart, f"{code} is not in the mart"
 
 
-def test_the_milestone_4_amendment_names_rules_and_files_that_exist_and_none_built_yet() -> None:
+def test_the_milestone_4_amendment_names_rules_and_files_and_its_new_rules_are_results_rules() -> (
+    None
+):
     amendment = DESIGN.split("\n## 20. Amendment")[1].split("\n## 21. Amendment")[0]
     rule_ids = set(re.findall(r"RES-0\d\d", amendment))
     seed_list = DESIGN.split("## 8. Rule catalogue")[1].split("## 9.")[0]
@@ -147,18 +149,22 @@ def test_the_milestone_4_amendment_names_rules_and_files_that_exist_and_none_bui
         assert (ROOT.parent / name).exists(), name
     assert "referee/src/referee/data.py" in amendment
     assert "1,000 rows" in amendment and "feat/referee-results-data" in amendment
-    assert not ({"RES-012", "RES-013"} & {rule.id for rule in ALL_RULES}), (
-        "the results rules arrive in 4b; update this test and section 20.4 when they do"
-    )
+    # Section 20.4 promised the two rules; 4b-1 built them as results rules, which the design
+    # review does not run.
+    assert {"RES-012", "RES-013"} <= {rule.id for rule in RESULTS_RULES}
+    assert not ({"RES-012", "RES-013"} & {rule.id for rule in ALL_RULES})
 
 
-def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_none_built_yet() -> None:
+def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_4b_2_is_not_built() -> (
+    None
+):
     amendment = DESIGN.split("\n## 21. Amendment")[1]
     seed_list = DESIGN.split("## 8. Rule catalogue")[1].split("## 9.")[0]
     catalogue = set(re.findall(r"(?:DES|RES)-0\d\d", seed_list))
     named = set(re.findall(r"(?:DES|RES)-0\d\d", amendment))
     new_rules = {"RES-012", "RES-013", "DES-009"}
-    built = {rule.id for rule in ALL_RULES}
+    built_in_4b_1 = {"RES-001", "RES-002", "RES-003", "RES-011", "RES-012", "RES-013"}
+    built = {rule.id for rule in ALL_RULES} | {rule.id for rule in RESULTS_RULES}
 
     assert {"RES-001", "RES-002", "RES-003", "RES-004", "RES-007", "RES-008"} <= named
     assert {"RES-011", "RES-012", "RES-013", "DES-009"} <= named
@@ -168,8 +174,11 @@ def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_none_bu
         assert (ROOT.parent / name).exists(), name
     for branch in ("feat/referee-results-data-fit", "feat/referee-results-effect"):
         assert branch in amendment
-    assert not new_rules & built and not any(rule_id.startswith("RES-") for rule_id in built), (
-        "the results rules arrive in 4b-1 and 4b-2; update this test and section 21 when they do"
+    assert built_in_4b_1 <= {rule.id for rule in RESULTS_RULES}
+    assert not {rule.id for rule in ALL_RULES} & {rule_id for rule_id in named if "RES" in rule_id}
+    assert not {"RES-004", "RES-007", "RES-008", "DES-009"} & built, (
+        "RES-004, RES-007, RES-008 and DES-009 arrive in 4b-2; update this test and section 21 "
+        "when they do"
     )
 
 

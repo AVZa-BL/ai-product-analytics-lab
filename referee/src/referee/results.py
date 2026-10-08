@@ -10,7 +10,7 @@ change it. The decisions are those of design section 21.3 and 21.8.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Literal
@@ -53,6 +53,13 @@ class PlayerRecord:
     @property
     def exposed(self) -> bool:
         return self.first_exposed_at is not None
+
+    @property
+    def version(self) -> int:
+        """The configuration version the player first saw: the exposure's, else the assignment's."""
+        if self.first_exposure_version is None:
+            return self.assigned_version
+        return self.first_exposure_version
 
     @property
     def late_exposed(self) -> bool:
@@ -209,8 +216,22 @@ def effect_estimate(
     """
     metric = context.metrics[context.spec.primary_metric.name]
     chosen = list(players)
-    treatment = [metric.value(p) for p in chosen if p.arm == arm]
-    control = [metric.value(p) for p in chosen if p.arm == context.control]
+    return difference_summary(
+        metric,
+        [metric.value(p) for p in chosen if p.arm == arm],
+        [metric.value(p) for p in chosen if p.arm == context.control],
+    )
+
+
+def difference_summary(
+    metric: ExportMetric, treatment: Sequence[float], control: Sequence[float]
+) -> dict[str, Any]:
+    """mean(treatment) - mean(control) of one metric's values, with its 95% interval.
+
+    Welch's interval for a continuous metric, the two-proportion interval for a binary one.
+    The groups need not be arms: any two sets of players will do. When the data allow no
+    estimate the answer carries the reason in "error" in place of the numbers.
+    """
     counts = {"n_treatment": len(treatment), "n_control": len(control)}
     try:
         if metric.kind == "binary":

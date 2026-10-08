@@ -37,6 +37,7 @@ KEY_TERMS = {
     "RES-003": "design.min_duration_days",
     "RES-011": "divided by the number of weeks",
     "RES-012": "after their first purchase",
+    "RES-013": "arm_config_version",
 }
 
 
@@ -112,7 +113,7 @@ def test_each_rule_sits_under_its_own_group() -> None:
 def test_the_summary_counts_and_lists_every_rule() -> None:
     text = render_rules_markdown()
 
-    assert "22 rules: 7 blockers, 13 warnings, 2 info." in text
+    assert "23 rules: 7 blockers, 14 warnings, 2 info." in text
     for r in CATALOGUE:
         assert f"| {r.id} | {r.severity} | {r.title} |" in text
 

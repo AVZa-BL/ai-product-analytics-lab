@@ -12,7 +12,7 @@ from datetime import timedelta
 from typing import Any
 
 from referee.methods import SRM_ALPHA, SrmResult, StatsError, homogeneity_test, srm_test
-from referee.results import ResultsContext, effect_estimate
+from referee.results import ResultsContext, difference_summary, effect_estimate
 from referee.rules.base import Escalation, Rule
 from referee.rules.references import FABIJAN_ET_AL_2019, KOHAVI_TANG_XU_2020
 
@@ -145,6 +145,68 @@ def _late_exposure(context: ResultsContext) -> dict[str, Any] | None:
 def _late_share_differs(evidence: dict[str, Any]) -> bool:
     homogeneity = evidence.get("homogeneity")
     return homogeneity is not None and homogeneity["p_value"] < homogeneity["alpha"]
+
+
+def _versions(players: list) -> list[dict[str, int]]:
+    counts = Counter(p.version for p in players)
+    return [{"version": version, "players": counts[version]} for version in sorted(counts)]
+
+
+def _configuration_changed(context: ResultsContext) -> dict[str, Any] | None:
+    """An arm whose analysed players first saw it on more than one configuration version."""
+    metric = context.metrics[context.spec.primary_metric.name]
+    changed: dict[str, Any] = {}
+    for arm in context.arm_names:
+        players = [p for p in context.analysed if p.arm == arm]
+        if len({p.version for p in players}) < 2:
+            continue
+        by_week: dict[int, list] = defaultdict(list)
+        for player in players:
+            by_week[context.week_of(player.first_exposed_at)].append(player)
+        mixed = [
+            week for week, found in sorted(by_week.items()) if len({p.version for p in found}) > 1
+        ]
+        within_week = []
+        for week in mixed:
+            groups: dict[int, list[float]] = defaultdict(list)
+            for player in by_week[week]:
+                groups[player.version].append(metric.value(player))
+            earlier = min(groups)
+            for later in sorted(v for v in groups if v > earlier):
+                summary = difference_summary(metric, groups[later], groups[earlier])
+                within_week.append(
+                    {
+                        "week": week,
+                        "later_version": later,
+                        "earlier_version": earlier,
+                        "n_later": summary.pop("n_treatment"),
+                        "n_earlier": summary.pop("n_control"),
+                        **summary,
+                    }
+                )
+        changed[arm] = {
+            "versions": _versions(players),
+            "by_week": [
+                {"week": week, "versions": _versions(found)}
+                for week, found in sorted(by_week.items())
+            ],
+            "mixed_weeks": mixed,
+            "assigned_differs": sum(
+                p.first_exposure_version is not None
+                and p.first_exposure_version != p.assigned_version
+                for p in players
+            ),
+            "within_week": within_week,
+        }
+    if not changed:
+        return None
+    analysed = context.analysed
+    known = sum(p.first_exposure_version is not None for p in analysed)
+    return {
+        "metric": context.spec.primary_metric.name,
+        "version_from": {"exposure": known, "assignment": len(analysed) - known},
+        "arms": changed,
+    }
 
 
 def _fewer_players_than_registered(context: ResultsContext) -> dict[str, Any] | None:
@@ -309,5 +371,29 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
             ),
             applies=_late_share_differs,
         ),
+    ),
+    Rule(
+        id="RES-013",
+        severity="warning",
+        title="An arm's configuration changed during the test",
+        fires_when=(
+            "Among the players of the effect analysis, at least one arm has players who first "
+            "saw it on different arm_config_version values: the version at first exposure, or "
+            "at assignment when the exposures carry none."
+        ),
+        why_it_matters=(
+            "A change of configuration part-way through is a second treatment inside the arm. "
+            "Players before and after it saw different things, so the arm's effect is an average "
+            "of two experiences, and a change of that effect over time (RES-007) cannot be told "
+            "from the effect of the change itself."
+        ),
+        remediation=(
+            "Find out what changed and when. Analyse the versions separately or restart the test "
+            "on the final configuration; do not pool the versions and read a trend over weeks as "
+            "novelty. The difference within a week in the evidence is descriptive only: the "
+            "versions were not randomised."
+        ),
+        references=(KOHAVI_TANG_XU_2020,),
+        check=_configuration_changed,
     ),
 )
