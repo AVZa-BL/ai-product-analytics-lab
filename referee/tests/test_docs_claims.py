@@ -8,6 +8,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from scipy.stats import chi2, ncx2, norm
 from test_spec_canonical import SECTION_6_SHA256
 
 from referee import cli
@@ -96,9 +97,9 @@ def test_the_amendment_states_the_pinned_fingerprint_and_the_exit_statuses() -> 
 def test_the_design_header_points_at_every_amendment() -> None:
     header = DESIGN.split("**Scope:**")[0]
 
-    for number in (16, 17, 18, 19, 20):
+    for number in (16, 17, 18, 19, 20, 21):
         assert f"see section {number}" in header
-    assert all(f"\n## {number}. Amendment" in DESIGN for number in (16, 17, 18, 19, 20))
+    assert all(f"\n## {number}. Amendment" in DESIGN for number in (16, 17, 18, 19, 20, 21))
 
 
 def test_the_amendment_names_the_files_it_says_exist() -> None:
@@ -132,7 +133,7 @@ def test_the_milestone_3_amendment_names_the_lab_files_and_incident_codes_that_e
 
 
 def test_the_milestone_4_amendment_names_rules_and_files_that_exist_and_none_built_yet() -> None:
-    amendment = DESIGN.split("\n## 20. Amendment")[1]  # not "## 20.", which "### 20.1" contains
+    amendment = DESIGN.split("\n## 20. Amendment")[1].split("\n## 21. Amendment")[0]
     rule_ids = set(re.findall(r"RES-0\d\d", amendment))
     seed_list = DESIGN.split("## 8. Rule catalogue")[1].split("## 9.")[0]
     catalogue = set(re.findall(r"RES-0\d\d", seed_list))
@@ -149,6 +150,55 @@ def test_the_milestone_4_amendment_names_rules_and_files_that_exist_and_none_bui
     assert not ({"RES-012", "RES-013"} & {rule.id for rule in ALL_RULES}), (
         "the results rules arrive in 4b; update this test and section 20.4 when they do"
     )
+
+
+def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_none_built_yet() -> None:
+    amendment = DESIGN.split("\n## 21. Amendment")[1]
+    seed_list = DESIGN.split("## 8. Rule catalogue")[1].split("## 9.")[0]
+    catalogue = set(re.findall(r"(?:DES|RES)-0\d\d", seed_list))
+    named = set(re.findall(r"(?:DES|RES)-0\d\d", amendment))
+    new_rules = {"RES-012", "RES-013", "DES-009"}
+    built = {rule.id for rule in ALL_RULES}
+
+    assert {"RES-001", "RES-002", "RES-003", "RES-004", "RES-007", "RES-008"} <= named
+    assert {"RES-011", "RES-012", "RES-013", "DES-009"} <= named
+    assert named - new_rules <= catalogue, "section 21 names a rule section 8 lacks"
+    assert not new_rules & catalogue, "section 8 must keep the seed list as written"
+    for name in re.findall(r"`((?:referee|analytics-lab)/[\w/.\-]+)`", amendment):
+        assert (ROOT.parent / name).exists(), name
+    for branch in ("feat/referee-results-data-fit", "feat/referee-results-effect"):
+        assert branch in amendment
+    assert not new_rules & built and not any(rule_id.startswith("RES-") for rule_id in built), (
+        "the results rules arrive in 4b-1 and 4b-2; update this test and section 21 when they do"
+    )
+
+
+def test_the_milestone_4b_amendment_quotes_the_numbers_the_code_reproduces() -> None:
+    amendment = DESIGN.split("\n## 21. Amendment")[1]
+    shift = norm.ppf(0.975) + norm.ppf(0.8)  # the slope test's 80%-power point, in standard errors
+    powers = [
+        100 * ncx2.sf(chi2.ppf(0.95, cohorts - 1), cohorts - 1, shift**2)
+        for cohorts in (3, 4, 6, 8, 12)
+    ]
+    quoted = ", ".join(f"{p:.1f}%" for p in powers[:-1]) + f" and {powers[-1]:.1f}%"
+    generator = (
+        ROOT.parent / "analytics-lab/src/analytics_lab/generation/hybrid_subscription.py"
+    ).read_text(encoding="utf-8")
+    provenance = (ROOT / "tests/data/hybrid_offer_page_5000/PROVENANCE.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert quoted in amendment
+    # The fixture figures are pinned by tests/test_real_lab_export.py; the text must match them.
+    for figure in ("19.86", "19.92", "Q = 3.77", "p = 0.34, 4.0e-5 and 2.6e-8", "p = 6.7e-10"):
+        assert figure in amendment, figure
+    for figure in ("198 players (7.0%)", "7.1%, 7.4% and 6.4%", "p = 0.72", "445", "11 have"):
+        assert figure in amendment, figure
+    # The new-user caveat rests on how the lab's generator places players in time.
+    assert 'pd.to_timedelta(120, unit="D")' in generator
+    assert 'pd.to_timedelta(30, unit="D")' in generator
+    assert "--start-date 2026-01-01" in provenance
+    assert "2026-04-11" in amendment and "2026-01-01" in amendment
 
 
 def test_the_readme_names_every_runtime_dependency_the_project_declares() -> None:
