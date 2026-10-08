@@ -1,7 +1,8 @@
 # Importing your current tracking from a CSV
 
-`tracewright import-plan` turns a spreadsheet export of your tracking into a plan file that
-`propose` and `review-plan` can read:
+`tracewright import-plan` turns a spreadsheet export of your tracking, or a Google Sheet itself
+([`google-sheets.md`](google-sheets.md)), into a plan file that `propose` and `review-plan` can
+read:
 
 ```bash
 python -m tracewright import-plan examples/current-tracking.csv \
@@ -15,21 +16,26 @@ python -m tracewright import-plan examples/current-tracking.csv \
 ## Format
 
 A header row is required. One row is one property of one event. A row whose `property` is empty
-describes the event itself.
+describes the event itself. The names below are the importer's own; your headers need not match
+them, because common spellings are recognised (`Event Name`, `Parameter`, `Data Type`, `Mandatory?`
+and so on, listed in [`column-names.md`](column-names.md)) and `--map NAME=HEADER` names any other.
+Use `--dry-run` to see how your columns were read before anything is written.
 
 | Column | Used on | Meaning |
 | --- | --- | --- |
 | `event` | every row | Event name. Required. |
 | `property` | property rows | Property name. Empty on a row that describes the event. |
-| `type` | property rows | `string`, `integer`, `number`, `boolean`, `timestamp` or `enum`. Default `string`. |
+| `type` | property rows | `string`, `integer`, `number`, `boolean`, `timestamp` or `enum`; common words such as `int`, `bool`, `datetime` are read as these. Default `string`. |
 | `required` | property rows | `true`/`false`, `yes`/`no`, `1`/`0`. Blank means false. |
 | `pii` | property rows | Same spellings. Blank means false. |
-| `allowed_values` | property rows | Values separated by `\|`, for an `enum`. |
+| `allowed_values` | property rows | Values separated by `\|`, `;`, `,` or line breaks, for an `enum`. |
 | `description` | both | On a property row, the property; on an event row, the event. |
+| `event_description` | event | The event's description, on any row. If present, `description` is only the property's. |
 | `trigger`, `owner`, `status` | event | Say it on any row of the event; if repeated it must agree. `status` is `active`, `planned` or `deprecated`. |
 
-All columns except `event` are optional. A column that is not in the table is refused, so a typo
-in a header does not silently drop data.
+All columns except `event` are optional. A column that fits no meaning is refused, so a typo in a
+header does not silently drop data; `--ignore-other-columns` sets such columns aside, and the
+columns used and set aside are always listed on standard error.
 
 **Errors.** Problems in a row's own fields name the row (row 1 is the header): an empty event, a
 bad `true`/`false`, an unknown `type`, a property declared twice, a row with more cells than the
@@ -41,16 +47,13 @@ whole plan is validated, such as a bad `--id`, is reported by field path.
 "CSV UTF-8 (Comma delimited)". The importer does not guess the delimiter. `--out` is not
 overwritten unless `--force` is given, because the generated YAML is meant to be edited by hand. See [`examples/current-tracking.csv`](../examples/current-tracking.csv).
 
-## Getting your tracking out of Google Sheets today
+## Google Sheets
 
-The importer reads a CSV file, not a Google Sheet directly (reading a sheet directly is planned, see the README, *Next*). To use a sheet now:
-
-1. Open the tab that holds the tracking calls. The export covers one tab at a time.
-2. **File, Download, Comma Separated Values (.csv)**. The file is UTF-8 and comma-separated, which is what the importer requires.
-3. Make the first row use the column names above (`event`, `property`, `type`, and so on). A header the importer does not know is refused, so a sheet with its own headers must be renamed first; keep a copy of the original.
-4. Run `import-plan` and read the YAML it writes before trusting it. The importer checks the structure, not whether the sheet is right.
-
-Several tabs mean several exports; combine them into one CSV with the same header, or import one at a time into separate plans. A Google Doc with a design description is exported with **File, Download, Plain Text (.txt)** or **PDF Document (.pdf)** and passed to `propose --doc`.
+Pass the sheet's address instead of a file, or download a tab as **File, Download, Comma Separated
+Values (.csv)** and pass that. Giving access, private sheets, several tabs, layouts with the event
+name written once for several rows (`--fill-down`) and every error message are in
+[`google-sheets.md`](google-sheets.md). A Google Doc with a design description is exported with
+**File, Download, Plain Text (.txt)** or **PDF Document (.pdf)** and passed to `propose --doc`.
 
 ## What the importer does not do
 

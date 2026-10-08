@@ -15,32 +15,21 @@ All example data is synthetic. The repository contains no production, customer, 
 | 1 | Tracking-plan schema, 12 review rules, `review-plan` | Done |
 | 2 | `propose`: feature documents + current plan → proposal with types and reasons; `import-plan` from CSV | Done, see *What is verified* |
 | 3 | Run `propose` on a real design document with a real model, and judge the proposals against what an analyst would write | Next. Needs an API key and one real document |
-| 4 | Read the current tracking from a **Google Sheet** (map the sheet's own columns), instead of a hand-made CSV | Planned. Needs the sheet's column layout, see *Next* |
+| 4 | Read the current tracking from a **Google Sheet** (recognises common headers, `--map` for the rest, `--dry-run` to check) | Built and tested against stand-ins for Google; never run against a real sheet |
 | 5 | Compare a plan with events actually observed in an export (drift) | Planned |
 
 ## Next
 
-Nothing in this section is built. It records what comes next and what is needed to start.
+Nothing here is built yet.
 
-**Google Sheets as the input for the current tracking (milestone 4).** The tracking calls and their specifications live in a Google Sheet. Today `propose` reads a plan file, and `import-plan` reads one fixed CSV layout ([`docs/import-csv.md`](docs/import-csv.md)), so a real sheet will not load as it is: its headers will differ from ours, and any unknown column is refused. What decides the design is the sheet's actual layout, so before building I need, from you:
-
-1. The **header row** of the sheet (column names only, no data needed), and whether it is one tab for all events or one tab per event or area.
-2. Where the **specification** lives: free text in one column, or separate columns for trigger, owner and so on.
-3. How the **property types** are written (for example `string`, `int`, `bool`, or something else).
-4. How the tool should **reach** the sheet: by you exporting a tab to CSV (works today, see below), or by the tool reading the sheet directly. Reading it directly needs Google credentials that you set up (an OAuth login or a service account with read access to that sheet) and a new dependency; I would not start that without your decision.
-
-A likely design, not decided: a small mapping from your headers to ours that you confirm once, optionally proposed by the model from the header row and the first rows. It is a proposal for you to correct, because a wrong guess about a column silently corrupts the plan.
-
-**What works today for Google files** (nothing to build):
-
-- *Tracking sheet:* open the tab, **File, Download, Comma Separated Values (.csv)**, rename the headers to the columns in [`docs/import-csv.md`](docs/import-csv.md), then run `import-plan`.
-- *Design document in Google Docs:* **File, Download, Plain Text (.txt)** or **PDF Document (.pdf)**, then pass it with `--doc`.
-
-**Milestone 3 first, in practice:** run `propose` once on one real document and read the result as the analyst who would have written it. That tells us whether the proposals are good enough to be worth connecting to more inputs.
+1. **A trial on a real document with a real model (milestone 3).** Run `propose` once on one real design document and read the result as the analyst who would have written it. That tells us whether the proposals are good enough to be worth connecting to more inputs. Needs an API key and one real document.
+2. **A first read of a real Google Sheet.** The Sheets input is built and tested against stand-ins for Google ([`docs/google-sheets.md`](docs/google-sheets.md)), but never run against a real sheet. Start with `--dry-run` on yours; the header row of your sheet, if you send it, lets me check the recognised spellings against it.
+3. **The drift check (milestone 5).** Compare a plan with the events a product really sends.
 
 ## What is verified, and what is not
 
-- **Verified by tests (offline):** the schema and its validation, the document loader, the evidence check, the collision/type/naming checks and the merge, the repair loop, the report files (golden files), the CSV importer, and the **real Anthropic SDK against a mocked HTTP transport**: the request body (including repair feedback), the streaming parse (including thinking blocks), a refusal, a truncated or otherwise unfinished response, an empty one, HTTP errors 400, 401, 403, 404, 429 and 500, a connection that fails before or during the response, and missing credentials or a missing profile. The tests run with the Anthropic credentials of the machine removed from the environment and from the home directory, and a test that opens a non-local network connection fails.
+- **Verified by tests (offline):** the schema and its validation, the document loader, the evidence check, the collision/type/naming checks and the merge, the repair loop, the report files (golden files), the CSV and spreadsheet importer (column recognition, value cleaning, two real-world layouts, the Google Sheets reader against stand-ins for Google and against a server on this machine), and the **real Anthropic SDK against a mocked HTTP transport**: the request body (including repair feedback), the streaming parse (including thinking blocks), a refusal, a truncated or otherwise unfinished response, an empty one, HTTP errors 400, 401, 403, 404, 429 and 500, a connection that fails before or during the response, and missing credentials or a missing profile. The tests run with the Anthropic credentials of the machine removed from the environment and from the home directory, and a test that opens a non-local network connection fails.
+- **Not verified:** a read from a real Google Sheet (no Google account was available), or the steps for getting a Google access token. See [`docs/google-sheets.md`](docs/google-sheets.md).
 - **Not verified:** a live call to a model. No API credentials were available where this was built, so `propose` has never run against the real API. The request shape follows the SDK documentation and is accepted by the SDK, but the API's own validation of it has not been exercised.
 - **Not evaluated:** how good the proposals are. The worked example below is **hand-written** to show what the output looks like and to exercise the checks; it is not model output. Judge proposal quality on your own documents before trusting it.
 
@@ -76,7 +65,7 @@ python -m tracewright propose --doc my-feature.md --doc balance.pdf \
 ```
 
 - `--doc` is repeatable: Markdown, text, CSV, JSON, YAML, or PDF. Nothing is truncated; a file that is too large is refused with the limit.
-- `--plan` is optional. If you track in a spreadsheet, [`import-plan`](docs/import-csv.md) turns a CSV into a plan file. With no plan, the proposal creates one and names its own identity keys.
+- `--plan` is optional. If you track in a Google Sheet or a spreadsheet, [`import-plan`](docs/google-sheets.md) turns it into a plan file. With no plan, the proposal creates one and names its own identity keys.
 - `--model` (default `claude-opus-5-5`), `--effort` (default `high`), `--max-repairs` 0 to 5 (default 2), `--owner` (recorded on the proposed events), `--force` (overwrite results of an earlier run in `--out`).
 - **What is sent:** every document, your whole plan, and the previous proposal on each repair round go to the Anthropic API. Do not use it on documents you may not send there. [`docs/propose.md`](docs/propose.md#privacy-what-leaves-your-machine) has the details; with `--replay` nothing is sent.
 

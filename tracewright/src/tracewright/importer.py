@@ -1,72 +1,53 @@
-"""Build a tracking plan from a CSV export of the tracking you already have.
+"""Build a tracking plan from the tracking you already have in a spreadsheet or CSV.
 
-Most teams keep their tracking in a spreadsheet. One row is one property of one event; a row with
-an empty `property` describes the event itself. Columns (a header row is required):
+One row is one property of one event; a row with no property describes the event itself. Which
+column means what is decided in `sheets/layout.py` (header spellings, or `--map`), and the words in
+the cells are cleaned in `sheets/values.py`. This module turns the cleaned rows into a plan and
+refuses, with the row number, whatever it cannot read without guessing.
 
-    event        required; the event name
-    property     the property name; empty on a row that describes the event only
-    type         string, integer, number, boolean, timestamp or enum (default string)
-    required     true/false/yes/no/1/0 (property rows)
-    pii          true/false/yes/no/1/0 (property rows)
-    allowed_values  values separated by | (property rows, enum)
-    description  of the property on a property row, of the event on an event row
+The columns, by meaning (the importer's own names; see `docs/import-csv.md` for the spellings):
+
+    event            required; the event name
+    property         the property name; empty on a row that describes the event only
+    type             string, integer, number, boolean, timestamp or enum (default string)
+    required, pii    yes/no, true/false, 1/0, a tick (property rows)
+    allowed_values   values separated by | ; , or line breaks (property rows, enum)
+    description      of the property on a property row, of the event on an event row
+    event_description  of the event, on any row
     trigger, owner, status   describe the event; the same on every row of an event if repeated
 
-Unknown columns, rows wider than the header, conflicting event fields, unknown types and repeated
-properties are refused with a row number (row 1 is the header). Problems that only show when the
-whole plan is validated, such as a bad --id, are reported by field path instead.
+Problems in a row's own cells name the row (the number the spreadsheet shows). Problems found only
+when the whole plan is validated, such as a bad --id, are reported by field path instead.
 """
 
 from __future__ import annotations
 
-import csv
-import io
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, get_args
 
 from tracewright.plan import PLAN_VERSION, VERSION_KEY, PropertyType, TrackingPlan
+from tracewright.sheets import values
+from tracewright.sheets.layout import CANONICAL, Layout, resolve_layout
+from tracewright.sheets.table import Table, TableError, read_csv_text
 
 MAX_BYTES = 5_000_000
-COLUMNS = (
-    "event",
-    "property",
-    "type",
-    "required",
-    "pii",
-    "allowed_values",
-    "description",
-    "trigger",
-    "owner",
-    "status",
-)
-_TRUE = {"true", "yes", "y", "1"}
-_FALSE = {"false", "no", "n", "0"}
 
 
-class CsvImportError(ValueError):
-    """The CSV cannot be turned into a plan. The message names the row."""
+class CsvImportError(TableError):
+    """The table cannot be turned into a plan. The message names the row."""
 
 
-def _flag(value: str, row: int, column: str) -> bool | None:
-    text = value.strip().lower()
-    if not text:
-        return None
-    if text in _TRUE:
-        return True
-    if text in _FALSE:
-        return False
-    raise CsvImportError(f"row {row}: {column} must be true or false, got {value!r}")
+@dataclass(frozen=True, kw_only=True)
+class ImportResult:
+    plan: TrackingPlan
+    mapping: tuple[str, ...]  # one line per table: which column was read as what
+    notes: tuple[str, ...]  # things the person should know, not errors
 
 
-def import_plan_csv(
-    path: str | Path,
-    *,
-    plan_id: str,
-    title: str,
-    identity_keys: list[str],
-    owner: str | None = None,
-) -> TrackingPlan:
-    """Read a CSV file into a validated plan. Raises CsvImportError or PlanError."""
+def read_csv_file(path: str | Path, header_row: int = 1) -> Table:
+    """A CSV file as a table. Refuses a file that is too large before reading it."""
     file = Path(path)
     try:
         size = file.stat().st_size
@@ -79,99 +60,40 @@ def import_plan_csv(
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError as error:
         raise CsvImportError(f"{file}: not valid UTF-8 (at byte offset {error.start})") from error
+    return read_csv_text(text, str(file), header_row)
 
-    try:
-        reader = csv.DictReader(io.StringIO(text, newline=""))
-        header = [(name or "").strip().lower() for name in (reader.fieldnames or [])]
-        if "event" not in header:
-            hint = ""
-            if len(header) == 1 and (";" in header[0] or "\t" in header[0]):
-                hint = (
-                    "; the header looks ;- or tab-delimited, but the file must be comma-separated "
-                    "(in Excel: save as 'CSV UTF-8 (Comma delimited)')"
-                )
-            raise CsvImportError(
-                f"{file}: the header row must have an 'event' column; found {header}{hint}"
-            )
-        unknown = [name for name in header if name not in COLUMNS]
-        if unknown:
-            raise CsvImportError(f"{file}: unknown column(s) {unknown}; known: {list(COLUMNS)}")
-        rows = []
-        for number, record in enumerate(reader, start=2):
-            if None in record:  # more cells than the header has columns
-                raise CsvImportError(
-                    f"row {number}: has {len(header) + len(record[None])} cells but the header "
-                    f"has {len(header)}; put a value that contains a comma in double quotes"
-                )
-            rows.append(
-                (number, {(k or "").strip().lower(): (v or "") for k, v in record.items()})
-            )
-    except csv.Error as error:
-        raise CsvImportError(f"{file}: not readable as CSV: {error}") from error
 
+def import_plan_tables(
+    tables: Sequence[Table],
+    *,
+    plan_id: str,
+    title: str,
+    identity_keys: list[str],
+    owner: str | None = None,
+    overrides: Mapping[str, str] | None = None,
+    ignore_other_columns: bool = False,
+    fill_down: bool = False,
+    type_map: Mapping[str, str] | None = None,
+    status_map: Mapping[str, str] | None = None,
+) -> ImportResult:
+    """Read one or more tables into a validated plan. Raises TableError or PlanError."""
     events: dict[str, dict[str, Any]] = {}
     first_row: dict[str, dict[str, int]] = {}
-    for number, row in rows:
-        name = row.get("event", "").strip()
-        if not name:
-            if any(value.strip() for value in row.values()):
-                raise CsvImportError(f"row {number}: the event column is empty")
-            continue
-        event = events.setdefault(name, {"name": name, "properties": []})
-        for column in ("trigger", "owner", "status"):
-            value = row.get(column, "").strip()
-            if value:
-                if column in event and event[column] != value:
-                    raise CsvImportError(
-                        f"row {number}: {column} of event {name!r} is {value!r}, but an earlier "
-                        f"row says {event[column]!r}"
-                    )
-                event[column] = value
-        prop = row.get("property", "").strip()
-        description = row.get("description", "").strip()
-        if not prop:
-            property_cells = ("type", "required", "pii", "allowed_values")
-            stray = [c for c in property_cells if row.get(c, "").strip()]
-            if stray:
-                raise CsvImportError(
-                    f"row {number}: the property cell is empty, so this row describes the event, "
-                    f"but {stray} is filled in; name the property, or clear those cells"
-                )
-            if description:
-                if event.get("description", description) != description:
-                    raise CsvImportError(
-                        f"row {number}: event {name!r} already has a different description "
-                        "from an earlier event row"
-                    )
-                event["description"] = description
-            continue
-        kind = row.get("type", "").strip() or "string"
-        if kind not in get_args(PropertyType):
-            raise CsvImportError(
-                f"row {number}: type must be one of {list(get_args(PropertyType))}, got {kind!r}"
-            )
-        if prop in first_row.setdefault(name, {}):
-            raise CsvImportError(
-                f"row {number}: property {prop!r} of event {name!r} is already declared on "
-                f"row {first_row[name][prop]}"
-            )
-        first_row[name][prop] = number
-        entry: dict[str, Any] = {"name": prop, "type": kind}
-        required = _flag(row.get("required", ""), number, "required")
-        pii = _flag(row.get("pii", ""), number, "pii")
-        if required is not None:
-            entry["required"] = required
-        if pii is not None:
-            entry["pii"] = pii
-        if description:
-            entry["description"] = description
-        values = [v.strip() for v in row.get("allowed_values", "").split("|") if v.strip()]
-        if values:
-            entry["allowed_values"] = values
-        event["properties"].append(entry)
+    mapping: list[str] = []
+    notes: list[str] = []
+    for table in tables:
+        layout = resolve_layout(table, overrides, ignore_other_columns=ignore_other_columns)
+        mapping.append(f"{table.label} (header on row {table.header_row}):")
+        mapping.extend(f"  {line}" for line in layout.describe(table))
+        reader = _Reader(
+            table, layout, len(tables) > 1, fill_down, dict(type_map or {}), dict(status_map or {})
+        )
+        reader.read(events, first_row)
+        notes.extend(reader.notes)
 
     if not events:
-        raise CsvImportError(f"{file}: no events found")
+        labels = ", ".join(t.label for t in tables)
+        raise CsvImportError(f"{labels}: no events found below the header row")
     data: dict[str, Any] = {
         VERSION_KEY: PLAN_VERSION,
         "id": plan_id,
@@ -181,4 +103,180 @@ def import_plan_csv(
     }
     if owner:
         data["owner"] = owner
-    return TrackingPlan.from_dict(data)
+    return ImportResult(
+        plan=TrackingPlan.from_dict(data), mapping=tuple(mapping), notes=tuple(notes)
+    )
+
+
+def import_plan_csv(
+    path: str | Path,
+    *,
+    plan_id: str,
+    title: str,
+    identity_keys: list[str],
+    owner: str | None = None,
+    **options: Any,
+) -> TrackingPlan:
+    """Read a CSV file into a validated plan. Raises TableError or PlanError."""
+    result = import_plan_tables(
+        [read_csv_file(path)],
+        plan_id=plan_id,
+        title=title,
+        identity_keys=identity_keys,
+        owner=owner,
+        **options,
+    )
+    return result.plan
+
+
+class _Reader:
+    """Reads the rows of one table into the shared dict of events."""
+
+    def __init__(
+        self,
+        table: Table,
+        layout: Layout,
+        several: bool,
+        fill_down: bool,
+        type_map: dict[str, str],
+        status_map: dict[str, str],
+    ) -> None:
+        self.table = table
+        self.layout = layout
+        self.several = several
+        self.fill_down = fill_down
+        self.type_map = type_map
+        self.status_map = status_map
+        self.notes: list[str] = []
+
+    def where(self, number: int) -> str:
+        return f"{self.table.label}, row {number}" if self.several else f"row {number}"
+
+    def cell(self, cells: tuple[str, ...], name: str) -> str:
+        index = self.layout.columns.get(name)
+        return cells[index] if index is not None and index < len(cells) else ""
+
+    def read(self, events: dict[str, dict[str, Any]], first_row: dict[str, dict[str, int]]) -> None:
+        width = len(self.table.header)
+        previous = ""
+        for number, cells in self.table.rows:
+            if len(cells) > width:
+                raise CsvImportError(
+                    f"{self.where(number)}: has {len(cells)} cells but the header has {width}; "
+                    "put a value that contains a comma in double quotes"
+                )
+            if not any(cells):
+                continue
+            name = self.cell(cells, "event")
+            if not name and self.fill_down and previous:
+                name = previous
+            if not name:
+                raise CsvImportError(
+                    f"{self.where(number)}: the event column is empty (if the event name is "
+                    "written once for several rows, add --fill-down)"
+                )
+            previous = name
+            self.read_row(number, name, cells, events, first_row)
+
+    def read_row(
+        self,
+        number: int,
+        name: str,
+        cells: tuple[str, ...],
+        events: dict[str, dict[str, Any]],
+        first_row: dict[str, dict[str, int]],
+    ) -> None:
+        where = self.where(number)
+        event = events.setdefault(name, {"name": name, "properties": []})
+        for column in ("trigger", "owner"):
+            self.event_field(event, column, self.cell(cells, column), name, where)
+        raw_status = self.cell(cells, "status")
+        if raw_status:
+            try:
+                state = values.status(raw_status, self.status_map)
+            except ValueError as error:
+                words = sorted(values.STATUS_WORDS)
+                raise CsvImportError(
+                    f"{where}: {error}; known words: {words}. Add one with "
+                    "--status-map 'Word=active|planned|deprecated'"
+                ) from error
+            self.event_field(event, "status", state, name, where)
+        self.event_field(
+            event, "description", self.cell(cells, "event_description"), name, where
+        )
+
+        prop = self.cell(cells, "property")
+        description = self.cell(cells, "description")
+        if not prop:
+            property_cells = ("type", "required", "pii", "allowed_values")
+            stray = [c for c in property_cells if self.cell(cells, c)]
+            if stray:
+                raise CsvImportError(
+                    f"{where}: the property cell is empty, so this row describes the event, "
+                    f"but {stray} is filled in; name the property, or clear those cells"
+                )
+            self.event_field(event, "description", description, name, where)
+            return
+
+        kind = self.property_type(where, self.cell(cells, "type"))
+        seen = first_row.setdefault(name, {})
+        if prop in seen:
+            raise CsvImportError(
+                f"{where}: property {prop!r} of event {name!r} is already declared on "
+                f"row {seen[prop]}"
+            )
+        seen[prop] = number
+        entry: dict[str, Any] = {"name": prop, "type": kind}
+        for column in ("required", "pii"):
+            try:
+                flag = values.flag(self.cell(cells, column))
+            except ValueError as error:
+                raise CsvImportError(
+                    f"{where}: {column} must be yes/no, true/false, 1/0 or a tick, got "
+                    f"{self.cell(cells, column)!r}"
+                ) from error
+            if flag is not None:
+                entry[column] = flag
+        if description and self.layout.columns.get("event_description") is not None:
+            entry["description"] = description
+        elif description:
+            entry["description"] = description
+        allowed = values.split_values(self.cell(cells, "allowed_values"))
+        if allowed:
+            entry["allowed_values"] = allowed
+        events[name]["properties"].append(entry)
+
+    def property_type(self, where: str, text: str) -> str:
+        if not text:
+            return "string"
+        try:
+            return values.property_type(text, self.type_map)
+        except ValueError as error:
+            accepted = list(get_args(PropertyType))
+            raise CsvImportError(
+                f"{where}: {error}; a plan's types are {accepted}. Add a word with "
+                "--type-map 'Word=string'"
+            ) from error
+
+    @staticmethod
+    def event_field(
+        event: dict[str, Any], column: str, value: str, name: str, where: str
+    ) -> None:
+        if not value:
+            return
+        if column in event and event[column] != value:
+            raise CsvImportError(
+                f"{where}: {column} of event {name!r} is {value!r}, but an earlier row says "
+                f"{event[column]!r}"
+            )
+        event[column] = value
+
+
+__all__ = [
+    "CANONICAL",
+    "CsvImportError",
+    "ImportResult",
+    "import_plan_csv",
+    "import_plan_tables",
+    "read_csv_file",
+]

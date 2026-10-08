@@ -5,6 +5,7 @@ from tracewright.cli import main
 from tracewright.importer import CsvImportError, import_plan_csv
 from tracewright.loader import parse_plan, render_plan_yaml
 from tracewright.plan import PlanError
+from tracewright.sheets.table import TableError
 
 KW = {"plan_id": "p", "title": "P", "identity_keys": ["player_id"]}
 HEADER = "event,property,type,required,pii,allowed_values,description,trigger,owner,status\n"
@@ -41,7 +42,7 @@ def test_flags_accept_common_spellings(tmp_path):
 @pytest.mark.parametrize(
     ("body", "message"),
     [
-        ("a_b,p,string,maybe,,,,,,\n", "row 2: required must be true or false"),
+        ("a_b,p,string,maybe,,,,,,\n", "row 2: required must be yes/no, true/false"),
         (",p,string,,,,,,,\n", "row 2: the event column is empty"),
         ("a_b,,,,,,,t1,,\na_b,p,string,,,,,t2,,\n", "row 3: trigger of event 'a_b' is 't2'"),
         ("", "no events found"),
@@ -53,9 +54,9 @@ def test_bad_rows_are_refused_with_a_row_number(tmp_path, body, message):
 
 
 def test_header_problems(tmp_path):
-    with pytest.raises(CsvImportError, match="'event' column"):
+    with pytest.raises(TableError, match="no column looks like the event name"):
         import_plan_csv(csv(tmp_path, "x\n", header="name\n"), **KW)
-    with pytest.raises(CsvImportError, match="unknown column"):
+    with pytest.raises(TableError, match="fit no meaning: B 'colour'"):
         import_plan_csv(csv(tmp_path, "a,b\n", header="event,colour\n"), **KW)
 
 
@@ -103,13 +104,14 @@ def test_the_command_reports_problems_as_exit_2(tmp_path, capsys):
 @pytest.mark.parametrize(
     ("body", "message"),
     [
-        ("a_b,p,uuid,,,,,,,\n", r"row 2: type must be one of .*got 'uuid'"),
-        ("a_b,p,int,,,,,,,\n", r"row 2: type must be one of .*got 'int'"),
+        ("a_b,p,currency,,,,,,,\n", r"row 2: unknown type 'currency'.*--type-map"),
+        ("a_b,p,array,,,,,,,\n", r"row 2: 'array' cannot be expressed in a plan"),
         ("a_b,p,string,,,,,,,\na_b,q,string,,,,,,,\na_b,p,string,,,,,,,\n",
          r"row 4: property 'p' of event 'a_b' is already declared on row 2"),
         ("a_b,,string,,,,,,,\n", r"row 2: the property cell is empty.*\['type'\]"),
         ("a_b,,,true,,,,,,\n", r"row 2: the property cell is empty.*\['required'\]"),
-        ("a_b,,,,,,First,,,\na_b,,,,,,Second,,,\n", r"row 3: event 'a_b' already has a different"),
+        ("a_b,,,,,,First,,,\na_b,,,,,,Second,,,\n",
+         r"row 3: description of event 'a_b' is 'Second', but an earlier row says 'First'"),
     ],
 )
 def test_row_level_problems_name_the_row(tmp_path, body, message):
@@ -132,14 +134,14 @@ def test_an_unquoted_comma_in_a_value_is_caught_instead_of_shifting_the_columns(
 def test_a_semicolon_delimited_file_gets_a_hint(tmp_path):
     path = tmp_path / "t.csv"
     path.write_text("event;property;type\na_b;p;string\n", encoding="utf-8")
-    with pytest.raises(CsvImportError, match="comma-separated") as caught:
+    with pytest.raises(TableError, match="comma-separated") as caught:
         import_plan_csv(path, **KW)
     assert "event;property;type" in str(caught.value)
 
 
 def test_a_header_without_event_shows_what_was_found(tmp_path):
-    with pytest.raises(CsvImportError, match=r"found \['event name', 'type'\]"):
-        import_plan_csv(csv(tmp_path, "x,y\n", header="Event Name,Type\n"), **KW)
+    with pytest.raises(TableError, match=r"Columns found: A 'Name', B 'Type'"):
+        import_plan_csv(csv(tmp_path, "x,y\n", header="Name,Type\n"), **KW)
 
 
 def test_an_oversized_file_is_refused_before_it_is_read(tmp_path, monkeypatch):

@@ -21,6 +21,7 @@ def isolated_from_real_credentials(monkeypatch, tmp_path_factory):
 
     for name in [n for n in os.environ if n.startswith("ANTHROPIC_")]:
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("GOOGLE_SHEETS_ACCESS_TOKEN", raising=False)
     home = tmp_path_factory.mktemp("home")
     for name in ("HOME", "USERPROFILE", "XDG_CONFIG_HOME"):
         monkeypatch.setenv(name, str(home))

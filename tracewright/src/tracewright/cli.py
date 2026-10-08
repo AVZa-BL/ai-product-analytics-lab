@@ -14,13 +14,17 @@ import sys
 import traceback
 from collections.abc import Sequence
 from pathlib import Path
+from typing import get_args
 
 from tracewright import __version__
-from tracewright.importer import CsvImportError, import_plan_csv
+from tracewright.importer import import_plan_tables, read_csv_file
 from tracewright.loader import LoadError, load_plan, render_plan_yaml
-from tracewright.plan import PlanError
+from tracewright.plan import EventStatus, PlanError, PropertyType
 from tracewright.report import plan_report, render_json, render_text
 from tracewright.review import review_plan
+from tracewright.sheets.google import is_sheet_source, read_google_sheet
+from tracewright.sheets.layout import parse_overrides
+from tracewright.sheets.table import Table, TableError
 
 EXIT_OK = 0
 EXIT_BLOCKED = 1
@@ -88,10 +92,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     imp = commands.add_parser(
         "import-plan",
-        help="turn a CSV of your current tracking into a plan file",
-        description="Read a CSV of events and properties and write a tracking plan as YAML.",
+        help="turn your current tracking (a CSV file or a Google Sheet) into a plan file",
+        description=(
+            "Read the tracking you already have, from CSV files or Google Sheets addresses, and "
+            "write a tracking plan as YAML. Column headers are recognised by their common "
+            "spellings; use --map for the rest, and --dry-run to see how every column was read "
+            "before anything is written. A Google Sheet shared by link needs no setup; a private "
+            "one is read with an access token in the environment variable "
+            "GOOGLE_SHEETS_ACCESS_TOKEN. See docs/google-sheets.md."
+        ),
     )
-    imp.add_argument("csv", help="path to the CSV (see docs/import-csv.md for the columns)")
+    imp.add_argument(
+        "sources", nargs="+", metavar="SOURCE",
+        help="a CSV file or a https://docs.google.com/spreadsheets/d/... address; several merge",
+    )
     imp.add_argument("--id", required=True, dest="plan_id", help="plan id (a-z, 0-9, _)")
     imp.add_argument("--title", required=True)
     imp.add_argument(
@@ -99,6 +113,43 @@ def build_parser() -> argparse.ArgumentParser:
         help="a property that identifies the user or device; repeat for several",
     )
     imp.add_argument("--owner", help="default owner for every event")
+    imp.add_argument(
+        "--map", action="append", default=[], metavar="NAME=HEADER",
+        help="read the column with this header as NAME (event, property, type, required, pii, "
+        "allowed_values, description, event_description, trigger, owner, status); repeatable",
+    )
+    imp.add_argument(
+        "--ignore-other-columns", action="store_true",
+        help="set aside columns that fit no meaning instead of refusing them",
+    )
+    imp.add_argument(
+        "--header-row", type=int, default=1, metavar="N",
+        help="the row that holds the headers (default 1)",
+    )
+    imp.add_argument(
+        "--fill-down", action="store_true",
+        help="an empty event cell means the event of the row above (merged-cell layouts)",
+    )
+    imp.add_argument(
+        "--tab", action="append", default=[], metavar="NAME",
+        help="Google Sheets with a token only: read this tab; repeatable",
+    )
+    imp.add_argument(
+        "--all-tabs", action="store_true", help="Google Sheets with a token only: read every tab"
+    )
+    imp.add_argument(
+        "--type-map", action="append", default=[], metavar="WORD=TYPE",
+        help="read the word WORD in a type cell as TYPE (string, integer, number, boolean, "
+        "timestamp, enum); repeatable",
+    )
+    imp.add_argument(
+        "--status-map", action="append", default=[], metavar="WORD=STATUS",
+        help="read the word WORD in a status cell as active, planned or deprecated; repeatable",
+    )
+    imp.add_argument(
+        "--dry-run", action="store_true",
+        help="show how the columns were read and what would be imported; write nothing",
+    )
     imp.add_argument("--out", metavar="FILE", help="write here instead of standard output")
     imp.add_argument("--force", action="store_true", help="overwrite --out if it exists")
     return parser
@@ -148,21 +199,71 @@ def _review_plan(args: argparse.Namespace) -> int:
     return EXIT_BLOCKED if report["blocking_rule_ids"] else EXIT_OK
 
 
+def _word_map(pairs: list[str], flag: str, allowed: tuple[str, ...]) -> dict[str, str]:
+    """`--type-map Word=string` pairs as a dict. Raises TableError for a bad one."""
+    out: dict[str, str] = {}
+    for pair in pairs:
+        word, sep, value = pair.partition("=")
+        word, value = word.strip(), value.strip()
+        if not sep or not word or value not in allowed:
+            raise TableError(
+                f"{flag} {pair!r}: write it as WORD=VALUE, with VALUE one of {list(allowed)}"
+            )
+        out[word] = value
+    return out
+
+
+def _read_sources(args: argparse.Namespace) -> tuple[list[Table], list[str]]:
+    tables: list[Table] = []
+    notes: list[str] = []
+    for source in args.sources:
+        if is_sheet_source(source):
+            found, more = read_google_sheet(
+                source, tabs=args.tab, all_tabs=args.all_tabs, header_row=args.header_row
+            )
+            tables.extend(found)
+            notes.extend(more)
+        else:
+            if args.tab or args.all_tabs:
+                raise TableError(f"--tab and --all-tabs are for Google Sheets, not for {source}")
+            tables.append(read_csv_file(source, args.header_row))
+    return tables, notes
+
+
 def _import_plan(args: argparse.Namespace) -> int:
     try:
-        plan = import_plan_csv(
-            args.csv,
+        overrides = parse_overrides(args.map)
+        type_map = _word_map(args.type_map, "--type-map", get_args(PropertyType))
+        status_map = _word_map(args.status_map, "--status-map", get_args(EventStatus))
+        tables, notes = _read_sources(args)
+        result = import_plan_tables(
+            tables,
             plan_id=args.plan_id,
             title=args.title,
             identity_keys=args.identity_keys,
             owner=args.owner,
+            overrides=overrides,
+            ignore_other_columns=args.ignore_other_columns,
+            fill_down=args.fill_down,
+            type_map=type_map,
+            status_map=status_map,
         )
-    except CsvImportError as error:
+    except TableError as error:  # CSV, column mapping and Google Sheets problems alike
         print(f"tracewright: error: {error}", file=sys.stderr)
         return EXIT_UNREADABLE
     except PlanError as error:
-        print(_plan_error(args.csv, error), file=sys.stderr)
+        print(_plan_error(", ".join(args.sources), error), file=sys.stderr)
         return EXIT_UNREADABLE
+    for line in (*result.mapping, *notes, *result.notes):
+        print(line if line.startswith(" ") else f"tracewright: {line}", file=sys.stderr)
+    plan = result.plan
+    properties = sum(len(e.properties) for e in plan.events)
+    events = f"{len(plan.events)} event{'' if len(plan.events) == 1 else 's'}"
+    summary = f"{events}, {properties} propert{'y' if properties == 1 else 'ies'}"
+    if args.dry_run:
+        print(f"dry run: would import {summary}; nothing written")
+        return EXIT_OK
+    print(f"tracewright: read {summary}", file=sys.stderr)
     text = render_plan_yaml(plan)
     if args.out:
         target = Path(args.out)
