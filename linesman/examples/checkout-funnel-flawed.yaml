@@ -1,0 +1,52 @@
+# A tracking plan with several deliberate mistakes. `linesman review-plan` recommends REVISE.
+linesman_plan_version: 1
+id: checkout_funnel_flawed
+title: Checkout funnel (draft with mistakes)
+identity_keys: [user_id, anonymous_id]
+
+events:
+  - name: CheckoutStarted          # NAM-001: not object_action in snake_case
+    description: Player opens the checkout screen.
+    trigger: Checkout screen is shown.
+    owner: growth-analytics
+    properties:
+      - {name: user_id, type: string, required: true}
+      - {name: cart_value, type: number}
+      - {name: planId, type: string}            # NAM-002: not snake_case
+
+  - name: order_completed
+    # DOC-001: no description or trigger
+    owner: growth-analytics
+    properties:
+      - {name: user_id, type: string, required: true}
+      - {name: cart_value, type: string}        # SCH-001: number on another event
+      - {name: payment_method, type: enum}      # SCH-002: no allowed_values
+      - {name: email, type: string}             # GOV-001: personal data not marked pii
+
+  - name: page_viewed
+    description: A screen is shown.
+    trigger: Any screen render.
+    # DOC-002: no owner; SCH-003: no identity key
+    properties:
+      - {name: screen, type: string}
+
+  - name: legacy_purchase
+    status: deprecated
+    properties:
+      - {name: user_id, type: string, required: true}
+
+  - name: refund_requested
+    status: planned
+    description: Player requests a refund.
+    trigger: Refund form is submitted.
+    owner: support-analytics
+    properties:
+      - {name: user_id, type: string, required: true}
+
+metrics:
+  - name: checkout_conversion
+    events: [checkout_started, order_completed]
+  - name: revenue
+    events: [legacy_purchase]                   # COV-002: deprecated event
+  - name: refund_rate
+    events: [refund_requested, order_cancelled] # COV-003 (planned) and COV-001 (undefined)

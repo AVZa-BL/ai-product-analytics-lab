@@ -1,0 +1,10 @@
+Linesman tracking-plan review
+Plan:      checkout_funnel - Checkout funnel
+Contents:  3 events, 2 metrics
+Plan hash: sha256:962daf71c37dcfb0df36f479cd666ece5b90ca71753f174cdddf3a7490e6d174
+Linesman:  0.1.0
+
+Recommendation: PROCEED
+Findings: none
+
+Linesman is advisory: it recommends, and does not approve or block a release.
