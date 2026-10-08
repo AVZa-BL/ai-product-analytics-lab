@@ -13,9 +13,14 @@ from __future__ import annotations
 import sys
 from collections.abc import Sequence
 
-from referee.rules import ALL_RULES, Rule
+from referee.rules import CATALOGUE, Rule
 
-GROUPS = {"HYP": "Hypothesis", "DES": "Design", "PRO": "Procedure"}
+GROUPS = {
+    "HYP": "Hypothesis",
+    "DES": "Design",
+    "PRO": "Procedure",
+    "RES": "Results",
+}
 
 _INTRO = """\
 # Rule catalogue
@@ -64,10 +69,19 @@ _POWER_NOTES = """\
   duration can power, found by bisection.
 """
 
+_RESULTS_NOTE = """\
+A results rule looks at an experiment's exported data together with its spec (design
+section 21), not at the spec alone. A results review ends in a **verdict**, which follows from
+the findings: `invalid` if any is a blocker, `caution` if any is a warning, `clear` otherwise.
+`clear` says that the rules which ran found nothing; it does not say the effect is real. The
+design review does not run these rules.
+"""
+
 _OUTRO = """\
 ## Not yet
 
-Rules about results (the `RES` family in the design document) arrive with the results review.
+The rest of the `RES` family in design section 21 arrives with the results review; no command
+runs the results rules yet.
 """
 
 
@@ -105,7 +119,7 @@ def _rule_block(rule: Rule) -> str:
     )
 
 
-def render_rules_markdown(rules: Sequence[Rule] = ALL_RULES) -> str:
+def render_rules_markdown(rules: Sequence[Rule] = CATALOGUE) -> str:
     """The catalogue for `rules`, grouped by ID prefix in the order the groups are listed."""
     table = ["| ID | Severity | Title |", "| --- | --- | --- |"]
     table += [f"| {rule.id} | {rule.severity} | {rule.title} |" for rule in rules]
@@ -114,6 +128,8 @@ def render_rules_markdown(rules: Sequence[Rule] = ALL_RULES) -> str:
         members = [rule for rule in rules if _group(rule) == prefix]
         if members:
             blocks.append(f"## {name} rules ({prefix})")
+            if prefix == "RES":
+                blocks.append(_RESULTS_NOTE)
             blocks += [_rule_block(rule) for rule in members]
     blocks += [_POWER_NOTES, _OUTRO]
     return "\n\n".join(block.strip("\n") for block in blocks) + "\n"

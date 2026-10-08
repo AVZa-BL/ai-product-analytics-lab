@@ -99,3 +99,22 @@ def results_spec(raw_spec: dict, **changes: object) -> ExperimentSpec:
             node = node.setdefault(part, {})
         node[leaf] = value
     return ExperimentSpec.from_dict(raw)
+
+
+def crowd(arm: str, count: int, *, prefix: str | None = None, **fields: object) -> list[Row]:
+    """`count` players of one arm, with ids `<prefix>_0000`... and the same other fields."""
+    name = prefix or arm
+    return [Row(f"{name}_{i:04d}", arm, **fields) for i in range(count)]
+
+
+def evaluate_results(rule, spec: ExperimentSpec, rows: list[Row]):
+    """Run one results rule over hand-built rows read against `spec`."""
+    from referee.results import ResultsContext
+
+    return rule.evaluate(ResultsContext.of(spec, build_data(rows)))
+
+
+TWO_ARMS = [
+    {"name": "control", "allocation": 0.5, "is_control": True},
+    {"name": "variant_b", "allocation": 0.5},
+]

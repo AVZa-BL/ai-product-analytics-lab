@@ -8,8 +8,12 @@ from referee.rules.results import RESULTS_RULES
 
 ALL_RULES: tuple[Rule, ...] = (*HYPOTHESIS_RULES, *DESIGN_RULES, *PROCEDURE_RULES)
 
+# Every rule, for the documentation: the design rules, then the results rules.
+CATALOGUE: tuple[Rule, ...] = (*ALL_RULES, *RESULTS_RULES)
+
 __all__ = [
     "ALL_RULES",
+    "CATALOGUE",
     "DESIGN_RULES",
     "HYPOTHESIS_RULES",
     "PROCEDURE_RULES",

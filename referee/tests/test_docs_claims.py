@@ -73,7 +73,7 @@ def test_the_readme_exit_status_table_matches_the_command() -> None:
 
 
 def test_the_readme_counts_the_rules_the_catalogue_has() -> None:
-    assert f"all {len(ALL_RULES)} rules" in README
+    assert f"the {len(ALL_RULES)} design-review rules" in README
 
 
 @pytest.mark.parametrize("document", ["README.md", "docs/rules.md"])

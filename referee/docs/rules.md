@@ -24,7 +24,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 
 ## Summary
 
-17 rules: 4 blockers, 11 warnings, 2 info.
+18 rules: 5 blockers, 11 warnings, 2 info.
 
 | ID | Severity | Title |
 | --- | --- | --- |
@@ -45,6 +45,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 | PRO-002 | warning | No sample-ratio-mismatch check scheduled |
 | PRO-003 | warning | No guardrail metrics declared |
 | PRO-004 | info | Bucketing salt not declared |
+| RES-001 | blocker | Sample ratio mismatch: the arms are not the size the allocation promised |
 
 ## Hypothesis rules (HYP)
 
@@ -202,6 +203,24 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 - **References:**
   - Kohavi, Deng, Frasca, Longbotham, Walker, Xu. Trustworthy Online Controlled Experiments: Five Puzzling Outcomes Explained. KDD 2012.
 
+## Results rules (RES)
+
+A results rule looks at an experiment's exported data together with its spec (design
+section 21), not at the spec alone. A results review ends in a **verdict**, which follows from
+the findings: `invalid` if any is a blocker, `caution` if any is a warning, `clear` otherwise.
+`clear` says that the rules which ran found nothing; it does not say the effect is real. The
+design review does not run these rules.
+
+### RES-001: Sample ratio mismatch: the arms are not the size the allocation promised
+
+- **Severity:** blocker
+- **Fires when:** The assigned players per arm differ from arms[].allocation by more than chance allows: the chi-squared test of the counts against the registered allocation, over every assigned player, has p below 0.001.
+- **Why it matters:** Random assignment gives arms of the registered sizes, up to chance. A mismatch this large means the arms were not formed as designed (a fault in assignment, in logging or in filtering), so who is in each arm may differ and a difference in the metrics can come from that. No estimate of the effect can be trusted until the cause is known.
+- **What to do:** Do not read the effect. Find why the counts differ: assignment or bucketing, logging that loses events in one arm, bot or test-account filters, a crash or redirect on one variant, or an exposure rule applied to some arms only. The week-by-week table in the evidence shows whether the mismatch began at a point in time. Fix the cause and rerun the experiment.
+- **References:**
+  - Fabijan et al. Diagnosing Sample Ratio Mismatch in Online Controlled Experiments. KDD 2019.
+  - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
 ## How the power plan behind DES-001, DES-004 and DES-005 is computed
 
 - Sample sizes use a normal approximation built on the standard library. The tests compare them
@@ -223,4 +242,5 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 
 ## Not yet
 
-Rules about results (the `RES` family in the design document) arrive with the results review.
+The rest of the `RES` family in design section 21 arrives with the results review; no command
+runs the results rules yet.
