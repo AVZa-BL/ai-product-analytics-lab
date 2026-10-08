@@ -113,7 +113,7 @@ def test_each_rule_sits_under_its_own_group() -> None:
 def test_the_summary_counts_and_lists_every_rule() -> None:
     text = render_rules_markdown()
 
-    assert "23 rules: 7 blockers, 14 warnings, 2 info." in text
+    assert "23 rules by default severity: 7 blockers, 14 warnings, 2 info." in text
     for r in CATALOGUE:
         assert f"| {r.id} | {r.severity} | {r.title} |" in text
 
@@ -206,3 +206,12 @@ def test_the_committed_catalogue_documents_the_one_escalation_there_is() -> None
 
     assert escalating == ["RES-012"]
     assert DOC.read_text(encoding="utf-8").count("Escalates to") == 1
+
+
+def test_the_intro_does_not_claim_a_results_rule_looks_at_the_spec_alone() -> None:
+    intro = render_rules_markdown().split("## ")[0]
+
+    assert "(a results rule also at the experiment's data)" in intro
+    assert "Effect on the design review (the results review has its own verdict" in intro
+    assert "none of the\nobjections of the design rules (HYP, DES and PRO)" in intro
+    assert "none of the\nobjections below" not in intro

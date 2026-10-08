@@ -59,7 +59,10 @@ def _is_whole(value: float) -> bool:
 
 
 def _finite(values: Sequence[float], name: str) -> list[float]:
-    numbers = [float(value) for value in values]
+    try:
+        numbers = [float(value) for value in values]
+    except OverflowError:  # an integer beyond any float
+        raise StatsError(f"{name} must hold only finite numbers") from None
     if not all(math.isfinite(number) for number in numbers):
         raise StatsError(f"{name} must hold only finite numbers")
     return numbers
@@ -145,11 +148,14 @@ def homogeneity_test(successes: Sequence[int], totals: Sequence[int]) -> Homogen
         if n < 1 or not 0 <= s <= n:
             raise StatsError(f"{s} successes out of {n} is not possible")
     successes_all, size_all = sum(int(s) for s in successes), sum(int(n) for n in totals)
-    pooled = successes_all / size_all
-    if pooled in (0.0, 1.0):
+    if successes_all in (0, size_all):
         raise StatsError("every unit has the same outcome, so no group can differ from another")
+    # With pooled rate S / N, (s - n * S / N)^2 / (n * S / N * (1 - S / N)) is, multiplied
+    # through by N^2, (s * N - n * S)^2 / (n * S * (N - S)). Both sides are whole numbers, so
+    # the quotient is rounded once, however large the counts or close the rate is to 0 or 1.
     chi_square = math.fsum(
-        (s - n * pooled) ** 2 / (n * pooled * (1 - pooled))
+        (int(s) * size_all - int(n) * successes_all) ** 2
+        / (int(n) * successes_all * (size_all - successes_all))
         for s, n in zip(successes, totals, strict=True)
     )
     degrees = len(successes) - 1
@@ -188,8 +194,11 @@ def _mean_and_variance(values: list[float], name: str) -> tuple[float, float]:
         raise StatsError(f"{name} needs at least 2 values, got {len(values)}")
     if _is_constant(values):
         return values[0], 0.0
-    mean = math.fsum(values) / len(values)
-    variance = math.fsum((value - mean) ** 2 for value in values) / (len(values) - 1)
+    try:
+        mean = math.fsum(values) / len(values)
+        variance = math.fsum((value - mean) ** 2 for value in values) / (len(values) - 1)
+    except OverflowError:  # the sum or a squared deviation is beyond any float
+        raise StatsError(f"{name} holds values too large to square") from None
     return mean, variance
 
 

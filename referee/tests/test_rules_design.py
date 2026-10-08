@@ -365,3 +365,14 @@ def test_an_unattainable_effect_is_a_blocker_and_the_review_still_completes(
 
     assert review.blocking_rule_ids == ("DES-001",)
     assert review.recommendation == "revise"
+
+
+@pytest.mark.parametrize("kind", ["new_users", "existing_users", "mixed"])
+def test_des_008_is_not_suppressed_by_a_declared_population_kind(
+    clean_raw_spec: dict, kind: str
+) -> None:
+    finding = evaluate(
+        des.DES_008, clean_raw_spec, design__pre_period_covariate=None, population__kind=kind
+    )
+
+    assert finding is not None

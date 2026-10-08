@@ -4,18 +4,19 @@ Generated from the rule code by `python -m referee.rules.docs`. Do not edit this
 a test fails if it differs from the generated text. To change a rule, change it in
 `src/referee/rules/` and regenerate.
 
-A **rule** looks at one validated spec and either finds nothing or raises one **finding**. Each
-finding carries the rule's ID and severity, the evidence that triggered it, why it matters,
-what to do, and its references. The same spec always gives the same findings.
+A **rule** looks at one validated spec (a results rule also at the experiment's data) and either
+finds nothing or raises one **finding**. Each finding carries the rule's ID and severity, the
+evidence that triggered it, why it matters, what to do, and its references. The same input
+always gives the same findings.
 
-| Severity | Effect on the review |
+| Severity | Effect on the design review (the results review has its own verdict: see Results) |
 | --- | --- |
 | blocker | The recommendation is `revise` and `referee review-design` exits with status 1. |
 | warning | Reported; the recommendation stays `proceed`. |
 | info | Reported; the recommendation stays `proceed`. |
 
 Referee is advisory. A recommendation of `proceed` means the design raised none of the
-objections below, not that the experiment is worth running.
+objections of the design rules (HYP, DES and PRO), not that the experiment is worth running.
 
 In "fires when", a field is **absent** when it is missing from the spec or is `null`.
 Whether a spec is well-formed (a hypothesis with a null statement, a direction and a metric, for
@@ -24,7 +25,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 
 ## Summary
 
-23 rules: 7 blockers, 14 warnings, 2 info.
+23 rules by default severity: 7 blockers, 14 warnings, 2 info.
 
 | ID | Severity | Title |
 | --- | --- | --- |
@@ -219,7 +220,7 @@ design review does not run these rules.
 ### RES-001: Sample ratio mismatch: the arms are not the size the allocation promised
 
 - **Severity:** blocker
-- **Fires when:** The assigned players per arm differ from arms[].allocation by more than chance allows: the chi-squared test of the counts against the registered allocation, over every assigned player, has p below 0.001.
+- **Fires when:** The assigned players per arm differ from arms[].allocation by more than chance allows: the chi-squared test of the counts against the registered allocation, over every assigned player at or after design.start_utc (all of them when the spec registers none), has p below 0.001.
 - **Why it matters:** Random assignment gives arms of the registered sizes, up to chance. A mismatch this large means the arms were not formed as designed (a fault in assignment, in logging or in filtering), so who is in each arm may differ and a difference in the metrics can come from that. No estimate of the effect can be trusted until the cause is known.
 - **What to do:** Do not read the effect. Find why the counts differ: assignment or bucketing, logging that loses events in one arm, bot or test-account filters, a crash or redirect on one variant, or an exposure rule applied to some arms only. The week-by-week table in the evidence shows whether the mismatch began at a point in time. Fix the cause and rerun the experiment.
 - **References:**
@@ -230,25 +231,25 @@ design review does not run these rules.
 
 - **Severity:** blocker
 - **Fires when:** In the effect analysis (assigned, exposed, and not first exposed after the first purchase), at least one arm has fewer players than the n per arm that the power plan of the spec requires for it, or the design cannot be sized at all.
-- **Why it matters:** The registered sample size is what the experiment needs to detect the registered effect with the registered power. With fewer players the test has less power than was promised, so a result that is not significant says little about whether the effect exists.
-- **What to do:** Keep the experiment running until every arm reaches its registered n (the evidence says how many are missing). If it must stop, report the result as underpowered, with the interval of the effect, and not as evidence of no effect. Do not lower the registered n after seeing the data.
+- **Why it matters:** The registered sample size is what the experiment needs to detect the registered effect with the registered power. With fewer players the test has less power than was promised, so a result that is not significant says little about whether the effect exists. A design that cannot be sized has no registered sample size at all, so no amount of data meets it.
+- **What to do:** Keep the experiment running until every arm reaches its registered n (when the evidence gives sizes, it says how many are missing). If it must stop, report the result as underpowered, with the interval of the effect, and not as evidence of no effect. Do not lower the registered n after seeing the data. If the evidence says the design is unattainable, the spec's baseline and mde_relative cannot be turned into a sample size (the evidence gives the reason): more data will not clear this, so correct them and register the experiment again.
 - **References:**
   - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
 
 ### RES-003: Ran for less than the registered minimum duration
 
 - **Severity:** blocker
-- **Fires when:** The observed duration, from the first to the last assignment in whole days (rounded up), is shorter than design.min_duration_days.
+- **Fires when:** The observed duration, from the first to the last assignment in whole days (rounded up), is shorter than design.min_duration_days. Every assigned player at or after design.start_utc counts, exposed or not (all of them when the spec registers none).
 - **Why it matters:** The minimum duration is registered so that the run covers the weekly cycle of behaviour and gives effects that take time to settle a chance to show. A shorter run measures a window that may not represent the usual weeks, and cannot show a change over time.
-- **What to do:** Run to at least design.min_duration_days, and to a whole number of weeks where you can. Do not stop on the day the result looked good. If the registered minimum was wrong, say so and why before reading the effect.
+- **What to do:** Run to at least design.min_duration_days, and to a whole number of weeks where you can. Do not stop on the day the result looked good. If the registered minimum was wrong, say so and why before reading the effect. Register design.start_utc: without it the first and last assignment in the export set the duration, and one mistimed row (a timestamp of zero, a default date) can hide this finding.
 - **References:**
   - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
 
 ### RES-011: Sample ratio drifts over time although the total passes
 
 - **Severity:** warning
-- **Fires when:** The sample-ratio check over all assigned players passes (RES-001 does not fire), but in at least one 7-day week of assignment the chi-squared test of that week's counts against arms[].allocation has p below 0.001 divided by the number of weeks that hold players.
-- **Why it matters:** A mismatch that begins, ends or reverses partway through can cancel in the total. It means assignment or logging changed during the test (a release, a campaign, an outage), so the players of the failing weeks are not comparable with the others.
+- **Fires when:** The sample-ratio check over all assigned players passes (RES-001 does not fire), but in at least one 7-day week of assignment (weeks are counted from design.start_utc, else from the first assignment) the chi-squared test of that week's counts against arms[].allocation has p below 0.001 divided by the number of weeks that hold players.
+- **Why it matters:** A mismatch that reverses partway through can cancel in the total, and one that begins or ends partway is diluted in it. A failing week points to a change in assignment or logging during the test (a release, a campaign, an outage, a planned ramp-up of the allocation), so the players of that week may not be comparable with the others.
 - **What to do:** Find what changed in the failing weeks: a release, a change to assignment or logging, a new traffic source, an outage. Decide what to do with those weeks from the cause, never because leaving them out changes the result.
 - **References:**
   - Fabijan et al. Diagnosing Sample Ratio Mismatch in Online Controlled Experiments. KDD 2019.
@@ -259,7 +260,7 @@ design review does not run these rules.
 - **Severity:** warning
 - **Fires when:** At least one assigned player was first exposed after their first purchase in the seven-day outcome window.
 - **Escalates to blocker when:** the share of exposed players who were exposed late differs between the arms: the chi-squared test of homogeneity across the arms has p below 0.001.
-- **Why it matters:** A purchase made before the player first saw the change cannot be an effect of it. These players are left out of the effect analysis, but they are in the arms, so a different number of them in different arms means the change reached the arms differently. It is the results-time counterpart of DES-007.
+- **Why it matters:** A purchase made before the player first saw the change cannot be an effect of it. These players are left out of the effect analysis, but they are in the arms, so a different share of the exposed players being late in different arms means the change reached the arms differently. It is the results-time counterpart of DES-007.
 - **What to do:** Check how exposure is triggered. If it can follow a purchase, say so in the design and analyse from first exposure. Compare the estimates with and without these players in the evidence, and say which one the conclusion rests on. If the late share differs between arms, find out why before reading the effect.
 - **References:**
   - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.

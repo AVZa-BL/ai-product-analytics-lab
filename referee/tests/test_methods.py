@@ -1282,3 +1282,83 @@ def test_a_homogeneity_test_refuses_what_it_cannot_answer(
 ) -> None:
     with pytest.raises(StatsError, match=fragment):
         homogeneity_test(successes, totals)
+
+
+# --- Edges found by the independent review of 4b-1 -----------------------------------------------
+
+
+def test_an_empty_group_without_successes_is_refused_not_divided_by() -> None:
+    with pytest.raises(StatsError, match="not possible"):
+        homogeneity_test([0, 3], [0, 50])
+
+
+def test_five_groups_have_four_degrees_of_freedom() -> None:
+    assert homogeneity_test([5, 9, 12, 7, 20], [100] * 5).degrees_of_freedom == 4
+
+
+def _exact_homogeneity_chi_square(successes: list[int], totals: list[int]):
+    """Pearson's statistic in exact rational arithmetic, rounded once."""
+    from fractions import Fraction
+
+    pooled = Fraction(sum(successes), sum(totals))
+    total = sum(
+        (Fraction(s) - n * pooled) ** 2 / (n * pooled * (1 - pooled))
+        for s, n in zip(successes, totals, strict=True)
+    )
+    return float(total)
+
+
+@pytest.mark.parametrize(
+    ("successes", "totals"),
+    [
+        ([10**15, 10**15 + 5], [10**15 + 10**14, 2 * 10**15]),
+        ([1, 1], [10**15, 10**15]),
+        ([10**17 - 1, 10**17 - 2], [10**17, 10**17]),
+        ([10**17, 10**17 - 1], [10**17, 10**17]),
+        ([3, 1, 1], [10**13, 10**13, 10**13]),
+        ([71, 77, 50], [997, 1046, 781]),
+    ],
+)
+def test_the_homogeneity_statistic_is_exact_however_large_the_counts_or_close_the_rate_to_0_or_1(
+    successes: list[int], totals: list[int]
+) -> None:
+    result = homogeneity_test(successes, totals)
+
+    assert result.chi_square == pytest.approx(
+        _exact_homogeneity_chi_square(successes, totals), rel=1e-14
+    )
+
+
+def test_a_rate_of_exactly_one_is_found_in_integers_not_in_floats() -> None:
+    # 10**17 - 1 of 10**17 twice: the pooled float 1 - 1e-17 rounds to 1.0, which used to
+    # raise "every unit has the same outcome" although one unit in each group differs.
+    assert homogeneity_test([10**17 - 1, 10**17 - 1], [10**17, 10**17]).chi_square == 0.0
+    with pytest.raises(StatsError, match="same outcome"):
+        homogeneity_test([10**17, 10**17], [10**17, 10**17])
+
+
+@pytest.mark.parametrize(
+    ("treatment", "control"),
+    [
+        ([1e160, 1e160, 3.0], [1.0, 2.0, 3.0]),
+        ([3e154, -3e154, 1.0], [1.0, 2.0, 3.0]),
+        ([1.7e308, -1.7e308, 1.7e308], [1.7e308, -1.7e308, 5.0]),
+        ([1.5e308, -1.5e308, 1.5e308], [1.0, 2.0, 3.0]),
+    ],
+)
+def test_values_too_large_to_square_are_a_stats_error_not_an_overflow(
+    treatment: list[float], control: list[float]
+) -> None:
+    with pytest.raises(StatsError, match="too large"):
+        welch_difference(treatment, control)
+
+
+def test_an_integer_beyond_any_float_is_not_a_finite_number() -> None:
+    with pytest.raises(StatsError, match="finite"):
+        welch_difference([10**400, 1, 2], [1, 2, 3])
+
+
+def test_values_that_still_fit_are_unchanged_by_the_overflow_guards() -> None:
+    result = welch_difference([1e100, 3e100, 5e100], [1e100, 2e100, 3e100])
+
+    assert result.difference == pytest.approx(1e100, rel=1e-12)

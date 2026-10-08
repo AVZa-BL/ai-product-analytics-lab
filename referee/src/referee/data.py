@@ -34,6 +34,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 ASSIGNMENTS_FILE = "experiment_assignments.csv"
 EXPOSURES_FILE = "experiment_exposures.csv"
@@ -326,21 +327,37 @@ def _read[T](
     return built
 
 
+def _no_repeated_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """A JSON object, refusing a key given twice: JSON would silently keep the last."""
+    found: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in found:
+            raise ValueError(f"key {key!r} is given more than once")
+        found[key] = value
+    return found
+
+
 def _exported_at(folder: Path, problems: _Problems) -> datetime | None:
     """When the export was taken, from `manifest.json`; None when that file or key is absent.
 
     A manifest that is there must be a JSON object, and an `exported_at_utc` in it must be an
     ISO 8601 text with a zero UTC offset: a time Referee cannot read is a problem, not a guess.
     """
+    path = folder / MANIFEST_FILE
     try:
-        text = (folder / MANIFEST_FILE).read_text(encoding="utf-8-sig")
+        text = path.read_text(encoding="utf-8-sig")
     except FileNotFoundError:
+        if path.is_symlink():  # a link to nothing is a manifest that cannot be read
+            problems.add(f"{MANIFEST_FILE}: is a link to a file that does not exist")
         return None
     except (OSError, UnicodeDecodeError) as error:
         problems.add(f"{MANIFEST_FILE}: cannot be read ({error})")
         return None
     try:
-        manifest = json.loads(text)
+        manifest = json.loads(text, object_pairs_hook=_no_repeated_keys)
+    except RecursionError:
+        problems.add(f"{MANIFEST_FILE}: nested too deeply to read")
+        return None
     except ValueError as error:
         problems.add(f"{MANIFEST_FILE}: not valid JSON ({error})")
         return None
@@ -359,6 +376,16 @@ def _exported_at(folder: Path, problems: _Problems) -> datetime | None:
     if problem is not None:
         problems.add(f"{MANIFEST_FILE}: key 'exported_at_utc': {problem}")
     return moment
+
+
+def exposure_time_key(seen: Exposure) -> tuple[datetime, int]:
+    """Which of a player's exposures comes first: the earlier time, then the lower version.
+
+    Two exposures at one instant are ordered by configuration version, a missing version
+    counting as lower than any. The loader sorts by this key, and the results context uses it
+    to pick a player's first exposure, so the two cannot disagree about a tie.
+    """
+    return seen.exposed_at, -1 if seen.config_version is None else seen.config_version
 
 
 def load_export(directory: str | Path, experiment_id: str) -> ExperimentData:
@@ -463,8 +490,7 @@ def load_export(directory: str | Path, experiment_id: str) -> ExperimentData:
     problems.raise_if_any()
 
     def exposure_order(seen: Exposure) -> tuple[str, datetime, int]:
-        version = -1 if seen.config_version is None else seen.config_version
-        return seen.player_id, seen.exposed_at, version
+        return (seen.player_id, *exposure_time_key(seen))
 
     return ExperimentData(
         experiment_id=experiment_id,

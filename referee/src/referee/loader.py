@@ -94,15 +94,21 @@ def _problem(source: str, error: yaml.YAMLError) -> str:
 def parse_spec(text: str, *, source: str = "<string>") -> ExperimentSpec:
     """Parse YAML text and validate it as a spec.
 
-    Raises LoadError for text YAML or this module rejects, and SpecError, listing every
-    violation, for a mapping that is not a valid spec.
+    Raises LoadError for text YAML or this module rejects (including a timestamp that cannot
+    exist), and SpecError, listing every violation, for a mapping that is not a valid spec.
     """
 
     try:
         # Building the loader already checks the text for control characters.
         data = _SpecLoader(text, source).get_single_data()
+    except LoadError:
+        raise
     except yaml.YAMLError as error:
         raise LoadError(_problem(source, error)) from error
+    except ValueError as error:
+        # PyYAML builds a timestamp while it constructs the document and raises a bare
+        # ValueError for one that cannot exist (2026-02-30, hour 24, an offset of 24 hours).
+        raise LoadError(f"{source}: {error}; if this is meant as text, quote it") from error
     return ExperimentSpec.from_dict(data)
 
 

@@ -458,3 +458,261 @@ def test_an_estimate_that_cannot_be_made_carries_its_reason_and_the_counts(raw_s
     assert got["n_treatment"] == got["n_control"] == 1
     assert "every unit has the same outcome" in got["error"]
     assert "difference" not in got
+
+
+# --- After the independent review of 4b-1 ---------------------------------------------------------
+
+
+def test_players_and_the_ignored_come_back_in_player_order_whatever_order_the_data_is_in(
+    raw_spec,
+) -> None:
+    rows = [
+        Row("b", assigned_at=at(1)),
+        Row("a", assigned_at=at(2)),
+        Row("y", assigned_at=at(-3)),
+        Row("x", assigned_at=at(-2)),
+    ]
+    data = build_data(rows)
+    data = replace(data, assignments=data.assignments[::-1])
+    spec = results_spec(raw_spec, design__start_utc="2026-04-11T00:00:00Z")
+
+    context = ResultsContext.of(spec, data)
+
+    assert [p.player_id for p in context.players] == ["a", "b"]
+    assert context.ignored_before_start == ("x", "y")
+
+
+def test_unknown_arms_are_listed_in_sorted_order_and_beside_the_arms_the_spec_has(
+    raw_spec,
+) -> None:
+    names = ["zeta", "alpha", "mid", "omega", "beta", "kappa", "delta"]
+
+    (problem,) = _refusal(raw_spec, [Row(f"p{i}", name) for i, name in enumerate(names)])
+
+    assert str(sorted(names)) in problem
+    assert "(the spec's arms: ['control', 'variant_b', 'variant_c'])" in problem
+
+
+def test_the_first_player_without_an_outcome_is_the_first_in_player_order(raw_spec) -> None:
+    data = build_data([Row("p1"), Row("p2"), Row("p3")])
+    data = replace(data, outcomes=data.outcomes[:1])
+
+    with pytest.raises(ResultsError) as caught:
+        ResultsContext.of(results_spec(raw_spec), data)
+
+    assert caught.value.problems == ("2 assigned players have no outcome row (first: 'p2')",)
+
+
+def test_one_problem_is_not_pluralised_in_the_header(raw_spec) -> None:
+    with pytest.raises(ResultsError) as caught:
+        _context(raw_spec, [])
+
+    assert str(caught.value).splitlines()[0].endswith(": 1 problem")
+
+
+@pytest.mark.parametrize("declared", ["none", "bonferroni", "dunnett", None])
+def test_the_power_plan_honours_the_declared_alpha_adjustment(raw_spec, declared) -> None:
+    from referee.power import plan_power
+
+    spec = results_spec(raw_spec, design__mde_relative=1.5, design__alpha_adjustment=declared)
+    context = ResultsContext.of(spec, build_data([Row("p1")]))
+    adjustment = "none" if declared == "none" else "bonferroni"
+
+    assert context.plan == plan_power(spec, alpha_adjustment=adjustment)
+    default = ResultsContext.of(
+        results_spec(raw_spec, design__mde_relative=1.5), build_data([Row("p1")])
+    )
+    if declared == "none":
+        assert context.required_n("control") < default.required_n("control")
+
+
+def test_the_control_is_the_arm_marked_so_wherever_it_is_listed_and_whatever_it_is_called(
+    raw_spec,
+) -> None:
+    arms = [
+        {"name": "variant_b", "allocation": 0.5},
+        {"name": "holdout", "allocation": 0.5, "is_control": True},
+    ]
+
+    context = _context(raw_spec, [Row("p1", "holdout"), Row("p2", "variant_b")], arms=arms)
+
+    assert context.control == "holdout"
+
+
+def test_the_context_carries_the_experiment_id_and_the_time_of_the_export(raw_spec) -> None:
+    from datetime import UTC, datetime
+
+    moment = datetime(2026, 5, 9, 6, tzinfo=UTC)
+    data = build_data([Row("p1")], experiment_id="exp_7", exported_at=moment)
+
+    context = ResultsContext.of(results_spec(raw_spec), data)
+
+    assert (context.experiment_id, context.exported_at) == ("exp_7", moment)
+
+
+def test_a_first_exposure_on_configuration_version_zero_is_version_zero(raw_spec) -> None:
+    (record,) = _context(raw_spec, [Row("p1", assigned_version=3, exposure_version=0)]).players
+
+    assert record.version == 0
+
+
+def test_a_player_who_bought_but_was_never_exposed_is_not_late(raw_spec) -> None:
+    rows = [Row("p1", exposed_at=None, purchases=1, first_purchase_at=at(1))]
+
+    (record,) = _context(raw_spec, rows).players
+
+    assert record.late_exposed is False and not record.exposed
+
+
+# --- A player's first exposure is the earliest, whatever order the data comes in -----------------
+
+
+def _first(raw_spec, rows: list[Row], *, reverse: bool = True):
+    data = build_data(rows)
+    if reverse:
+        data = replace(data, exposures=data.exposures[::-1])
+    (record,) = ResultsContext.of(results_spec(raw_spec), data).players
+    return record
+
+
+def test_the_first_exposure_is_the_earliest_even_when_the_exposures_arrive_reversed(
+    raw_spec,
+) -> None:
+    row = Row(
+        "p1",
+        exposed_at=at(0, 1),
+        exposure_version=1,
+        extra_exposures=((at(0, 3), 2),),
+        purchases=1,
+        first_purchase_at=at(0, 2),
+    )
+
+    for reverse in (False, True):
+        record = _first(raw_spec, [row], reverse=reverse)
+        assert (record.first_exposed_at, record.version) == (at(0, 1), 1)
+        assert record.late_exposed is False
+
+
+def test_two_exposures_at_one_instant_take_the_lower_version_in_any_order(raw_spec) -> None:
+    row = Row("p1", exposed_at=at(0, 1), exposure_version=2, extra_exposures=((at(0, 1), 1),))
+
+    for reverse in (False, True):
+        assert _first(raw_spec, [row], reverse=reverse).version == 1
+
+
+def test_an_exposure_without_a_version_is_lower_than_one_with_a_version_at_the_same_instant(
+    raw_spec,
+) -> None:
+    row = Row(
+        "p1",
+        assigned_version=7,
+        exposed_at=at(0, 1),
+        exposure_version=3,
+        extra_exposures=((at(0, 1), None),),
+    )
+
+    for reverse in (False, True):
+        record = _first(raw_spec, [row], reverse=reverse)
+        assert record.first_exposure_version is None and record.version == 7
+
+
+# --- A player appearing twice is refused ---------------------------------------------------------
+
+
+def test_a_player_assigned_twice_is_refused_not_counted_twice(raw_spec) -> None:
+    data = build_data([Row("p1"), Row("p2")])
+    data = replace(data, assignments=(*data.assignments, data.assignments[0]))
+
+    with pytest.raises(ResultsError) as caught:
+        ResultsContext.of(results_spec(raw_spec), data)
+
+    assert caught.value.problems == (
+        "1 players appear more than once in the assignments (first: 'p1')",
+    )
+
+
+def test_a_player_with_two_outcome_rows_is_refused_not_resolved_to_the_last(raw_spec) -> None:
+    data = build_data([Row("p1"), Row("p2")])
+    data = replace(data, outcomes=(*data.outcomes, replace(data.outcomes[1], purchases_7d=9)))
+
+    with pytest.raises(ResultsError) as caught:
+        ResultsContext.of(results_spec(raw_spec), data)
+
+    assert caught.value.problems == (
+        "1 players appear more than once in the outcomes (first: 'p2')",
+    )
+
+
+# --- Values too large for a float are infinite, which the statistics refuse ----------------------
+
+
+def test_a_session_count_beyond_any_float_is_infinite_and_the_estimate_says_why(raw_spec) -> None:
+    spec = results_spec(
+        raw_spec,
+        primary_metric__name="sessions_7d",
+        primary_metric__kind="continuous",
+        primary_metric__baseline=10.0,
+        primary_metric__baseline_std=5.0,
+    )
+    rows = [
+        Row("c1", sessions=10**400),
+        Row("c2", sessions=3),
+        Row("c3", sessions=4),
+        Row("b1", "variant_b", sessions=3),
+        Row("b2", "variant_b", sessions=5),
+        Row("b3", "variant_b", sessions=7),
+    ]
+    context = ResultsContext.of(spec, build_data(rows))
+
+    got = effect_estimate(context, "variant_b", context.players)
+
+    huge = next(p for p in context.players if p.player_id == "c1")
+    assert context.metrics["sessions_7d"].value(huge) == float("inf")
+    assert got["error"] == "control must hold only finite numbers"
+    assert (got["n_treatment"], got["n_control"]) == (3, 3)
+
+
+def test_an_empty_group_has_a_reason_of_its_own_in_the_estimate(raw_spec) -> None:
+    context = _context(raw_spec, [Row("c1"), Row("c2")])
+
+    assert effect_estimate(context, "variant_b", context.players) == {
+        "n_treatment": 0,
+        "n_control": 2,
+        "error": "the treatment group has no players",
+    }
+    assert effect_estimate(context, "variant_b", [])["error"] == (
+        "the treatment and control group has no players"
+    )
+
+
+def test_effect_estimates_gives_every_non_control_arm_from_one_pass(raw_spec) -> None:
+    from referee.results import effect_estimates
+
+    rows = [
+        *[Row(f"c{i}", "control", purchases=int(i < 4)) for i in range(20)],
+        *[Row(f"b{i}", "variant_b", purchases=int(i < 8)) for i in range(20)],
+        *[Row(f"v{i}", "variant_c", purchases=int(i < 2)) for i in range(20)],
+    ]
+    context = _context(raw_spec, rows)
+
+    got = effect_estimates(context, context.players)
+
+    assert list(got) == ["variant_b", "variant_c"]
+    assert got["variant_b"] == effect_estimate(context, "variant_b", context.players)
+    assert got["variant_b"]["difference"] == 0.2 and got["variant_c"]["difference"] == -0.1
+    assert list(effect_estimates(context, context.players, arms=["variant_c"])) == ["variant_c"]
+
+
+def test_the_analysed_players_are_worked_out_once_and_the_context_can_be_pickled(
+    raw_spec,
+) -> None:
+    import pickle
+
+    context = _context(raw_spec, [Row("p1"), Row("p2", exposed_at=None)])
+    copy = pickle.loads(pickle.dumps(context))
+
+    assert context.analysed is context.analysed
+    assert [p.player_id for p in context.analysed] == ["p1"]
+    assert [p.player_id for p in copy.analysed] == ["p1"]
+    assert METRICS["sessions_7d"].value(copy.players[0]) == 3.0
+    assert copy == context

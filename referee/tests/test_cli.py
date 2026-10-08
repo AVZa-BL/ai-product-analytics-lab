@@ -295,3 +295,19 @@ def test_the_command_is_deterministic_across_processes(section_6: Path) -> None:
     second = run_process("review-design", str(section_6), "--format", "json")
 
     assert first.stdout == second.stdout != ""
+
+
+def test_an_unquoted_impossible_start_time_exits_2_not_3(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, clean_raw_spec: dict
+) -> None:
+    path = write_yaml(tmp_path, clean_raw_spec)
+    text = path.read_text(encoding="utf-8").replace(
+        "design:\n", "design:\n  start_utc: 2026-02-30T00:00:00Z\n"
+    )
+    assert "start_utc" in text
+    path.write_text(text, encoding="utf-8")
+
+    code, out, err = run(capsys, "review-design", str(path))
+
+    assert (code, out) == (2, "")
+    assert err.startswith(f"referee: error: {path}: ") and "day is out of range" in err

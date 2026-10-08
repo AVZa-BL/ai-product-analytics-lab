@@ -9,13 +9,14 @@ change it. The decisions are those of design section 21.3 and 21.8.
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
-from referee.data import Assignment, ExperimentData, Exposure, Outcome
+from referee.data import Assignment, ExperimentData, Exposure, Outcome, exposure_time_key
 from referee.methods import StatsError, two_proportion_difference, welch_difference
 from referee.power import PowerError, PowerPlan, plan_power, power_alpha_adjustment
 from referee.spec import ExperimentSpec
@@ -80,13 +81,38 @@ class ExportMetric:
     value: Callable[[PlayerRecord], float]
 
 
+def _as_float(count: int) -> float:
+    """A count as a float; one beyond any float is infinite, which the statistics refuse."""
+    try:
+        return float(count)
+    except OverflowError:
+        return math.inf
+
+
+# Module-level functions, not lambdas, so that a context can be pickled.
+def _sessions(player: PlayerRecord) -> float:
+    return _as_float(player.sessions_7d)
+
+
+def _purchases(player: PlayerRecord) -> float:
+    return _as_float(player.purchases_7d)
+
+
+def _revenue(player: PlayerRecord) -> float:
+    return player.revenue_usd_7d
+
+
+def _purchased(player: PlayerRecord) -> float:
+    return 1.0 if player.purchases_7d > 0 else 0.0
+
+
 METRICS: Mapping[str, ExportMetric] = {
     metric.name: metric
     for metric in (
-        ExportMetric("sessions_7d", "continuous", lambda p: float(p.sessions_7d)),
-        ExportMetric("purchases_7d", "continuous", lambda p: float(p.purchases_7d)),
-        ExportMetric("revenue_usd_7d", "continuous", lambda p: p.revenue_usd_7d),
-        ExportMetric("purchased_7d", "binary", lambda p: 1.0 if p.purchases_7d > 0 else 0.0),
+        ExportMetric("sessions_7d", "continuous", _sessions),
+        ExportMetric("purchases_7d", "continuous", _purchases),
+        ExportMetric("revenue_usd_7d", "continuous", _revenue),
+        ExportMetric("purchased_7d", "binary", _purchased),
     )
 }
 
@@ -110,6 +136,13 @@ class ResultsContext:
     players: tuple[PlayerRecord, ...]
     ignored_before_start: tuple[str, ...]
     metrics: Mapping[str, ExportMetric]
+    analysed: tuple[PlayerRecord, ...] = field(init=False)
+    """Assigned, exposed, and not first exposed after the first purchase (section 21.3)."""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "analysed", tuple(p for p in self.players if p.exposed and not p.late_exposed)
+        )
 
     @classmethod
     def of(cls, spec: ExperimentSpec, data: ExperimentData) -> ResultsContext:
@@ -138,6 +171,16 @@ class ResultsContext:
         if data.assignments and not kept:
             problems.append("no player was assigned at or after design.start_utc")
 
+        for table, ids in (
+            ("assignments", [a.player_id for a in data.assignments]),
+            ("outcomes", [o.player_id for o in data.outcomes]),
+        ):
+            repeated = sorted(player for player, n in Counter(ids).items() if n > 1)
+            if repeated:
+                problems.append(
+                    f"{len(repeated)} players appear more than once in the {table} "
+                    f"(first: {repeated[0]!r})"
+                )
         outcome = {o.player_id: o for o in data.outcomes}
         lacking = [a.player_id for a in kept if a.player_id not in outcome]
         if lacking:
@@ -147,9 +190,11 @@ class ResultsContext:
         if problems or origin is None:
             raise ResultsError(problems)
 
-        first_exposure = {}
-        for exposure in data.exposures:  # in player order, and each player's by time
-            first_exposure.setdefault(exposure.player_id, exposure)
+        first_exposure: dict[str, Exposure] = {}
+        for exposure in data.exposures:  # whatever the order: the earliest wins
+            held = first_exposure.get(exposure.player_id)
+            if held is None or exposure_time_key(exposure) < exposure_time_key(held):
+                first_exposure[exposure.player_id] = exposure
         players = tuple(
             _record(a, first_exposure.get(a.player_id), outcome[a.player_id])
             for a in sorted(kept, key=lambda a: a.player_id)
@@ -183,11 +228,6 @@ class ResultsContext:
     def control(self) -> str:
         return next(arm.name for arm in self.spec.arms if arm.is_control)
 
-    @property
-    def analysed(self) -> tuple[PlayerRecord, ...]:
-        """Assigned, exposed, and not first exposed after the first purchase (section 21.3)."""
-        return tuple(p for p in self.players if p.exposed and not p.late_exposed)
-
     def count_by_arm(self, players: Iterable[PlayerRecord]) -> dict[str, int]:
         """Players per arm, in the spec's order, with 0 for an arm nobody is in."""
         counted = Counter(p.arm for p in players)
@@ -214,13 +254,25 @@ def effect_estimate(
     estimate, not a test. When the data allow no estimate (a group too small, or no variation)
     the answer carries the reason in "error" in place of the numbers.
     """
+    return effect_estimates(context, players, arms=(arm,))[arm]
+
+
+def effect_estimates(
+    context: ResultsContext, players: Iterable[PlayerRecord], *, arms: Iterable[str] | None = None
+) -> dict[str, dict[str, Any]]:
+    """`effect_estimate` for each of `arms` (every arm but the control by default).
+
+    The players are grouped once, so the cost does not grow with the number of arms.
+    """
     metric = context.metrics[context.spec.primary_metric.name]
-    chosen = list(players)
-    return difference_summary(
-        metric,
-        [metric.value(p) for p in chosen if p.arm == arm],
-        [metric.value(p) for p in chosen if p.arm == context.control],
-    )
+    values: dict[str, list[float]] = {name: [] for name in context.arm_names}
+    for player in players:
+        values[player.arm].append(metric.value(player))
+    wanted = [name for name in context.arm_names if name != context.control]
+    return {
+        arm: difference_summary(metric, values[arm], values[context.control])
+        for arm in (wanted if arms is None else arms)
+    }
 
 
 def difference_summary(
@@ -233,6 +285,9 @@ def difference_summary(
     estimate the answer carries the reason in "error" in place of the numbers.
     """
     counts = {"n_treatment": len(treatment), "n_control": len(control)}
+    empty = [name for name, group in (("treatment", treatment), ("control", control)) if not group]
+    if empty:
+        return {**counts, "error": f"the {' and '.join(empty)} group has no players"}
     try:
         if metric.kind == "binary":
             found = two_proportion_difference(

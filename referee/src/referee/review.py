@@ -35,4 +35,6 @@ def review_results(
         experiment_id=data.experiment_id,
         rules_run=tuple(rule.id for rule in rules),
         findings=tuple(findings),
+        origin=context.origin,
+        ignored_before_start=context.ignored_before_start,
     )

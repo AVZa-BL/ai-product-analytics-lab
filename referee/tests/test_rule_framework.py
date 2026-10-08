@@ -238,3 +238,10 @@ def test_an_escalated_finding_makes_a_design_review_revise(clean_spec: Experimen
     assert review_design(clean_spec, rules=[severe]).recommendation == "revise"
     quiet = _escalating(check=lambda c: {"severe": False})
     assert review_design(clean_spec, rules=[quiet]).recommendation == "proceed"
+
+
+def test_an_escalation_to_a_severity_that_does_not_exist_is_a_value_error() -> None:
+    escalation = Escalation(to="critical", when="never.", applies=lambda evidence: False)
+
+    with pytest.raises(ValueError, match="severity must be one of"):
+        make_rule(escalation=escalation)

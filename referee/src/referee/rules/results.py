@@ -1,7 +1,7 @@
 """Rules about what the data of a finished experiment shows (RES).
 
-The data-fit rules of design section 21.4 arrive here one at a time; the effect rules follow
-in the next change. A rule reads a `ResultsContext` and returns the evidence that triggered it.
+The data-fit rules of design section 21.4 are here; the effect rules follow in milestone 4b-2.
+A rule reads a `ResultsContext` and returns the evidence that triggered it.
 """
 
 from __future__ import annotations
@@ -12,10 +12,11 @@ from datetime import timedelta
 from typing import Any
 
 from referee.methods import SRM_ALPHA, SrmResult, StatsError, homogeneity_test, srm_test
-from referee.results import ResultsContext, difference_summary, effect_estimate
+from referee.results import ResultsContext, difference_summary, effect_estimates
 from referee.rules.base import Escalation, Rule
 from referee.rules.references import FABIJAN_ET_AL_2019, KOHAVI_TANG_XU_2020
 
+LATE_SHARE_ALPHA = 0.001  # RES-012's escalation; its own judgement, not SRM_ALPHA (section 21.9)
 _SHARE_DIGITS = 4
 _CHI_SQUARE_DIGITS = 4
 _EXPECTED_DIGITS = 2
@@ -111,12 +112,13 @@ def _late_exposure(context: ResultsContext) -> dict[str, Any] | None:
             "chi_square": round(result.chi_square, _CHI_SQUARE_DIGITS),
             "degrees_of_freedom": result.degrees_of_freedom,
             "p_value": result.p_value,
-            "alpha": SRM_ALPHA,
+            "alpha": LATE_SHARE_ALPHA,
         }
     except StatsError:
         pass  # one arm exposed, or everyone or no one late: there is nothing to compare
 
-    analysed = context.analysed
+    with_late = effect_estimates(context, exposed_players)
+    without_late = effect_estimates(context, context.analysed)
     return {
         "late": late,
         "exposed": exposed,
@@ -132,11 +134,10 @@ def _late_exposure(context: ResultsContext) -> dict[str, Any] | None:
             "metric": context.spec.primary_metric.name,
             "by_arm": {
                 arm: {
-                    "with_late_exposed": effect_estimate(context, arm, exposed_players),
-                    "without_late_exposed": effect_estimate(context, arm, analysed),
+                    "with_late_exposed": with_late[arm],
+                    "without_late_exposed": without_late[arm],
                 }
-                for arm in arms
-                if arm != context.control
+                for arm in with_late
             },
         },
     }
@@ -156,8 +157,11 @@ def _configuration_changed(context: ResultsContext) -> dict[str, Any] | None:
     """An arm whose analysed players first saw it on more than one configuration version."""
     metric = context.metrics[context.spec.primary_metric.name]
     changed: dict[str, Any] = {}
+    analysed_by_arm: dict[str, list] = {arm: [] for arm in context.arm_names}
+    for player in context.analysed:
+        analysed_by_arm[player.arm].append(player)
     for arm in context.arm_names:
-        players = [p for p in context.analysed if p.arm == arm]
+        players = analysed_by_arm[arm]
         if len({p.version for p in players}) < 2:
             continue
         by_week: dict[int, list] = defaultdict(list)
@@ -253,7 +257,8 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         fires_when=(
             "The assigned players per arm differ from arms[].allocation by more than chance "
             "allows: the chi-squared test of the counts against the registered allocation, "
-            "over every assigned player, has p below 0.001."
+            "over every assigned player at or after design.start_utc (all of them when the "
+            "spec registers none), has p below 0.001."
         ),
         why_it_matters=(
             "Random assignment gives arms of the registered sizes, up to chance. A mismatch this "
@@ -285,13 +290,17 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
             "The registered sample size is what the experiment needs to detect the registered "
             "effect with the registered power. With fewer players the test has less power than "
             "was promised, so a result that is not significant says little about whether the "
-            "effect exists."
+            "effect exists. A design that cannot be sized has no registered sample size at "
+            "all, so no amount of data meets it."
         ),
         remediation=(
-            "Keep the experiment running until every arm reaches its registered n (the "
-            "evidence says how many are missing). If it must stop, report the result as "
-            "underpowered, with the interval of the effect, and not as evidence of no effect. "
-            "Do not lower the registered n after seeing the data."
+            "Keep the experiment running until every arm reaches its registered n (when the "
+            "evidence gives sizes, it says how many are missing). If it must stop, report the "
+            "result as underpowered, with the interval of the effect, and not as evidence of no "
+            "effect. Do not lower the registered n after seeing the data. If the evidence says "
+            "the design is unattainable, the spec's baseline and mde_relative cannot be turned "
+            "into a sample size (the evidence gives the reason): more data will not clear this, "
+            "so correct them and register the experiment again."
         ),
         references=(KOHAVI_TANG_XU_2020,),
         check=_fewer_players_than_registered,
@@ -302,7 +311,9 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         title="Ran for less than the registered minimum duration",
         fires_when=(
             "The observed duration, from the first to the last assignment in whole days "
-            "(rounded up), is shorter than design.min_duration_days."
+            "(rounded up), is shorter than design.min_duration_days. Every assigned player at "
+            "or after design.start_utc counts, exposed or not (all of them when the spec "
+            "registers none)."
         ),
         why_it_matters=(
             "The minimum duration is registered so that the run covers the weekly cycle of "
@@ -313,7 +324,9 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         remediation=(
             "Run to at least design.min_duration_days, and to a whole number of weeks where "
             "you can. Do not stop on the day the result looked good. If the registered minimum "
-            "was wrong, say so and why before reading the effect."
+            "was wrong, say so and why before reading the effect. Register design.start_utc: "
+            "without it the first and last assignment in the export set the duration, and one "
+            "mistimed row (a timestamp of zero, a default date) can hide this finding."
         ),
         references=(KOHAVI_TANG_XU_2020,),
         check=_shorter_than_the_registered_minimum,
@@ -324,14 +337,17 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         title="Sample ratio drifts over time although the total passes",
         fires_when=(
             "The sample-ratio check over all assigned players passes (RES-001 does not fire), "
-            "but in at least one 7-day week of assignment the chi-squared test of that week's "
-            "counts against arms[].allocation has p below 0.001 divided by the number of weeks "
-            "that hold players."
+            "but in at least one 7-day week of assignment (weeks are counted from "
+            "design.start_utc, else from the first assignment) the chi-squared test of that "
+            "week's counts against arms[].allocation has p below 0.001 divided by the number of "
+            "weeks that hold players."
         ),
         why_it_matters=(
-            "A mismatch that begins, ends or reverses partway through can cancel in the total. "
-            "It means assignment or logging changed during the test (a release, a campaign, an "
-            "outage), so the players of the failing weeks are not comparable with the others."
+            "A mismatch that reverses partway through can cancel in the total, and one that "
+            "begins or ends partway is diluted in it. A failing week points to a change in "
+            "assignment or logging during the test (a release, a campaign, an outage, a planned "
+            "ramp-up of the allocation), so the players of that week may not be comparable with "
+            "the others."
         ),
         remediation=(
             "Find what changed in the failing weeks: a release, a change to assignment or "
@@ -352,8 +368,8 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         why_it_matters=(
             "A purchase made before the player first saw the change cannot be an effect of it. "
             "These players are left out of the effect analysis, but they are in the arms, so "
-            "a different number of them in different arms means the change reached the arms "
-            "differently. It is the results-time counterpart of DES-007."
+            "a different share of the exposed players being late in different arms means the "
+            "change reached the arms differently. It is the results-time counterpart of DES-007."
         ),
         remediation=(
             "Check how exposure is triggered. If it can follow a purchase, say so in the "

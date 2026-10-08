@@ -2,8 +2,9 @@
 
 A rule is data plus one function. The data (ID, severity, title, when it fires, why it matters,
 how to fix it, references) never changes between runs, which is what lets the rule
-documentation be generated from the rules themselves. The function looks at a `ReviewContext`
-and returns the evidence that triggered the rule, or None when the spec is fine.
+documentation be generated from the rules themselves. The function looks at a context (a
+`ReviewContext` for the design review, a `ResultsContext` for the results review) and returns
+the evidence that triggered the rule, or None when there is nothing to report.
 """
 
 from __future__ import annotations

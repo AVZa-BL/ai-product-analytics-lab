@@ -17,6 +17,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from results_helpers import results_spec
 from scipy.stats import chi2_contingency
 
 from referee import data
@@ -27,6 +28,7 @@ from referee.methods import (
     srm_test,
     welch_difference,
 )
+from referee.results import ResultsContext
 
 FIXTURE = Path(__file__).parent / "data" / "hybrid_offer_page_5000"
 EXPERIMENT = "hybrid_offer_page"
@@ -262,6 +264,43 @@ def test_with_a_floor_of_30_week_3_goes_and_the_corrected_statistics_are_the_one
     assert b_raw.q_statistic == pytest.approx(19.92, abs=0.005)
     assert c_corrected.q_statistic == pytest.approx(3.77, abs=0.005)
     assert c_corrected.q_p_value == pytest.approx(0.15, abs=0.005)
+
+
+def test_on_the_effect_population_week_3_is_empty_and_q_is_the_one_section_21_quotes_for_it(
+    export: ExperimentData, raw_spec
+) -> None:
+    spec = results_spec(
+        raw_spec,
+        primary_metric__name="sessions_7d",
+        primary_metric__kind="continuous",
+        primary_metric__baseline=10.0,
+        primary_metric__baseline_std=5.0,
+    )
+    context = ResultsContext.of(spec, export)
+    metric = context.metrics["sessions_7d"]
+    sessions: dict[tuple[str, int], list[float]] = defaultdict(list)
+    for player in context.analysed:
+        sessions[(player.arm, context.week_of(player.first_exposed_at))].append(
+            metric.value(player)
+        )
+
+    def corrected_q(arm: str):
+        weeks = [w for w in range(3) if min(len(sessions[(a, w)]) for a in (arm, "control")) >= 30]
+        fits = [welch_difference(sessions[(arm, w)], sessions[("control", w)]) for w in weeks]
+        errors = [
+            f.std_error * math.sqrt(f.degrees_of_freedom / (f.degrees_of_freedom - 2)) for f in fits
+        ]
+        return weeks, cohort_heterogeneity([f.difference for f in fits], errors, positions=weeks)
+
+    weeks_b, b = corrected_q("variant_b")
+    weeks_c, c = corrected_q("variant_c")
+
+    assert not any(week >= 3 for _, week in sessions), "the 3 + 13 players of week 3 are all late"
+    assert weeks_b == weeks_c == [0, 1, 2]
+    assert b.q_statistic == pytest.approx(20.19, abs=0.005)
+    assert b.q_p_value == pytest.approx(4.1e-5, rel=0.02, abs=0)
+    assert c.q_statistic == pytest.approx(3.63, abs=0.005)
+    assert c.q_p_value == pytest.approx(0.16, abs=0.005)
 
 
 def test_the_sample_ratio_fails_in_the_second_and_third_week_of_assignment_but_not_the_first(

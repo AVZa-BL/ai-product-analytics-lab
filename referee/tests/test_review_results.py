@@ -207,3 +207,33 @@ def test_the_default_rules_are_the_results_rules_and_not_the_design_rules(spec, 
     assert review.rules_run == tuple(sorted(rule.id for rule in RESULTS_RULES))
     assert not {r.id for r in RESULTS_RULES} & {r.id for r in ALL_RULES}
     assert all(rule.id.startswith("RES-") for rule in RESULTS_RULES)
+
+
+# --- What the review says about the players it left out ---------------------------------------
+
+
+def test_the_review_carries_the_origin_and_no_ignored_players_when_none_were_left_out(
+    spec, data
+) -> None:
+    review = review_results(spec, data, rules=())
+
+    assert review.origin == min(a.assigned_at for a in data.assignments)
+    assert review.ignored_before_start == ()
+
+
+def test_the_review_lists_the_players_assigned_before_the_registered_start(raw_spec) -> None:
+    from results_helpers import at
+
+    rows = [Row("a", assigned_at=at(-3)), Row("b", assigned_at=at(1)), Row("c", assigned_at=at(-1))]
+    spec = results_spec(raw_spec, design__start_utc="2026-04-11T00:00:00Z")
+
+    review = review_results(spec, build_data(rows), rules=())
+
+    assert review.origin == at(0)
+    assert review.ignored_before_start == ("a", "c")
+
+
+def test_a_hand_built_review_defaults_to_no_origin_and_nobody_ignored() -> None:
+    review = ResultsReview(spec_id="s", experiment_id="e", rules_run=(), findings=())
+
+    assert review.origin is None and review.ignored_before_start == ()

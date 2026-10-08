@@ -866,3 +866,83 @@ def test_a_manifest_with_a_byte_order_mark_is_read_like_the_csv_files(tmp_path: 
     )
 
     assert load_export(tmp_path, "e1").exported_at == _utc(2026, 5, 9, 6)
+
+
+# --- The manifest, after the independent review of 4b-1 -----------------------------------------
+
+
+def test_a_manifest_that_is_not_utf8_is_reported_not_raised(tmp_path: Path) -> None:
+    export(tmp_path)
+    (tmp_path / data.MANIFEST_FILE).write_bytes(b'{"exported_at_utc": "\xff\xfe"}')
+
+    (problem,) = _problems(tmp_path)
+
+    assert problem.startswith("manifest.json: cannot be read")
+
+
+def test_the_manifest_is_the_file_called_manifest_dot_json(tmp_path: Path) -> None:
+    export(tmp_path)
+    (tmp_path / "manifest.JSON.txt").write_text('{"exported_at_utc": "nonsense"}', encoding="utf-8")
+    (tmp_path / "manifest.json").write_text(
+        '{"exported_at_utc": "2026-05-09T06:00:00Z"}', encoding="utf-8"
+    )
+
+    assert load_export(tmp_path, "e1").exported_at == _utc(2026, 5, 9, 6)
+
+
+@pytest.mark.parametrize("depth", [10_000, 100_000])
+def test_a_manifest_nested_too_deeply_for_json_is_a_problem_not_a_crash(
+    tmp_path: Path, depth: int
+) -> None:
+    export(tmp_path)
+    _manifest(tmp_path, "[" * depth + "]" * depth)
+
+    (problem,) = _problems(tmp_path)
+
+    assert problem == "manifest.json: nested too deeply to read"
+
+
+def test_a_manifest_that_gives_a_key_twice_is_refused_not_resolved_to_the_last(
+    tmp_path: Path,
+) -> None:
+    export(tmp_path)
+    _manifest(
+        tmp_path,
+        '{"exported_at_utc": "2026-01-01T00:00:00Z", "exported_at_utc": "2026-02-01T00:00:00Z"}',
+    )
+
+    (problem,) = _problems(tmp_path)
+
+    assert problem.startswith("manifest.json: not valid JSON")
+    assert "'exported_at_utc' is given more than once" in problem
+
+
+def test_a_manifest_that_is_a_link_to_nothing_is_a_problem_not_an_absent_file(
+    tmp_path: Path,
+) -> None:
+    export(tmp_path)
+    (tmp_path / data.MANIFEST_FILE).symlink_to(tmp_path / "nowhere.json")
+
+    (problem,) = _problems(tmp_path)
+
+    assert problem == "manifest.json: is a link to a file that does not exist"
+
+
+def test_an_export_without_a_manifest_is_still_fine(tmp_path: Path) -> None:
+    export(tmp_path)
+
+    assert load_export(tmp_path, "e1").exported_at is None
+
+
+def test_two_exposures_at_one_instant_are_ordered_by_version_with_none_lowest() -> None:
+    at_noon = _utc(2026, 4, 12, 12)
+    exposures = [
+        data.Exposure("p1", at_noon, 2),
+        data.Exposure("p1", at_noon, None),
+        data.Exposure("p1", at_noon, 1),
+        data.Exposure("p1", _utc(2026, 4, 12, 11), 5),
+    ]
+
+    ordered = sorted(exposures, key=data.exposure_time_key)
+
+    assert [e.config_version for e in ordered] == [5, None, 1, 2]

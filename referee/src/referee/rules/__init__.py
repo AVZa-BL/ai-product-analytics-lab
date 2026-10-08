@@ -1,4 +1,9 @@
-"""The rule catalogue. `ALL_RULES` is the single list the review runs."""
+"""The rule catalogue.
+
+`ALL_RULES` is the list the design review runs, over a spec. `RESULTS_RULES` is the list the
+results review runs, over a spec and its data. `CATALOGUE` is both, in the order the
+documentation prints them.
+"""
 
 from referee.rules.base import Escalation, ReviewContext, Rule
 from referee.rules.design import DESIGN_RULES

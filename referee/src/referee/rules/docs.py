@@ -29,18 +29,19 @@ Generated from the rule code by `python -m referee.rules.docs`. Do not edit this
 a test fails if it differs from the generated text. To change a rule, change it in
 `src/referee/rules/` and regenerate.
 
-A **rule** looks at one validated spec and either finds nothing or raises one **finding**. Each
-finding carries the rule's ID and severity, the evidence that triggered it, why it matters,
-what to do, and its references. The same spec always gives the same findings.
+A **rule** looks at one validated spec (a results rule also at the experiment's data) and either
+finds nothing or raises one **finding**. Each finding carries the rule's ID and severity, the
+evidence that triggered it, why it matters, what to do, and its references. The same input
+always gives the same findings.
 
-| Severity | Effect on the review |
+| Severity | Effect on the design review (the results review has its own verdict: see Results) |
 | --- | --- |
 | blocker | The recommendation is `revise` and `referee review-design` exits with status 1. |
 | warning | Reported; the recommendation stays `proceed`. |
 | info | Reported; the recommendation stays `proceed`. |
 
 Referee is advisory. A recommendation of `proceed` means the design raised none of the
-objections below, not that the experiment is worth running.
+objections of the design rules (HYP, DES and PRO), not that the experiment is worth running.
 
 In "fires when", a field is **absent** when it is missing from the spec or is `null`.
 Whether a spec is well-formed (a hypothesis with a null statement, a direction and a metric, for
@@ -88,7 +89,7 @@ runs the results rules yet.
 def _severity_counts(rules: Sequence[Rule]) -> str:
     counts = {s: sum(rule.severity == s for rule in rules) for s in ("blocker", "warning", "info")}
     return (
-        f"{len(rules)} rules: {counts['blocker']} blockers, "
+        f"{len(rules)} rules by default severity: {counts['blocker']} blockers, "
         f"{counts['warning']} warnings, {counts['info']} info."
     )
 

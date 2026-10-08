@@ -1092,3 +1092,505 @@ def test_a_results_review_of_the_committed_export_lists_every_data_fit_rule_that
     assert review.blocking_rule_ids == ("RES-001", "RES-002")
     assert [f.rule_id for f in review.findings if f.severity == "warning"] == ["RES-012", "RES-013"]
     assert review.rules_run == ("RES-001", "RES-002", "RES-003", "RES-011", "RES-012", "RES-013")
+
+
+# --- After the independent review of 4b-1 ---------------------------------------------------------
+
+LATE = {"exposed_at": at(0, 5), "purchases": 1, "first_purchase_at": at(0, 1)}
+BUYER = {"purchases": 1, "first_purchase_at": at(0, 9)}
+RES_002, RES_003, RES_011, RES_012, RES_013 = (
+    _rule(rule_id) for rule_id in ("RES-002", "RES-003", "RES-011", "RES-012", "RES-013")
+)
+
+
+def _versioned(arm: str, count: int, version: int, week: int, prefix: str, **fields: object):
+    return crowd(
+        arm,
+        count,
+        prefix=prefix,
+        assigned_version=version,
+        exposure_version=version,
+        assigned_at=at(7 * week),
+        exposed_at=at(7 * week, 1),
+        **fields,
+    )
+
+
+# Players who were never exposed are in the sample-ratio rules ----------------------------------
+
+
+def test_the_weekly_table_counts_players_who_were_never_exposed(raw_spec) -> None:
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+    rows = [
+        *crowd("control", 600, prefix="c"),
+        *crowd("variant_b", 300, prefix="v"),
+        *crowd("variant_b", 100, prefix="n", exposed_at=None),
+    ]
+
+    finding = evaluate_results(RES_001, spec, rows)
+
+    assert finding.evidence["by_week"][0]["assigned"] == {"control": 600, "variant_b": 400}
+
+
+def test_res_011_counts_the_never_exposed_so_a_drift_that_lives_in_them_is_found(raw_spec) -> None:
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+    rows: list[Row] = []
+    for week, (control, variant) in enumerate([(700, 300), (300, 700)]):
+        start = {"assigned_at": at(7 * week), "exposed_at": at(7 * week, 1)}
+        rows += crowd("control", control, prefix=f"c{week}", **start)
+        rows += crowd("variant_b", variant // 2, prefix=f"v{week}", **start)
+        rows += crowd(
+            "variant_b",
+            variant - variant // 2,
+            prefix=f"n{week}",
+            assigned_at=at(7 * week),
+            exposed_at=None,
+        )
+
+    finding = evaluate_results(RES_011, spec, rows)
+
+    assert finding is not None and finding.evidence["failing_weeks"] == [0, 1]
+
+
+def test_the_weeks_come_back_in_week_order_whatever_the_player_ids_are(raw_spec) -> None:
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+    rows = [
+        *crowd("control", 400, prefix="z_late", assigned_at=at(0), exposed_at=at(0, 1)),
+        *crowd("variant_b", 200, prefix="y_late", assigned_at=at(0), exposed_at=at(0, 1)),
+        *crowd("control", 100, prefix="b_first", assigned_at=at(15), exposed_at=at(15, 1)),
+        *crowd("variant_b", 100, prefix="a_first", assigned_at=at(15), exposed_at=at(15, 1)),
+    ]
+
+    finding = evaluate_results(RES_001, spec, rows)
+
+    assert [week["week"] for week in finding.evidence["by_week"]] == [0, 2]
+
+
+def test_a_week_in_which_an_arm_has_nobody_still_lists_that_arm_with_zero(raw_spec) -> None:
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+    rows = [
+        *crowd("control", 600, prefix="c"),
+        *crowd("variant_b", 400, prefix="v"),
+        *crowd("control", 40, prefix="w", assigned_at=at(8), exposed_at=at(8, 1)),
+    ]
+
+    finding = evaluate_results(RES_001, spec, rows)
+
+    assert finding.evidence["by_week"][1]["assigned"] == {"control": 40, "variant_b": 0}
+
+
+def test_the_allocation_and_expected_counts_are_labelled_by_arm_when_arms_are_not_alphabetical(
+    raw_spec,
+) -> None:
+    arms = [
+        {"name": "variant_b", "allocation": 0.3},
+        {"name": "control", "allocation": 0.7, "is_control": True},
+    ]
+    spec = results_spec(raw_spec, arms=arms)
+    rows = [*crowd("control", 300), *crowd("variant_b", 700)]
+
+    finding = evaluate_results(RES_001, spec, rows)
+
+    assert finding.evidence["allocation"] == {"variant_b": 0.3, "control": 0.7}
+    assert finding.evidence["expected"] == {"variant_b": 300.0, "control": 700.0}
+    assert finding.evidence["assigned"] == {"variant_b": 700, "control": 300}
+
+
+def test_res_011_labels_the_allocation_by_arm_when_arms_are_not_alphabetical(raw_spec) -> None:
+    arms = [
+        {"name": "variant_b", "allocation": 0.3},
+        {"name": "control", "allocation": 0.7, "is_control": True},
+    ]
+    spec = results_spec(raw_spec, arms=arms)
+    rows: list[Row] = []
+    for week, (control, variant) in enumerate([(1010, 290), (810, 490)]):
+        start = {"assigned_at": at(7 * week), "exposed_at": at(7 * week, 1)}
+        rows += crowd("control", control, prefix=f"c{week}", **start)
+        rows += crowd("variant_b", variant, prefix=f"v{week}", **start)
+
+    assert evaluate_results(RES_001, spec, rows) is None
+    finding = evaluate_results(RES_011, spec, rows)
+
+    assert finding.evidence["allocation"] == {"variant_b": 0.3, "control": 0.7}
+
+
+def test_res_011_quotes_the_real_p_value_of_the_total(raw_spec) -> None:
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+    rows: list[Row] = []
+    for week, (control, variant) in enumerate([(700, 300), (330, 700)]):
+        start = {"assigned_at": at(7 * week), "exposed_at": at(7 * week, 1)}
+        rows += crowd("control", control, prefix=f"c{week}", **start)
+        rows += crowd("variant_b", variant, prefix=f"v{week}", **start)
+
+    finding = evaluate_results(RES_011, spec, rows)
+
+    expected = srm_test([1030, 1000], [0.5, 0.5]).p_value
+    assert 0.0 < expected < 1.0
+    assert finding.evidence["total"] == {
+        "assigned": {"control": 1030, "variant_b": 1000},
+        "p_value": expected,
+    }
+
+
+# RES-002 --------------------------------------------------------------------------------------
+
+
+def test_res_002_lists_an_arm_nobody_is_in_among_the_missing(raw_spec) -> None:
+    spec = results_spec(raw_spec, design__mde_relative=1.5)
+    rows = [*crowd("control", 300), *crowd("variant_b", 300)]
+
+    finding = evaluate_results(RES_002, spec, rows)
+
+    required = finding.evidence["required"]
+    assert finding.evidence["missing"] == {"variant_c": required["variant_c"]}
+    assert finding.evidence["short_arms"] == ["variant_c"]
+
+
+def test_res_002_lists_the_short_arms_in_the_order_of_the_spec(raw_spec) -> None:
+    arms = [
+        {"name": "variant_b", "allocation": 0.5},
+        {"name": "control", "allocation": 0.5, "is_control": True},
+    ]
+    spec = results_spec(raw_spec, arms=arms, design__mde_relative=1.5)
+
+    finding = evaluate_results(RES_002, spec, [*crowd("control", 5), *crowd("variant_b", 5)])
+
+    assert finding.evidence["short_arms"] == ["variant_b", "control"]
+
+
+def test_res_002_on_a_design_that_cannot_be_sized_says_that_more_data_will_not_clear_it(
+    raw_spec,
+) -> None:
+    spec = results_spec(
+        raw_spec,
+        arms=TWO_ARMS,
+        primary_metric__baseline=0.9,
+        design__mde_relative=0.3,
+    )
+
+    finding = evaluate_results(RES_002, spec, [*crowd("control", 5000), *crowd("variant_b", 5000)])
+
+    assert finding.evidence["unattainable"] is True and "missing" not in finding.evidence
+    assert "more data will not clear this" in finding.remediation
+    assert "when the evidence gives sizes" in finding.remediation
+    assert "no registered sample size at all" in finding.why_it_matters
+
+
+# RES-003 --------------------------------------------------------------------------------------
+
+
+def test_res_003_measures_the_duration_over_every_assigned_player_even_one_never_exposed(
+    raw_spec,
+) -> None:
+    rows = [
+        *crowd("control", 5, prefix="a"),
+        *crowd("variant_b", 5, prefix="b"),
+        *crowd("variant_b", 1, prefix="z_never", assigned_at=at(14), exposed_at=None),
+    ]
+    spec = results_spec(raw_spec, arms=TWO_ARMS, design__min_duration_days=14)
+
+    assert evaluate_results(RES_003, spec, rows) is None
+
+
+def test_res_003_counts_a_never_exposed_player_as_the_first_assignment(raw_spec) -> None:
+    rows = [
+        *crowd("control", 5, prefix="b", assigned_at=at(3), exposed_at=at(3, 1)),
+        *crowd("variant_b", 5, prefix="c", assigned_at=at(17), exposed_at=at(17, 1)),
+        Row("a_never", assigned_at=at(0), exposed_at=None),
+    ]
+    spec = results_spec(
+        raw_spec,
+        arms=TWO_ARMS,
+        design__min_duration_days=17,
+        design__planned_duration_days=30,
+    )
+
+    assert evaluate_results(RES_003, spec, rows) is None
+
+
+def test_res_003_tells_the_reader_to_register_a_start_so_that_one_stray_row_cannot_hide_it(
+    raw_spec,
+) -> None:
+    rows = [
+        *crowd("control", 50, prefix="c"),
+        *crowd("variant_b", 50, prefix="v"),
+        Row("stray", assigned_at=at(-20_000)),
+    ]
+    spec = results_spec(raw_spec, arms=TWO_ARMS, design__min_duration_days=14)
+    registered = results_spec(
+        raw_spec,
+        arms=TWO_ARMS,
+        design__min_duration_days=14,
+        design__start_utc="2026-04-11T00:00:00Z",
+    )
+
+    assert evaluate_results(RES_003, spec, rows) is None  # the stray row stretches the span
+    finding = evaluate_results(RES_003, registered, rows)
+    assert finding is not None and finding.evidence["ignored_before_start"] == ["stray"]
+    assert "Register design.start_utc" in finding.remediation
+
+
+# RES-012 --------------------------------------------------------------------------------------
+
+
+def test_res_012_has_its_own_alpha_that_a_change_of_the_sample_ratio_alpha_does_not_move(
+    raw_spec, monkeypatch
+) -> None:
+    from referee.rules import results as rules_results
+
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+    rows = [*crowd("control", 500, prefix="c"), *crowd("variant_b", 450, prefix="v")]
+    rows += crowd("variant_b", 50, prefix="vl", **LATE)
+    monkeypatch.setattr(rules_results, "SRM_ALPHA", 0.05)
+
+    finding = evaluate_results(RES_012, spec, rows)
+
+    assert rules_results.LATE_SHARE_ALPHA == 0.001
+    assert finding.evidence["homogeneity"]["alpha"] == 0.001
+    assert finding.severity == "blocker"
+
+
+def test_res_012_why_it_matters_speaks_of_the_share_not_the_number() -> None:
+    assert "a different share of the exposed players" in RES_012.why_it_matters
+    assert "a different number" not in RES_012.why_it_matters
+
+
+def test_one_arm_with_no_late_players_against_a_lot_is_a_blocker(raw_spec) -> None:
+    rows = [
+        *crowd("control", 500, prefix="c"),
+        *crowd("variant_b", 400, prefix="v"),
+        *crowd("variant_b", 100, prefix="vl", **LATE),
+    ]
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+
+    finding = evaluate_results(RES_012, spec, rows)
+
+    assert finding.evidence["late"] == {"control": 0, "variant_b": 100}
+    assert finding.evidence["homogeneity"] is not None and finding.severity == "blocker"
+
+
+def test_the_late_share_and_its_test_are_over_the_exposed_not_the_assigned(raw_spec) -> None:
+    rows = [
+        *crowd("control", 400, prefix="c"),
+        *crowd("control", 100, prefix="cl", **LATE),
+        *crowd("control", 500, prefix="cn", exposed_at=None),
+        *crowd("variant_b", 450, prefix="v"),
+        *crowd("variant_b", 50, prefix="vl", **LATE),
+    ]
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+
+    evidence = evaluate_results(RES_012, spec, rows).evidence
+
+    expected = homogeneity_test([100, 50], [500, 500])
+    assert evidence["late_share_of_exposed"] == {"control": 0.2, "variant_b": 0.1}
+    assert evidence["homogeneity"]["p_value"] == expected.p_value
+    assert evidence["homogeneity"]["chi_square"] == round(expected.chi_square, 4)
+
+
+def test_purchasers_in_the_share_include_those_who_were_never_exposed(raw_spec) -> None:
+    rows = [
+        *crowd("control", 40, prefix="c"),
+        *crowd("control", 5, prefix="cl", **LATE),
+        *crowd("variant_b", 45, prefix="v"),
+        *crowd("variant_b", 15, prefix="vn", exposed_at=None, **BUYER),
+    ]
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+
+    evidence = evaluate_results(RES_012, spec, rows).evidence
+
+    assert evidence["share_of_purchasers"] == round(5 / 20, 4)
+
+
+def test_the_two_estimates_are_over_the_exposed_and_over_the_analysed_players(raw_spec) -> None:
+    rows = [
+        *crowd("control", 40, prefix="c"),
+        *crowd("control", 10, prefix="cb", **BUYER),
+        *crowd("variant_b", 35, prefix="v"),
+        *crowd("variant_b", 15, prefix="vb", **BUYER),
+        *crowd("variant_b", 5, prefix="vl", **LATE),
+        *crowd("variant_b", 30, prefix="vn", exposed_at=None, **BUYER),
+        *crowd("control", 30, prefix="cn", exposed_at=None),
+    ]
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+
+    got = evaluate_results(RES_012, spec, rows).evidence["estimate"]["by_arm"]["variant_b"]
+
+    without = two_proportion_difference(15, 50, 10, 50)
+    with_late = two_proportion_difference(20, 55, 10, 50)
+    assert got["without_late_exposed"]["difference"] == round(without.difference, 6)
+    assert (
+        got["without_late_exposed"]["n_treatment"],
+        got["without_late_exposed"]["n_control"],
+    ) == (
+        50,
+        50,
+    )
+    assert got["with_late_exposed"]["difference"] == round(with_late.difference, 6)
+    assert (got["with_late_exposed"]["n_treatment"], got["with_late_exposed"]["n_control"]) == (
+        55,
+        50,
+    )
+
+
+def test_the_control_need_not_be_first_or_called_control_in_the_estimate(raw_spec) -> None:
+    arms = [
+        {"name": "variant_b", "allocation": 0.5},
+        {"name": "holdout", "allocation": 0.5, "is_control": True},
+    ]
+    rows = [
+        *crowd("holdout", 40, prefix="c"),
+        *crowd("holdout", 10, prefix="cb", **BUYER),
+        *crowd("variant_b", 30, prefix="v"),
+        *crowd("variant_b", 20, prefix="vb", **BUYER),
+        *crowd("variant_b", 2, prefix="vl", **LATE),
+    ]
+    spec = results_spec(raw_spec, arms=arms)
+
+    got = evaluate_results(RES_012, spec, rows).evidence["estimate"]["by_arm"]
+
+    assert list(got) == ["variant_b"]
+    expected = two_proportion_difference(20, 50, 10, 50)
+    assert got["variant_b"]["without_late_exposed"]["difference"] == round(expected.difference, 6)
+
+
+def test_an_odd_number_of_late_players_is_counted_exactly(raw_spec) -> None:
+    rows = [
+        *crowd("control", 20, prefix="c"),
+        *crowd("variant_b", 10, prefix="v"),
+        *crowd("variant_b", 3, prefix="vl", **LATE),
+    ]
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+
+    evidence = evaluate_results(RES_012, spec, rows).evidence
+
+    assert evidence["late_total"] == 3 and json.dumps(evidence)
+
+
+def test_a_session_count_beyond_any_float_gives_an_error_in_the_estimate_not_a_crash(
+    raw_spec,
+) -> None:
+    spec = results_spec(
+        raw_spec,
+        arms=TWO_ARMS,
+        primary_metric__name="sessions_7d",
+        primary_metric__kind="continuous",
+        primary_metric__baseline=10.0,
+        primary_metric__baseline_std=5.0,
+    )
+    rows = [
+        Row("c1", sessions=10**400),
+        *crowd("control", 4, prefix="c"),
+        *crowd("variant_b", 5, prefix="v"),
+        Row("late", "variant_b", **LATE),
+    ]
+
+    review = review_results(spec, build_data(rows))
+
+    by_arm = next(f for f in review.findings if f.rule_id == "RES-012").evidence["estimate"][
+        "by_arm"
+    ]
+    assert (
+        by_arm["variant_b"]["with_late_exposed"]["error"] == "control must hold only finite numbers"
+    )
+
+
+# RES-013 --------------------------------------------------------------------------------------
+
+
+def test_every_mixed_week_is_reported_in_week_order_whatever_the_ids(raw_spec) -> None:
+    rows = [
+        *_versioned("control", 20, 1, 0, "c"),
+        *_versioned("variant_b", 10, 2, 2, "a2"),  # ids that sort the later week first
+        *_versioned("variant_b", 10, 1, 2, "a1"),
+        *_versioned("variant_b", 10, 2, 1, "b2"),
+        *_versioned("variant_b", 10, 1, 1, "b1"),
+    ]
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+
+    arm = evaluate_results(RES_013, spec, rows).evidence["arms"]["variant_b"]
+
+    assert arm["mixed_weeks"] == [1, 2]
+    assert [week["week"] for week in arm["by_week"]] == [1, 2]
+    assert [week["week"] for week in arm["within_week"]] == [1, 2]
+
+
+def test_later_versions_are_each_compared_with_the_earliest_in_version_order(raw_spec) -> None:
+    rows = [
+        *_versioned("control", 20, 1, 0, "c"),
+        *_versioned("variant_b", 10, 3, 0, "a"),  # ids that sort version 3 first
+        *_versioned("variant_b", 10, 2, 0, "b"),
+        *_versioned("variant_b", 10, 1, 0, "d"),
+    ]
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+
+    arm = evaluate_results(RES_013, spec, rows).evidence["arms"]["variant_b"]
+
+    assert [(w["earlier_version"], w["later_version"]) for w in arm["within_week"]] == [
+        (1, 2),
+        (1, 3),
+    ]
+    assert [v["version"] for v in arm["versions"]] == [1, 2, 3]
+
+
+def test_every_changed_arm_is_reported_with_its_own_counts(raw_spec) -> None:
+    rows = [
+        *_versioned("control", 10, 1, 0, "c1"),
+        *_versioned("control", 10, 2, 1, "c2"),
+        *_versioned("variant_b", 10, 1, 0, "b1"),
+        *crowd(
+            "variant_b",
+            7,
+            prefix="b2",
+            assigned_version=1,
+            exposure_version=2,
+            assigned_at=at(7),
+            exposed_at=at(7, 1),
+        ),
+    ]
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+
+    arms = evaluate_results(RES_013, spec, rows).evidence["arms"]
+
+    assert list(arms) == ["control", "variant_b"]
+    assert arms["control"]["assigned_differs"] == 0
+    assert arms["variant_b"]["assigned_differs"] == 7
+    assert arms["control"]["versions"] == [
+        {"version": 1, "players": 10},
+        {"version": 2, "players": 10},
+    ]
+
+
+def test_an_exposure_on_a_lower_version_than_the_assignment_counts_as_differing(raw_spec) -> None:
+    rows = [
+        *_versioned("control", 20, 1, 0, "c"),
+        *_versioned("variant_b", 10, 2, 0, "a"),
+        *crowd("variant_b", 6, prefix="low", assigned_version=3, exposure_version=2),
+        *_versioned("variant_b", 5, 1, 0, "one"),
+    ]
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+
+    arm = evaluate_results(RES_013, spec, rows).evidence["arms"]["variant_b"]
+
+    assert arm["assigned_differs"] == 6
+
+
+def test_a_session_count_beyond_any_float_does_not_stop_the_configuration_rule(raw_spec) -> None:
+    spec = results_spec(
+        raw_spec,
+        arms=TWO_ARMS,
+        primary_metric__name="sessions_7d",
+        primary_metric__kind="continuous",
+        primary_metric__baseline=10.0,
+        primary_metric__baseline_std=5.0,
+    )
+    rows = [
+        *_versioned("control", 4, 1, 0, "c"),
+        *_versioned("variant_b", 3, 1, 0, "a", sessions=10**400),
+        *_versioned("variant_b", 3, 2, 0, "b"),
+    ]
+
+    arm = evaluate_results(RES_013, spec, rows).evidence["arms"]["variant_b"]
+
+    (within,) = arm["within_week"]
+    assert within["error"] == "control must hold only finite numbers"
+    assert (within["n_later"], within["n_earlier"]) == (3, 3)

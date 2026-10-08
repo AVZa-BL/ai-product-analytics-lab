@@ -218,3 +218,21 @@ def test_the_readme_names_every_runtime_dependency_the_project_declares() -> Non
     assert {"numpy", "pyyaml", "scipy"} <= {n.lower() for n in names}
     for name in names:
         assert name.lower() in README.lower(), f"the README does not name the dependency {name}"
+
+
+def test_the_readme_names_the_results_rules_that_are_built_and_says_no_command_runs_them() -> None:
+    sentence = next(line for line in README.splitlines() if "results rules built so far" in line)
+
+    assert all(rule.id in sentence for rule in RESULTS_RULES)
+    assert f"the {len(RESULTS_RULES)} results rules" not in sentence  # the ids, not a count
+    assert "no command runs them yet" in sentence
+
+
+def test_the_amendment_names_who_delivers_the_text_changes_and_where_the_ignored_players_go() -> (
+    None
+):
+    amendment = DESIGN.split("\n## 21. Amendment")[1]
+
+    assert "(delivered in 4b-2, with DES-009)" in amendment
+    assert "`ResultsReview.ignored_before_start`" in amendment
+    assert "The report (4c) states the origin" in amendment
