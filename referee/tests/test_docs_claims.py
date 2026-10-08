@@ -236,3 +236,70 @@ def test_the_amendment_names_who_delivers_the_text_changes_and_where_the_ignored
     assert "(delivered in 4b-2, with DES-009)" in amendment
     assert "`ResultsReview.ignored_before_start`" in amendment
     assert "The report (4c) states the origin" in amendment
+
+
+# --- The small-count claims of section 21.4, recomputed -------------------------------------------
+
+
+def _flag_ratio(n: int, share: float, alpha: float) -> float:
+    """How many times its level the chi-square sample-ratio test flags (exact sum)."""
+    import numpy as np
+    from scipy.stats import binom
+
+    from referee.methods import srm_test
+
+    counts = np.arange(n + 1)
+    flags = np.array(
+        [srm_test([n - k, k], [1 - share, share], alpha=alpha).flagged for k in counts], dtype=bool
+    )
+    return float(binom.pmf(counts, n, share)[flags].sum() / alpha)
+
+
+def _homogeneity_sizes(first: int, second: int, rate: float, alpha: float = 0.001):
+    """(chi-square, exact) flag probability, in units of alpha, for two arms sharing one rate."""
+    import numpy as np
+    from scipy.stats import binom
+
+    from referee import methods
+
+    top_first, top_second = min(45, first), min(20, second)
+    weight_first = binom.pmf(np.arange(top_first + 1), first, rate)
+    weight_second = binom.pmf(np.arange(top_second + 1), second, rate)
+    assert weight_first.sum() > 1 - 1e-12 and weight_second.sum() > 1 - 1e-12
+    chi_square = exact = 0.0
+    for a, weight_a in enumerate(weight_first):
+        for b, weight_b in enumerate(weight_second):
+            if a + b == 0:
+                continue
+            weight = weight_a * weight_b
+            chi_square += weight * (
+                methods.homogeneity_test([a, b], [first, second]).p_value < alpha
+            )
+            exact += weight * (methods._exact_homogeneity_p([a, b], [first, second]) < alpha)
+    return chi_square / alpha, exact / alpha
+
+
+def test_the_amendment_quotes_the_sample_ratio_sizes_the_code_reproduces() -> None:
+    amendment = DESIGN.split("\n## 21. Amendment")[1]
+
+    quoted = {
+        "4.0 times as often as its level at a 10% allocation": _flag_ratio(50, 0.1, 0.00025),
+        "5.9 times at 5%": _flag_ratio(100, 0.05, 0.00025),
+        "3.2 times at 10%": _flag_ratio(50, 0.1, 0.001),
+    }
+    for text, ratio in quoted.items():
+        assert text in amendment, text
+        assert f"{ratio:.1f} times" in text, (text, ratio)
+
+
+def test_the_amendment_quotes_the_homogeneity_sizes_the_code_reproduces() -> None:
+    amendment = DESIGN.split("\n## 21. Amendment")[1]
+    chi_square, exact = _homogeneity_sizes(950, 50, 0.003)
+    chi_square_tiny, exact_tiny = _homogeneity_sizes(990, 10, 0.003)
+
+    assert (
+        "χ² at 0.001 flags 14 times as often as its level (29 times with 990 and 10)" in amendment
+    )
+    assert round(chi_square) == 14 and round(chi_square_tiny) == 29
+    assert exact < 0.65 and exact_tiny < 0.65
+    assert "Fisher's exact test at most 0.65 times in every cell computed" in amendment

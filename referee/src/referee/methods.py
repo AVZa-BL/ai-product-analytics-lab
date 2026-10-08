@@ -21,11 +21,15 @@ import math
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
-from scipy import stats
+from scipy import special, stats
 
 SRM_ALPHA = 0.001  # section 9: the threshold used in the Kohavi, Tang and Xu treatment of SRM
+SMALL_EXPECTED_COUNT = 100  # below it the rules use the exact tests (judgement, section 21.4)
+_ENUMERATION_LIMIT = 1_000_000  # outcomes an exact test may list before the chi-square is kept
+_TOLERANCE = 1e-7  # relative, on a probability: the rule scipy's binomtest and fisher_exact use
 
 
 class StatsError(ValueError):
@@ -68,6 +72,79 @@ def _finite(values: Sequence[float], name: str) -> list[float]:
     return numbers
 
 
+# --- Exact tests for counts too small for the chi-square approximation --------------------
+
+
+def _compositions(total: int, parts: int) -> np.ndarray:
+    """Every way to write `total` as an ordered sum of `parts` whole numbers of at least 0."""
+    rows = np.zeros((1, 0), dtype=np.int64)
+    remaining = np.array([total], dtype=np.int64)
+    for _ in range(parts - 1):
+        lengths = remaining + 1
+        owner = np.repeat(np.arange(len(rows)), lengths)
+        starts = np.cumsum(lengths) - lengths
+        take = np.arange(int(lengths.sum())) - np.repeat(starts, lengths)
+        rows = np.hstack([rows[owner], take[:, None]])
+        remaining = remaining[owner] - take
+    return np.hstack([rows, remaining[:, None]])
+
+
+def _outcomes_listable(total: int, parts: int) -> bool:
+    return math.comb(total + parts - 1, parts - 1) <= _ENUMERATION_LIMIT
+
+
+def _exact_sample_ratio_p(observed: Sequence[int], shares: Sequence[float]) -> float | None:
+    """The exact multinomial test: the chance, under the allocation, of a split no likelier
+    than the one seen. None when there are too many splits to list."""
+    total, arms = sum(int(n) for n in observed), len(observed)
+    if not _outcomes_listable(total, arms):
+        return None
+    log_shares = np.log(np.asarray(shares, dtype=float))
+
+    def log_probability(counts: np.ndarray) -> np.ndarray:
+        return (
+            special.gammaln(total + 1)
+            - special.gammaln(counts + 1).sum(axis=-1)
+            + counts @ log_shares
+        )
+
+    seen = log_probability(np.asarray(observed, dtype=np.int64))
+    every = log_probability(_compositions(total, arms))
+    return min(1.0, math.fsum(np.exp(every[every <= seen + _TOLERANCE])))
+
+
+def _exact_homogeneity_p(successes: Sequence[int], totals: Sequence[int]) -> float | None:
+    """The exact conditional test of a 2 x k table (Fisher's for k = 2, Freeman and Halton's
+    for more): the chance, with the margins fixed, of a table no likelier than the one seen.
+    None when there are too many tables to list."""
+    size, hits = sum(int(n) for n in totals), sum(int(s) for s in successes)
+    if hits > size - hits:  # a table and its mirror image are equally likely: list the shorter
+        successes, hits = (
+            [int(n) - int(s) for s, n in zip(successes, totals, strict=True)],
+            size - hits,
+        )
+    groups = len(totals)
+    if not _outcomes_listable(hits, groups):
+        return None
+    caps = np.asarray([int(n) for n in totals], dtype=np.int64)
+
+    def log_probability(counts: np.ndarray) -> np.ndarray:
+        within = (
+            special.gammaln(caps + 1)
+            - special.gammaln(counts + 1)
+            - special.gammaln(caps - counts + 1)
+        )
+        pooled = (
+            special.gammaln(size + 1) - special.gammaln(hits + 1) - special.gammaln(size - hits + 1)
+        )
+        return within.sum(axis=-1) - pooled
+
+    candidates = _compositions(hits, groups)
+    every = log_probability(candidates[(candidates <= caps).all(axis=1)])
+    seen = log_probability(np.asarray(successes, dtype=np.int64))
+    return min(1.0, math.fsum(np.exp(every[every <= seen + _TOLERANCE])))
+
+
 # --- Sample ratio mismatch -----------------------------------------------------------------
 
 
@@ -79,10 +156,15 @@ class SrmResult:
     degrees_of_freedom: int
     p_value: float
     flagged: bool
+    method: Literal["chi_square", "exact"] = "chi_square"
 
 
 def srm_test(
-    observed: Sequence[int], allocation: Sequence[float], *, alpha: float = SRM_ALPHA
+    observed: Sequence[int],
+    allocation: Sequence[float],
+    *,
+    alpha: float = SRM_ALPHA,
+    exact_below: float | None = None,
 ) -> SrmResult:
     """Chi-square goodness of fit of observed arm counts against the registered allocation.
 
@@ -91,6 +173,12 @@ def srm_test(
     is flagged when p < alpha. An arm with no assignments counts as 0 rather than being left
     out, so a vanished arm shows up as the mismatch it is. Reference: Fabijan et al.,
     "Diagnosing Sample Ratio Mismatch in Online Controlled Experiments" (KDD 2019).
+
+    The chi-square p value is an approximation that is too small, at the tail a rule needs,
+    when an expected count is small. With `exact_below` set, a test whose smallest expected
+    count is below it takes the exact multinomial p value instead (`method` says which one
+    was used); the chi-square statistic is still reported. The exact test lists every possible
+    split, so beyond 1,000,000 of them the chi-square is kept.
     """
     _check_alpha(alpha)
     if len(observed) != len(allocation) or len(observed) < 2:
@@ -108,6 +196,11 @@ def srm_test(
     chi_square = math.fsum((n - e) ** 2 / e for n, e in zip(observed, expected, strict=True))
     degrees = len(observed) - 1
     p_value = float(stats.chi2.sf(chi_square, degrees))
+    method: Literal["chi_square", "exact"] = "chi_square"
+    if exact_below is not None and min(expected) < exact_below:
+        exact = _exact_sample_ratio_p(observed, shares)
+        if exact is not None:
+            p_value, method = exact, "exact"
     return SrmResult(
         observed=tuple(int(n) for n in observed),
         expected=expected,
@@ -115,6 +208,7 @@ def srm_test(
         degrees_of_freedom=degrees,
         p_value=p_value,
         flagged=p_value < alpha,
+        method=method,
     )
 
 
@@ -128,17 +222,25 @@ class HomogeneityResult:
     chi_square: float
     degrees_of_freedom: int
     p_value: float
+    smallest_expected: float
+    method: Literal["chi_square", "exact"] = "chi_square"
 
 
-def homogeneity_test(successes: Sequence[int], totals: Sequence[int]) -> HomogeneityResult:
+def homogeneity_test(
+    successes: Sequence[int], totals: Sequence[int], *, exact_below: float | None = None
+) -> HomogeneityResult:
     """Pearson's chi-square test that every group has the same rate, without a continuity fix.
 
     The expected successes of a group are its size times the pooled rate; the statistic is
     sum((s - e)^2 / (n * rate * (1 - rate))) on (groups - 1) degrees of freedom. It is the
     test of a 2 x k table of successes and failures. The chi-square approximation is poor when
-    an expected count is below about 5; this function does not hide that. Raises `StatsError`
-    for fewer than two groups, an empty group, impossible counts, or when every unit in every
-    group has the same outcome (the rate would then be 0 or 1 and nothing can differ).
+    an expected count is small, and `smallest_expected` reports the smallest one, over
+    successes and failures. With `exact_below` set, a table whose smallest expected count is
+    below it takes the exact conditional p value instead (Fisher's exact test for two groups,
+    Freeman and Halton's for more; `method` says which was used), unless there are more than
+    1,000,000 tables to list, when the chi-square is kept. Raises `StatsError` for fewer than
+    two groups, an empty group, impossible counts, or when every unit in every group has the
+    same outcome (the rate would then be 0 or 1 and nothing can differ).
     """
     if len(successes) != len(totals) or len(successes) < 2:
         raise StatsError("need a success count and a size for each of at least two groups")
@@ -159,12 +261,23 @@ def homogeneity_test(successes: Sequence[int], totals: Sequence[int]) -> Homogen
         for s, n in zip(successes, totals, strict=True)
     )
     degrees = len(successes) - 1
+    smallest = min(
+        min(int(n) * successes_all, int(n) * (size_all - successes_all)) / size_all for n in totals
+    )
+    p_value = float(stats.chi2.sf(chi_square, degrees))
+    method: Literal["chi_square", "exact"] = "chi_square"
+    if exact_below is not None and smallest < exact_below:
+        exact = _exact_homogeneity_p(successes, totals)
+        if exact is not None:
+            p_value, method = exact, "exact"
     return HomogeneityResult(
         successes=tuple(int(s) for s in successes),
         totals=tuple(int(n) for n in totals),
         chi_square=chi_square,
         degrees_of_freedom=degrees,
-        p_value=float(stats.chi2.sf(chi_square, degrees)),
+        p_value=p_value,
+        smallest_expected=smallest,
+        method=method,
     )
 
 

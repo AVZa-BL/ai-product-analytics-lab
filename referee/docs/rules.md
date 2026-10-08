@@ -220,7 +220,7 @@ design review does not run these rules.
 ### RES-001: Sample ratio mismatch: the arms are not the size the allocation promised
 
 - **Severity:** blocker
-- **Fires when:** The assigned players per arm differ from arms[].allocation by more than chance allows: the chi-squared test of the counts against the registered allocation, over every assigned player at or after design.start_utc (all of them when the spec registers none), has p below 0.001.
+- **Fires when:** The assigned players per arm differ from arms[].allocation by more than chance allows: the chi-squared test of the counts against the registered allocation (the exact multinomial test when an expected count is below 100), over every assigned player at or after design.start_utc (all of them when the spec registers none), has p below 0.001.
 - **Why it matters:** Random assignment gives arms of the registered sizes, up to chance. A mismatch this large means the arms were not formed as designed (a fault in assignment, in logging or in filtering), so who is in each arm may differ and a difference in the metrics can come from that. No estimate of the effect can be trusted until the cause is known.
 - **What to do:** Do not read the effect. Find why the counts differ: assignment or bucketing, logging that loses events in one arm, bot or test-account filters, a crash or redirect on one variant, or an exposure rule applied to some arms only. The week-by-week table in the evidence shows whether the mismatch began at a point in time. Fix the cause and rerun the experiment.
 - **References:**
@@ -248,7 +248,7 @@ design review does not run these rules.
 ### RES-011: Sample ratio drifts over time although the total passes
 
 - **Severity:** warning
-- **Fires when:** The sample-ratio check over all assigned players passes (RES-001 does not fire), but in at least one 7-day week of assignment (weeks are counted from design.start_utc, else from the first assignment) the chi-squared test of that week's counts against arms[].allocation has p below 0.001 divided by the number of weeks that hold players.
+- **Fires when:** The sample-ratio check over all assigned players passes (RES-001 does not fire), but in at least one 7-day week of assignment (weeks are counted from design.start_utc, else from the first assignment) the chi-squared test of that week's counts against arms[].allocation (the exact multinomial test when an expected count is below 100) has p below 0.001 divided by the number of weeks that hold players.
 - **Why it matters:** A mismatch that reverses partway through can cancel in the total, and one that begins or ends partway is diluted in it. A failing week points to a change in assignment or logging during the test (a release, a campaign, an outage, a planned ramp-up of the allocation), so the players of that week may not be comparable with the others.
 - **What to do:** Find what changed in the failing weeks: a release, a change to assignment or logging, a new traffic source, an outage. Decide what to do with those weeks from the cause, never because leaving them out changes the result.
 - **References:**
@@ -259,7 +259,7 @@ design review does not run these rules.
 
 - **Severity:** warning
 - **Fires when:** At least one assigned player was first exposed after their first purchase in the seven-day outcome window.
-- **Escalates to blocker when:** the share of exposed players who were exposed late differs between the arms: the chi-squared test of homogeneity across the arms has p below 0.001.
+- **Escalates to blocker when:** the share of exposed players who were exposed late differs between the arms: the chi-squared test of homogeneity across the arms (the exact test when an expected count is below 100) has p below 0.001.
 - **Why it matters:** A purchase made before the player first saw the change cannot be an effect of it. These players are left out of the effect analysis, but they are in the arms, so a different share of the exposed players being late in different arms means the change reached the arms differently. It is the results-time counterpart of DES-007.
 - **What to do:** Check how exposure is triggered. If it can follow a purchase, say so in the design and analyse from first exposure. Compare the estimates with and without these players in the evidence, and say which one the conclusion rests on. If the late share differs between arms, find out why before reading the effect.
 - **References:**

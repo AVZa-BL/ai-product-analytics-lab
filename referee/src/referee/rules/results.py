@@ -11,7 +11,14 @@ from collections import Counter, defaultdict
 from datetime import timedelta
 from typing import Any
 
-from referee.methods import SRM_ALPHA, SrmResult, StatsError, homogeneity_test, srm_test
+from referee.methods import (
+    SMALL_EXPECTED_COUNT,
+    SRM_ALPHA,
+    SrmResult,
+    StatsError,
+    homogeneity_test,
+    srm_test,
+)
 from referee.results import ResultsContext, difference_summary, effect_estimates
 from referee.rules.base import Escalation, Rule
 from referee.rules.references import FABIJAN_ET_AL_2019, KOHAVI_TANG_XU_2020
@@ -27,11 +34,15 @@ def _allocation(context: ResultsContext) -> list[float]:
     return [arm.allocation for arm in context.spec.arms]
 
 
+def _sample_ratio(context: ResultsContext, counts: list[int]) -> SrmResult:
+    """The sample-ratio test of counts in the spec's arm order: exact where they are small."""
+    return srm_test(counts, _allocation(context), exact_below=SMALL_EXPECTED_COUNT)
+
+
 def _total_sample_ratio(context: ResultsContext) -> tuple[dict[str, int], SrmResult]:
     """The assigned players per arm, and the sample-ratio test over all of them."""
     assigned = context.count_by_arm(context.players)
-    total = srm_test([assigned[arm] for arm in context.arm_names], _allocation(context))
-    return assigned, total
+    return assigned, _sample_ratio(context, [assigned[arm] for arm in context.arm_names])
 
 
 def _weekly_sample_ratios(context: ResultsContext) -> list[dict[str, Any]]:
@@ -40,14 +51,18 @@ def _weekly_sample_ratios(context: ResultsContext) -> list[dict[str, Any]]:
     by_week: dict[int, Counter[str]] = defaultdict(Counter)
     for player in context.players:
         by_week[context.week_of(player.assigned_at)][player.arm] += 1
-    return [
-        {
-            "week": week,
-            "assigned": {arm: counts[arm] for arm in arms},
-            "p_value": srm_test([counts[arm] for arm in arms], _allocation(context)).p_value,
-        }
-        for week, counts in sorted(by_week.items())
-    ]
+    weeks = []
+    for week, counts in sorted(by_week.items()):
+        result = _sample_ratio(context, [counts[arm] for arm in arms])
+        weeks.append(
+            {
+                "week": week,
+                "assigned": {arm: counts[arm] for arm in arms},
+                "p_value": result.p_value,
+                "method": result.method,
+            }
+        )
+    return weeks
 
 
 def _sample_ratio_mismatch(context: ResultsContext) -> dict[str, Any] | None:
@@ -69,6 +84,7 @@ def _sample_ratio_mismatch(context: ResultsContext) -> dict[str, Any] | None:
         "chi_square": round(total.chi_square, _CHI_SQUARE_DIGITS),
         "degrees_of_freedom": total.degrees_of_freedom,
         "p_value": total.p_value,
+        "method": total.method,
         "by_week": weekly,
     }
 
@@ -88,7 +104,7 @@ def _sample_ratio_drift(context: ResultsContext) -> dict[str, Any] | None:
         "weeks_tested": len(weekly),
         "failing_weeks": failing,
         "by_week": [{**week, "flagged": week["p_value"] < threshold} for week in weekly],
-        "total": {"assigned": assigned, "p_value": total.p_value},
+        "total": {"assigned": assigned, "p_value": total.p_value, "method": total.method},
         "allocation": dict(zip(context.arm_names, _allocation(context), strict=True)),
     }
 
@@ -105,17 +121,24 @@ def _late_exposure(context: ResultsContext) -> dict[str, Any] | None:
     purchasers = sum(p.first_purchase_at is not None for p in context.players)
 
     tested = [arm for arm in arms if exposed[arm] > 0]
-    homogeneity = None
+    homogeneity: dict[str, Any]
     try:
-        result = homogeneity_test([late[a] for a in tested], [exposed[a] for a in tested])
+        result = homogeneity_test(
+            [late[a] for a in tested],
+            [exposed[a] for a in tested],
+            exact_below=SMALL_EXPECTED_COUNT,
+        )
         homogeneity = {
             "chi_square": round(result.chi_square, _CHI_SQUARE_DIGITS),
             "degrees_of_freedom": result.degrees_of_freedom,
             "p_value": result.p_value,
             "alpha": LATE_SHARE_ALPHA,
+            "method": result.method,
+            "smallest_expected": round(result.smallest_expected, _EXPECTED_DIGITS),
         }
-    except StatsError:
-        pass  # one arm exposed, or everyone or no one late: there is nothing to compare
+    except StatsError as error:
+        # one arm exposed, or everyone or no one late: there is nothing to compare
+        homogeneity = {"error": str(error)}
 
     with_late = effect_estimates(context, exposed_players)
     without_late = effect_estimates(context, context.analysed)
@@ -145,7 +168,11 @@ def _late_exposure(context: ResultsContext) -> dict[str, Any] | None:
 
 def _late_share_differs(evidence: dict[str, Any]) -> bool:
     homogeneity = evidence.get("homogeneity")
-    return homogeneity is not None and homogeneity["p_value"] < homogeneity["alpha"]
+    return (
+        homogeneity is not None
+        and "p_value" in homogeneity
+        and homogeneity["p_value"] < homogeneity["alpha"]
+    )
 
 
 def _versions(players: list) -> list[dict[str, int]]:
@@ -256,9 +283,10 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         title="Sample ratio mismatch: the arms are not the size the allocation promised",
         fires_when=(
             "The assigned players per arm differ from arms[].allocation by more than chance "
-            "allows: the chi-squared test of the counts against the registered allocation, "
-            "over every assigned player at or after design.start_utc (all of them when the "
-            "spec registers none), has p below 0.001."
+            "allows: the chi-squared test of the counts against the registered allocation "
+            "(the exact multinomial test when an expected count is below 100), over every "
+            "assigned player at or after design.start_utc (all of them when the spec "
+            "registers none), has p below 0.001."
         ),
         why_it_matters=(
             "Random assignment gives arms of the registered sizes, up to chance. A mismatch this "
@@ -339,8 +367,9 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
             "The sample-ratio check over all assigned players passes (RES-001 does not fire), "
             "but in at least one 7-day week of assignment (weeks are counted from "
             "design.start_utc, else from the first assignment) the chi-squared test of that "
-            "week's counts against arms[].allocation has p below 0.001 divided by the number of "
-            "weeks that hold players."
+            "week's counts against arms[].allocation (the exact multinomial test when an "
+            "expected count is below 100) has p below 0.001 divided by the number of weeks "
+            "that hold players."
         ),
         why_it_matters=(
             "A mismatch that reverses partway through can cancel in the total, and one that "
@@ -383,7 +412,8 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
             to="blocker",
             when=(
                 "the share of exposed players who were exposed late differs between the arms: "
-                "the chi-squared test of homogeneity across the arms has p below 0.001."
+                "the chi-squared test of homogeneity across the arms (the exact test when an "
+                "expected count is below 100) has p below 0.001."
             ),
             applies=_late_share_differs,
         ),

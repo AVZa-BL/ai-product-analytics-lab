@@ -15,7 +15,13 @@ from results_helpers import (
 )
 
 from referee.data import load_export
-from referee.methods import homogeneity_test, srm_test, two_proportion_difference, welch_difference
+from referee.methods import (
+    SMALL_EXPECTED_COUNT,
+    homogeneity_test,
+    srm_test,
+    two_proportion_difference,
+    welch_difference,
+)
 from referee.results import ResultsContext
 from referee.review import review_results
 from referee.rules import RESULTS_RULES
@@ -91,8 +97,10 @@ def test_res_001_reports_the_counts_the_test_and_the_week_by_week_check(raw_spec
         "week": 0,
         "assigned": {"control": 300, "variant_b": 200},
         "p_value": srm_test([300, 200], [0.5, 0.5]).p_value,
+        "method": "chi_square",
     }
     assert evidence["by_week"][1]["p_value"] == 1.0  # 100 against 100
+    assert evidence["method"] == "chi_square"
 
 
 def test_res_001_evidence_can_be_written_as_json(raw_spec) -> None:
@@ -563,7 +571,7 @@ def test_res_011_needs_p_strictly_below_the_weekly_level(
     """No real counts give a p of exactly 0.0005, so the test supplies the p values."""
     from referee.methods import SrmResult
 
-    def stub(observed, allocation, *, alpha=0.001):
+    def stub(observed, allocation, *, alpha=0.001, exact_below=None):
         p_value = 1.0 if tuple(observed) == (1000, 1000) else week_p
         return SrmResult(
             observed=tuple(observed),
@@ -593,7 +601,7 @@ SESSIONS = {
 }
 
 
-def _late_rows(control_late: int, variant_late: int, *, exposed: int = 500) -> list:
+def _late_rows(control_late: int, variant_late: int, *, exposed: int = 5000) -> list:
     """Two arms of `exposed` players, each with the given number of late-exposed ones."""
     return [
         *crowd("control", exposed - control_late, prefix="c"),
@@ -662,27 +670,32 @@ def test_res_012_reports_counts_and_shares(raw_spec) -> None:
 
 
 def test_res_012_stays_a_warning_when_every_arm_has_the_same_late_share(raw_spec) -> None:
-    finding = _res_012(raw_spec, _late_rows(20, 20))
+    finding = _res_012(raw_spec, _late_rows(200, 200))
 
     assert finding is not None and finding.severity == "warning"
     assert finding.evidence["homogeneity"]["p_value"] == 1.0
 
 
 @pytest.mark.parametrize(
-    ("variant_late", "severity"), [(45, "warning"), (46, "blocker")], ids=["p-0.00134", "p-0.00093"]
+    ("variant_late", "severity"),
+    [(269, "warning"), (270, "blocker")],
+    ids=["p-0.0011", "p-0.00094"],
 )
 def test_res_012_becomes_a_blocker_when_the_late_share_differs_between_arms(
     raw_spec, variant_late: int, severity: str
 ) -> None:
-    finding = _res_012(raw_spec, _late_rows(20, variant_late))
+    finding = _res_012(raw_spec, _late_rows(200, variant_late))
 
     assert finding is not None and finding.severity == severity
-    expected = homogeneity_test([20, variant_late], [500, 500])
+    expected = homogeneity_test([200, variant_late], [5000, 5000])
+    assert expected.method == "chi_square"  # every expected count is far above 100
     assert finding.evidence["homogeneity"] == {
         "chi_square": round(expected.chi_square, 4),
         "degrees_of_freedom": 1,
         "p_value": expected.p_value,
         "alpha": 0.001,
+        "method": "chi_square",
+        "smallest_expected": round(expected.smallest_expected, 2),
     }
 
 
@@ -694,18 +707,19 @@ def test_res_012_needs_p_strictly_below_a_thousandth_to_block(
 ) -> None:
     from referee.methods import HomogeneityResult
 
-    def stub(successes, totals):
+    def stub(successes, totals, *, exact_below=None):
         return HomogeneityResult(
             successes=tuple(successes),
             totals=tuple(totals),
             chi_square=1.0,
             degrees_of_freedom=1,
             p_value=p_value,
+            smallest_expected=1000.0,
         )
 
     monkeypatch.setattr("referee.rules.results.homogeneity_test", stub)
 
-    assert _res_012(raw_spec, _late_rows(20, 20)).severity == severity
+    assert _res_012(raw_spec, _late_rows(200, 200)).severity == severity
 
 
 def test_res_012_with_one_arm_exposed_has_nothing_to_compare(raw_spec) -> None:
@@ -715,7 +729,9 @@ def test_res_012_with_one_arm_exposed_has_nothing_to_compare(raw_spec) -> None:
     finding = _res_012(raw_spec, rows)
 
     assert finding is not None and finding.severity == "warning"
-    assert finding.evidence["homogeneity"] is None
+    assert finding.evidence["homogeneity"] == {
+        "error": "need a success count and a size for each of at least two groups"
+    }
     assert finding.evidence["late_share_of_exposed"] == {"control": 0.5, "variant_b": None}
 
 
@@ -723,17 +739,17 @@ def test_res_012_compares_the_arms_that_were_exposed_and_leaves_out_one_nobody_s
     raw_spec,
 ) -> None:
     rows = [
-        *crowd("control", 480, prefix="c"),
-        *crowd("control", 20, prefix="cl", **LATE),
-        *crowd("variant_b", 454, prefix="v"),
-        *crowd("variant_b", 46, prefix="vl", **LATE),
+        *crowd("control", 4800, prefix="c"),
+        *crowd("control", 200, prefix="cl", **LATE),
+        *crowd("variant_b", 4520, prefix="v"),
+        *crowd("variant_b", 480, prefix="vl", **LATE),
         *crowd("variant_c", 100, prefix="never", exposed_at=None),  # assigned, never exposed
     ]
 
     finding = evaluate_results(RES_012, results_spec(raw_spec), rows)
 
     assert finding is not None and finding.severity == "blocker"
-    assert finding.evidence["exposed"] == {"control": 500, "variant_b": 500, "variant_c": 0}
+    assert finding.evidence["exposed"] == {"control": 5000, "variant_b": 5000, "variant_c": 0}
     assert finding.evidence["homogeneity"]["degrees_of_freedom"] == 1
 
 
@@ -742,8 +758,10 @@ def test_res_012_when_every_exposed_player_is_late_there_is_nothing_to_compare(r
 
     finding = _res_012(raw_spec, rows)
 
-    assert finding is not None and finding.evidence["homogeneity"] is None
-    assert finding.severity == "warning"
+    assert finding is not None and finding.severity == "warning"
+    assert finding.evidence["homogeneity"] == {
+        "error": "every unit has the same outcome, so no group can differ from another"
+    }
 
 
 def test_res_012_quotes_the_estimate_with_and_without_the_late_players(raw_spec) -> None:
@@ -1229,6 +1247,7 @@ def test_res_011_quotes_the_real_p_value_of_the_total(raw_spec) -> None:
     assert finding.evidence["total"] == {
         "assigned": {"control": 1030, "variant_b": 1000},
         "p_value": expected,
+        "method": "chi_square",
     }
 
 
@@ -1381,9 +1400,10 @@ def test_the_late_share_and_its_test_are_over_the_exposed_not_the_assigned(raw_s
 
     evidence = evaluate_results(RES_012, spec, rows).evidence
 
-    expected = homogeneity_test([100, 50], [500, 500])
+    expected = homogeneity_test([100, 50], [500, 500], exact_below=SMALL_EXPECTED_COUNT)
     assert evidence["late_share_of_exposed"] == {"control": 0.2, "variant_b": 0.1}
     assert evidence["homogeneity"]["p_value"] == expected.p_value
+    assert evidence["homogeneity"]["method"] == expected.method == "exact"
     assert evidence["homogeneity"]["chi_square"] == round(expected.chi_square, 4)
 
 
@@ -1594,3 +1614,141 @@ def test_a_session_count_beyond_any_float_does_not_stop_the_configuration_rule(r
     (within,) = arm["within_week"]
     assert within["error"] == "control must hold only finite numbers"
     assert (within["n_later"], within["n_earlier"]) == (3, 3)
+
+
+# --- Small counts: the exact tests (design section 21.4) -----------------------------------------
+
+
+def _small_week(raw_spec, per_week: list[tuple[int, int]], allocation: tuple[float, float]):
+    arms = [
+        {"name": "control", "allocation": allocation[0], "is_control": True},
+        {"name": "variant_b", "allocation": allocation[1]},
+    ]
+    rows: list[Row] = []
+    for week, (control, variant) in enumerate(per_week):
+        start = {"assigned_at": at(7 * week), "exposed_at": at(7 * week, 1)}
+        rows += crowd("control", control, prefix=f"c{week}", **start)
+        rows += crowd("variant_b", variant, prefix=f"v{week}", **start)
+    return results_spec(raw_spec, arms=arms), rows
+
+
+def test_res_001_uses_the_exact_test_for_a_small_total_where_the_chi_square_would_flag(
+    raw_spec,
+) -> None:
+    # 16 against 2 at 50/50: chi-square p = 0.00097 (flags), exact p = 0.00131 (does not).
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+    rows = [*crowd("control", 16), *crowd("variant_b", 2)]
+
+    assert srm_test([16, 2], [0.5, 0.5]).flagged
+    assert evaluate_results(RES_001, spec, rows) is None
+
+
+def test_res_001_says_which_test_it_used_and_still_flags_a_real_small_mismatch(raw_spec) -> None:
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+    rows = [*crowd("control", 18), *crowd("variant_b", 0)]
+
+    finding = evaluate_results(RES_001, spec, rows)
+
+    assert finding.evidence["method"] == "exact"
+    assert finding.evidence["p_value"] == pytest.approx(2 * 0.5**18, rel=1e-9)
+
+
+def test_res_001_keeps_the_chi_square_when_every_expected_count_is_at_least_100(raw_spec) -> None:
+    spec = results_spec(raw_spec, arms=TWO_ARMS)
+    finding = evaluate_results(RES_001, spec, [*crowd("control", 700), *crowd("variant_b", 300)])
+
+    assert finding.evidence["method"] == "chi_square"
+    assert finding.evidence["by_week"][0]["method"] == "chi_square"
+
+
+def test_res_011_does_not_fire_on_a_trailing_week_of_five_players_at_90_10(raw_spec) -> None:
+    # The chi-square p of 2 against 3 at 90/10 is 0.00019, below the weekly level of 0.00025;
+    # the exact p is 0.0086.
+    spec, rows = _small_week(raw_spec, [(900, 100), (900, 100), (900, 100), (2, 3)], (0.9, 0.1))
+
+    assert srm_test([2, 3], [0.9, 0.1]).p_value < 0.00025
+    assert evaluate_results(RES_011, spec, rows) is None
+
+
+def test_res_011_still_finds_a_real_mismatch_in_a_small_trailing_week(raw_spec) -> None:
+    spec, rows = _small_week(raw_spec, [(900, 100), (900, 100), (900, 100), (10, 20)], (0.9, 0.1))
+
+    finding = evaluate_results(RES_011, spec, rows)
+
+    assert finding.evidence["failing_weeks"] == [3]
+    small = finding.evidence["by_week"][3]
+    assert small["method"] == "exact" and small["flagged"] is True
+    assert finding.evidence["by_week"][0]["method"] == "chi_square"
+    assert finding.evidence["total"]["method"] == "chi_square"
+
+
+def _late_exposure_rows(exposed: tuple[int, int], late: tuple[int, int]) -> list[Row]:
+    return [
+        *crowd("control", exposed[0] - late[0], prefix="c"),
+        *crowd("control", late[0], prefix="cl", **LATE),
+        *crowd("variant_b", exposed[1] - late[1], prefix="v"),
+        *crowd("variant_b", late[1], prefix="vl", **LATE),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("exposed", "late", "severity", "p_value"),
+    [
+        ((9000, 1000), (0, 2), "warning", 0.00999099909989125),
+        ((9500, 500), (0, 1), "warning", 0.049999999999747434),
+        ((19800, 200), (0, 1), "warning", 0.009999999999966085),
+        ((1000, 5), (0, 1), "warning", 0.004975124378106324),
+        ((9000, 1000), (0, 8), "blocker", 9.750470407157206e-09),
+    ],
+)
+def test_res_012_does_not_escalate_on_one_or_two_late_players_in_a_small_arm_but_does_on_eight(
+    raw_spec, exposed, late, severity: str, p_value: float
+) -> None:
+    chi_square = homogeneity_test(list(late), list(exposed))
+
+    finding = _res_012(raw_spec, _late_exposure_rows(exposed, late))
+
+    assert finding.severity == severity
+    assert finding.evidence["homogeneity"]["method"] == "exact"
+    assert finding.evidence["homogeneity"]["p_value"] == pytest.approx(p_value, rel=1e-9)
+    if severity == "warning":
+        assert chi_square.p_value < 0.001  # what the chi-square would have escalated on
+
+
+def test_res_012_reports_the_smallest_expected_count_so_the_reader_can_judge_the_test(
+    raw_spec,
+) -> None:
+    finding = _res_012(raw_spec, _late_exposure_rows((9000, 1000), (0, 2)))
+
+    assert finding.evidence["homogeneity"]["smallest_expected"] == pytest.approx(0.2)
+
+
+def test_res_012_escalates_on_the_exact_test_of_three_arms_too(raw_spec) -> None:
+    rows = [
+        *crowd("control", 495, prefix="c"),
+        *crowd("variant_b", 495, prefix="v"),
+        *crowd("variant_c", 90, prefix="w"),
+        *crowd("variant_c", 10, prefix="wl", **LATE),
+        *crowd("control", 5, prefix="cl", **LATE),
+        *crowd("variant_b", 5, prefix="vl", **LATE),
+    ]
+
+    finding = evaluate_results(RES_012, results_spec(raw_spec), rows)
+
+    homogeneity = finding.evidence["homogeneity"]
+    assert homogeneity["method"] == "exact" and homogeneity["degrees_of_freedom"] == 2
+    assert finding.severity == ("blocker" if homogeneity["p_value"] < 0.001 else "warning")
+    assert homogeneity["p_value"] < 0.001  # 10 of 100 against 5 of 500 twice
+
+
+def test_the_committed_exports_late_exposure_is_tested_exactly_and_still_gives_p_0_72(
+    raw_spec, export
+) -> None:
+    finding = RES_012.evaluate(ResultsContext.of(results_spec(raw_spec), export))
+
+    homogeneity = finding.evidence["homogeneity"]
+    assert finding.severity == "warning"
+    assert homogeneity["method"] == "exact"  # variant_c expects 781 * 198 / 2824 = 54.8 late
+    assert homogeneity["smallest_expected"] == pytest.approx(54.76, abs=0.005)
+    assert homogeneity["p_value"] == pytest.approx(0.7215, abs=0.00005)
+    assert homogeneity["chi_square"] == pytest.approx(0.6598, abs=0.00005)
