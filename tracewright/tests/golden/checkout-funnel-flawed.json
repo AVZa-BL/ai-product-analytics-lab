@@ -1,0 +1,228 @@
+{
+  "report_version": 1,
+  "kind": "plan_review",
+  "tracewright_version": "0.1.0",
+  "plan": {
+    "id": "checkout_funnel_flawed",
+    "title": "Checkout funnel (draft with mistakes)",
+    "events": 5,
+    "metrics": 3,
+    "sha256": "7fb3131c225857f6b7631048955bb1316f0b4efc5cc2e7d95895208161c7d070"
+  },
+  "recommendation": "revise",
+  "blocking_rule_ids": [
+    "COV-001",
+    "COV-002",
+    "GOV-001",
+    "SCH-001",
+    "SCH-003"
+  ],
+  "counts": {
+    "blocker": 5,
+    "warning": 6,
+    "info": 1
+  },
+  "findings": [
+    {
+      "rule_id": "COV-001",
+      "severity": "blocker",
+      "title": "Metric depends on an event the plan does not define",
+      "evidence": {
+        "metrics": {
+          "checkout_conversion": [
+            "checkout_started"
+          ],
+          "refund_rate": [
+            "order_cancelled"
+          ]
+        }
+      },
+      "why_it_matters": "A metric built on an event nobody tracks will read zero or stay empty, and the gap looks like a business result instead of a tracking hole.",
+      "remediation": "Define the event in events, or correct the name in the metric.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020 (chapter on instrumentation)."
+      ]
+    },
+    {
+      "rule_id": "COV-002",
+      "severity": "blocker",
+      "title": "Metric depends on a deprecated event",
+      "evidence": {
+        "metrics": {
+          "revenue": [
+            "legacy_purchase"
+          ]
+        }
+      },
+      "why_it_matters": "A deprecated event stops arriving. A metric still reading it will decay toward zero and be mistaken for a real decline.",
+      "remediation": "Point the metric at the replacement event, then retire the old one.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020 (chapter on instrumentation)."
+      ]
+    },
+    {
+      "rule_id": "GOV-001",
+      "severity": "blocker",
+      "title": "Property name suggests personal data but is not marked pii",
+      "evidence": {
+        "properties": [
+          "order_completed.email"
+        ]
+      },
+      "why_it_matters": "Personal data sent to analytics without a recorded decision is a privacy risk and a compliance question (data minimisation). The check is by name, so it can be wrong in both directions: it will miss a personal value with an innocent name.",
+      "remediation": "If the property holds personal data, set pii: true and record the lawful basis outside this plan, or stop sending it. If it does not, rename it so it is not mistaken for personal data.",
+      "references": [
+        "Regulation (EU) 2016/679 (GDPR): Art. 4(1) personal data; Art. 5(1)(c) data minimisation."
+      ]
+    },
+    {
+      "rule_id": "SCH-001",
+      "severity": "blocker",
+      "title": "Same property name has different types on different events",
+      "evidence": {
+        "properties": {
+          "cart_value": {
+            "number": [
+              "CheckoutStarted"
+            ],
+            "string": [
+              "order_completed"
+            ]
+          }
+        }
+      },
+      "why_it_matters": "A property that is a string on one event and a number on another cannot be stored in one warehouse column, so loads fail or silently coerce, and joins across events give wrong results.",
+      "remediation": "Give the property one type everywhere, or rename one of them if they mean different things.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020 (chapter on instrumentation)."
+      ]
+    },
+    {
+      "rule_id": "SCH-003",
+      "severity": "blocker",
+      "title": "Event cannot be tied to a user or device",
+      "evidence": {
+        "identity_keys": [
+          "user_id",
+          "anonymous_id"
+        ],
+        "events": [
+          "page_viewed"
+        ]
+      },
+      "why_it_matters": "An event that does not say who or which device produced it cannot be counted per user, joined to other events, or used in any retention or conversion metric.",
+      "remediation": "Add one of the identity_keys to the event as a required property, or set it once globally and list it on every event.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020 (chapter on instrumentation)."
+      ]
+    },
+    {
+      "rule_id": "COV-003",
+      "severity": "warning",
+      "title": "Metric depends on an event that is only planned",
+      "evidence": {
+        "metrics": {
+          "refund_rate": [
+            "refund_requested"
+          ]
+        }
+      },
+      "why_it_matters": "Until the event ships, the metric computes on partial or no data, and its history will have a break at the release date.",
+      "remediation": "Mark the metric as not ready until the event is active, or document the start date in the metric definition.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020 (chapter on instrumentation)."
+      ]
+    },
+    {
+      "rule_id": "DOC-001",
+      "severity": "warning",
+      "title": "Event has no description or trigger",
+      "evidence": {
+        "events": [
+          "order_completed"
+        ]
+      },
+      "why_it_matters": "If nobody wrote down when the event fires, each analyst guesses, and the same event name ends up meaning different things in different dashboards.",
+      "remediation": "Add a description (what it means) and a trigger (the exact user or system action that emits it).",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020 (chapter on instrumentation)."
+      ]
+    },
+    {
+      "rule_id": "DOC-002",
+      "severity": "warning",
+      "title": "Event has no owner",
+      "evidence": {
+        "events": [
+          "page_viewed"
+        ]
+      },
+      "why_it_matters": "When an event breaks or its meaning must change, someone has to be asked. Without an owner the question has no answer, and broken events stay broken.",
+      "remediation": "Set the event's owner, or set a plan-level owner that covers every event.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020 (chapter on instrumentation)."
+      ]
+    },
+    {
+      "rule_id": "NAM-001",
+      "severity": "warning",
+      "title": "Event name does not follow object_action",
+      "evidence": {
+        "events": [
+          "CheckoutStarted"
+        ]
+      },
+      "why_it_matters": "Names such as 'click' or 'CheckoutStarted' cannot be searched, grouped or governed consistently. A single convention is what lets a query select every event about one object, and keeps two spellings of one event from splitting its counts.",
+      "remediation": "Rename the event to object_action in snake_case, for example checkout_started. Deprecate the old name instead of reusing it.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020 (chapter on instrumentation)."
+      ]
+    },
+    {
+      "rule_id": "NAM-002",
+      "severity": "warning",
+      "title": "Property name is not snake_case",
+      "evidence": {
+        "properties": [
+          "planId"
+        ]
+      },
+      "why_it_matters": "Warehouses fold case differently, so 'planId' and 'plan_id' can become two columns or one, depending on the destination. A fixed style removes the ambiguity.",
+      "remediation": "Rename the property to snake_case, for example plan_id.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020 (chapter on instrumentation)."
+      ]
+    },
+    {
+      "rule_id": "SCH-002",
+      "severity": "warning",
+      "title": "Enum property declares no allowed values",
+      "evidence": {
+        "properties": [
+          "order_completed.payment_method"
+        ]
+      },
+      "why_it_matters": "Without a closed list, every typo or new spelling becomes a new category, and a funnel split by that property silently loses rows.",
+      "remediation": "List every permitted value in allowed_values, or change the type to string.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020 (chapter on instrumentation)."
+      ]
+    },
+    {
+      "rule_id": "COV-004",
+      "severity": "info",
+      "title": "Active event is used by no metric",
+      "evidence": {
+        "events": [
+          "CheckoutStarted",
+          "page_viewed"
+        ]
+      },
+      "why_it_matters": "An event nobody reads still costs volume, maintenance and privacy exposure. It is either missing from a metric that should use it, or not worth collecting.",
+      "remediation": "Connect the event to a metric, or deprecate it.",
+      "references": [
+        "Regulation (EU) 2016/679 (GDPR): Art. 4(1) personal data; Art. 5(1)(c) data minimisation."
+      ]
+    }
+  ]
+}

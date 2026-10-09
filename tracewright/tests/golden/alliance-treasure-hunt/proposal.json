@@ -1,0 +1,562 @@
+{
+  "report_version": 1,
+  "kind": "tracking_proposal",
+  "tracewright_version": "0.1.0",
+  "status": "ok",
+  "repairs": 1,
+  "inputs": {
+    "documents": [
+      {
+        "name": "gdd.md",
+        "kind": "text",
+        "sha256": "d4cd0631b6fdb4f3cbdd186a95b7fc69bc035e419a2adb98e4240652e4f92a1b",
+        "bytes": 1804
+      }
+    ],
+    "plan": {
+      "id": "realm_of_ember_core",
+      "sha256": "719c80fe791f7f213b69ec51ac28cbfa7a9a2b2c3a9332922207afb6a9f7338f"
+    }
+  },
+  "attempts": [
+    {
+      "number": 1,
+      "model": "replay",
+      "problems_found": [
+        "[COLLISION] alliance_left: new event 'alliance_left' already exists in the plan; use extended_events to add properties or reused_events to rely on it",
+        "[EVIDENCE_QUOTE] treasure_chest_opened: the quote 'Players open chests after collecting ten map fragments.' was not found in gdd.md; quote the document verbatim, or use kind 'inferred' if it is your judgement",
+        "[SCH-001] Same property name has different types on different events. Evidence: {\"properties\": {\"alliance_id\": {\"integer\": [\"treasure_hunt_started\"], \"string\": [\"alliance_joined\", \"alliance_left\", \"treasure_hunt_screen_viewed\", \"treasure_milestone_reached\", \"treasure_share_forfeited\"]}}}. Fix: Give the property one type everywhere, or rename one of them if they mean different things.",
+        "[NAM-002] Property name is not snake_case. Evidence: {\"properties\": [\"chestTier\"]}. Fix: Rename the property to snake_case, for example plan_id."
+      ]
+    },
+    {
+      "number": 2,
+      "model": "replay",
+      "problems_found": []
+    }
+  ],
+  "proposal": {
+    "feature": {
+      "id": "alliance_treasure_hunt",
+      "name": "Alliance Treasure Hunt",
+      "summary": "A 72-hour weekly alliance event: members earn Map Fragments from battles and daily quests, exchange ten fragments for a Treasure Chest, and unlock shared milestone rewards at 100, 250 and 500 opened chests. The design sets three measurable criteria: 40% of eligible alliances start a hunt, non-participants' day-7 retention does not drop, and Fragment Packs stay below 15% of fragments earned."
+    },
+    "identity_keys": [],
+    "new_events": [
+      {
+        "name": "treasure_hunt_started",
+        "description": "An alliance leader starts a Treasure Hunt for the alliance.",
+        "trigger": "The server confirms the 500 Ember Coins entry cost was taken from the alliance vault and the hunt is created.",
+        "priority": "must",
+        "rationale": "The start is the numerator of the first success criterion (40% of eligible alliances start a hunt) and the anchor for every other hunt event.",
+        "evidence": {
+          "kind": "document",
+          "document": "gdd.md",
+          "quote": "An alliance leader starts a hunt by paying an entry cost of 500 Ember Coins from the alliance vault."
+        },
+        "properties": [
+          {
+            "name": "player_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Opaque id of the acting player.",
+            "rationale": "Ties the event to a player, as on every existing event.",
+            "reuses_existing": true
+          },
+          {
+            "name": "alliance_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Opaque id of the alliance.",
+            "rationale": "Lets every hunt metric be cut by alliance; same name and type as in alliance_joined.",
+            "reuses_existing": true
+          },
+          {
+            "name": "hunt_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Id of one hunt of one alliance.",
+            "rationale": "Joins all events of a hunt together; a hunt is the unit the success criteria are measured on.",
+            "reuses_existing": false
+          },
+          {
+            "name": "alliance_size",
+            "type": "integer",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Members of the alliance at the start.",
+            "rationale": "Eligibility is five members or more; the size also explains differences in progress speed.",
+            "reuses_existing": true
+          },
+          {
+            "name": "entry_cost",
+            "type": "integer",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Ember Coins paid from the vault.",
+            "rationale": "Keeps the metric valid if the entry cost is ever changed or tested.",
+            "reuses_existing": false
+          }
+        ]
+      },
+      {
+        "name": "treasure_hunt_screen_viewed",
+        "description": "A player opens the hunt screen.",
+        "trigger": "The hunt screen is shown to the player.",
+        "priority": "should",
+        "rationale": "The first success criterion needs a denominator: how many eligible alliances were exposed to the event and did not start. Views by leaders versus other members show whether leaders found the feature.",
+        "evidence": {
+          "kind": "inferred",
+          "document": "",
+          "quote": ""
+        },
+        "properties": [
+          {
+            "name": "player_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Opaque id of the acting player.",
+            "rationale": "Ties the event to a player, as on every existing event.",
+            "reuses_existing": true
+          },
+          {
+            "name": "alliance_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Opaque id of the alliance.",
+            "rationale": "Lets every hunt metric be cut by alliance; same name and type as in alliance_joined.",
+            "reuses_existing": true
+          },
+          {
+            "name": "is_leader",
+            "type": "boolean",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Whether the viewer is the alliance leader.",
+            "rationale": "Only leaders can start a hunt, so views are read separately for them.",
+            "reuses_existing": false
+          },
+          {
+            "name": "hunt_active",
+            "type": "boolean",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Whether the alliance has a running hunt.",
+            "rationale": "Separates browsing a running hunt from looking at the start option.",
+            "reuses_existing": false
+          }
+        ]
+      },
+      {
+        "name": "map_fragment_earned",
+        "description": "A player receives Map Fragments.",
+        "trigger": "The server credits Map Fragments to the player.",
+        "priority": "must",
+        "rationale": "Fragment inflow shows participation and pace, and its split by source gives the Fragment Pack share (below 15%) directly.",
+        "evidence": {
+          "kind": "document",
+          "document": "gdd.md",
+          "quote": "Members earn Map Fragments from battles and daily quests."
+        },
+        "properties": [
+          {
+            "name": "player_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Opaque id of the acting player.",
+            "rationale": "Ties the event to a player, as on every existing event.",
+            "reuses_existing": true
+          },
+          {
+            "name": "hunt_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Id of one hunt of one alliance.",
+            "rationale": "Joins all events of a hunt together; a hunt is the unit the success criteria are measured on.",
+            "reuses_existing": false
+          },
+          {
+            "name": "source",
+            "type": "enum",
+            "required": true,
+            "pii": false,
+            "allowed_values": [
+              "battle",
+              "daily_quest",
+              "pack"
+            ],
+            "description": "Where the fragments came from.",
+            "rationale": "The Fragment Pack criterion is the share of fragments with source pack.",
+            "reuses_existing": false
+          },
+          {
+            "name": "fragment_amount",
+            "type": "integer",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Fragments credited.",
+            "rationale": "Pace of the hunt and size of each source.",
+            "reuses_existing": false
+          }
+        ]
+      },
+      {
+        "name": "treasure_chest_opened",
+        "description": "A player exchanges ten Map Fragments and opens a Treasure Chest.",
+        "trigger": "The chest-opening animation completes and the reward is granted.",
+        "priority": "must",
+        "rationale": "Chests opened drive the milestones and show how far each hunt gets. Tier and reward show what the event adds to the economy.",
+        "evidence": {
+          "kind": "document",
+          "document": "gdd.md",
+          "quote": "Ten Map Fragments can be exchanged for one Treasure Chest."
+        },
+        "properties": [
+          {
+            "name": "player_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Opaque id of the acting player.",
+            "rationale": "Ties the event to a player, as on every existing event.",
+            "reuses_existing": true
+          },
+          {
+            "name": "hunt_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Id of one hunt of one alliance.",
+            "rationale": "Joins all events of a hunt together; a hunt is the unit the success criteria are measured on.",
+            "reuses_existing": false
+          },
+          {
+            "name": "chest_tier",
+            "type": "enum",
+            "required": true,
+            "pii": false,
+            "allowed_values": [
+              "bronze",
+              "silver",
+              "gold"
+            ],
+            "description": "Tier of the chest.",
+            "rationale": "Tier depends on alliance rank, so it is the economy lever to monitor.",
+            "reuses_existing": false
+          },
+          {
+            "name": "reward_type",
+            "type": "enum",
+            "required": true,
+            "pii": false,
+            "allowed_values": [
+              "ember_coins",
+              "gems",
+              "speedups",
+              "hero_shards"
+            ],
+            "description": "What the chest contained.",
+            "rationale": "Shows which currencies the event injects into the economy.",
+            "reuses_existing": false
+          },
+          {
+            "name": "reward_amount",
+            "type": "integer",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Whole units of the reward.",
+            "rationale": "Size of the economy injection.",
+            "reuses_existing": false
+          }
+        ]
+      },
+      {
+        "name": "treasure_milestone_reached",
+        "description": "An alliance reaches a chest milestone.",
+        "trigger": "The server records the 100th, 250th or 500th opened chest of the hunt.",
+        "priority": "should",
+        "rationale": "Milestones are the event's shared goal; reaching them is the completion measure of a hunt and the moment the milestone push goes out.",
+        "evidence": {
+          "kind": "document",
+          "document": "gdd.md",
+          "quote": "When the alliance reaches 100, 250 and 500 opened chests, every member receives a milestone reward."
+        },
+        "properties": [
+          {
+            "name": "player_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Opaque id of the acting player.",
+            "rationale": "Ties the event to a player, as on every existing event.",
+            "reuses_existing": true
+          },
+          {
+            "name": "alliance_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Opaque id of the alliance.",
+            "rationale": "Lets every hunt metric be cut by alliance; same name and type as in alliance_joined.",
+            "reuses_existing": true
+          },
+          {
+            "name": "hunt_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Id of one hunt of one alliance.",
+            "rationale": "Joins all events of a hunt together; a hunt is the unit the success criteria are measured on.",
+            "reuses_existing": false
+          },
+          {
+            "name": "milestone",
+            "type": "integer",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Chest count of the milestone: 100, 250 or 500.",
+            "rationale": "Separates the three completion levels.",
+            "reuses_existing": false
+          }
+        ]
+      },
+      {
+        "name": "treasure_share_forfeited",
+        "description": "A member loses their share of a milestone reward by leaving the alliance early.",
+        "trigger": "The server withholds a milestone reward because the member left within two hours of the milestone.",
+        "priority": "could",
+        "rationale": "Shows whether the forfeit rule is hit often, which would signal friction or abuse; alliance_left alone cannot tell when the leave cost a reward.",
+        "evidence": {
+          "kind": "document",
+          "document": "gdd.md",
+          "quote": "Members who leave the alliance within two hours of a milestone forfeit their share of that milestone reward."
+        },
+        "properties": [
+          {
+            "name": "player_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Opaque id of the acting player.",
+            "rationale": "Ties the event to a player, as on every existing event.",
+            "reuses_existing": true
+          },
+          {
+            "name": "alliance_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Opaque id of the alliance.",
+            "rationale": "Lets every hunt metric be cut by alliance; same name and type as in alliance_joined.",
+            "reuses_existing": true
+          },
+          {
+            "name": "hunt_id",
+            "type": "string",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Id of one hunt of one alliance.",
+            "rationale": "Joins all events of a hunt together; a hunt is the unit the success criteria are measured on.",
+            "reuses_existing": false
+          },
+          {
+            "name": "milestone",
+            "type": "integer",
+            "required": true,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Milestone whose reward was forfeited.",
+            "rationale": "Which milestone members leave around.",
+            "reuses_existing": false
+          }
+        ]
+      }
+    ],
+    "extended_events": [
+      {
+        "name": "purchase_completed",
+        "rationale": "Fragment Pack revenue has to be separable from other purchases, and tied to a hunt, to read the monetisation side of the event.",
+        "evidence": {
+          "kind": "document",
+          "document": "gdd.md",
+          "quote": "Players can buy Fragment Packs for real money, limited to three per day."
+        },
+        "add_properties": [
+          {
+            "name": "hunt_id",
+            "type": "string",
+            "required": false,
+            "pii": false,
+            "allowed_values": [],
+            "description": "Hunt the purchase was made for; empty for other purchases.",
+            "rationale": "Links a purchase to a hunt so pack revenue and pack share can be computed per hunt.",
+            "reuses_existing": false
+          }
+        ]
+      }
+    ],
+    "reused_events": [
+      {
+        "name": "currency_spent",
+        "rationale": "The entry cost is an Ember Coins sink and is already captured here. Agree the sink value treasure_hunt_entry so it can be filtered."
+      },
+      {
+        "name": "alliance_left",
+        "rationale": "Needed to read the early-leave rule together with treasure_share_forfeited; no change required."
+      },
+      {
+        "name": "push_opened",
+        "rationale": "Opens of the milestone push are already captured with campaign_id. Agree a campaign id for hunt milestones."
+      },
+      {
+        "name": "alliance_joined",
+        "rationale": "Gives alliance size over time, which defines which alliances are eligible."
+      },
+      {
+        "name": "session_started",
+        "rationale": "Day-7 retention of non-participants is read from sessions; no change required."
+      }
+    ],
+    "metrics": [
+      {
+        "name": "hunt_start_rate_eligible_alliances",
+        "definition": "Share of alliances with five or more members that start a hunt in the first month.",
+        "events": [
+          "treasure_hunt_screen_viewed",
+          "treasure_hunt_started",
+          "alliance_joined"
+        ],
+        "rationale": "First success criterion (40%)."
+      },
+      {
+        "name": "hunt_funnel",
+        "definition": "Per hunt: started, fragments earned, chests opened, milestones reached.",
+        "events": [
+          "treasure_hunt_started",
+          "map_fragment_earned",
+          "treasure_chest_opened",
+          "treasure_milestone_reached"
+        ],
+        "rationale": "Shows where hunts stall."
+      },
+      {
+        "name": "fragment_pack_share",
+        "definition": "Fragments earned from packs divided by all fragments earned.",
+        "events": [
+          "map_fragment_earned",
+          "purchase_completed"
+        ],
+        "rationale": "Third success criterion (below 15%)."
+      },
+      {
+        "name": "non_participant_d7_retention",
+        "definition": "Day-7 retention of players in eligible alliances who earned no fragments, against a comparable baseline.",
+        "events": [
+          "session_started",
+          "map_fragment_earned",
+          "treasure_chest_opened"
+        ],
+        "rationale": "Second success criterion: the event must not hurt players who skip it."
+      },
+      {
+        "name": "early_leave_forfeit_rate",
+        "definition": "Forfeited shares divided by milestone rewards granted.",
+        "events": [
+          "treasure_share_forfeited",
+          "treasure_milestone_reached",
+          "alliance_left"
+        ],
+        "rationale": "Checks the leave rule for friction and abuse."
+      },
+      {
+        "name": "event_economy_injection",
+        "definition": "Currency granted by chests per hunt, against the entry cost sink.",
+        "events": [
+          "treasure_chest_opened",
+          "currency_spent"
+        ],
+        "rationale": "Economy health."
+      }
+    ],
+    "not_tracked": [
+      {
+        "what": "One event per Map Fragment drop inside battles.",
+        "why": "High volume and no extra question answered: fragments are summed per source in map_fragment_earned."
+      },
+      {
+        "what": "Individual items inside a chest.",
+        "why": "reward_type and reward_amount answer the economy question without a new event per item."
+      },
+      {
+        "what": "Views of the member contribution list.",
+        "why": "The design leaves its visibility undecided; add it when the question exists."
+      }
+    ],
+    "assumptions": [
+      "hunt_id is generated by the server when the hunt is created and is stable for its 72 hours.",
+      "Only one hunt can run per alliance at a time, as the document states, so hunt_id is unique per alliance and week.",
+      "Ember Coins corresponds to the value ember_coins of currency_spent.currency."
+    ],
+    "open_questions": [
+      "Should chest contents be allowed to raise battle power? If yes, battle_finished needs a chest-bonus property.",
+      "What exactly makes an alliance eligible on Monday (member count at unlock, or at start)?",
+      "In which time zone does the Monday unlock happen? It decides how days are cut in the funnel."
+    ]
+  },
+  "schema_violations": [],
+  "grounding": {
+    "quoted_found": 6,
+    "quoted_missing": 0,
+    "unverifiable": 0,
+    "inferred": 1,
+    "by_event": {
+      "treasure_hunt_started": "found",
+      "treasure_hunt_screen_viewed": "inferred",
+      "map_fragment_earned": "found",
+      "treasure_chest_opened": "found",
+      "treasure_milestone_reached": "found",
+      "treasure_share_forfeited": "found",
+      "purchase_completed": "found"
+    }
+  },
+  "problems": [],
+  "introduced_findings": [],
+  "merged_plan_sha256": "faf2e7910bd84a0ce5e2cb2c407e2ea0f285fbe2110f9cd4894af64856b628e5",
+  "review_of_merged_plan": {
+    "recommendation": "proceed",
+    "blocking_rule_ids": []
+  },
+  "review_of_existing_plan": {
+    "recommendation": "proceed",
+    "findings": 1
+  }
+}
