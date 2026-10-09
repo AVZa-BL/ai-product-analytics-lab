@@ -235,7 +235,11 @@ class ResultsContext:
 
     def week_of(self, moment: datetime) -> int:
         """The 7-day block of `moment`, counted from the origin (negative before it)."""
-        return (moment - self.origin) // timedelta(days=DAYS_PER_BLOCK)
+        return self.block_of(moment, DAYS_PER_BLOCK)
+
+    def block_of(self, moment: datetime, block_days: int) -> int:
+        """The block of `block_days` days that `moment` falls in, counted from the origin."""
+        return (moment - self.origin) // timedelta(days=block_days)
 
     def required_n(self, arm: str) -> int | None:
         """The arm's required sample size from the power plan, found by name."""

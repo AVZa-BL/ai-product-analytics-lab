@@ -303,3 +303,15 @@ def test_the_amendment_quotes_the_homogeneity_sizes_the_code_reproduces() -> Non
     assert round(chi_square) == 14 and round(chi_square_tiny) == 29
     assert exact < 0.65 and exact_tiny < 0.65
     assert "Fisher's exact test at most 0.65 times in every cell computed" in amendment
+
+
+def test_the_amendment_names_every_reason_the_cohort_planner_can_give() -> None:
+    from typing import get_args
+
+    from referee.cohorts import NotEvaluated
+
+    amendment = DESIGN.split("\n## 21. Amendment")[1]
+
+    for code in get_args(NotEvaluated):
+        assert f"`{code}`" in amendment, code
+    assert "referee/src/referee/cohorts.py" in amendment
