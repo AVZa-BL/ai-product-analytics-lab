@@ -14,6 +14,12 @@ files checked, so fixing one stage can show the next. `total` counts the problem
 that failed. Rows come back in a canonical order (by player, not by file position), so a
 seeded bootstrap gives the same answer however the export was sorted.
 
+The outcomes file may carry `window_end_utc`, when each player's seven-day window closes; it
+is read when the column is there, and then every row of the experiment must have it. A
+`manifest.json` beside the files may carry `exported_at_utc`, when the export was taken. These
+two are what lets a review tell outcome windows that were complete from ones still open; neither
+is derived from the other columns or from the files' own timestamps.
+
 A file cut short in the middle of its last line is refused, because the last row is then
 missing or incomplete. A cut that lands exactly between two rows, or inside the last cell of
 the last row, cannot be told from a complete file.
@@ -22,18 +28,21 @@ the last row, cannot be told from a complete file.
 from __future__ import annotations
 
 import csv
+import json
 import math
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 ASSIGNMENTS_FILE = "experiment_assignments.csv"
 EXPOSURES_FILE = "experiment_exposures.csv"
 OUTCOMES_FILE = "experiment_outcomes.csv"
+MANIFEST_FILE = "manifest.json"
 
 # Columns Referee reads. Others may be present and are ignored; `arm_config_version` in the
-# exposures file is read when it is there.
+# exposures file and `window_end_utc` in the outcomes file are read when they are there.
 _REQUIRED: dict[str, tuple[str, ...]] = {
     ASSIGNMENTS_FILE: (
         "experiment_id",
@@ -89,6 +98,7 @@ class Outcome:
     purchases_7d: int
     revenue_usd_7d: float
     first_purchase_at: datetime | None
+    window_end: datetime | None = None  # None when the outcomes file has no such column
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -99,6 +109,7 @@ class ExperimentData:
     assignments: tuple[Assignment, ...]
     exposures: tuple[Exposure, ...]
     outcomes: tuple[Outcome, ...]
+    exported_at: datetime | None = None  # None when no manifest.json gives it
 
 
 class _Problems:
@@ -198,6 +209,19 @@ def list_experiment_ids(directory: str | Path) -> tuple[str, ...]:
     return tuple(sorted(ids))
 
 
+def _parse_utc(value: str) -> tuple[datetime | None, str | None]:
+    """The instant in an ISO 8601 text with a zero UTC offset, or the reason it is not one."""
+    try:
+        moment = datetime.fromisoformat(value)
+    except ValueError:
+        return None, f"must be an ISO 8601 timestamp, got {value!r}"
+    if moment.utcoffset() is None:
+        return None, f"must carry a UTC offset (Z, +00 or +00:00), got {value!r}"
+    if moment.utcoffset() != timedelta(0):
+        return None, f"must be in UTC (offset 0), got {value!r}"
+    return moment.astimezone(UTC), None
+
+
 class _Reader:
     """Parses the cells of one row, recording a problem (and returning None) for a bad one."""
 
@@ -259,18 +283,10 @@ class _Reader:
             if not optional:
                 self.fail(column, "must not be empty")
             return None
-        try:
-            moment = datetime.fromisoformat(value)
-        except ValueError:
-            self.fail(column, f"must be an ISO 8601 timestamp, got {value!r}")
-            return None
-        if moment.utcoffset() is None:
-            self.fail(column, f"must carry a UTC offset (Z, +00 or +00:00), got {value!r}")
-            return None
-        if moment.utcoffset() != timedelta(0):
-            self.fail(column, f"must be in UTC (offset 0), got {value!r}")
-            return None
-        return moment.astimezone(UTC)
+        moment, problem = _parse_utc(value)
+        if problem is not None:
+            self.fail(column, problem)
+        return moment
 
 
 def _read[T](
@@ -311,14 +327,75 @@ def _read[T](
     return built
 
 
+def _no_repeated_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """A JSON object, refusing a key given twice: JSON would silently keep the last."""
+    found: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in found:
+            raise ValueError(f"key {key!r} is given more than once")
+        found[key] = value
+    return found
+
+
+def _exported_at(folder: Path, problems: _Problems) -> datetime | None:
+    """When the export was taken, from `manifest.json`; None when that file or key is absent.
+
+    A manifest that is there must be a JSON object, and an `exported_at_utc` in it must be an
+    ISO 8601 text with a zero UTC offset: a time Referee cannot read is a problem, not a guess.
+    """
+    path = folder / MANIFEST_FILE
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except FileNotFoundError:
+        if path.is_symlink():  # a link to nothing is a manifest that cannot be read
+            problems.add(f"{MANIFEST_FILE}: is a link to a file that does not exist")
+        return None
+    except (OSError, UnicodeDecodeError) as error:
+        problems.add(f"{MANIFEST_FILE}: cannot be read ({error})")
+        return None
+    try:
+        manifest = json.loads(text, object_pairs_hook=_no_repeated_keys)
+    except RecursionError:
+        problems.add(f"{MANIFEST_FILE}: nested too deeply to read")
+        return None
+    except ValueError as error:
+        problems.add(f"{MANIFEST_FILE}: not valid JSON ({error})")
+        return None
+    if not isinstance(manifest, dict):
+        problems.add(f"{MANIFEST_FILE}: must be a JSON object")
+        return None
+    value = manifest.get("exported_at_utc")
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        problems.add(
+            f"{MANIFEST_FILE}: key 'exported_at_utc': must be an ISO 8601 timestamp, got {value!r}"
+        )
+        return None
+    moment, problem = _parse_utc(value)
+    if problem is not None:
+        problems.add(f"{MANIFEST_FILE}: key 'exported_at_utc': {problem}")
+    return moment
+
+
+def exposure_time_key(seen: Exposure) -> tuple[datetime, int]:
+    """Which of a player's exposures comes first: the earlier time, then the lower version.
+
+    Two exposures at one instant are ordered by configuration version, a missing version
+    counting as lower than any. The loader sorts by this key, and the results context uses it
+    to pick a player's first exposure, so the two cannot disagree about a tie.
+    """
+    return seen.exposed_at, -1 if seen.config_version is None else seen.config_version
+
+
 def load_export(directory: str | Path, experiment_id: str) -> ExperimentData:
     """Read every row of `experiment_id` from the three files in `directory`.
 
     Raises `DataError` listing the problems found, in two stages (see the module docstring):
     first a missing file or column, a value that is not what its column promises, a short or
-    cut-off row or a CSV syntax error; then, once there are none, a player assigned twice, an
-    exposure or outcome for a player who was never assigned, or an assigned player with no
-    outcome.
+    cut-off row, a CSV syntax error or a `manifest.json` that cannot be read; then, once there
+    are none, a player assigned twice, an exposure or outcome for a player who was never
+    assigned, or an assigned player with no outcome.
     """
     folder = Path(directory)
     if not folder.is_dir():
@@ -349,7 +426,11 @@ def load_export(directory: str | Path, experiment_id: str) -> ExperimentData:
         purchases = cells.integer("purchases_7d", minimum=0)
         revenue = cells.real("revenue_usd_7d", minimum=0.0)
         first = cells.timestamp("first_purchase_at_utc", optional=True)
+        has_window_end = "window_end_utc" in cells.row
+        window_end = cells.timestamp("window_end_utc") if has_window_end else None
         if player is None or sessions is None or purchases is None or revenue is None:
+            return None
+        if has_window_end and window_end is None:
             return None
         if (purchases > 0) != (first is not None):
             cells.fail(
@@ -357,11 +438,12 @@ def load_export(directory: str | Path, experiment_id: str) -> ExperimentData:
                 f"must be present exactly when purchases_7d is above 0 (it is {purchases})",
             )
             return None
-        return Outcome(player, sessions, purchases, revenue, first)
+        return Outcome(player, sessions, purchases, revenue, first, window_end)
 
     assigned = _read(folder, ASSIGNMENTS_FILE, experiment_id, problems, assignment)
     exposed = _read(folder, EXPOSURES_FILE, experiment_id, problems, exposure)
     measured = _read(folder, OUTCOMES_FILE, experiment_id, problems, outcome)
+    exported_at = _exported_at(folder, problems)
     problems.raise_if_any()
 
     if not assigned:
@@ -408,12 +490,12 @@ def load_export(directory: str | Path, experiment_id: str) -> ExperimentData:
     problems.raise_if_any()
 
     def exposure_order(seen: Exposure) -> tuple[str, datetime, int]:
-        version = -1 if seen.config_version is None else seen.config_version
-        return seen.player_id, seen.exposed_at, version
+        return (seen.player_id, *exposure_time_key(seen))
 
     return ExperimentData(
         experiment_id=experiment_id,
         assignments=tuple(sorted((row for _, row in assigned), key=lambda r: r.player_id)),
         exposures=tuple(sorted((seen for _, seen in exposed), key=exposure_order)),
         outcomes=tuple(sorted((result for _, result in measured), key=lambda r: r.player_id)),
+        exported_at=exported_at,
     )

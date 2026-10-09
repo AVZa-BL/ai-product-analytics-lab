@@ -9,12 +9,16 @@ that design section 20.4 states.
 
 import hashlib
 import json
+import math
 import random
 import shutil
 from collections import Counter, defaultdict
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from results_helpers import results_spec
+from scipy.stats import chi2_contingency
 
 from referee import data
 from referee.data import ExperimentData, load_export
@@ -24,6 +28,7 @@ from referee.methods import (
     srm_test,
     welch_difference,
 )
+from referee.results import ResultsContext
 
 FIXTURE = Path(__file__).parent / "data" / "hybrid_offer_page_5000"
 EXPERIMENT = "hybrid_offer_page"
@@ -46,8 +51,11 @@ def _weeks(export: ExperimentData, *, by: str) -> dict[str, int]:
     return {player: (moment - start).days // 7 for player, moment in first.items()}
 
 
-def _cohorts(export: ExperimentData, arm: str, weeks: dict[str, int]):
-    """The sessions difference against control in each week, as Welch gives it."""
+def _cohorts(export: ExperimentData, arm: str, weeks: dict[str, int], *, floor: int = 2):
+    """The sessions difference against control in each week, as Welch gives it.
+
+    A week is used when both the arm and control hold at least `floor` players in it.
+    """
     arm_of = {a.player_id: a.arm for a in export.assignments}
     sessions = {o.player_id: float(o.sessions_7d) for o in export.outcomes}
     groups: dict[tuple[str, int], list[float]] = defaultdict(list)
@@ -56,7 +64,7 @@ def _cohorts(export: ExperimentData, arm: str, weeks: dict[str, int]):
     usable = [
         w
         for w in sorted({w for _, w in groups})
-        if len(groups[(arm, w)]) > 1 and len(groups[("control", w)]) > 1
+        if len(groups[(arm, w)]) >= floor and len(groups[("control", w)]) >= floor
     ]
     fits = [welch_difference(groups[(arm, w)], groups[("control", w)]) for w in usable]
     return usable, fits
@@ -226,3 +234,144 @@ def test_in_variant_b_the_week_and_the_config_version_move_together_as_section_2
         2: {1: 6, 2: 338},
         3: {2: 3},
     }
+
+
+# --- What section 21 (Amendment 6) quotes from this export ---------------------------------
+
+
+def test_with_a_floor_of_30_week_3_goes_and_the_corrected_statistics_are_the_ones_section_21_quotes(
+    export: ExperimentData,
+) -> None:
+    weeks = _weeks(export, by="exposure")
+
+    def heterogeneity(arm: str, *, corrected: bool):
+        usable, fits = _cohorts(export, arm, weeks, floor=30)
+        errors = [
+            f.std_error * math.sqrt(f.degrees_of_freedom / (f.degrees_of_freedom - 2))
+            if corrected
+            else f.std_error
+            for f in fits
+        ]
+        return usable, cohort_heterogeneity([f.difference for f in fits], errors, positions=usable)
+
+    usable_b, b_corrected = heterogeneity("variant_b", corrected=True)
+    _, b_raw = heterogeneity("variant_b", corrected=False)
+    usable_c, c_corrected = heterogeneity("variant_c", corrected=True)
+
+    assert usable_b == usable_c == [0, 1, 2]
+    assert b_corrected.q_statistic == pytest.approx(19.86, abs=0.005)
+    assert b_corrected.q_p_value == pytest.approx(4.9e-5, rel=0.02, abs=0)
+    assert b_raw.q_statistic == pytest.approx(19.92, abs=0.005)
+    assert c_corrected.q_statistic == pytest.approx(3.77, abs=0.005)
+    assert c_corrected.q_p_value == pytest.approx(0.15, abs=0.005)
+
+
+def test_on_the_effect_population_week_3_is_empty_and_q_is_the_one_section_21_quotes_for_it(
+    export: ExperimentData, raw_spec
+) -> None:
+    spec = results_spec(
+        raw_spec,
+        primary_metric__name="sessions_7d",
+        primary_metric__kind="continuous",
+        primary_metric__baseline=10.0,
+        primary_metric__baseline_std=5.0,
+    )
+    context = ResultsContext.of(spec, export)
+    metric = context.metrics["sessions_7d"]
+    sessions: dict[tuple[str, int], list[float]] = defaultdict(list)
+    for player in context.analysed:
+        sessions[(player.arm, context.week_of(player.first_exposed_at))].append(
+            metric.value(player)
+        )
+
+    def corrected_q(arm: str):
+        weeks = [w for w in range(3) if min(len(sessions[(a, w)]) for a in (arm, "control")) >= 30]
+        fits = [welch_difference(sessions[(arm, w)], sessions[("control", w)]) for w in weeks]
+        errors = [
+            f.std_error * math.sqrt(f.degrees_of_freedom / (f.degrees_of_freedom - 2)) for f in fits
+        ]
+        return weeks, cohort_heterogeneity([f.difference for f in fits], errors, positions=weeks)
+
+    weeks_b, b = corrected_q("variant_b")
+    weeks_c, c = corrected_q("variant_c")
+
+    assert not any(week >= 3 for _, week in sessions), "the 3 + 13 players of week 3 are all late"
+    assert weeks_b == weeks_c == [0, 1, 2]
+    assert b.q_statistic == pytest.approx(20.19, abs=0.005)
+    assert b.q_p_value == pytest.approx(4.1e-5, rel=0.02, abs=0)
+    assert c.q_statistic == pytest.approx(3.63, abs=0.005)
+    assert c.q_p_value == pytest.approx(0.16, abs=0.005)
+
+
+def test_the_sample_ratio_fails_in_the_second_and_third_week_of_assignment_but_not_the_first(
+    export: ExperimentData,
+) -> None:
+    arms = ("control", "variant_b", "variant_c")
+    start = min(a.assigned_at for a in export.assignments)
+    counts: dict[int, Counter] = defaultdict(Counter)
+    for a in export.assignments:
+        counts[(a.assigned_at - start).days // 7][a.arm] += 1
+    equal = [1 / 3] * 3
+
+    p_values = {
+        week: srm_test([c[arm] for arm in arms], equal).p_value
+        for week, c in sorted(counts.items())
+    }
+    total = srm_test([sum(c[arm] for c in counts.values()) for arm in arms], equal)
+
+    assert list(p_values) == [0, 1, 2]
+    assert p_values[0] == pytest.approx(0.34, abs=0.005)
+    assert p_values[1] == pytest.approx(4.0e-5, rel=0.01, abs=0)
+    assert p_values[2] == pytest.approx(2.6e-8, rel=0.02, abs=0)
+    assert total.p_value == pytest.approx(6.7e-10, rel=0.01, abs=0)
+    assert [week for week, p in p_values.items() if p < 0.001 / 3] == [1, 2]  # RES-011's level
+
+
+def test_late_exposure_is_even_across_the_arms_and_the_first_assignment_is_on_april_11th(
+    export: ExperimentData,
+) -> None:
+    arms = ("control", "variant_b", "variant_c")
+    arm_of = {a.player_id: a.arm for a in export.assignments}
+    assigned = Counter(arm_of.values())
+    first_exposure: dict[str, object] = {}
+    for exposure in export.exposures:
+        first_exposure.setdefault(exposure.player_id, exposure.exposed_at)
+    late = Counter(
+        arm_of[o.player_id]
+        for o in export.outcomes
+        if o.first_purchase_at is not None and first_exposure[o.player_id] > o.first_purchase_at
+    )
+
+    _, p_value, *_ = chi2_contingency([[late[a], assigned[a] - late[a]] for a in arms])
+
+    assert [late[a] for a in arms] == [71, 77, 50]
+    assert [f"{late[a] / assigned[a]:.1%}" for a in arms] == ["7.1%", "7.4%", "6.4%"]
+    assert p_value == pytest.approx(0.72, abs=0.005)
+    assert min(a.assigned_at for a in export.assignments).date().isoformat() == "2026-04-11"
+
+
+def test_eleven_variant_b_players_were_first_exposed_on_a_different_version_than_assigned(
+    export: ExperimentData,
+) -> None:
+    assigned_version = {a.player_id: (a.arm, a.config_version) for a in export.assignments}
+    first_exposure: dict[str, object] = {}
+    for exposure in export.exposures:
+        first_exposure.setdefault(exposure.player_id, exposure)
+    differs = Counter(
+        assigned_version[player][0]
+        for player, exposure in first_exposure.items()
+        if exposure.config_version is not None
+        and exposure.config_version != assigned_version[player][1]
+    )
+
+    assert differs == Counter({"variant_b": 11})
+
+
+def test_every_outcome_window_is_the_seven_days_after_the_assignment_and_no_export_time_is_given(
+    export: ExperimentData,
+) -> None:
+    assigned = {a.player_id: a.assigned_at for a in export.assignments}
+
+    assert all(o.window_end == assigned[o.player_id] + timedelta(days=7) for o in export.outcomes)
+    assert max(o.window_end for o in export.outcomes) == max(assigned.values()) + timedelta(days=7)
+    assert export.exported_at is None  # the lab's manifest does not say when it was written

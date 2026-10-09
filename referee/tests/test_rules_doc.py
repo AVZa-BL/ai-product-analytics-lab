@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from referee.rules import ALL_RULES, Rule
+from referee.rules import CATALOGUE, Escalation, Rule
 from referee.rules.docs import GROUPS, render_rules_markdown
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -32,6 +32,12 @@ KEY_TERMS = {
     "PRO-002": "procedure.srm_check_cadence",
     "PRO-003": "no guardrails",
     "PRO-004": "procedure.bucketing_salt",
+    "RES-001": "arms[].allocation",
+    "RES-002": "fewer players than",
+    "RES-003": "design.min_duration_days",
+    "RES-011": "divided by the number of weeks",
+    "RES-012": "after their first purchase",
+    "RES-013": "arm_config_version",
 }
 
 
@@ -86,7 +92,7 @@ def test_the_file_is_tidy() -> None:
 def test_every_rule_has_a_section_once_in_catalogue_order() -> None:
     headings = re.findall(r"^### ([A-Z]{3}-\d{3}): (.+)$", render_rules_markdown(), re.M)
 
-    assert headings == [(r.id, r.title) for r in ALL_RULES]
+    assert headings == [(r.id, r.title) for r in CATALOGUE]
 
 
 def test_each_rule_sits_under_its_own_group() -> None:
@@ -101,21 +107,21 @@ def test_each_rule_sits_under_its_own_group() -> None:
 
     for prefix, name in GROUPS.items():
         ids = set(re.findall(r"^### ([A-Z]{3}-\d{3}):", by_group[name], re.M))
-        assert ids == {r.id for r in ALL_RULES if r.id.startswith(prefix)}
+        assert ids == {r.id for r in CATALOGUE if r.id.startswith(prefix)}
 
 
 def test_the_summary_counts_and_lists_every_rule() -> None:
     text = render_rules_markdown()
 
-    assert "17 rules: 4 blockers, 11 warnings, 2 info." in text
-    for r in ALL_RULES:
+    assert "23 rules by default severity: 7 blockers, 14 warnings, 2 info." in text
+    for r in CATALOGUE:
         assert f"| {r.id} | {r.severity} | {r.title} |" in text
 
 
 def test_each_rules_own_text_appears_in_its_section() -> None:
     sections = re.split(r"^### ", render_rules_markdown(), flags=re.M)[1:]
 
-    for r, section in zip(ALL_RULES, sections, strict=True):
+    for r, section in zip(CATALOGUE, sections, strict=True):
         assert f"- **Severity:** {r.severity}\n" in section
         assert f"- **Fires when:** {r.fires_when}\n" in section
         assert f"- **Why it matters:** {r.why_it_matters}\n" in section
@@ -144,10 +150,10 @@ def test_the_power_notes_name_how_dunnett_is_planned() -> None:
 
 
 def test_the_catalogue_has_a_fires_when_for_exactly_the_rules_it_lists() -> None:
-    assert set(KEY_TERMS) == {r.id for r in ALL_RULES}
+    assert set(KEY_TERMS) == {r.id for r in CATALOGUE}
 
 
-@pytest.mark.parametrize("r", ALL_RULES, ids=lambda r: r.id)
+@pytest.mark.parametrize("r", CATALOGUE, ids=lambda r: r.id)
 def test_a_fires_when_names_what_the_rule_reads_and_is_not_the_why(r: Rule) -> None:
     assert KEY_TERMS[r.id] in r.fires_when
     assert r.fires_when != r.why_it_matters
@@ -155,7 +161,7 @@ def test_a_fires_when_names_what_the_rule_reads_and_is_not_the_why(r: Rule) -> N
 
 
 def test_fires_when_texts_are_unique() -> None:
-    texts = [r.fires_when for r in ALL_RULES]
+    texts = [r.fires_when for r in CATALOGUE]
 
     assert len(texts) == len(set(texts))
 
@@ -164,8 +170,8 @@ def test_fires_when_texts_are_unique() -> None:
 
 
 def test_a_rule_whose_prefix_has_no_group_is_refused() -> None:
-    with pytest.raises(ValueError, match="RES-001 has no group: add 'RES' to GROUPS"):
-        render_rules_markdown([rule("RES-001")])
+    with pytest.raises(ValueError, match="XYZ-001 has no group: add 'XYZ' to GROUPS"):
+        render_rules_markdown([rule("XYZ-001")])
 
 
 def test_a_group_with_no_rules_is_left_out() -> None:
@@ -177,3 +183,35 @@ def test_a_group_with_no_rules_is_left_out() -> None:
 
 def test_the_catalogue_is_deterministic() -> None:
     assert render_rules_markdown() == render_rules_markdown()
+
+
+def test_an_escalation_is_documented_after_the_fires_when_and_only_for_rules_that_have_one() -> (
+    None
+):
+    escalating = rule(
+        "DES-004", escalation=Escalation(to="blocker", when="it is bad.", applies=lambda e: True)
+    )
+
+    text = render_rules_markdown([escalating, rule("DES-005")])
+
+    assert text.count("Escalates to") == 1
+    lines = text.split("### DES-004")[1].split("### DES-005")[0].splitlines()
+    labels = [line.split(":**")[0] for line in lines if line.startswith("- **")]
+    assert labels[:3] == ["- **Severity", "- **Fires when", "- **Escalates to blocker when"]
+    assert "- **Escalates to blocker when:** it is bad." in text
+
+
+def test_the_committed_catalogue_documents_the_one_escalation_there_is() -> None:
+    escalating = [r.id for r in CATALOGUE if r.escalation is not None]
+
+    assert escalating == ["RES-012"]
+    assert DOC.read_text(encoding="utf-8").count("Escalates to") == 1
+
+
+def test_the_intro_does_not_claim_a_results_rule_looks_at_the_spec_alone() -> None:
+    intro = render_rules_markdown().split("## ")[0]
+
+    assert "(a results rule also at the experiment's data)" in intro
+    assert "Effect on the design review (the results review has its own verdict" in intro
+    assert "none of the\nobjections of the design rules (HYP, DES and PRO)" in intro
+    assert "none of the\nobjections below" not in intro

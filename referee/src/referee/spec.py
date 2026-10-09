@@ -15,6 +15,7 @@ import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, get_args
 
 SPEC_VERSION = 1
@@ -27,6 +28,7 @@ HarmfulDirection = Literal["increase", "decrease"]
 Sidedness = Literal["two_sided", "one_sided"]
 ExposureTiming = Literal["pre_treatment", "post_treatment"]
 Interference = Literal["none_expected", "possible"]
+PopulationKind = Literal["new_users", "existing_users", "mixed"]
 AlphaCorrection = Literal["none", "bonferroni", "dunnett"]
 StoppingRule = Literal["fixed_horizon", "sequential"]
 SrmCadence = Literal["daily", "weekly", "none"]
@@ -63,6 +65,7 @@ class Population:
     exposure_trigger: str
     exposure_timing: ExposureTiming | None
     interference: Interference | None
+    kind: PopulationKind | None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -101,6 +104,7 @@ class Design:
     min_duration_days: int
     alpha_adjustment: AlphaCorrection | None
     pre_period_covariate: str | None
+    start_utc: str | None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -231,6 +235,7 @@ def _population(node: _Node) -> Population:
         exposure_trigger=node.text("exposure_trigger"),
         exposure_timing=node.optional_choice("exposure_timing", get_args(ExposureTiming)),
         interference=node.optional_choice("interference", get_args(Interference)),
+        kind=node.optional_choice("kind", get_args(PopulationKind)),
     )
     node.reject_unknown()
     return population
@@ -344,6 +349,7 @@ def _design(node: _Node) -> Design:
         min_duration_days=node.integer("min_duration_days", ge=1),
         alpha_adjustment=node.optional_choice("alpha_adjustment", get_args(AlphaCorrection)),
         pre_period_covariate=node.optional_text("pre_period_covariate"),
+        start_utc=node.optional_utc_timestamp("start_utc"),
     )
     if (
         not node.failed("planned_duration_days", "min_duration_days")
@@ -477,6 +483,40 @@ class _Node:
             self.fail(key, f"must be one of {allowed}; got {_show(value)}")
             return None
         return value
+
+    def optional_utc_timestamp(self, key: str) -> str | None:
+        """An instant given in UTC, returned as one fixed text: ISO 8601 ending in Z.
+
+        Text such as `2026-11-02T00:00:00Z` or `2026-11-02T00:00:00+00:00` is accepted, and so
+        is a datetime, because YAML reads an unquoted timestamp as one. A date alone, a time
+        with no offset or an offset other than zero is refused, since which instant it meant
+        would be a guess. Spellings of one instant give one text, so they give one fingerprint.
+        """
+        value = self._lookup(key, required=False)
+        if value is _ABSENT or value is None:
+            return None
+        moment = value
+        if isinstance(value, str):
+            try:
+                moment = datetime.fromisoformat(value)
+            except ValueError:
+                moment = None
+        if not isinstance(moment, datetime):
+            self.fail(
+                key,
+                f"must be an ISO 8601 timestamp such as 2026-11-02T00:00:00Z, got {_show(value)}",
+            )
+            return None
+        if moment.utcoffset() is None:
+            self.fail(
+                key,
+                f"must carry a UTC offset (Z, +00 or +00:00), got {_show(value)}",
+            )
+            return None
+        if moment.utcoffset() != timedelta(0):
+            self.fail(key, f"must be in UTC (offset 0), got {_show(value)}")
+            return None
+        return moment.astimezone(UTC).isoformat().removesuffix("+00:00") + "Z"
 
     def boolean(self, key: str, *, default: bool) -> bool:
         value = self._lookup(key, required=False)

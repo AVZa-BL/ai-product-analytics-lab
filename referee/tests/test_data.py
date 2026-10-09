@@ -713,3 +713,236 @@ def test_listing_the_experiments_of_an_export_with_a_missing_file_is_refused(
 
     with pytest.raises(DataError, match="missing"):
         list_experiment_ids(tmp_path)
+
+
+# --- When each outcome window closes, and when the export was taken (design section 21.8) ---
+
+WINDOW_COLUMNS = [*OUTCOME_COLUMNS, "window_end_utc"]
+WINDOW_ENDS = [
+    "2026-04-18 00:02:25+00",
+    "2026-04-18 00:08:33+00",
+    "2026-04-19 09:00:00+00",
+    "2026-05-03 12:30:00+00",
+]
+
+
+def _outcomes_with_window_ends() -> list[dict[str, str]]:
+    return [
+        dict(row, window_end_utc=end) for row, end in zip(_outcomes(), WINDOW_ENDS, strict=True)
+    ]
+
+
+def _manifest(folder: Path, text: str) -> None:
+    (folder / data.MANIFEST_FILE).write_text(text, encoding="utf-8")
+
+
+def test_the_end_of_each_window_is_read_when_the_column_is_there(tmp_path: Path) -> None:
+    loaded = load_export(
+        export(tmp_path, outcomes=_outcomes_with_window_ends(), outcome_columns=WINDOW_COLUMNS),
+        "e1",
+    )
+
+    assert [o.window_end for o in loaded.outcomes] == [
+        _utc(2026, 4, 18, 0, 2, 25),
+        _utc(2026, 4, 18, 0, 8, 33),
+        _utc(2026, 4, 19, 9),
+        _utc(2026, 5, 3, 12, 30),
+    ]
+    assert loaded.outcomes[1] == Outcome(
+        "p2", 5, 1, 4.99, _utc(2026, 4, 12, 10), _utc(2026, 4, 18, 0, 8, 33)
+    )
+
+
+def test_without_the_column_no_window_end_is_known_and_nothing_is_invented(tmp_path: Path) -> None:
+    loaded = load_export(export(tmp_path), "e1")
+
+    assert {o.window_end for o in loaded.outcomes} == {None}
+    assert loaded.exported_at is None
+
+
+@pytest.mark.parametrize(
+    ("stamp", "fragment"),
+    [
+        ("2026-04-18 00:02:25", "must carry a UTC offset"),
+        ("2026-04-18 02:02:25+02:00", "must be in UTC"),
+        ("next week", "must be an ISO 8601 timestamp"),
+        ("", "must not be empty"),
+    ],
+)
+def test_once_the_column_is_there_every_row_of_the_experiment_must_have_a_good_value(
+    tmp_path: Path, stamp: str, fragment: str
+) -> None:
+    rows = _outcomes_with_window_ends()
+    rows[2]["window_end_utc"] = stamp
+
+    (problem,) = _problems(export(tmp_path, outcomes=rows, outcome_columns=WINDOW_COLUMNS))
+
+    assert problem.startswith("experiment_outcomes.csv:4: column 'window_end_utc': ")
+    assert fragment in problem
+
+
+def test_a_bad_window_end_in_another_experiment_is_not_checked(tmp_path: Path) -> None:
+    other = _row(WINDOW_COLUMNS, "other", "px", 1, 0, "0.0", "", "not a time")
+
+    loaded = load_export(
+        export(
+            tmp_path,
+            outcomes=[*_outcomes_with_window_ends(), other],
+            outcome_columns=WINDOW_COLUMNS,
+        ),
+        "e1",
+    )
+
+    assert len(loaded.outcomes) == 4
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ('{"exported_at_utc": "2026-05-09T06:00:00Z"}', _utc(2026, 5, 9, 6)),
+        ('{"exported_at_utc": "2026-05-09 06:00:00+00:00", "files": {}}', _utc(2026, 5, 9, 6)),
+        ('{"experiment_id": "e1", "generator": {"seed": 42}}', None),
+        ('{"exported_at_utc": null}', None),
+    ],
+    ids=["z", "numeric-offset-with-other-keys", "no-key", "null"],
+)
+def test_the_manifest_may_say_when_the_export_was_taken(
+    tmp_path: Path, text: str, expected: datetime | None
+) -> None:
+    export(tmp_path)
+    _manifest(tmp_path, text)
+
+    assert load_export(tmp_path, "e1").exported_at == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "fragment"),
+    [
+        ("{not json", "not valid JSON"),
+        ("", "not valid JSON"),
+        ('["2026-05-09T06:00:00Z"]', "must be a JSON object"),
+        ('{"exported_at_utc": 20260509}', "must be an ISO 8601 timestamp, got 20260509"),
+        ('{"exported_at_utc": "2026-05-09T06:00:00"}', "must carry a UTC offset"),
+        ('{"exported_at_utc": "2026-05-09T08:00:00+02:00"}', "must be in UTC"),
+        ('{"exported_at_utc": "last night"}', "must be an ISO 8601 timestamp"),
+        ('{"exported_at_utc": ""}', "must be an ISO 8601 timestamp"),
+    ],
+)
+def test_a_manifest_that_is_there_but_cannot_be_read_is_a_problem_not_a_guess(
+    tmp_path: Path, text: str, fragment: str
+) -> None:
+    export(tmp_path)
+    _manifest(tmp_path, text)
+
+    (problem,) = _problems(tmp_path)
+
+    assert problem.startswith("manifest.json: ") and fragment in problem
+
+
+def test_a_manifest_problem_is_listed_with_the_problems_of_the_files(tmp_path: Path) -> None:
+    rows = _assignments()
+    rows[0]["assigned_at_utc"] = "yesterday"
+    export(tmp_path, assignments=rows)
+    _manifest(tmp_path, "{broken")
+
+    problems = _problems(tmp_path)
+
+    assert [p.split(":")[0] for p in problems] == ["experiment_assignments.csv", "manifest.json"]
+
+
+def test_a_manifest_that_is_a_directory_cannot_be_read(tmp_path: Path) -> None:
+    export(tmp_path)
+    (tmp_path / data.MANIFEST_FILE).mkdir()
+
+    (problem,) = _problems(tmp_path)
+
+    assert problem.startswith("manifest.json: cannot be read")
+
+
+def test_a_manifest_with_a_byte_order_mark_is_read_like_the_csv_files(tmp_path: Path) -> None:
+    export(tmp_path)
+    (tmp_path / data.MANIFEST_FILE).write_bytes(
+        b"\xef\xbb\xbf" + b'{"exported_at_utc": "2026-05-09T06:00:00Z"}'
+    )
+
+    assert load_export(tmp_path, "e1").exported_at == _utc(2026, 5, 9, 6)
+
+
+# --- The manifest, after the independent review of 4b-1 -----------------------------------------
+
+
+def test_a_manifest_that_is_not_utf8_is_reported_not_raised(tmp_path: Path) -> None:
+    export(tmp_path)
+    (tmp_path / data.MANIFEST_FILE).write_bytes(b'{"exported_at_utc": "\xff\xfe"}')
+
+    (problem,) = _problems(tmp_path)
+
+    assert problem.startswith("manifest.json: cannot be read")
+
+
+def test_the_manifest_is_the_file_called_manifest_dot_json(tmp_path: Path) -> None:
+    export(tmp_path)
+    (tmp_path / "manifest.JSON.txt").write_text('{"exported_at_utc": "nonsense"}', encoding="utf-8")
+    (tmp_path / "manifest.json").write_text(
+        '{"exported_at_utc": "2026-05-09T06:00:00Z"}', encoding="utf-8"
+    )
+
+    assert load_export(tmp_path, "e1").exported_at == _utc(2026, 5, 9, 6)
+
+
+@pytest.mark.parametrize("depth", [10_000, 100_000])
+def test_a_manifest_nested_too_deeply_for_json_is_a_problem_not_a_crash(
+    tmp_path: Path, depth: int
+) -> None:
+    export(tmp_path)
+    _manifest(tmp_path, "[" * depth + "]" * depth)
+
+    (problem,) = _problems(tmp_path)
+
+    assert problem == "manifest.json: nested too deeply to read"
+
+
+def test_a_manifest_that_gives_a_key_twice_is_refused_not_resolved_to_the_last(
+    tmp_path: Path,
+) -> None:
+    export(tmp_path)
+    _manifest(
+        tmp_path,
+        '{"exported_at_utc": "2026-01-01T00:00:00Z", "exported_at_utc": "2026-02-01T00:00:00Z"}',
+    )
+
+    (problem,) = _problems(tmp_path)
+
+    assert problem.startswith("manifest.json: not valid JSON")
+    assert "'exported_at_utc' is given more than once" in problem
+
+
+def test_a_manifest_that_is_a_link_to_nothing_is_a_problem_not_an_absent_file(
+    tmp_path: Path,
+) -> None:
+    export(tmp_path)
+    (tmp_path / data.MANIFEST_FILE).symlink_to(tmp_path / "nowhere.json")
+
+    (problem,) = _problems(tmp_path)
+
+    assert problem == "manifest.json: is a link to a file that does not exist"
+
+
+def test_an_export_without_a_manifest_is_still_fine(tmp_path: Path) -> None:
+    export(tmp_path)
+
+    assert load_export(tmp_path, "e1").exported_at is None
+
+
+def test_two_exposures_at_one_instant_are_ordered_by_version_with_none_lowest() -> None:
+    at_noon = _utc(2026, 4, 12, 12)
+    exposures = [
+        data.Exposure("p1", at_noon, 2),
+        data.Exposure("p1", at_noon, None),
+        data.Exposure("p1", at_noon, 1),
+        data.Exposure("p1", _utc(2026, 4, 12, 11), 5),
+    ]
+
+    ordered = sorted(exposures, key=data.exposure_time_key)
+
+    assert [e.config_version for e in ordered] == [5, None, 1, 2]

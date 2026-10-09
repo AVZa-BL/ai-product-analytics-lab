@@ -13,9 +13,14 @@ from __future__ import annotations
 import sys
 from collections.abc import Sequence
 
-from referee.rules import ALL_RULES, Rule
+from referee.rules import CATALOGUE, Rule
 
-GROUPS = {"HYP": "Hypothesis", "DES": "Design", "PRO": "Procedure"}
+GROUPS = {
+    "HYP": "Hypothesis",
+    "DES": "Design",
+    "PRO": "Procedure",
+    "RES": "Results",
+}
 
 _INTRO = """\
 # Rule catalogue
@@ -24,18 +29,19 @@ Generated from the rule code by `python -m referee.rules.docs`. Do not edit this
 a test fails if it differs from the generated text. To change a rule, change it in
 `src/referee/rules/` and regenerate.
 
-A **rule** looks at one validated spec and either finds nothing or raises one **finding**. Each
-finding carries the rule's ID and severity, the evidence that triggered it, why it matters,
-what to do, and its references. The same spec always gives the same findings.
+A **rule** looks at one validated spec (a results rule also at the experiment's data) and either
+finds nothing or raises one **finding**. Each finding carries the rule's ID and severity, the
+evidence that triggered it, why it matters, what to do, and its references. The same input
+always gives the same findings.
 
-| Severity | Effect on the review |
+| Severity | Effect on the design review (the results review has its own verdict: see Results) |
 | --- | --- |
 | blocker | The recommendation is `revise` and `referee review-design` exits with status 1. |
 | warning | Reported; the recommendation stays `proceed`. |
 | info | Reported; the recommendation stays `proceed`. |
 
 Referee is advisory. A recommendation of `proceed` means the design raised none of the
-objections below, not that the experiment is worth running.
+objections of the design rules (HYP, DES and PRO), not that the experiment is worth running.
 
 In "fires when", a field is **absent** when it is missing from the spec or is `null`.
 Whether a spec is well-formed (a hypothesis with a null statement, a direction and a metric, for
@@ -64,17 +70,26 @@ _POWER_NOTES = """\
   duration can power, found by bisection.
 """
 
+_RESULTS_NOTE = """\
+A results rule looks at an experiment's exported data together with its spec (design
+section 21), not at the spec alone. A results review ends in a **verdict**, which follows from
+the findings: `invalid` if any is a blocker, `caution` if any is a warning, `clear` otherwise.
+`clear` says that the rules which ran found nothing; it does not say the effect is real. The
+design review does not run these rules.
+"""
+
 _OUTRO = """\
 ## Not yet
 
-Rules about results (the `RES` family in the design document) arrive with the results review.
+The rest of the `RES` family in design section 21 arrives with the results review; no command
+runs the results rules yet.
 """
 
 
 def _severity_counts(rules: Sequence[Rule]) -> str:
     counts = {s: sum(rule.severity == s for rule in rules) for s in ("blocker", "warning", "info")}
     return (
-        f"{len(rules)} rules: {counts['blocker']} blockers, "
+        f"{len(rules)} rules by default severity: {counts['blocker']} blockers, "
         f"{counts['warning']} warnings, {counts['info']} info."
     )
 
@@ -98,6 +113,11 @@ def _rule_block(rule: Rule) -> str:
             "",
             f"- **Severity:** {rule.severity}",
             f"- **Fires when:** {rule.fires_when}",
+            *(
+                [f"- **Escalates to {rule.escalation.to} when:** {rule.escalation.when}"]
+                if rule.escalation
+                else []
+            ),
             f"- **Why it matters:** {rule.why_it_matters}",
             f"- **What to do:** {rule.remediation}",
             *references,
@@ -105,7 +125,7 @@ def _rule_block(rule: Rule) -> str:
     )
 
 
-def render_rules_markdown(rules: Sequence[Rule] = ALL_RULES) -> str:
+def render_rules_markdown(rules: Sequence[Rule] = CATALOGUE) -> str:
     """The catalogue for `rules`, grouped by ID prefix in the order the groups are listed."""
     table = ["| ID | Severity | Title |", "| --- | --- | --- |"]
     table += [f"| {rule.id} | {rule.severity} | {rule.title} |" for rule in rules]
@@ -114,6 +134,8 @@ def render_rules_markdown(rules: Sequence[Rule] = ALL_RULES) -> str:
         members = [rule for rule in rules if _group(rule) == prefix]
         if members:
             blocks.append(f"## {name} rules ({prefix})")
+            if prefix == "RES":
+                blocks.append(_RESULTS_NOTE)
             blocks += [_rule_block(rule) for rule in members]
     blocks += [_POWER_NOTES, _OUTRO]
     return "\n\n".join(block.strip("\n") for block in blocks) + "\n"

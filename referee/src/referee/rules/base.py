@@ -2,8 +2,9 @@
 
 A rule is data plus one function. The data (ID, severity, title, when it fires, why it matters,
 how to fix it, references) never changes between runs, which is what lets the rule
-documentation be generated from the rules themselves. The function looks at a `ReviewContext`
-and returns the evidence that triggered the rule, or None when the spec is fine.
+documentation be generated from the rules themselves. The function looks at a context (a
+`ReviewContext` for the design review, a `ResultsContext` for the results review) and returns
+the evidence that triggered the rule, or None when there is nothing to report.
 """
 
 from __future__ import annotations
@@ -12,19 +13,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from referee.findings import Finding, Severity
-from referee.power import AlphaAdjustment, PowerError, PowerPlan, plan_power
+from referee.findings import Finding, Severity, is_more_serious
+from referee.power import PowerError, PowerPlan, plan_power, power_alpha_adjustment
 from referee.spec import ExperimentSpec
-
-
-def power_alpha_adjustment(spec: ExperimentSpec) -> AlphaAdjustment:
-    """The adjustment the power plan uses for what the spec declares.
-
-    Only an explicit "none" turns the adjustment off. An absent field and "bonferroni" plan
-    with Bonferroni, and so does "dunnett", which is slightly less conservative but is not
-    implemented here: the plan may ask for a few more units than Dunnett would.
-    """
-    return "none" if spec.design.alpha_adjustment == "none" else "bonferroni"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -49,11 +40,27 @@ class ReviewContext:
         return cls(spec=spec, plan=plan, power_error=None)
 
 
-Check = Callable[[ReviewContext], dict[str, Any] | None]
+type Check[Context] = Callable[[Context], dict[str, Any] | None]
 
 
 @dataclass(frozen=True, kw_only=True)
-class Rule:
+class Escalation:
+    """When a rule's finding is more serious than the rule's default severity.
+
+    `when` says so in words, for the documentation; `applies` decides from the evidence the
+    rule found, and must cope with an empty one (a rule is test-built at definition).
+    """
+
+    to: Severity
+    when: str
+    applies: Callable[[dict[str, Any]], bool]
+
+
+@dataclass(frozen=True, kw_only=True)
+class Rule[Context]:
+    """A rule over some context: a `ReviewContext` for the design review, a `ResultsContext`
+    (see `referee.results`) for the results review."""
+
     id: str
     severity: Severity
     title: str
@@ -61,7 +68,8 @@ class Rule:
     why_it_matters: str
     remediation: str
     references: tuple[str, ...]
-    check: Check
+    check: Check[Context]
+    escalation: Escalation | None = None
 
     def __post_init__(self) -> None:
         # Build a throwaway finding so a malformed rule fails when it is defined, not the
@@ -69,11 +77,20 @@ class Rule:
         self.finding({})
         if not isinstance(self.fires_when, str) or not self.fires_when.strip():
             raise ValueError(f"fires_when must be a non-empty string, got {self.fires_when!r}")
+        if self.escalation is not None:
+            if not is_more_serious(self.escalation.to, self.severity):
+                raise ValueError(
+                    f"{self.id} escalates to {self.escalation.to}, which is not more serious "
+                    f"than its severity {self.severity}"
+                )
+            if not self.escalation.when.strip():
+                raise ValueError(f"{self.id}: an escalation must say when it applies")
 
     def finding(self, evidence: dict[str, Any]) -> Finding:
+        escalated = self.escalation is not None and self.escalation.applies(evidence)
         return Finding(
             rule_id=self.id,
-            severity=self.severity,
+            severity=self.escalation.to if escalated else self.severity,
             title=self.title,
             evidence=evidence,
             why_it_matters=self.why_it_matters,
@@ -81,6 +98,6 @@ class Rule:
             references=self.references,
         )
 
-    def evaluate(self, context: ReviewContext) -> Finding | None:
+    def evaluate(self, context: Context) -> Finding | None:
         evidence = self.check(context)
         return None if evidence is None else self.finding(evidence)
