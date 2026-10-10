@@ -327,3 +327,17 @@ def test_the_amendment_names_every_reason_a_cohort_can_be_dropped_for() -> None:
     for code in get_args(DropReason):
         assert f"`{code}`" in amendment, code
     assert "referee/src/referee/cohort_effects.py" in amendment
+
+
+def test_the_amendment_names_the_gate_reasons_and_the_values_its_readings_quote() -> None:
+    from typing import get_args
+
+    from referee.cohorts import GateReason, raised_floor
+
+    amendment = DESIGN.split("\n## 21. Amendment")[1]
+
+    for code in get_args(GateReason):
+        assert f"`{code}`" in amendment, code
+    floors = [raised_floor(r) for r in (1.6, 2, 3, 4, 9)]
+    assert floors == [33, 43, 69, 98, 258]
+    assert "floors of 33, 43, 69, 98 and 258 at 1.6, 2, 3, 4 and 9 to 1" in amendment

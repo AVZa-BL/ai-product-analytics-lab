@@ -10,10 +10,13 @@ from referee.cohorts import (
     FLOOR,
     WEEKLY_MEDIAN_MINIMUM,
     Minimum,
+    allocation_ratio,
+    cohort_gate,
     cohort_sizes,
     plan_cohorts,
+    raised_floor,
 )
-from referee.results import ResultsContext
+from referee.results import METRICS, ExportMetric, ResultsContext
 
 START = "2026-04-11T00:00:00Z"
 THREE_ARMS = [
@@ -509,3 +512,331 @@ def test_the_median_is_over_the_smaller_arm_even_when_the_arm_is_the_larger(raw_
     ).attempts[0]
 
     assert attempt.median_smaller_arm == 70.0
+
+
+# --- The gates: units and metrics ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("randomization", "analysis", "reason"),
+    [
+        ("player", "player", None),
+        ("player", "user", None),
+        ("user", "player", None),
+        ("user", "user", None),
+        ("device", "device", None),
+        ("device", "player", "unit_not_independent"),
+        ("player", "device", "unit_not_independent"),
+        ("session", "session", "unit_not_independent"),
+        ("cluster", "cluster", "unit_not_independent"),
+        ("session", "player", "unit_not_independent"),
+        ("player", "cluster", "unit_not_independent"),
+    ],
+)
+def test_the_units_must_be_one_class_of_independent_players(
+    raw_spec, randomization: str, analysis: str, reason: str | None
+) -> None:
+    context = _both(
+        raw_spec,
+        {0: 80},
+        population__randomization_unit=randomization,
+        population__analysis_unit=analysis,
+    )
+
+    assert cohort_gate(context, context.metrics["purchased_7d"]) == reason
+
+
+def test_a_ratio_metric_is_not_validated_and_binary_and_continuous_ones_are(raw_spec) -> None:
+    context = _both(raw_spec, {0: 80})
+    ratio = ExportMetric("ratio_of_things", "ratio", METRICS["sessions_7d"].value)
+
+    assert cohort_gate(context, ratio) == "ratio_metric_not_validated"
+    assert cohort_gate(context, METRICS["sessions_7d"]) is None
+    assert cohort_gate(context, METRICS["purchased_7d"]) is None
+
+
+def test_the_unit_is_checked_before_the_metric(raw_spec) -> None:
+    context = _both(raw_spec, {0: 80}, population__randomization_unit="session")
+    ratio = ExportMetric("ratio_of_things", "ratio", METRICS["sessions_7d"].value)
+
+    assert cohort_gate(context, ratio) == "unit_not_independent"
+
+
+# --- The gate on allocation ---------------------------------------------------------------------
+
+
+def test_the_floor_rises_with_the_ratio_of_the_arms_sizes_from_1_5_to_1() -> None:
+    assert [raised_floor(r) for r in (1, 1.2, 1.5)] == [30, 30, 30]
+    assert [raised_floor(r) for r in (1.6, 2, 3, 4, 9)] == [33, 43, 69, 98, 258]
+    for ratio in (1.7, 2.5, 5.0, 7.3):
+        assert raised_floor(ratio) == math.ceil(30 * (ratio / 1.5) ** 1.2)
+    assert [raised_floor(r) for r in (1.5, 2, 4, 9)] == sorted(
+        raised_floor(r) for r in (1.5, 2, 4, 9)
+    )
+
+
+def test_the_ratio_is_the_larger_arm_over_the_smaller_whichever_is_the_larger(raw_spec) -> None:
+    big_control = _context(
+        raw_spec,
+        _rows("control", {0: 300}) + _rows("variant_b", {0: 100}),
+        design__mde_relative=2.0,
+    )
+    big_arm = _context(
+        raw_spec,
+        _rows("control", {0: 100}) + _rows("variant_b", {0: 300}),
+        design__mde_relative=2.0,
+    )
+    nobody = _context(raw_spec, _rows("control", {0: 100}), design__mde_relative=2.0)
+
+    assert (
+        allocation_ratio(big_control, "variant_b") == allocation_ratio(big_arm, "variant_b") == 3.0
+    )
+    assert allocation_ratio(nobody, "variant_b") is None
+
+
+def test_a_ratio_beyond_9_to_1_is_not_evaluated_and_9_to_1_is_not_refused_for_it(raw_spec) -> None:
+    def plan(arm_size: int):
+        rows = _rows("control", dict.fromkeys(range(4), 225)) + _rows(
+            "variant_b", dict.fromkeys(range(4), arm_size)
+        )
+        return plan_cohorts(_context(raw_spec, rows, design__mde_relative=2.0), "variant_b")
+
+    at_nine = plan(25)  # 900 against 100
+    beyond = plan(24)  # 900 against 96: 9.375
+
+    assert at_nine.allocation_ratio == 9.0 and at_nine.reason != "allocation_too_unequal"
+    assert at_nine.reason == "fewer_than_3_cohorts_reach_minimum" and at_nine.floor == 258
+    assert beyond.reason == "allocation_too_unequal" and beyond.attempts == ()
+    assert beyond.allocation_ratio == pytest.approx(9.375) and beyond.block_days is None
+
+
+def test_the_raised_floor_decides_which_cohorts_are_usable(raw_spec) -> None:
+    def usable(arm_size: int, control_size: int):
+        rows = _rows("control", dict.fromkeys(range(4), control_size)) + _rows(
+            "variant_b", dict.fromkeys(range(4), arm_size)
+        )
+        return plan_cohorts(_context(raw_spec, rows, design__mde_relative=2.0), "variant_b")
+
+    equal = usable(60, 60)
+    threefold = usable(60, 180)  # ratio 3: the floor is 69
+    enough = usable(70, 210)
+
+    assert equal.floor == 30 and equal.attempts[0].usable == (0, 1, 2, 3)
+    assert threefold.floor == 69 and threefold.attempts[0].usable == ()
+    assert enough.floor == 69 and enough.attempts[0].usable == (0, 1, 2, 3) and enough.evaluated
+    assert threefold.attempts[0].minimum_arm.used == 69
+    assert enough.attempts[0].minimum_control.used == 69
+
+
+def test_the_preferred_minimum_never_goes_below_the_raised_floor(raw_spec) -> None:
+    rows = _rows("control", dict.fromkeys(range(4), 210)) + _rows(
+        "variant_b", dict.fromkeys(range(4), 70)
+    )
+
+    attempt = plan_cohorts(
+        _context(raw_spec, rows, design__mde_relative=2.0), "variant_b"
+    ).attempts[0]
+
+    assert attempt.minimum_arm.registered == 141
+    assert attempt.minimum_arm.preferred == attempt.minimum_control.preferred == 69
+
+
+# --- The gate on unfinished outcome windows -------------------------------------------------------
+
+
+def _rows_with_window(arm: str, blocks: dict[int, int], *, window_days: float | None = None):
+    rows = _rows(arm, blocks)
+    if window_days is not None:
+        for row in rows:
+            row.window_end = row.assigned_at + timedelta(days=window_days)
+    return rows
+
+
+def _windows(
+    raw_spec,
+    per_block: dict[int, int],
+    *,
+    days: int = 28,
+    exported_at=None,
+    mde: float = 2.0,
+    **more,
+):
+    rows = _rows("control", per_block) + _rows("variant_b", per_block)
+    spec = results_spec(
+        raw_spec,
+        arms=TWO_ARMS,
+        design__planned_duration_days=days,
+        design__min_duration_days=7,
+        design__start_utc=START,
+        design__mde_relative=mde,
+        **more,
+    )
+    return ResultsContext.of(spec, build_data(rows, exported_at=exported_at))
+
+
+def test_a_window_closes_seven_days_after_assignment_unless_the_export_says_otherwise(
+    raw_spec,
+) -> None:
+    from dataclasses import replace
+
+    stated = _windows(raw_spec, {0: 1}).players[0]  # the test export states the window
+    unstated = replace(stated, window_end=None)
+    given = _context(raw_spec, [Row("p1", window_end=at(3))]).players[0]
+
+    assert stated.window_closes_at == stated.assigned_at + timedelta(days=7)
+    assert unstated.window_closes_at == unstated.assigned_at + timedelta(days=7)
+    assert given.window_closes_at == at(3)
+
+
+def test_a_cohort_without_stated_windows_is_judged_by_seven_days_after_assignment(raw_spec) -> None:
+    from dataclasses import replace
+
+    context = _windows(raw_spec, dict.fromkeys(range(4), 80))
+    unstated = replace(context, players=tuple(replace(p, window_end=None) for p in context.players))
+
+    assert plan_cohorts(unstated, "variant_b", as_of=at(28)).attempts[0].incomplete == ()
+    assert plan_cohorts(unstated, "variant_b", as_of=at(27)).attempts[0].incomplete == (3,)
+
+
+def test_without_an_as_of_time_nothing_is_excluded_and_completeness_is_not_checked(
+    raw_spec,
+) -> None:
+    plan = plan_cohorts(_windows(raw_spec, dict.fromkeys(range(4), 80)), "variant_b")
+
+    assert plan.as_of is None and plan.completeness_checked is False
+    assert plan.attempts[0].incomplete == () and plan.evaluated
+
+
+def test_a_cohort_whose_windows_close_after_the_as_of_time_is_left_out_and_listed(
+    raw_spec,
+) -> None:
+    context = _windows(raw_spec, dict.fromkeys(range(4), 80))
+
+    complete = plan_cohorts(context, "variant_b", as_of=at(28))
+    cut = plan_cohorts(context, "variant_b", as_of=at(27))
+
+    assert complete.completeness_checked and complete.attempts[0].incomplete == ()
+    assert complete.usable == (0, 1, 2, 3)  # a window that closes exactly at the as-of time is done
+    assert cut.attempts[0].incomplete == (3,)
+    assert cut.usable == (0, 1, 2) and cut.evaluated and cut.as_of == at(27)
+
+
+def test_the_exports_own_time_is_the_as_of_time_unless_one_is_given(raw_spec) -> None:
+    context = _windows(raw_spec, dict.fromkeys(range(4), 80), exported_at=at(27))
+
+    from_export = plan_cohorts(context, "variant_b")
+    overridden = plan_cohorts(context, "variant_b", as_of=at(28))
+
+    assert from_export.as_of == at(27) and from_export.attempts[0].incomplete == (3,)
+    assert overridden.as_of == at(28) and overridden.attempts[0].incomplete == ()
+
+
+def test_a_shortage_that_unfinished_windows_cause_is_named_for_them(raw_spec) -> None:
+    context = _windows(raw_spec, dict.fromkeys(range(4), 80))
+
+    plan = plan_cohorts(context, "variant_b", as_of=at(20))  # blocks 2 and 3 are unfinished
+
+    assert plan.attempts[0].incomplete == (2, 3) and plan.attempts[0].usable == (0, 1)
+    assert plan.reason == "outcome_window_incomplete" and plan.block_days is None
+
+
+def test_missing_coverage_that_unfinished_windows_cause_is_named_for_them(raw_spec) -> None:
+    context = _windows(raw_spec, dict.fromkeys(range(5), 80), days=35)
+
+    plan = plan_cohorts(context, "variant_b", as_of=at(27))  # blocks 3 and 4 close at 28 and 35
+
+    assert plan.attempts[0].usable == (0, 1, 2) and plan.attempts[0].covers_window is False
+    assert plan.reason == "outcome_window_incomplete"
+
+
+def test_a_shortage_that_would_be_there_anyway_keeps_its_own_reason(raw_spec) -> None:
+    context = _windows(raw_spec, {0: 80, 1: 10, 2: 10, 3: 80})
+
+    plan = plan_cohorts(context, "variant_b", as_of=at(27))
+
+    assert plan.attempts[0].incomplete == (3,)
+    assert plan.reason == "fewer_than_3_cohorts_reach_minimum"
+
+
+def test_a_window_given_in_the_export_is_the_one_that_counts(raw_spec) -> None:
+    rows = _rows_with_window("control", dict.fromkeys(range(4), 80), window_days=3) + (
+        _rows_with_window("variant_b", dict.fromkeys(range(4), 80), window_days=3)
+    )
+    spec = results_spec(
+        raw_spec,
+        arms=TWO_ARMS,
+        design__planned_duration_days=28,
+        design__min_duration_days=7,
+        design__start_utc=START,
+        design__mde_relative=2.0,
+    )
+    context = ResultsContext.of(spec, build_data(rows))
+
+    plan = plan_cohorts(context, "variant_b", as_of=at(7 * 3 + 3))
+
+    assert plan.attempts[0].incomplete == () and plan.usable == (0, 1, 2, 3)
+    assert plan_cohorts(context, "variant_b", as_of=at(7 * 3 + 2)).attempts[0].incomplete == (3,)
+
+
+def test_one_unfinished_window_in_a_cohort_is_enough_to_leave_it_out(raw_spec) -> None:
+    rows = _rows("control", dict.fromkeys(range(4), 80)) + _rows(
+        "variant_b", dict.fromkeys(range(4), 80)
+    )
+    rows[-1].window_end = at(7 * 3 + 7 + 5)  # one player of block 3 closes five days later
+    spec = results_spec(
+        raw_spec,
+        arms=TWO_ARMS,
+        design__planned_duration_days=28,
+        design__min_duration_days=7,
+        design__start_utc=START,
+        design__mde_relative=2.0,
+    )
+    context = ResultsContext.of(spec, build_data(rows))
+
+    assert plan_cohorts(context, "variant_b", as_of=at(28)).attempts[0].incomplete == (3,)
+
+
+def test_only_the_arm_and_control_can_make_a_cohort_incomplete(raw_spec) -> None:
+    rows = (
+        _rows("control", dict.fromkeys(range(4), 80))
+        + _rows("variant_b", dict.fromkeys(range(4), 80))
+        + _rows("variant_c", dict.fromkeys(range(4), 80))
+    )
+    for row in rows:
+        if row.arm == "variant_c" and row.assigned_at >= at(21):
+            row.window_end = at(60)
+    spec = results_spec(
+        raw_spec,
+        arms=THREE_ARMS,
+        design__planned_duration_days=28,
+        design__min_duration_days=7,
+        design__start_utc=START,
+        design__mde_relative=2.0,
+    )
+    context = ResultsContext.of(spec, build_data(rows))
+
+    assert plan_cohorts(context, "variant_b", as_of=at(28)).attempts[0].incomplete == ()
+    assert plan_cohorts(context, "variant_c", as_of=at(28)).attempts[0].incomplete == (3,)
+
+
+def test_unfinished_windows_are_taken_off_before_the_preferred_minimum_is_judged(raw_spec) -> None:
+    # 70-day plan, preferred minimum 95: eight cohorts reach it, two (blocks 8 and 9) do not.
+    sizes = {**dict.fromkeys(range(8), 100), 8: 50, 9: 50}
+    context = _windows(raw_spec, sizes, days=70, mde=0.3)
+
+    unchecked = plan_cohorts(context, "variant_b").attempts[0]
+    checked = plan_cohorts(context, "variant_b", as_of=at(7 * 8 + 6)).attempts[0]  # 8 and 9 open
+
+    assert unchecked.preferred_used is False  # 8 of 10 is below 90%
+    assert checked.incomplete == (8, 9) and checked.preferred_used is True
+    assert checked.usable == tuple(range(8))
+
+
+def test_the_fortnightly_attempt_has_its_own_incomplete_blocks(raw_spec) -> None:
+    context = _windows(raw_spec, dict.fromkeys(range(8), 40), days=56)
+
+    plan = plan_cohorts(context, "variant_b", as_of=at(7 * 7 + 6))
+
+    weekly, fortnightly = plan.attempts
+    assert weekly.incomplete == (7,) and fortnightly.incomplete == (3,)
+    assert plan.block_days == 14 and plan.usable == (0, 1, 2)

@@ -56,6 +56,14 @@ class PlayerRecord:
         return self.first_exposed_at is not None
 
     @property
+    def window_closes_at(self) -> datetime:
+        """When the player's seven-day outcome window closes: the export's `window_end_utc`,
+        else seven days after the assignment (the length the lab's export uses)."""
+        if self.window_end is not None:
+            return self.window_end
+        return self.assigned_at + timedelta(days=DAYS_PER_BLOCK)
+
+    @property
     def version(self) -> int:
         """The configuration version the player first saw: the exposure's, else the assignment's."""
         if self.first_exposure_version is None:
