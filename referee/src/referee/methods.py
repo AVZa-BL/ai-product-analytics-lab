@@ -36,6 +36,14 @@ class StatsError(ValueError):
     """The input does not allow a meaningful answer; the message says why."""
 
 
+class NoVariationError(StatsError):
+    """Neither group varies, so a standard error would be 0 and nothing can be tested."""
+
+
+class NonPositiveMeanError(StatsError):
+    """A group's mean is not above 0, so the log of a ratio of means does not exist."""
+
+
 def _check_alpha(alpha: float) -> None:
     if not 0 < alpha < 1:
         raise StatsError(f"alpha must be between 0 and 1, got {alpha!r}")
@@ -331,7 +339,7 @@ def welch_difference(
     mean_b, var_b = _mean_and_variance(b, "control")
     part_a, part_b = var_a / len(a), var_b / len(b)
     if part_a + part_b == 0:
-        raise StatsError(
+        raise NoVariationError(
             "neither group varies, so the standard error is 0 and nothing can be tested"
         )
     std_error = math.sqrt(part_a + part_b)
@@ -355,6 +363,89 @@ def welch_difference(
         ci_low=difference - margin,
         ci_high=difference + margin,
         confidence=1 - alpha,
+    )
+
+
+def welch_correction(degrees_of_freedom: float) -> float:
+    """The factor sqrt(nu / (nu - 2)) by which a standard error estimated on nu degrees of
+    freedom is multiplied when it is used as if it were known.
+
+    A standard error estimated from small samples is itself uncertain, and weighting cohorts
+    by its inverse square then makes Cochran's Q too large; the factor is the standard
+    deviation of a t variable on nu degrees of freedom. It is a proposal validated by
+    simulation only (design section 21.1), not a published method. Raises `StatsError` unless
+    nu is finite and above 2, where that variance exists.
+    """
+    if not (math.isfinite(degrees_of_freedom) and degrees_of_freedom > 2):
+        raise StatsError(
+            f"the correction needs degrees of freedom above 2, got {degrees_of_freedom!r}"
+        )
+    return math.sqrt(degrees_of_freedom / (degrees_of_freedom - 2))
+
+
+# --- A ratio of means, on the log scale ----------------------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class LogRatio:
+    """log(mean(treatment) / mean(control)), with the delta-method standard error."""
+
+    n_treatment: int
+    n_control: int
+    mean_treatment: float
+    mean_control: float
+    log_ratio: float
+    std_error: float
+    degrees_of_freedom: float
+
+
+def _relative_variance_of_mean(values: list[float], mean: float, name: str) -> float:
+    """The variance of the mean of `values` divided by the mean squared.
+
+    Worked out on the values divided by their mean, so that a tiny mean with a tiny spread
+    does not underflow to a spread of 0, which would read as "does not vary".
+    """
+    scaled = [value / mean for value in values]
+    if not all(math.isfinite(value) for value in scaled):
+        raise StatsError("the relative variance is too large to represent")
+    _, variance = _mean_and_variance(scaled, name)
+    return variance / len(values)
+
+
+def log_mean_ratio(treatment: Sequence[float], control: Sequence[float]) -> LogRatio:
+    """The log of the ratio of two group means, and its standard error by the delta method.
+
+    The variance of log(mean) is s^2 / (n * mean^2), so for independent groups the variance of
+    the log ratio is the sum of the two, and the degrees of freedom are Satterthwaite's for
+    those two parts, as in `welch_difference`. It is the relative scale of an effect: a constant
+    relative effect is a constant log ratio whatever the baseline. Raises `NonPositiveMeanError`
+    when either mean is not above 0, `NoVariationError` when neither group varies, and
+    `StatsError` for fewer than 2 values in a group or numbers too large to square.
+    """
+    a, b = _finite(treatment, "treatment"), _finite(control, "control")
+    mean_a, var_a = _mean_and_variance(a, "treatment")
+    mean_b, var_b = _mean_and_variance(b, "control")
+    if mean_a <= 0 or mean_b <= 0:
+        raise NonPositiveMeanError("both means must be above 0 for a ratio of means")
+    part_a = _relative_variance_of_mean(a, mean_a, "treatment")
+    part_b = _relative_variance_of_mean(b, mean_b, "control")
+    total = part_a + part_b
+    if total == 0:
+        raise NoVariationError(
+            "neither group varies, so the standard error is 0 and nothing can be tested"
+        )
+    if not math.isfinite(total):
+        raise StatsError("the relative variance is too large to represent")
+    share_a, share_b = part_a / total, part_b / total
+    degrees = 1.0 / (share_a**2 / (len(a) - 1) + share_b**2 / (len(b) - 1))
+    return LogRatio(
+        n_treatment=len(a),
+        n_control=len(b),
+        mean_treatment=mean_a,
+        mean_control=mean_b,
+        log_ratio=math.log(mean_a / mean_b),
+        std_error=math.sqrt(total),
+        degrees_of_freedom=degrees,
     )
 
 

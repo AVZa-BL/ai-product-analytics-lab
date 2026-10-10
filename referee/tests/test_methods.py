@@ -15,6 +15,8 @@ from statsmodels.stats.weightstats import CompareMeans, DescrStatsW
 from referee import methods
 from referee.methods import (
     SRM_ALPHA,
+    NonPositiveMeanError,
+    NoVariationError,
     StatsError,
     benjamini_hochberg,
     benjamini_yekutieli,
@@ -23,10 +25,12 @@ from referee.methods import (
     cohort_heterogeneity,
     heavy_tail_measures,
     homogeneity_test,
+    log_mean_ratio,
     ratio_difference,
     ratio_estimate,
     srm_test,
     two_proportion_difference,
+    welch_correction,
     welch_difference,
 )
 
@@ -1362,3 +1366,119 @@ def test_values_that_still_fit_are_unchanged_by_the_overflow_guards() -> None:
     result = welch_difference([1e100, 3e100, 5e100], [1e100, 2e100, 3e100])
 
     assert result.difference == pytest.approx(1e100, rel=1e-12)
+
+
+# --- The small-sample correction, and the ratio of means on the log scale ----------------------
+
+
+def test_the_correction_is_the_standard_deviation_of_a_t_variable() -> None:
+    for nu in (3.0, 5.0, 29.0, 58.5, 1000.0):
+        assert welch_correction(nu) == pytest.approx(stats.t(nu).std(), rel=1e-12)
+    assert welch_correction(30.0) == pytest.approx(math.sqrt(30 / 28), rel=1e-15)
+    assert welch_correction(1e9) == pytest.approx(1.0, abs=1e-8)
+
+
+def test_the_correction_falls_as_the_degrees_of_freedom_rise() -> None:
+    values = [welch_correction(nu) for nu in (2.5, 4, 10, 30, 100, 1000)]
+
+    assert values == sorted(values, reverse=True) and values[-1] > 1.0
+
+
+@pytest.mark.parametrize("nu", [2.0, 1.0, 0.0, -3.0, float("nan"), float("inf")])
+def test_the_correction_refuses_degrees_of_freedom_where_the_variance_does_not_exist(
+    nu: float,
+) -> None:
+    with pytest.raises(StatsError, match="above 2"):
+        welch_correction(nu)
+
+
+def test_the_log_ratio_matches_a_direct_computation_of_the_delta_method() -> None:
+    rng = np.random.default_rng(20261209)
+    treatment = rng.normal(12.0, 4.0, 80)
+    control = rng.normal(10.0, 3.0, 55)
+    result = log_mean_ratio(list(treatment), list(control))
+
+    var_t = treatment.var(ddof=1) / (80 * treatment.mean() ** 2)
+    var_c = control.var(ddof=1) / (55 * control.mean() ** 2)
+    assert result.log_ratio == pytest.approx(math.log(treatment.mean() / control.mean()), rel=1e-12)
+    assert result.std_error == pytest.approx(math.sqrt(var_t + var_c), rel=1e-12)
+    assert result.degrees_of_freedom == pytest.approx(
+        (var_t + var_c) ** 2 / (var_t**2 / 79 + var_c**2 / 54), rel=1e-10
+    )
+    assert (result.n_treatment, result.n_control) == (80, 55)
+    assert result.mean_treatment == pytest.approx(treatment.mean(), rel=1e-12)
+
+
+def test_the_log_ratio_interval_covers_the_true_ratio_about_as_often_as_it_claims() -> None:
+    rng = np.random.default_rng(20261210)
+    true = math.log(12.0 / 10.0)
+    covered = 0
+    runs = 4000
+    for _ in range(runs):
+        result = log_mean_ratio(list(rng.normal(12.0, 4.0, 60)), list(rng.normal(10.0, 3.0, 60)))
+        margin = float(stats.t.ppf(0.975, result.degrees_of_freedom)) * result.std_error
+        covered += abs(result.log_ratio - true) <= margin
+
+    assert covered / runs == pytest.approx(0.95, abs=0.015)
+
+
+def test_a_constant_relative_effect_is_a_constant_log_ratio_whatever_the_baseline() -> None:
+    base = [3.0, 4.0, 5.0, 7.0, 9.0, 4.0, 6.0]
+    control = [2.0, 5.0, 3.0, 8.0, 4.0, 6.0, 5.0]
+    first = log_mean_ratio(base, control)
+
+    scaled_both = log_mean_ratio([10 * v for v in base], [10 * v for v in control])
+    doubled = log_mean_ratio([2 * v for v in base], control)
+
+    assert scaled_both.log_ratio == pytest.approx(first.log_ratio, rel=1e-12)
+    assert scaled_both.std_error == pytest.approx(first.std_error, rel=1e-12)
+    assert doubled.log_ratio == pytest.approx(first.log_ratio + math.log(2), rel=1e-12)
+    assert doubled.std_error == pytest.approx(first.std_error, rel=1e-12)
+
+
+def test_a_group_that_does_not_vary_still_gives_a_log_ratio_when_the_other_does() -> None:
+    result = log_mean_ratio([5.0, 5.0, 5.0], [4.0, 6.0, 8.0])
+
+    assert result.log_ratio == pytest.approx(math.log(5.0 / 6.0), rel=1e-12)
+    assert result.degrees_of_freedom == pytest.approx(2.0, rel=1e-12)  # only control varies
+
+
+def test_a_ratio_of_means_needs_both_means_above_zero() -> None:
+    for treatment, control in (
+        ([0.0, 0.0, 0.0], [1.0, 2.0, 3.0]),
+        ([1.0, 2.0, 3.0], [0.0, 0.0, 0.0]),
+        ([-1.0, -2.0, 0.5], [1.0, 2.0, 3.0]),
+    ):
+        with pytest.raises(NonPositiveMeanError, match="above 0"):
+            log_mean_ratio(treatment, control)
+
+
+def test_a_log_ratio_between_groups_that_do_not_vary_has_no_standard_error() -> None:
+    with pytest.raises(NoVariationError, match="neither group varies"):
+        log_mean_ratio([5.0, 5.0], [4.0, 4.0])
+    with pytest.raises(NoVariationError, match="neither group varies"):
+        welch_difference([5.0, 5.0], [4.0, 4.0])
+    assert issubclass(NoVariationError, StatsError) and issubclass(NonPositiveMeanError, StatsError)
+
+
+def test_a_log_ratio_refuses_what_it_cannot_estimate() -> None:
+    with pytest.raises(StatsError, match="at least 2 values"):
+        log_mean_ratio([1.0], [1.0, 2.0])
+    with pytest.raises(StatsError, match="finite"):
+        log_mean_ratio([1.0, float("inf")], [1.0, 2.0])
+    with pytest.raises(StatsError, match="too large"):
+        log_mean_ratio([3e154, -3e154, 1e155], [1.0, 2.0])
+
+
+def test_a_huge_spread_around_a_tiny_positive_mean_is_refused() -> None:
+    with pytest.raises(StatsError, match="too large"):
+        log_mean_ratio([-1e153, 1e153, 0.01, 0.01], [1.0, 2.0, 3.0])
+    with pytest.raises(StatsError, match="too large to represent"):
+        log_mean_ratio([1e10, -1e10, 5e-324, 5e-324, 5e-324], [1.0, 2.0, 3.0])
+
+
+def test_a_tiny_mean_with_a_tiny_spread_is_a_finite_answer_not_a_division_by_zero() -> None:
+    result = log_mean_ratio([1e-300, 2e-300, 3e-300], [1e-300, 4e-300, 2e-300])
+
+    assert result.log_ratio == pytest.approx(math.log(2 / (7 / 3)), rel=1e-12)
+    assert math.isfinite(result.std_error) and result.std_error > 0

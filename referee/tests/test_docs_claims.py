@@ -315,3 +315,15 @@ def test_the_amendment_names_every_reason_the_cohort_planner_can_give() -> None:
     for code in get_args(NotEvaluated):
         assert f"`{code}`" in amendment, code
     assert "referee/src/referee/cohorts.py" in amendment
+
+
+def test_the_amendment_names_every_reason_a_cohort_can_be_dropped_for() -> None:
+    from typing import get_args
+
+    from referee.cohort_effects import DropReason
+
+    amendment = DESIGN.split("\n## 21. Amendment")[1]
+
+    for code in get_args(DropReason):
+        assert f"`{code}`" in amendment, code
+    assert "referee/src/referee/cohort_effects.py" in amendment
