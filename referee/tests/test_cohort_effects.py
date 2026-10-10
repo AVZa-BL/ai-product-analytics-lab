@@ -8,7 +8,15 @@ import pytest
 from results_helpers import TWO_ARMS, Row, at, build_data, results_spec
 from scipy import stats
 
-from referee.cohort_effects import CohortTest, cohort_test
+from referee.cohort_effects import (
+    TRIGGER_LEVEL,
+    CohortTest,
+    ScaleTest,
+    Trigger,
+    cohort_test,
+    shows_heterogeneity,
+    trigger,
+)
 from referee.cohorts import plan_cohorts
 from referee.data import load_export
 from referee.methods import cohort_heterogeneity, log_mean_ratio, welch_correction, welch_difference
@@ -426,3 +434,114 @@ def test_on_the_committed_export_the_fade_is_found_and_the_two_scales_agree_with
     pooled = (w * np.array(d)).sum() / w.sum()
     q = (w * (np.array(d) - pooled) ** 2).sum()
     assert b.log_ratio.heterogeneity.q_statistic == pytest.approx(q, rel=1e-10)
+
+
+# --- The trigger ------------------------------------------------------------------------------
+
+
+def _scale(q_p: float | None, slope_p: float | None) -> ScaleTest:
+    """A scale test with the given p values, or not evaluated when `q_p` is None."""
+    from referee.methods import CohortHeterogeneity
+
+    found = None
+    if q_p is not None:
+        found = CohortHeterogeneity(
+            cohorts=4,
+            pooled_difference=0.0,
+            q_statistic=1.0,
+            degrees_of_freedom=3,
+            q_p_value=q_p,
+            i_squared=0.0,
+            slope=0.0,
+            slope_std_error=1.0,
+            slope_z_statistic=0.0,
+            slope_p_value=slope_p,
+        )
+    return ScaleTest(
+        scale="absolute",
+        cohorts=(),
+        dropped=(),
+        reason=None if found else "no_variation",
+        error=None,
+        heterogeneity=found,
+    )
+
+
+def _pair(absolute: ScaleTest, log_ratio: ScaleTest) -> CohortTest:
+    return CohortTest(
+        arm="a",
+        control="c",
+        metric="m",
+        block_days=7,
+        absolute=absolute,
+        log_ratio=log_ratio,
+    )
+
+
+def test_the_level_of_each_statistic_is_a_40th_divided_by_the_non_control_arms() -> None:
+    assert TRIGGER_LEVEL == 0.025
+    quiet = _scale(0.5, 0.5)
+
+    assert [trigger(_pair(quiet, quiet), m).level for m in (1, 2, 3, 5)] == [
+        0.025,
+        0.0125,
+        0.025 / 3,
+        0.005,
+    ]
+    with pytest.raises(ValueError, match="at least one non-control arm"):
+        trigger(_pair(quiet, quiet), 0)
+
+
+@pytest.mark.parametrize(
+    ("q_p", "slope_p", "shows"),
+    [
+        (0.01, 0.5, True),
+        (0.5, 0.01, True),
+        (0.01, 0.01, True),
+        (0.5, 0.5, False),
+        (0.025, 0.025, False),
+        (0.0249999, 0.5, True),
+        (0.5, 0.0249999, True),
+    ],
+)
+def test_a_scale_shows_heterogeneity_when_q_or_the_slope_is_below_the_level(
+    q_p: float, slope_p: float, shows: bool
+) -> None:
+    assert shows_heterogeneity(_scale(q_p, slope_p), 0.025) is shows
+
+
+def test_a_scale_that_was_not_evaluated_shows_nothing_either_way() -> None:
+    assert shows_heterogeneity(_scale(None, None), 0.025) is None
+
+
+def test_an_arm_is_flagged_only_when_both_scales_show_heterogeneity() -> None:
+    loud, quiet, missing = _scale(0.001, 0.5), _scale(0.5, 0.5), _scale(None, None)
+
+    assert trigger(_pair(loud, loud), 1) == Trigger(level=0.025, absolute=True, log_ratio=True)
+    assert trigger(_pair(loud, loud), 1).flagged is True
+    assert trigger(_pair(loud, quiet), 1).flagged is False
+    assert trigger(_pair(quiet, loud), 1).flagged is False
+    assert trigger(_pair(quiet, quiet), 1).flagged is False
+    assert trigger(_pair(loud, missing), 1) == Trigger(level=0.025, absolute=True, log_ratio=None)
+    assert trigger(_pair(loud, missing), 1).flagged is False
+    assert trigger(_pair(missing, missing), 1).flagged is False
+
+
+def test_a_level_made_stricter_by_more_arms_can_unflag_an_arm() -> None:
+    borderline = _scale(0.02, 0.5)
+
+    assert trigger(_pair(borderline, borderline), 1).flagged is True
+    assert trigger(_pair(borderline, borderline), 2).flagged is False
+
+
+def test_the_planted_fade_in_the_committed_export_is_flagged_for_variant_b_and_not_variant_c(
+    raw_spec,
+) -> None:
+    spec = results_spec(raw_spec, design__planned_duration_days=21, **SESSIONS)
+    context = ResultsContext.of(spec, load_export(FIXTURE, "hybrid_offer_page"))
+    metric = context.metrics["sessions_7d"]
+    b = cohort_test(context, plan_cohorts(context, "variant_b"), metric)
+    c = cohort_test(context, plan_cohorts(context, "variant_c"), metric)
+
+    assert trigger(b, 2).flagged is True
+    assert trigger(c, 2).flagged is False

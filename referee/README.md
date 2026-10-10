@@ -56,4 +56,6 @@ ruff check src tests
 python -m pytest -q
 ```
 
+The cohort test's false-alarm rate and power were measured by a simulation that is part of the tests: `python tests/cohort_simulation.py --reps 5000 --out docs/simulations/cohort_trigger_null.json` repeats the study of design section 21.5 (about four minutes; add `--power` for the fade study), and the tests re-run a handful of its cells.
+
 The runtime dependencies are PyYAML (to read spec files), NumPy and SciPy (the results statistics: the distributions and the seeded bootstrap); the power calculations and design rules use the standard library. `pytest`, `ruff` and `statsmodels` (which the tests check the power formulas and the statistics against) are development tools.

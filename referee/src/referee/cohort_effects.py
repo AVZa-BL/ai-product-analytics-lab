@@ -31,6 +31,7 @@ from referee.methods import (
 )
 from referee.results import ExportMetric, ResultsContext
 
+TRIGGER_LEVEL = 0.025  # per statistic, before dividing by the number of non-control arms
 Scale = Literal["absolute", "log_ratio"]
 DropReason = Literal["no_variation", "non_positive_mean", "not_estimable"]
 SCALES: tuple[Scale, Scale] = ("absolute", "log_ratio")
@@ -81,6 +82,49 @@ class CohortTest:
     @property
     def scales(self) -> tuple[ScaleTest, ScaleTest]:
         return self.absolute, self.log_ratio
+
+
+@dataclass(frozen=True, kw_only=True)
+class Trigger:
+    """Whether the cohort test flags an arm, and on which scales.
+
+    A scale shows heterogeneity when Cochran's Q or the slope has p below `level`; `None` means
+    the scale was not evaluated. The arm is flagged only when both scales show it.
+    """
+
+    level: float
+    absolute: bool | None
+    log_ratio: bool | None
+
+    @property
+    def flagged(self) -> bool:
+        return self.absolute is True and self.log_ratio is True
+
+
+def shows_heterogeneity(scale: ScaleTest, level: float) -> bool | None:
+    """Whether Q or the slope of `scale` has p below `level`; None if it is not evaluated."""
+    found = scale.heterogeneity
+    if found is None:
+        return None
+    return found.q_p_value < level or found.slope_p_value < level
+
+
+def trigger(test: CohortTest, non_control_arms: int) -> Trigger:
+    """The trigger of design section 21.5 for one arm's test.
+
+    The level of each statistic is `TRIGGER_LEVEL` divided by the number of non-control arms
+    (Bonferroni, as `plan_power` divides alpha), and the arm is flagged only when both scales
+    show heterogeneity. The false-alarm rate and the power of this rule were measured by
+    simulation (`tests/cohort_simulation.py`, section 21.5).
+    """
+    if non_control_arms < 1:
+        raise ValueError(f"an experiment has at least one non-control arm, got {non_control_arms}")
+    level = TRIGGER_LEVEL / non_control_arms
+    return Trigger(
+        level=level,
+        absolute=shows_heterogeneity(test.absolute, level),
+        log_ratio=shows_heterogeneity(test.log_ratio, level),
+    )
 
 
 def _estimate(
