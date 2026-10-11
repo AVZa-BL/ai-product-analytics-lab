@@ -14,17 +14,24 @@ statistics cannot handle. A scale left with fewer than 3 cohorts is not evaluate
 
 from __future__ import annotations
 
+import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Literal
 
+from scipy import stats
+
 from referee.cohorts import MIN_COHORTS, CohortPlan
 from referee.methods import (
+    SMALL_EXPECTED_COUNT,
     CohortHeterogeneity,
+    CohortShape,
     NonPositiveMeanError,
     NoVariationError,
     StatsError,
+    cohort_detectable_shift,
     cohort_heterogeneity,
+    homogeneity_test,
     log_mean_ratio,
     welch_correction,
     welch_difference,
@@ -32,6 +39,16 @@ from referee.methods import (
 from referee.results import ExportMetric, ResultsContext
 
 TRIGGER_LEVEL = 0.025  # per statistic, before dividing by the number of non-control arms
+POWER = 0.8  # the chance with which a quiet result could have seen the shifts it reports
+MDE_MULTIPLE = 4  # a shift above this many registered minimum detectable effects is low information
+MIN_EXPECTED_EVENTS = 5  # fewer events than this per arm and cohort is low information
+BASELINE_LEVEL = 0.05  # a control baseline that changes across cohorts, at this p value
+SHAPES: tuple[CohortShape, CohortShape] = ("linear_fade", "step")
+LowInformation = Literal[
+    "shift_exceeds_control_mean",
+    "shift_exceeds_4_times_registered_mde",
+    "fewer_than_5_expected_events",
+]
 Scale = Literal["absolute", "log_ratio"]
 DropReason = Literal["no_variation", "non_positive_mean", "not_estimable"]
 SCALES: tuple[Scale, Scale] = ("absolute", "log_ratio")
@@ -239,3 +256,157 @@ def cohort_test(context: ResultsContext, plan: CohortPlan, metric: ExportMetric)
         absolute=scales["absolute"],
         log_ratio=scales["log_ratio"],
     )
+
+
+# --- What a finding needs besides the trigger -------------------------------------------------
+
+
+def detectable_shifts(scale: ScaleTest, level: float) -> dict[CohortShape, float] | None:
+    """The smallest change of each shape that Q-or-slope would flag with 80% probability.
+
+    Worked out from the standard errors the trigger used (the corrected ones) and the block
+    numbers of the cohorts it used, in the units of `scale`: the metric's for the absolute scale
+    and a log ratio for the relative one. None when the scale was not evaluated.
+    """
+    if scale.heterogeneity is None:
+        return None
+    errors = [c.corrected_std_error for c in scale.cohorts]
+    blocks = [c.block for c in scale.cohorts]
+    return {
+        shape: cohort_detectable_shift(
+            errors, positions=blocks, shape=shape, level=level, power=POWER
+        )
+        for shape in SHAPES
+    }
+
+
+def min_expected_events(scale: ScaleTest) -> float | None:
+    """The fewest events (players times the cohort's rate) in any arm and cohort of the scale.
+
+    Meant for a binary metric, where the mean is a rate. None when no cohort was used.
+    """
+    if not scale.cohorts:
+        return None
+    return min(min(c.n_arm * c.mean_arm, c.n_control * c.mean_control) for c in scale.cohorts)
+
+
+def registered_mde(context: ResultsContext, metric: ExportMetric) -> float | None:
+    """The minimum detectable effect the spec registered for `metric`, in its units.
+
+    Only the primary metric has one: `design.mde_relative` times its baseline. None for a
+    guardrail, which registers a tolerance and not a target effect.
+    """
+    primary = context.spec.primary_metric
+    if metric.name != primary.name:
+        return None
+    return context.spec.design.mde_relative * primary.baseline
+
+
+def low_information(
+    *,
+    shift: float,
+    control_mean: float,
+    registered_mde: float | None,
+    expected_events: float | None,
+) -> tuple[LowInformation, ...]:
+    """Why a result tells little: the change it could have seen is large, or its counts are few.
+
+    `shift` is the detectable linear fade on the absolute scale. A result is low information
+    when that shift exceeds the control mean, when it exceeds 4 times the registered minimum
+    detectable effect (if there is one), or when a binary metric has fewer than 5 expected
+    events in some arm and cohort (`expected_events`, None for a metric that is not binary).
+    """
+    found: list[LowInformation] = []
+    if shift > control_mean:
+        found.append("shift_exceeds_control_mean")
+    if registered_mde is not None and shift > MDE_MULTIPLE * registered_mde:
+        found.append("shift_exceeds_4_times_registered_mde")
+    if expected_events is not None and expected_events < MIN_EXPECTED_EVENTS:
+        found.append("fewer_than_5_expected_events")
+    return tuple(found)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ControlCohort:
+    """The control arm in one cohort: its players, mean and 95% interval."""
+
+    block: int
+    n: int
+    mean: float
+    ci_low: float
+    ci_high: float
+
+
+@dataclass(frozen=True, kw_only=True)
+class ControlBaseline:
+    """The control arm's mean in each cohort the test used, and whether it moves.
+
+    `homogeneity_p` tests that the control's mean is the same in every cohort (the chi-squared
+    test of homogeneity for a binary metric, Cochran's Q of the means for another); None when
+    that cannot be worked out. `moves` is true when it is below 0.05: a baseline that changes
+    across cohorts can raise Q on a scale that is not invariant (design section 21.5).
+    """
+
+    cohorts: tuple[ControlCohort, ...]
+    pooled_mean: float
+    homogeneity_p: float | None
+
+    @property
+    def moves(self) -> bool:
+        return self.homogeneity_p is not None and self.homogeneity_p < BASELINE_LEVEL
+
+
+def control_baseline(
+    context: ResultsContext, plan: CohortPlan, metric: ExportMetric
+) -> ControlBaseline:
+    """The control arm's mean by cohort over the blocks `plan` uses, and its homogeneity."""
+    if not plan.evaluated or plan.block_days is None:
+        raise ValueError(f"the plan for {plan.arm!r} is not evaluated: {plan.reason}")
+    wanted = set(plan.usable)
+    values: dict[int, list[float]] = defaultdict(list)
+    for player in context.analysed:
+        if player.arm != plan.control:
+            continue
+        block = context.block_of(player.first_exposed_at, plan.block_days)
+        if block in wanted:
+            values[block].append(metric.value(player))
+    cohorts, errors = [], []
+    for block in sorted(values):
+        found = values[block]
+        n = len(found)
+        mean = math.fsum(found) / n
+        variance = math.fsum((v - mean) ** 2 for v in found) / (n - 1)
+        error = math.sqrt(variance / n)
+        margin = float(stats.t.ppf(0.975, n - 1)) * error
+        cohorts.append(
+            ControlCohort(block=block, n=n, mean=mean, ci_low=mean - margin, ci_high=mean + margin)
+        )
+        errors.append(error)
+    everyone = [v for block in sorted(values) for v in values[block]]
+    return ControlBaseline(
+        cohorts=tuple(cohorts),
+        pooled_mean=math.fsum(everyone) / len(everyone),
+        homogeneity_p=_baseline_p(metric, values, cohorts, errors),
+    )
+
+
+def _baseline_p(
+    metric: ExportMetric,
+    values: dict[int, list[float]],
+    cohorts: list[ControlCohort],
+    errors: list[float],
+) -> float | None:
+    try:
+        if metric.kind == "binary":
+            blocks = sorted(values)
+            return homogeneity_test(
+                [round(sum(values[b])) for b in blocks],
+                [len(values[b]) for b in blocks],
+                exact_below=SMALL_EXPECTED_COUNT,
+            ).p_value
+        corrected = [e * welch_correction(c.n - 1) for e, c in zip(errors, cohorts, strict=True)]
+        return cohort_heterogeneity(
+            [c.mean for c in cohorts], corrected, positions=[c.block for c in cohorts]
+        ).q_p_value
+    except StatsError:
+        return None

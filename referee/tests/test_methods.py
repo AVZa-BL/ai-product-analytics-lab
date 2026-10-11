@@ -22,7 +22,9 @@ from referee.methods import (
     benjamini_yekutieli,
     bonferroni,
     bootstrap_difference,
+    cohort_detectable_shift,
     cohort_heterogeneity,
+    cohort_power,
     heavy_tail_measures,
     homogeneity_test,
     log_mean_ratio,
@@ -1482,3 +1484,185 @@ def test_a_tiny_mean_with_a_tiny_spread_is_a_finite_answer_not_a_division_by_zer
 
     assert result.log_ratio == pytest.approx(math.log(2 / (7 / 3)), rel=1e-12)
     assert math.isfinite(result.std_error) and result.std_error > 0
+
+
+# --- What the cohort test could have seen ------------------------------------------------------
+
+
+def _simulated_power(effects, std_errors, positions, level, runs=60000, seed=20261301):
+    """Q-or-slope flags, by drawing the cohorts' estimates and applying the formulas directly."""
+    rng = np.random.default_rng(seed)
+    d = np.asarray(effects, float) + np.asarray(std_errors) * rng.standard_normal(
+        (runs, len(effects))
+    )
+    w = 1 / np.asarray(std_errors, float) ** 2
+    x = np.asarray(positions, float)
+    pooled = (w * d).sum(axis=1) / w.sum()
+    q = (w * (d - pooled[:, None]) ** 2).sum(axis=1)
+    x_bar = (w * x).sum() / w.sum()
+    spread = (w * (x - x_bar) ** 2).sum()
+    z = (w * (x - x_bar) * d).sum(axis=1) / np.sqrt(spread)
+    flagged = (stats.chi2.sf(q, len(effects) - 1) < level) | (2 * stats.norm.sf(np.abs(z)) < level)
+    return float(flagged.mean())
+
+
+@pytest.mark.parametrize(
+    ("effects", "std_errors", "positions"),
+    [
+        ([0, 0, 0, 0], [1, 1, 1, 1], [0, 1, 2, 3]),
+        ([3, 2, 1, 0], [1, 1, 1, 1], [0, 1, 2, 3]),
+        ([1.5, 1.5, 0, 0], [1, 1, 1, 1], [0, 1, 2, 3]),
+        ([2.0, 1.0, 0.5, 0.0, -0.5], [0.5, 1.0, 2.0, 1.0, 0.7], [0, 1, 3, 4, 6]),
+        ([0, 4, 0], [1, 1, 1], [0, 1, 2]),
+    ],
+)
+def test_the_power_of_q_or_slope_matches_a_simulation_of_the_cohort_estimates(
+    effects, std_errors, positions
+) -> None:
+    exact = cohort_power(effects, std_errors, positions=positions, level=0.025)
+    simulated = _simulated_power(effects, std_errors, positions, 0.025)
+
+    assert exact == pytest.approx(simulated, abs=4.5 * math.sqrt(0.25 / 60000))
+
+
+def test_without_a_change_the_power_is_the_false_alarm_rate_of_q_or_slope() -> None:
+    rates = [cohort_power([0] * k, [1] * k, level=0.025) for k in (3, 4, 8, 12)]
+
+    assert all(0.025 < rate < 0.05 for rate in rates)
+    assert rates[1] == pytest.approx(0.0417, abs=5e-5)  # the 4-cohort figure of section 21.5
+
+
+def test_the_power_is_between_the_power_of_each_statistic_alone_and_their_sum() -> None:
+    effects, se = [3.0, 2.0, 1.0, 0.0], [1.0, 1.0, 1.0, 1.0]
+    level, k = 0.025, 4
+    both = cohort_power(effects, se, level=level)
+    w = np.ones(4)
+    d_bar = np.mean(effects)
+    q_nc = float(((np.array(effects) - d_bar) ** 2).sum())
+    q_alone = float(stats.ncx2.sf(stats.chi2.isf(level, k - 1), k - 1, q_nc))
+    mu = float((w * (np.arange(4) - 1.5) * effects).sum() / math.sqrt(5.0))
+    cut = float(stats.norm.isf(level / 2))
+    slope_alone = float(stats.norm.sf(cut - abs(mu)) + stats.norm.cdf(-cut - abs(mu)))
+
+    assert max(q_alone, slope_alone) <= both + 1e-9
+    assert both <= q_alone + slope_alone
+    assert slope_alone > q_alone  # a straight fade is what the slope is for
+
+
+def test_the_power_rises_with_the_size_of_the_change_and_ignores_its_sign() -> None:
+    se = [1.0, 1.0, 1.0, 1.0]
+    powers = [
+        cohort_power([s * v for v in (1, 2 / 3, 1 / 3, 0)], se, level=0.025) for s in range(9)
+    ]
+
+    assert powers == sorted(powers) and powers[0] < 0.05 and powers[-1] > 0.99
+    assert cohort_power([-3, -2, -1, 0], se, level=0.025) == pytest.approx(
+        cohort_power([3, 2, 1, 0], se, level=0.025), rel=1e-12
+    )
+    assert cohort_power([3, 2, 1, 0], se, level=0.025) == pytest.approx(
+        cohort_power([0, 1, 2, 3], se, level=0.025), rel=1e-9
+    )
+
+
+def test_a_stricter_level_gives_less_power() -> None:
+    effects, se = [3.0, 2.0, 1.0, 0.0], [1.0] * 4
+
+    assert cohort_power(effects, se, level=0.0125) < cohort_power(effects, se, level=0.025)
+
+
+@pytest.mark.parametrize(
+    ("effects", "std_errors", "positions", "fragment"),
+    [
+        ([0, 0], [1, 1], None, "at least 3 cohorts"),
+        ([0, 0, 0], [1, 1], None, "one standard error per effect"),
+        ([0, 0, 0], [1, 0, 1], None, "above 0"),
+        ([0, 0, 0], [1, 1, 1], [1, 1, 1], "at least 2 different positions"),
+        ([0, 0, 0], [1, 1, 1], [0, 1], "one position per cohort"),
+        ([0, 0, float("nan")], [1, 1, 1], None, "finite"),
+    ],
+)
+def test_the_power_refuses_what_it_cannot_work_out(
+    effects, std_errors, positions, fragment
+) -> None:
+    with pytest.raises(StatsError, match=fragment):
+        cohort_power(effects, std_errors, positions=positions, level=0.025)
+    with pytest.raises(StatsError, match="alpha"):
+        cohort_power([0, 0, 0], [1, 1, 1], level=1.5)
+
+
+@pytest.mark.parametrize("shape", ["linear_fade", "step"])
+def test_the_detectable_shift_is_the_one_that_gives_exactly_the_wanted_power(shape: str) -> None:
+    se = [1.0, 0.8, 1.2, 1.0, 0.9]
+    positions = [0, 1, 2, 3, 4]
+    pattern = {"linear_fade": [1.0, 0.75, 0.5, 0.25, 0.0], "step": [1.0, 1.0, 0.0, 0.0, 0.0]}[shape]
+
+    shift = cohort_detectable_shift(se, positions=positions, shape=shape, level=0.025)
+    at = cohort_power([shift * v for v in pattern], se, positions=positions, level=0.025)
+    below = cohort_power([0.99 * shift * v for v in pattern], se, positions=positions, level=0.025)
+
+    assert at == pytest.approx(0.8, abs=1e-6) and below < 0.8
+
+
+def test_a_linear_fade_needs_no_more_than_the_slope_alone_would() -> None:
+    se, level = [1.0, 1.0, 1.0, 1.0], 0.025
+    # The slope alone has an exact answer: (z for the level + z for the power) standard
+    # errors of the slope, times the span of the cohorts.
+    slope_only = (stats.norm.isf(level / 2) + stats.norm.isf(0.2)) / math.sqrt(5.0) * 3
+
+    shift = cohort_detectable_shift(se, shape="linear_fade", level=level)
+
+    assert shift < slope_only and shift > 0.8 * slope_only
+
+
+def test_more_cohorts_and_smaller_errors_make_a_smaller_change_visible() -> None:
+    def shift(se, **kw):
+        return cohort_detectable_shift(se, shape="linear_fade", level=0.025, **kw)
+
+    assert shift([1.0] * 8) < shift([1.0] * 4) < shift([1.0] * 3)
+    assert shift([0.5] * 4) == pytest.approx(0.5 * shift([1.0] * 4), rel=1e-9)
+    assert shift([3.0] * 4) == pytest.approx(3 * shift([1.0] * 4), rel=1e-9)
+
+
+def test_a_step_is_seen_at_a_smaller_size_than_a_fade_of_the_same_height() -> None:
+    se = [1.0] * 8
+
+    fade = cohort_detectable_shift(se, shape="linear_fade", level=0.025)
+    step = cohort_detectable_shift(se, shape="step", level=0.025)
+
+    assert 0 < step < fade
+
+
+def test_a_gap_between_the_positions_changes_what_a_fade_looks_like() -> None:
+    se = [1.0, 1.0, 1.0, 1.0]
+
+    even = cohort_detectable_shift(se, positions=[0, 1, 2, 3], shape="linear_fade", level=0.025)
+    gap = cohort_detectable_shift(se, positions=[0, 1, 2, 6], shape="linear_fade", level=0.025)
+
+    assert gap != pytest.approx(even, rel=1e-3)
+
+
+def test_a_stricter_level_needs_a_bigger_change() -> None:
+    se = [1.0] * 4
+
+    assert cohort_detectable_shift(se, shape="step", level=0.0125) > cohort_detectable_shift(
+        se, shape="step", level=0.025
+    )
+
+
+def test_the_detectable_shift_refuses_what_it_cannot_work_out() -> None:
+    with pytest.raises(StatsError, match="power"):
+        cohort_detectable_shift([1.0] * 4, shape="step", level=0.025, power=1.0)
+    with pytest.raises(StatsError, match="unknown shape"):
+        cohort_detectable_shift([1.0] * 4, shape="wobble", level=0.025)  # type: ignore[arg-type]
+    with pytest.raises(StatsError, match="at least 3 cohorts"):
+        cohort_detectable_shift([1.0, 1.0], shape="step", level=0.025)
+
+
+def test_the_shapes_of_a_change_across_the_cohorts() -> None:
+    from referee.methods import _cohort_pattern
+
+    assert _cohort_pattern([0, 1, 2, 3], "linear_fade") == pytest.approx([1, 2 / 3, 1 / 3, 0])
+    assert _cohort_pattern([0, 1, 3, 4], "linear_fade") == pytest.approx([1, 0.75, 0.25, 0])
+    assert _cohort_pattern([0, 1, 2, 3], "step") == [1.0, 1.0, 0.0, 0.0]
+    assert _cohort_pattern([0, 1, 2, 3, 4], "step") == [1.0, 1.0, 0.0, 0.0, 0.0]  # the middle is 2
+    assert _cohort_pattern([2, 3, 5, 9], "step") == [1.0, 1.0, 1.0, 0.0]  # the middle is 5.5

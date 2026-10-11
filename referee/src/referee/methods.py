@@ -836,6 +836,120 @@ def cohort_heterogeneity(
     )
 
 
+# --- What the cohort test could have seen ---------------------------------------------------
+
+CohortShape = Literal["linear_fade", "step"]
+_POWER_NODES, _POWER_WEIGHTS = np.polynomial.legendre.leggauss(400)
+
+
+def _cohort_pattern(positions: Sequence[float], shape: CohortShape) -> list[float]:
+    """The shape of a change across the cohorts, scaled so that its largest value is 1.
+
+    A linear fade falls in a straight line from 1 in the first cohort to 0 in the last. A step
+    is 1 in the cohorts before the middle of the positions and 0 from there on.
+    """
+    first, last = min(positions), max(positions)
+    if shape == "linear_fade":
+        return [(last - x) / (last - first) for x in positions]
+    if shape == "step":
+        middle = (first + last) / 2
+        return [1.0 if x < middle else 0.0 for x in positions]
+    raise StatsError(f"unknown shape {shape!r}")
+
+
+def cohort_power(
+    effects: Sequence[float],
+    std_errors: Sequence[float],
+    *,
+    positions: Sequence[float] | None = None,
+    level: float,
+) -> float:
+    """The chance that Cochran's Q or the weighted slope flags cohorts whose true effects differ.
+
+    The cohorts' estimates are taken as normal with the given true `effects` and known
+    `std_errors`, the weights `cohort_heterogeneity` uses. Q is then the slope's square plus a
+    remainder on (cohorts - 2) degrees of freedom, and the two are independent: the slope is
+    N(mu, 1) and the remainder noncentral chi-squared, so the chance of not flagging is a single
+    integral over the slope, done here with 400-point Gauss-Legendre quadrature. A statistic
+    flags when its p value is below `level`. With all effects equal this is the false-alarm rate
+    of Q-or-slope at `level`.
+    """
+    d = _finite(effects, "effects")
+    se = _finite(std_errors, "std_errors")
+    k = len(d)
+    if k < 3 or len(se) != k:
+        raise StatsError(f"need one standard error per effect and at least 3 cohorts, got {k}")
+    if any(error <= 0 for error in se):
+        raise StatsError("every standard error must be above 0")
+    x = list(range(k)) if positions is None else _finite(positions, "positions")
+    if len(x) != k or len(set(x)) < 2:
+        raise StatsError("need one position per cohort and at least 2 different positions")
+    _check_alpha(level)
+    weight = [1.0 / error**2 for error in se]
+    total = math.fsum(weight)
+    d_bar = math.fsum(w * v for w, v in zip(weight, d, strict=True)) / total
+    x_bar = math.fsum(w * p for w, p in zip(weight, x, strict=True)) / total
+    spread = math.fsum(w * (p - x_bar) ** 2 for w, p in zip(weight, x, strict=True))
+    q_noncentral = math.fsum(w * (v - d_bar) ** 2 for w, v in zip(weight, d, strict=True))
+    mu = math.fsum(w * (p - x_bar) * v for w, p, v in zip(weight, x, d, strict=True)) / math.sqrt(
+        spread
+    )
+    remainder = max(q_noncentral - mu**2, 0.0)
+
+    slope_cut = float(stats.norm.isf(level / 2))
+    q_cut = float(stats.chi2.isf(level, k - 1))
+    z = slope_cut * _POWER_NODES
+    # Not flagged: |slope z| below its cut AND z^2 + remainder below Q's cut.
+    room = q_cut - z**2
+    quiet = np.where(room > 0, stats.ncx2.cdf(np.maximum(room, 0.0), k - 2, remainder), 0.0)
+    density = stats.norm.pdf(z - mu)
+    not_flagged = slope_cut * float(np.sum(_POWER_WEIGHTS * density * quiet))
+    return float(min(1.0, max(0.0, 1.0 - not_flagged)))
+
+
+def cohort_detectable_shift(
+    std_errors: Sequence[float],
+    *,
+    positions: Sequence[float] | None = None,
+    shape: CohortShape,
+    level: float,
+    power: float = 0.8,
+) -> float:
+    """The smallest change across the cohorts that Q-or-slope would flag with probability `power`.
+
+    The change has the given `shape` (a linear fade from the shift in the first cohort to 0 in
+    the last, or a step from the shift to 0 at the middle) and is measured on the scale of the
+    standard errors, found by bisection on `cohort_power`. It is what a result that was not
+    flagged could have seen, and so how much a quiet result is worth.
+    """
+    se = _finite(std_errors, "std_errors")
+    k = len(se)
+    x = list(range(k)) if positions is None else _finite(positions, "positions")
+    if not 0 < power < 1:
+        raise StatsError(f"power must be between 0 and 1, got {power!r}")
+    pattern = _cohort_pattern(x, shape)
+
+    def reaches(shift: float) -> bool:
+        effects = [shift * value for value in pattern]
+        return cohort_power(effects, se, positions=x, level=level) >= power
+
+    high = max(se)
+    for _ in range(80):
+        if reaches(high):
+            break
+        high *= 2.0
+    else:
+        raise StatsError("no change this size could be seen: the standard errors are too large")
+    low = 0.0
+    for _ in range(80):
+        middle = (low + high) / 2
+        if reaches(middle):
+            high = middle
+        else:
+            low = middle
+    return high
+
+
 # --- Several comparisons at once -----------------------------------------------------------
 #
 # Dunnett's test, which section 9 names as the less conservative choice for several arms

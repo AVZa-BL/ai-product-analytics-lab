@@ -11,15 +11,27 @@ from scipy import stats
 from referee.cohort_effects import (
     TRIGGER_LEVEL,
     CohortTest,
+    ControlBaseline,
     ScaleTest,
     Trigger,
     cohort_test,
+    control_baseline,
+    detectable_shifts,
+    low_information,
+    min_expected_events,
+    registered_mde,
     shows_heterogeneity,
     trigger,
 )
 from referee.cohorts import plan_cohorts
 from referee.data import load_export
-from referee.methods import cohort_heterogeneity, log_mean_ratio, welch_correction, welch_difference
+from referee.methods import (
+    cohort_detectable_shift,
+    cohort_heterogeneity,
+    log_mean_ratio,
+    welch_correction,
+    welch_difference,
+)
 from referee.results import ResultsContext
 
 START = "2026-04-11T00:00:00Z"
@@ -545,3 +557,291 @@ def test_the_planted_fade_in_the_committed_export_is_flagged_for_variant_b_and_n
 
     assert trigger(b, 2).flagged is True
     assert trigger(c, 2).flagged is False
+
+
+# --- The shift a quiet result could have seen -------------------------------------------------
+
+
+def test_the_detectable_shifts_come_from_the_corrected_errors_and_block_numbers_the_trigger_used(
+    raw_spec,
+) -> None:
+    context, _, _ = _fade(raw_spec)
+    scale = _run(context).absolute
+
+    found = detectable_shifts(scale, 0.025)
+
+    errors = [c.corrected_std_error for c in scale.cohorts]
+    for shape in ("linear_fade", "step"):
+        expected = cohort_detectable_shift(
+            errors, positions=[0, 1, 2, 3], shape=shape, level=0.025, power=0.8
+        )
+        assert found[shape] == expected
+    assert 0 < found["step"] < found["linear_fade"]
+    assert set(found) == {"linear_fade", "step"}
+
+
+def test_the_detectable_shift_follows_the_level_and_the_gap_between_blocks(raw_spec) -> None:
+    control = _draws(31, {0: 10, 1: 10, 2: 10, 3: 10})
+    arm = _draws(32, {0: 12, 1: 12, 2: 12, 3: 12})
+    arm[2] = arm[2][:20]
+    context = _context(raw_spec, _rows("control", control) + _rows("variant_b", arm))
+    scale = _run(context).absolute
+
+    gapped = detectable_shifts(scale, 0.025)
+    stricter = detectable_shifts(scale, 0.0125)
+
+    assert [c.block for c in scale.cohorts] == [0, 1, 3]
+    errors = [c.corrected_std_error for c in scale.cohorts]
+    assert gapped["linear_fade"] == cohort_detectable_shift(
+        errors, positions=[0, 1, 3], shape="linear_fade", level=0.025
+    )
+    assert stricter["step"] > gapped["step"] and stricter["linear_fade"] > gapped["linear_fade"]
+
+
+def test_a_scale_that_was_not_evaluated_has_no_detectable_shift() -> None:
+    assert detectable_shifts(_scale(None, None), 0.025) is None
+
+
+# --- Why a result tells little ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("shift", "control_mean", "mde", "events", "labels"),
+    [
+        (1.0, 1.0, None, None, ()),
+        (1.0001, 1.0, None, None, ("shift_exceeds_control_mean",)),
+        (4.0, 10.0, 1.0, None, ()),
+        (4.0001, 10.0, 1.0, None, ("shift_exceeds_4_times_registered_mde",)),
+        (1.0, 10.0, None, 5.0, ()),
+        (1.0, 10.0, None, 4.9999, ("fewer_than_5_expected_events",)),
+        (
+            50.0,
+            10.0,
+            1.0,
+            2.0,
+            (
+                "shift_exceeds_control_mean",
+                "shift_exceeds_4_times_registered_mde",
+                "fewer_than_5_expected_events",
+            ),
+        ),
+        (5.0, 10.0, None, 0.0, ("fewer_than_5_expected_events",)),
+    ],
+)
+def test_a_result_is_low_information_by_the_three_rules_of_section_21_7(
+    shift: float, control_mean: float, mde: float | None, events: float | None, labels: tuple
+) -> None:
+    got = low_information(
+        shift=shift, control_mean=control_mean, registered_mde=mde, expected_events=events
+    )
+
+    assert got == labels
+
+
+def test_the_registered_effect_is_the_primary_metrics_alone(raw_spec) -> None:
+    guardrail = {
+        "name": "sessions_7d",
+        "kind": "continuous",
+        "baseline": 10.0,
+        "baseline_std": 5.0,
+        "harmful_direction": "decrease",
+        "tolerance_relative": 0.05,
+    }
+    spec = results_spec(raw_spec, arms=TWO_ARMS, guardrails=[guardrail], design__mde_relative=0.3)
+    context = ResultsContext.of(spec, build_data([Row("p1")]))
+
+    assert registered_mde(context, context.metrics["purchased_7d"]) == pytest.approx(0.3 * 0.05)
+    assert registered_mde(context, context.metrics["sessions_7d"]) is None
+
+
+def _binary_rows(arm: str, rates: dict[int, float], n: int = 200) -> list[Row]:
+    """`n` players per block, a share `rate` of them buying after their first exposure."""
+    rows = []
+    for block, rate in rates.items():
+        buyers = round(rate * n)
+        for i in range(n):
+            bought = i < buyers
+            rows.append(
+                Row(
+                    f"{arm}_{block:02d}_{i:04d}",
+                    arm,
+                    assigned_at=at(7 * block),
+                    exposed_at=at(7 * block, 1),
+                    purchases=int(bought),
+                    first_purchase_at=at(7 * block, 2) if bought else None,
+                )
+            )
+    return rows
+
+
+def _binary_context(raw_spec, control: dict[int, float], arm: dict[int, float], n: int = 200):
+    spec = results_spec(
+        raw_spec,
+        arms=TWO_ARMS,
+        design__planned_duration_days=28,
+        design__min_duration_days=7,
+        design__start_utc=START,
+        design__mde_relative=2.0,
+    )
+    rows = _binary_rows("control", control, n) + _binary_rows("variant_b", arm, n)
+    return ResultsContext.of(spec, build_data(rows))
+
+
+def test_the_fewest_events_in_any_arm_and_cohort_is_the_expected_count_of_a_binary_metric(
+    raw_spec,
+) -> None:
+    context = _binary_context(
+        raw_spec,
+        control={0: 0.10, 1: 0.10, 2: 0.10, 3: 0.10},
+        arm={0: 0.10, 1: 0.03, 2: 0.10, 3: 0.10},
+    )
+    metric = context.metrics["purchased_7d"]
+
+    scale = cohort_test(context, plan_cohorts(context, "variant_b"), metric).absolute
+
+    assert min_expected_events(scale) == pytest.approx(0.03 * 200)  # 6 buyers of 200
+    assert min_expected_events(_scale(None, None)) is None
+
+
+# --- The control arm across the cohorts -------------------------------------------------------
+
+
+def test_the_control_mean_by_cohort_has_a_95_percent_interval_and_a_pooled_mean(raw_spec) -> None:
+    context, control, _ = _fade(raw_spec)
+    plan = plan_cohorts(context, "variant_b")
+
+    baseline = control_baseline(context, plan, context.metrics["sessions_7d"])
+
+    assert [c.block for c in baseline.cohorts] == [0, 1, 2, 3]
+    for found in baseline.cohorts:
+        values = np.array(control[found.block], float)
+        low, high = stats.t.interval(0.95, len(values) - 1, values.mean(), stats.sem(values))
+        assert found.n == 80 and found.mean == pytest.approx(values.mean(), rel=1e-12)
+        assert found.ci_low == pytest.approx(low, rel=1e-9)
+        assert found.ci_high == pytest.approx(high, rel=1e-9)
+    everyone = np.concatenate([control[b] for b in range(4)]).astype(float)
+    assert baseline.pooled_mean == pytest.approx(everyone.mean(), rel=1e-12)
+
+
+def test_the_homogeneity_of_a_continuous_control_is_cochrans_q_of_its_means(raw_spec) -> None:
+    context, control, _ = _fade(raw_spec)
+    plan = plan_cohorts(context, "variant_b")
+
+    baseline = control_baseline(context, plan, context.metrics["sessions_7d"])
+
+    means = np.array([np.mean(control[b]) for b in range(4)])
+    ses = np.array([stats.sem(np.array(control[b], float)) for b in range(4)])
+    ses = ses * np.array([welch_correction(79)] * 4)
+    w = 1 / ses**2
+    q = (w * (means - (w * means).sum() / w.sum()) ** 2).sum()
+    assert baseline.homogeneity_p == pytest.approx(stats.chi2.sf(q, 3), rel=1e-9)
+    assert baseline.moves is False  # the control is drawn from one distribution
+
+
+def test_a_control_whose_mean_drifts_across_the_cohorts_is_said_to_move(raw_spec) -> None:
+    control = _draws(41, {0: 8, 1: 10, 2: 12, 3: 14})
+    arm = _draws(42, {0: 10, 1: 10, 2: 10, 3: 10})
+    context = _context(raw_spec, _rows("control", control) + _rows("variant_b", arm))
+
+    baseline = control_baseline(
+        context, plan_cohorts(context, "variant_b"), context.metrics["sessions_7d"]
+    )
+
+    assert baseline.homogeneity_p < 0.001 and baseline.moves is True
+
+
+def test_the_homogeneity_of_a_binary_control_is_the_chi_squared_test_of_its_counts(
+    raw_spec,
+) -> None:
+    context = _binary_context(
+        raw_spec,
+        control={0: 0.05, 1: 0.10, 2: 0.15, 3: 0.20},
+        arm={0: 0.10, 1: 0.10, 2: 0.10, 3: 0.10},
+        n=400,
+    )
+
+    baseline = control_baseline(
+        context, plan_cohorts(context, "variant_b"), context.metrics["purchased_7d"]
+    )
+
+    table = [[20, 40, 60, 80], [380, 360, 340, 320]]
+    expected = stats.chi2_contingency(table, correction=False)[1]
+    assert baseline.homogeneity_p == pytest.approx(expected, rel=1e-6)
+    assert baseline.moves is True
+    assert [c.mean for c in baseline.cohorts] == pytest.approx([0.05, 0.10, 0.15, 0.20])
+
+
+def test_the_homogeneity_cannot_be_worked_out_when_the_control_does_not_vary(raw_spec) -> None:
+    control = {b: [7] * 80 for b in range(4)}
+    arm = _draws(43, {0: 10, 1: 10, 2: 10, 3: 10})
+    context = _context(raw_spec, _rows("control", control) + _rows("variant_b", arm))
+
+    baseline = control_baseline(
+        context, plan_cohorts(context, "variant_b"), context.metrics["sessions_7d"]
+    )
+
+    assert baseline.homogeneity_p is None and baseline.moves is False
+    assert [c.ci_low for c in baseline.cohorts] == [7.0] * 4
+
+
+@pytest.mark.parametrize(
+    ("p", "moves"), [(0.0499, True), (0.05, False), (0.7, False), (None, False)]
+)
+def test_a_baseline_moves_when_its_homogeneity_p_is_below_005(p: float | None, moves: bool) -> None:
+    assert ControlBaseline(cohorts=(), pooled_mean=1.0, homogeneity_p=p).moves is moves
+
+
+def test_the_baseline_of_a_plan_that_is_not_evaluated_is_refused(raw_spec) -> None:
+    context = _context(
+        raw_spec, _rows("control", {0: _flat(5)}) + _rows("variant_b", {0: _flat(6)})
+    )
+
+    with pytest.raises(ValueError, match="not evaluated"):
+        control_baseline(
+            context, plan_cohorts(context, "variant_b"), context.metrics["sessions_7d"]
+        )
+
+
+def test_the_fewest_events_can_be_in_control_as_well_as_in_the_arm(raw_spec) -> None:
+    context = _binary_context(
+        raw_spec,
+        control={0: 0.10, 1: 0.02, 2: 0.10, 3: 0.10},
+        arm={0: 0.10, 1: 0.10, 2: 0.10, 3: 0.10},
+    )
+    scale = cohort_test(
+        context, plan_cohorts(context, "variant_b"), context.metrics["purchased_7d"]
+    ).absolute
+
+    assert min_expected_events(scale) == pytest.approx(0.02 * 200)
+
+
+def test_the_pooled_control_mean_weighs_each_cohort_by_its_players(raw_spec) -> None:
+    control = {0: [2] * 60, 1: [4] * 100, 2: [6] * 80, 3: [10] * 90}
+    control = {b: [v + (i % 2) for i, v in enumerate(vals)] for b, vals in control.items()}
+    arm = _draws(51, dict.fromkeys(range(4), 5))
+    context = _context(raw_spec, _rows("control", control) + _rows("variant_b", arm))
+
+    baseline = control_baseline(
+        context, plan_cohorts(context, "variant_b"), context.metrics["sessions_7d"]
+    )
+
+    everyone = [v for b in range(4) for v in control[b]]
+    assert [c.n for c in baseline.cohorts] == [60, 100, 80, 90]
+    assert baseline.pooled_mean == pytest.approx(np.mean(everyone), rel=1e-12)
+    assert baseline.pooled_mean != pytest.approx(np.mean([c.mean for c in baseline.cohorts]))
+
+
+def test_the_control_baseline_covers_the_cohorts_the_test_used_and_no_others(raw_spec) -> None:
+    control = _draws(52, dict.fromkeys(range(4), 10))
+    arm = _draws(53, dict.fromkeys(range(4), 10))
+    arm[2] = arm[2][:20]  # block 2 cannot be used: the arm has 20 players there
+    context = _context(raw_spec, _rows("control", control) + _rows("variant_b", arm))
+
+    baseline = control_baseline(
+        context, plan_cohorts(context, "variant_b"), context.metrics["sessions_7d"]
+    )
+
+    assert [c.block for c in baseline.cohorts] == [0, 1, 3]
+    assert baseline.pooled_mean == pytest.approx(
+        np.mean([v for b in (0, 1, 3) for v in control[b]]), rel=1e-12
+    )

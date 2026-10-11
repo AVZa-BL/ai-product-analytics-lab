@@ -341,3 +341,23 @@ def test_the_amendment_names_the_gate_reasons_and_the_values_its_readings_quote(
     floors = [raised_floor(r) for r in (1.6, 2, 3, 4, 9)]
     assert floors == [33, 43, 69, 98, 258]
     assert "floors of 33, 43, 69, 98 and 258 at 1.6, 2, 3, 4 and 9 to 1" in amendment
+
+
+def test_the_amendment_says_in_words_each_low_information_label_and_names_the_files() -> None:
+    from typing import get_args
+
+    from referee.cohort_effects import LowInformation
+
+    amendment = DESIGN.split("\n## 21. Amendment")[1]
+    readings = amendment.split("- Readings of these numbers")[1].split("### 21.8")[0]
+    words = {
+        "shift_exceeds_control_mean": "when that shift exceeds the control mean",
+        "shift_exceeds_4_times_registered_mde": "exceeds 4 times the registered minimum detectable",
+        "fewer_than_5_expected_events": "fewer than 5 expected events per arm and cohort",
+    }
+
+    assert set(words) == set(get_args(LowInformation))
+    for label, phrase in words.items():
+        assert phrase in amendment, label
+    assert "`methods.cohort_detectable_shift`" in readings
+    assert "referee/src/referee/cohort_effects.py" in readings
