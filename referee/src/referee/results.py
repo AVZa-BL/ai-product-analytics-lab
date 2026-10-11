@@ -241,6 +241,12 @@ class ResultsContext:
         counted = Counter(p.arm for p in players)
         return {name: counted[name] for name in self.arm_names}
 
+    @property
+    def observed_days(self) -> int:
+        """Whole days, rounded up, from the first to the last assignment of `players`."""
+        assigned = [player.assigned_at for player in self.players]
+        return math.ceil((max(assigned) - min(assigned)) / timedelta(days=1))
+
     def week_of(self, moment: datetime) -> int:
         """The 7-day block of `moment`, counted from the origin (negative before it)."""
         return self.block_of(moment, DAYS_PER_BLOCK)

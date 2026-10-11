@@ -43,6 +43,10 @@ POWER = 0.8  # the chance with which a quiet result could have seen the shifts i
 MDE_MULTIPLE = 4  # a shift above this many registered minimum detectable effects is low information
 MIN_EXPECTED_EVENTS = 5  # fewer events than this per arm and cohort is low information
 BASELINE_LEVEL = 0.05  # a control baseline that changes across cohorts, at this p value
+# The share of tests the trigger flagged when nothing changes over time, two arms, in the 96
+# cells of design section 21.5 (mean and maximum); a test checks them against the saved study.
+NULL_FLAG_RATE_MEAN = 0.0346
+NULL_FLAG_RATE_MAX = 0.0508
 SHAPES: tuple[CohortShape, CohortShape] = ("linear_fade", "step")
 LowInformation = Literal[
     "shift_exceeds_control_mean",

@@ -33,7 +33,7 @@ The first prints a review that recommends **revise**: the design needs 389,060 u
 | 2 | The spec cannot be read or is not valid (every violation is listed) |
 | 3 | A failure inside Referee itself |
 
-Referee is advisory. `proceed` means the design raised none of the objections of the 17 design-review rules in [`docs/rules.md`](docs/rules.md), the catalogue with what triggers each and why it matters. It does not mean the experiment is worth running. The catalogue also lists the six results rules built so far (RES-001, RES-002, RES-003, RES-011, RES-012, RES-013); they read an experiment's data as well as its spec, and no command runs them yet.
+Referee is advisory. `proceed` means the design raised none of the objections of the 17 design-review rules in [`docs/rules.md`](docs/rules.md), the catalogue with what triggers each and why it matters. It does not mean the experiment is worth running. The catalogue also lists the seven results rules built so far (RES-001, RES-002, RES-003, RES-007, RES-011, RES-012, RES-013); they read an experiment's data as well as its spec, and no command runs them yet.
 
 Things to know when writing a spec:
 

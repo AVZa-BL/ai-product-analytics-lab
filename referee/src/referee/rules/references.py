@@ -26,3 +26,10 @@ DENG_ET_AL_2013 = (
     "Deng, Xu, Kohavi, Walker. Improving the Sensitivity of Online Controlled Experiments "
     "by Utilizing Pre-Experiment Data. WSDM 2013."
 )
+COCHRAN_1954 = (
+    "Cochran. The Combination of Estimates from Different Experiments. Biometrics 10(1), 1954."
+)
+HIGGINS_THOMPSON_2002 = (
+    "Higgins, Thompson. Quantifying Heterogeneity in a Meta-Analysis. "
+    "Statistics in Medicine 21(11), 2002."
+)

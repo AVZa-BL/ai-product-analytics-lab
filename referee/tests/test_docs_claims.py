@@ -155,7 +155,7 @@ def test_the_milestone_4_amendment_names_rules_and_files_and_its_new_rules_are_r
     assert not ({"RES-012", "RES-013"} & {rule.id for rule in ALL_RULES})
 
 
-def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_4b_2_is_not_built() -> (
+def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_4b_2_is_unfinished() -> (
     None
 ):
     amendment = DESIGN.split("\n## 21. Amendment")[1]
@@ -163,7 +163,7 @@ def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_4b_2_is
     catalogue = set(re.findall(r"(?:DES|RES)-0\d\d", seed_list))
     named = set(re.findall(r"(?:DES|RES)-0\d\d", amendment))
     new_rules = {"RES-012", "RES-013", "DES-009"}
-    built_in_4b_1 = {"RES-001", "RES-002", "RES-003", "RES-011", "RES-012", "RES-013"}
+    built_so_far = {"RES-001", "RES-002", "RES-003", "RES-007", "RES-011", "RES-012", "RES-013"}
     built = {rule.id for rule in ALL_RULES} | {rule.id for rule in RESULTS_RULES}
 
     assert {"RES-001", "RES-002", "RES-003", "RES-004", "RES-007", "RES-008"} <= named
@@ -174,11 +174,10 @@ def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_4b_2_is
         assert (ROOT.parent / name).exists(), name
     for branch in ("feat/referee-results-data-fit", "feat/referee-results-effect"):
         assert branch in amendment
-    assert built_in_4b_1 <= {rule.id for rule in RESULTS_RULES}
+    assert built_so_far <= {rule.id for rule in RESULTS_RULES}
     assert not {rule.id for rule in ALL_RULES} & {rule_id for rule_id in named if "RES" in rule_id}
-    assert not {"RES-004", "RES-007", "RES-008", "DES-009"} & built, (
-        "RES-004, RES-007, RES-008 and DES-009 arrive in 4b-2; update this test and section 21 "
-        "when they do"
+    assert not {"RES-004", "RES-008", "DES-009"} & built, (
+        "RES-004, RES-008 and DES-009 arrive in 4b-2; update this test and section 21 when they do"
     )
 
 

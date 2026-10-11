@@ -6,9 +6,7 @@ A rule reads a `ResultsContext` and returns the evidence that triggered it.
 
 from __future__ import annotations
 
-import math
 from collections import Counter, defaultdict
-from datetime import timedelta
 from typing import Any
 
 from referee.methods import (
@@ -21,13 +19,18 @@ from referee.methods import (
 )
 from referee.results import ResultsContext, difference_summary, effect_estimates
 from referee.rules.base import Escalation, Rule
-from referee.rules.references import FABIJAN_ET_AL_2019, KOHAVI_TANG_XU_2020
+from referee.rules.cohorts import cohort_report
+from referee.rules.references import (
+    COCHRAN_1954,
+    FABIJAN_ET_AL_2019,
+    HIGGINS_THOMPSON_2002,
+    KOHAVI_TANG_XU_2020,
+)
 
 LATE_SHARE_ALPHA = 0.001  # RES-012's escalation; its own judgement, not SRM_ALPHA (section 21.9)
 _SHARE_DIGITS = 4
 _CHI_SQUARE_DIGITS = 4
 _EXPECTED_DIGITS = 2
-_DAY = timedelta(days=1)
 
 
 def _allocation(context: ResultsContext) -> list[float]:
@@ -262,18 +265,26 @@ def _shorter_than_the_registered_minimum(context: ResultsContext) -> dict[str, A
     """The assignments span fewer whole days than design.min_duration_days."""
     first = min(player.assigned_at for player in context.players)
     last = max(player.assigned_at for player in context.players)
-    observed_days = math.ceil((last - first) / _DAY)
     design = context.spec.design
-    if observed_days >= design.min_duration_days:
+    if context.observed_days >= design.min_duration_days:
         return None
     return {
-        "observed_days": observed_days,
+        "observed_days": context.observed_days,
         "min_duration_days": design.min_duration_days,
         "planned_duration_days": design.planned_duration_days,
         "first_assignment": first.isoformat(),
         "last_assignment": last.isoformat(),
         "ignored_before_start": list(context.ignored_before_start),
     }
+
+
+def _effect_differs_between_cohorts(context: ResultsContext) -> dict[str, Any] | None:
+    """The cohort test of design sections 21.5 to 21.7, when anything is flagged or not run."""
+    report = cohort_report(context, _configuration_changed(context))
+    summary = report["summary"]
+    if not (summary["flagged"] or summary["not_evaluated"]):
+        return None
+    return report
 
 
 RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
@@ -358,6 +369,51 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         ),
         references=(KOHAVI_TANG_XU_2020,),
         check=_shorter_than_the_registered_minimum,
+    ),
+    Rule(
+        id="RES-007",
+        severity="warning",
+        title="The effect differs between cohorts of first exposure, or the test could not run",
+        fires_when=(
+            "For a non-control arm and one of the metrics of the spec (the primary metric or a "
+            "guardrail), the arm's difference against control is compared between cohorts: the "
+            "analysed players of the arm whose first exposure falls in one 7-day block (one "
+            "14-day block when the weekly cohorts are too small and the plan is at least 42 "
+            "days), counted from design.start_utc, else from the first assignment. The arm and "
+            "metric are flagged when, on both the absolute scale (the Welch difference) and the "
+            "relative scale (the log of the ratio of the means), Cochran's Q or the weighted "
+            "slope of the difference over the blocks has p below 0.025 divided by the number "
+            "of non-control arms. The rule fires when any arm and metric is flagged, or could "
+            "not be evaluated: the evidence then gives a reason code (fewer than 3 cohorts "
+            "reach the minimum size, the cohorts do not cover the window, the arms differ by "
+            "more than 9 to 1, an outcome window had not closed at the export, the units are "
+            "not independent players, or the metric is a ratio)."
+        ),
+        why_it_matters=(
+            "The pooled effect is an average over players who were first exposed at different "
+            "times. If the effect differs between those cohorts, the pooled figure describes "
+            "none of them well, and what a later launch sees can differ from it. The test says "
+            "that the effect differs, not why: a change tied to the calendar week of a cohort "
+            "(a launch, a promotion, a build, the mix of players acquired) cannot be told from "
+            "one tied to each player's own time since first exposure, because the export "
+            "holds seven-day totals only. A test that could not run is reported too, so that a "
+            "missing check cannot read as a pass."
+        ),
+        remediation=(
+            "Read the table of cohorts in the evidence before the pooled effect: each cohort's "
+            "difference and its standard error on both scales. Find out what differed between "
+            "the weeks of the cohorts (a launch, a promotion, a build, a change in where "
+            "players come from; RES-013 shows a change of configuration), and report the "
+            "pooled effect together with the cohort table, naming no cause the data cannot "
+            "show. For existing players, check whether the earliest cohorts are the most "
+            "active. A flag labelled low information is a lead to re-check with more data at "
+            "the planned end, not a finding. If the test did not run, the reason code says what "
+            "was missing: more traffic or a longer run, arms closer in size, an export made "
+            "after every outcome window has closed, or randomisation and analysis in the same "
+            "independent unit (player, user or device)."
+        ),
+        references=(COCHRAN_1954, HIGGINS_THOMPSON_2002, KOHAVI_TANG_XU_2020),
+        check=_effect_differs_between_cohorts,
     ),
     Rule(
         id="RES-011",

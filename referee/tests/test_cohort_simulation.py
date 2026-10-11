@@ -20,7 +20,13 @@ from cohort_simulation import (
     run_cell,
 )
 
-from referee.cohort_effects import CohortTest, _scale_test, trigger
+from referee.cohort_effects import (
+    NULL_FLAG_RATE_MAX,
+    NULL_FLAG_RATE_MEAN,
+    CohortTest,
+    _scale_test,
+    trigger,
+)
 
 
 def _real(arm: np.ndarray, control: np.ndarray) -> dict[str, np.ndarray]:
@@ -286,6 +292,15 @@ def test_the_design_text_quotes_the_figures_the_committed_study_holds() -> None:
     assert max(c["both"] for c in drift_absolute) == pytest.approx(0.035, abs=5e-5)
     assert "holds the trigger to 4.0% and 3.5% at most" in amendment
     assert max(c["both"] for c in lognormal) < 0.0475
+
+
+def test_the_null_flag_rates_the_findings_quote_are_the_mean_and_maximum_of_the_study() -> None:
+    stable = _cells(NULL, arms=2, scenario=("zero", "relative"))
+    rates = [c["both"] for c in stable]
+
+    assert len(rates) == 96
+    assert NULL_FLAG_RATE_MEAN == round(sum(rates) / len(rates), 4)
+    assert NULL_FLAG_RATE_MAX == max(rates)
 
 
 def test_the_design_text_quotes_the_power_figures_the_committed_study_holds() -> None:
