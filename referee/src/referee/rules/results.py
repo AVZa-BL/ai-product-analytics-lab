@@ -266,10 +266,11 @@ def _shorter_than_the_registered_minimum(context: ResultsContext) -> dict[str, A
     first = min(player.assigned_at for player in context.players)
     last = max(player.assigned_at for player in context.players)
     design = context.spec.design
-    if context.observed_days >= design.min_duration_days:
+    observed_days = context.observed_days
+    if observed_days >= design.min_duration_days:
         return None
     return {
-        "observed_days": context.observed_days,
+        "observed_days": observed_days,
         "min_duration_days": design.min_duration_days,
         "planned_duration_days": design.planned_duration_days,
         "first_assignment": first.isoformat(),
@@ -410,7 +411,10 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
             "the planned end, not a finding. If the test did not run, the reason code says what "
             "was missing: more traffic or a longer run, arms closer in size, an export made "
             "after every outcome window has closed, or randomisation and analysis in the same "
-            "independent unit (player, user or device)."
+            "independent unit (player, user or device). The evidence prices the traffic that "
+            "would let the cohorts be used, from the sizes observed (plans, traffic_needed), says "
+            "when to export again if the outcome windows of some cohorts had not closed, or "
+            "says why more traffic would not help."
         ),
         references=(COCHRAN_1954, HIGGINS_THOMPSON_2002, KOHAVI_TANG_XU_2020),
         check=_effect_differs_between_cohorts,

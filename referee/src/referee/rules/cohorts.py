@@ -2,7 +2,8 @@
 
 `cohort_report` runs the cohort test (design sections 21.5 to 21.7) for every non-control arm
 and every metric the spec names, and returns what a finding or a report needs: the cohort plan
-of each arm, one entry per arm and metric with its status, a summary, the settings used, and the
+of each arm (with the traffic that would let it pass, or when to export again, when it could
+not), one entry per arm and metric with its status, a summary, the settings used, and the
 sentences a reader should get. The rule raises a finding from it when something is flagged or
 could not be evaluated; the report of milestone 4c prints its summary line even when the rule
 is quiet.
@@ -14,6 +15,9 @@ have seen. Nothing here names a cause.
 
 from __future__ import annotations
 
+import math
+import re
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from referee.cohort_effects import (
@@ -31,7 +35,19 @@ from referee.cohort_effects import (
     registered_mde,
     trigger,
 )
-from referee.cohorts import Attempt, CohortPlan, Minimum, cohort_gate, plan_cohorts
+from referee.cohorts import (
+    FLOOR,
+    Attempt,
+    Binding,
+    CohortPlan,
+    Minimum,
+    Price,
+    TrafficAttempt,
+    TrafficNeeded,
+    cohort_gate,
+    plan_cohorts,
+    traffic_needed,
+)
 from referee.methods import CohortShape
 from referee.results import ExportMetric, ResultsContext
 
@@ -71,7 +87,54 @@ def _attempt(attempt: Attempt, arm: str, control: str) -> dict[str, Any]:
     }
 
 
-def _plan(plan: CohortPlan) -> dict[str, Any]:
+def _binding(binding: Binding) -> dict[str, Any]:
+    return {
+        "kind": binding.kind,
+        "block_days": binding.block_days,
+        "block": binding.block,
+        "side": binding.side,
+        "have": binding.have,
+        "need": binding.need,
+    }
+
+
+def _price_evidence(price: Price | None) -> dict[str, Any] | None:
+    if price is None:
+        return None
+    return {
+        "factor": price.factor,
+        "block_days": price.block_days,
+        "binding": [_binding(b) for b in price.binding],
+        "first_pass": price.first_pass,
+    }
+
+
+def _traffic_attempt(attempt: TrafficAttempt) -> dict[str, Any]:
+    return {
+        "block_days": attempt.block_days,
+        "reason": attempt.reason,
+        "left_out": list(attempt.left_out),
+        "now": attempt.now,
+        "after_windows_close": attempt.after_windows_close,
+    }
+
+
+def _traffic(found: TrafficNeeded | None, closes: datetime | None) -> dict[str, Any] | None:
+    if found is None:
+        return None
+    return {
+        "windows_close_at": None if closes is None else closes.isoformat(),
+        "now": _price_evidence(found.now),
+        "after_windows_close": _price_evidence(found.after_windows_close),
+        "waiting_suffices": found.waiting_suffices,
+        "blocker": found.blocker,
+        "attempts": [_traffic_attempt(a) for a in found.attempts],
+    }
+
+
+def _plan(
+    plan: CohortPlan, traffic: TrafficNeeded | None, closes: datetime | None
+) -> dict[str, Any]:
     return {
         "block_days": plan.block_days,
         "usable": list(plan.usable),
@@ -81,6 +144,7 @@ def _plan(plan: CohortPlan) -> dict[str, Any]:
         "as_of": None if plan.as_of is None else plan.as_of.isoformat(),
         "completeness_checked": plan.completeness_checked,
         "attempts": [_attempt(a, plan.arm, plan.control) for a in plan.attempts],
+        "traffic_needed": _traffic(traffic, closes),
     }
 
 
@@ -300,12 +364,227 @@ def _entry_note(entry: dict[str, Any]) -> str:
     return sentence
 
 
+_BLOCKERS = {
+    "plan_too_short": (
+        "More traffic would not help: the planned window holds fewer than 3 whole blocks. A "
+        "plan of at least 21 days holds 3 weekly blocks."
+    ),
+    "arms_too_unequal": (
+        "More traffic in the same proportions would not help: the two arms differ in size by "
+        "more than 9 to 1, and the smaller arm would have to grow relative to the larger."
+    ),
+    "empty_cohorts": (
+        "More of the same traffic would not help: too few blocks of the window hold players of "
+        "both arms (the test needs 3 usable cohorts, at least one in each half of the window, "
+        "and for weekly blocks the median week must not be empty), and scaling what was "
+        "observed cannot fill an empty one. Check whether assignment or exposure stopped or "
+        "began late."
+    ),
+}
+_EMPTY_INTERIM = (
+    "The assignments cover only part of the planned window, so some weeks of it are empty here "
+    "and more of the same traffic could not fill them. If the run is still going, run to the "
+    "planned end and look again; if it stopped, check whether assignment or exposure stopped "
+    "early."
+)
+_UNIT = {7: "weekly", 14: "14-day"}
+_NUMBERING = (
+    "Cohort numbers count blocks of 7 or 14 days from 0, starting at design.start_utc, or at "
+    "the first assignment when the spec registers none."
+)
+_INTERIM_TRAFFIC = (
+    "This is an interim look: the weeks the assignments do not reach count as empty in the "
+    "traffic figures, which describe the data so far and not a finished run, so a figure can "
+    "fall as they fill."
+)
+_CAVEATS = (
+    "About the traffic figures: they assume that the extra players arrive in the same weeks and "
+    "in the same proportions between the arms, and are exposed at the same rate, so arrivals "
+    "that come in spikes may not repeat; and they concern the sizes of the cohorts only, so a "
+    "scale can still drop a cohort it cannot estimate (no variation, or a mean that is not "
+    "positive). They do not price a longer run, or growing one arm only, which can cost less."
+)
+_PREFERRED = (
+    " The preferred minimum is a quarter of the registered share of a block; it is used only "
+    "while it keeps at least 90% of the cohorts that reach the floor."
+)
+
+
+def _count(number: float) -> str:
+    return str(int(number)) if number == int(number) else f"{number:.1f}"
+
+
+def _players(number: float) -> str:
+    return f"{_count(number)} player" + ("" if number == 1 else "s")
+
+
+def _times(factor: float) -> str:
+    return f"{factor:.2f}".rstrip("0").rstrip(".")
+
+
+def _when(moment: datetime) -> str:
+    """`moment` in UTC, rounded up to the minute so that "after" it is never too early."""
+    if moment.tzinfo is not None:
+        moment = moment.astimezone(UTC)
+    if moment.second or moment.microsecond:
+        moment = moment.replace(second=0, microsecond=0) + timedelta(minutes=1)
+    return f"{moment:%Y-%m-%d %H:%M} UTC"
+
+
+def _cohorts(block_days: int, blocks: list[int]) -> str:
+    unit = _UNIT[block_days]
+    if len(blocks) == 1:
+        return f"{unit} cohort {blocks[0]}"
+    listed = ", ".join(str(b) for b in blocks[:-1])
+    return f"{unit} cohorts {listed} and {blocks[-1]}"
+
+
+def _binding_text(arm: str, bindings: tuple[Binding, ...]) -> str:
+    """The sizes that reach what a rule asks of them at the multiple, as one sentence."""
+    groups: dict[tuple, dict[str, list[int]]] = {}
+    for binding in bindings:
+        key = (binding.block_days, binding.kind, binding.have, binding.need)
+        groups.setdefault(key, {}).setdefault(binding.side, []).append(binding.block)
+    parts = []
+    for (days, kind, have, need), sides in groups.items():
+        if kind == "weekly_median":
+            parts.append(
+                f"the median over the weeks of the smaller arm's size is {_players(have)} and "
+                f"{need} are wanted for weekly cohorts"
+            )
+            continue
+        wanted = f"the preferred minimum is {need}" if kind == "preferred" else f"{need} are wanted"
+        if set(sides) == {"arm", "control"} and sides["arm"] == sides["control"]:
+            where = _cohorts(days, sides["arm"])
+            parts.append(f"both arms have {_players(have)} in {where}, where {wanted}")
+            continue
+        for side, blocks in sides.items():
+            who = f"arm {arm} has" if side == "arm" else "control has"
+            parts.append(f"{who} {_players(have)} in {_cohorts(days, blocks)}, where {wanted}")
+    return "; ".join(parts)
+
+
+def _price_text(arm: str, plan: CohortPlan, price: Price) -> str:
+    sentence = (
+        f"{_times(price.factor)} times the traffic observed (every cohort of both arms scaled "
+        f"together) would meet the size rules for the cohorts, with {_UNIT[price.block_days]} "
+        "cohorts at that multiple, and keep meeting them at any larger multiple. At that "
+        "multiple these sizes reach what is wanted (the counts are as observed): "
+        f"{_binding_text(arm, price.binding)}."
+    )
+    if price.first_pass is not None:
+        sentence += (
+            f" The plan already passes at {_times(price.first_pass)} times, but not at every "
+            "larger multiple (the preferred minimum is judged again as the cohorts grow), so "
+            f"{_times(price.factor)} is where it keeps passing."
+        )
+    if any(b.kind == "floor" for b in price.binding) and plan.floor > FLOOR:
+        ratio = _times(math.ceil(plan.allocation_ratio * 100) / 100)
+        sentence += (
+            f" The floor is {plan.floor} instead of {FLOOR} because the two arms differ about "
+            f"{ratio} to 1; a smaller gap between the arms lowers it."
+        )
+    if any(b.kind == "preferred" for b in price.binding):
+        sentence += _PREFERRED
+    return sentence
+
+
+def _left_out_text(attempts: tuple[TrafficAttempt, ...]) -> str:
+    return "; ".join(
+        _cohorts(attempt.block_days, list(attempt.left_out))
+        for attempt in attempts
+        if attempt.left_out
+    )
+
+
+def _by_length(attempts: tuple[TrafficAttempt, ...]) -> str:
+    parts = []
+    for attempt in attempts:
+        name = f"{_UNIT[attempt.block_days]} cohorts"
+        now = f"{_times(attempt.now)} times" if attempt.now is not None else "no multiple would do"
+        if not attempt.left_out:
+            parts.append(f"{name}, {now}")
+            continue
+        later = attempt.after_windows_close
+        if later is None:
+            counted = "no multiple would do"
+        elif later == 1.0:
+            counted = "no extra traffic"
+        else:
+            counted = f"{_times(later)} times"
+        parts.append(
+            f"{name}, {now} as exported and {counted} once the cohorts left out are counted"
+        )
+    return "Each block length on its own: " + "; ".join(parts) + "."
+
+
+def _windows_close(context: ResultsContext, arm: str, plan: CohortPlan) -> datetime | None:
+    """When the last outcome window still open at the export closes, or None when none was.
+
+    The cohorts left out are those with a player whose window closes after the as-of time, so
+    the latest of those windows is the last to wait for, whichever block length is used.
+    """
+    if plan.as_of is None:
+        return None
+    still_open = [
+        player.window_closes_at
+        for player in context.analysed
+        if player.arm in (arm, context.control) and player.window_closes_at > plan.as_of
+    ]
+    return max(still_open, default=None)
+
+
+def _traffic_note(
+    arm: str, plan: CohortPlan, found: TrafficNeeded, closes: datetime | None, interim: bool
+) -> str:
+    if found.blocker == "empty_cohorts" and interim:
+        return f"arm {arm}: {_EMPTY_INTERIM}"
+    if found.blocker is not None:
+        return f"arm {arm}: {_BLOCKERS[found.blocker]}"
+    parts = []
+    left_out = _left_out_text(found.attempts)
+    if left_out:
+        parts.append(
+            "Cohorts were left out because their outcome windows had not closed by "
+            f"{_when(plan.as_of)}: {left_out}."
+        )
+    after_closing = "" if closes is None else f" after {_when(closes)}"
+    now, after = found.now, found.after_windows_close
+    if found.waiting_suffices:
+        parts.append(
+            f"Export again{after_closing}, once they have closed: {_UNIT[after.block_days]} "
+            "cohorts would then meet the size rules at the traffic observed."
+        )
+        if now is not None:
+            parts.append(f"Without waiting, {_price_text(arm, plan, now)}")
+        else:
+            parts.append("As exported, no multiple of the traffic would do.")
+    elif now is not None and now == after:
+        parts.append(f"Whether or not they are counted, {_price_text(arm, plan, now)}")
+    else:
+        if now is not None:
+            lead = "As exported, " if after is not None else ""
+            parts.append(lead + _price_text(arm, plan, now))
+        elif left_out:
+            parts.append("With those cohorts left out, no multiple of the traffic would do.")
+        if after is not None:
+            closed = "" if closes is None else f" (after {_when(closes)})"
+            parts.append(
+                f"Once they have closed{closed} and are counted, " + _price_text(arm, plan, after)
+            )
+    if len(found.attempts) > 1:
+        parts.append(_by_length(found.attempts))
+    return f"arm {arm}: " + " ".join(parts)
+
+
 def _notes(
     context: ResultsContext,
     entries: list[dict[str, Any]],
     summary: dict[str, Any],
     settings: dict[str, Any],
     plans: dict[str, CohortPlan],
+    traffic: dict[str, TrafficNeeded | None],
+    closes: dict[str, datetime | None],
     configuration: dict[str, Any] | None,
 ) -> list[str]:
     notes = [
@@ -329,6 +608,24 @@ def _notes(
             "looked for."
         )
     notes.extend(_entry_note(entry) for entry in entries)
+    priced = numbered = figures = False
+    for arm, found in traffic.items():
+        stopped = any(e["arm"] == arm and e.get("reason") == plans[arm].reason for e in entries)
+        if found is not None and stopped:
+            note = _traffic_note(arm, plans[arm], found, closes[arm], settings["interim"])
+            notes.append(note)
+            figures = figures or found.blocker is None
+            numbered = numbered or bool(re.search(r"cohorts? \d", note))
+            shown = found.now is not None or (
+                found.after_windows_close is not None and not found.waiting_suffices
+            )
+            priced = priced or shown
+    if numbered:
+        notes.append(_NUMBERING)
+    if figures and settings["interim"]:
+        notes.append(_INTERIM_TRAFFIC)
+    if priced:
+        notes.append(_CAVEATS)
     for entry in entries:
         baseline = entry.get("control_baseline")
         if baseline is not None and baseline["moves"]:
@@ -371,6 +668,8 @@ def cohort_report(context: ResultsContext, configuration: dict[str, Any] | None)
     """
     arms = [name for name in context.arm_names if name != context.control]
     plans = {arm: plan_cohorts(context, arm) for arm in arms}
+    traffic = {arm: traffic_needed(plan) for arm, plan in plans.items()}
+    closes = {arm: _windows_close(context, arm, plan) for arm, plan in plans.items()}
     entries = [
         _entry(context, plans[arm], metric, len(arms))
         for metric in context.metrics.values()
@@ -381,7 +680,7 @@ def cohort_report(context: ResultsContext, configuration: dict[str, Any] | None)
     return {
         "summary": summary,
         "settings": settings,
-        "plans": {arm: _plan(plan) for arm, plan in plans.items()},
+        "plans": {arm: _plan(plan, traffic[arm], closes[arm]) for arm, plan in plans.items()},
         "tests": entries,
-        "notes": _notes(context, entries, summary, settings, plans, configuration),
+        "notes": _notes(context, entries, summary, settings, plans, traffic, closes, configuration),
     }

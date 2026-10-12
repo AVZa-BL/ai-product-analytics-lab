@@ -5,10 +5,16 @@ spread, so each scenario's outcome can be reasoned out before it is run.
 """
 
 import json
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
-from cohort_helpers import THREE_ARMS, cohort_context, cohort_rows, spread
+from cohort_helpers import (
+    THREE_ARMS,
+    cohort_context,
+    cohort_rows,
+    sized_context,
+    spread,
+)
 from results_helpers import TWO_ARMS, at
 
 from referee.cohort_effects import (
@@ -18,10 +24,32 @@ from referee.cohort_effects import (
     cohort_test,
     detectable_shifts,
 )
-from referee.cohorts import plan_cohorts
+from referee.cohorts import (
+    Attempt,
+    Binding,
+    CohortPlan,
+    Minimum,
+    Price,
+    plan_cohorts,
+    traffic_needed,
+)
 from referee.results import ResultsContext
 from referee.rules import RESULTS_RULES
-from referee.rules.cohorts import _amount, _scale, _share, _shifts, cohort_report, summarise
+from referee.rules.cohorts import (
+    _amount,
+    _binding_text,
+    _count,
+    _players,
+    _price_evidence,
+    _price_text,
+    _scale,
+    _share,
+    _shifts,
+    _times,
+    _when,
+    cohort_report,
+    summarise,
+)
 
 RES_007 = next(rule for rule in RESULTS_RULES if rule.id == "RES-007")
 RES_013 = next(rule for rule in RESULTS_RULES if rule.id == "RES-013")
@@ -146,6 +174,68 @@ def _configuration_boundary(raw_spec):
     return cohort_context(raw_spec, rows, days=35, arms=TWO_ARMS)
 
 
+def _sized(raw_spec, arm, control, days, **more):
+    return sized_context(raw_spec, arm, control, days=days, **more)
+
+
+def _flat_sizes(count: int, weeks: int) -> dict[int, int]:
+    return dict.fromkeys(range(weeks), count)
+
+
+TRAFFIC_SCENARIOS = {
+    "traffic_median": lambda raw: _sized(raw, _flat_sizes(20, 5), _flat_sizes(20, 5), 35),
+    "traffic_median_complete": lambda raw: _sized(
+        raw, _flat_sizes(20, 5), _flat_sizes(20, 5), 35, stretch=True
+    ),
+    "traffic_fortnight": lambda raw: _sized(raw, _flat_sizes(10, 8), _flat_sizes(10, 8), 56),
+    "traffic_raised_floor": lambda raw: _sized(raw, _flat_sizes(80, 5), _flat_sizes(20, 5), 35),
+    "traffic_floor_ratio": lambda raw: _sized(raw, EARLY_ARM, EARLY_CONTROL, 35),
+    "traffic_spiky": lambda raw: _sized(raw, SPIKY, SPIKY, 35),
+    "traffic_empty": lambda raw: _sized(
+        raw, _flat_sizes(80, 3), {**_flat_sizes(80, 3), 4: 1}, 35, stretch=True
+    ),
+    "traffic_empty_interim": lambda raw: _sized(raw, _flat_sizes(80, 3), _flat_sizes(80, 3), 35),
+    "traffic_short": lambda raw: _sized(raw, _flat_sizes(80, 2), _flat_sizes(80, 2), 14),
+    "traffic_unequal": lambda raw: _sized(raw, _flat_sizes(100, 5), _flat_sizes(10, 5), 35),
+    "traffic_waiting": lambda raw: _sized(
+        raw, _flat_sizes(80, 3), _flat_sizes(80, 3), 21, exported_at=at(19)
+    ),
+    "traffic_after_waiting": lambda raw: _sized(raw, SPIKY, SPIKY, 35, exported_at=at(27)),
+    "traffic_mixed": lambda raw: _sized(
+        raw, _flat_sizes(40, 6), _flat_sizes(40, 6), 42, exported_at=at(40)
+    ),
+    "traffic_two_lengths_waiting": lambda raw: _sized(
+        raw, _flat_sizes(20, 8), _flat_sizes(20, 8), 56, exported_at=at(30)
+    ),
+    "traffic_one_length_waiting": lambda raw: _sized(
+        raw, {0: 10, 3: 10, 6: 10}, {0: 10, 3: 10, 6: 10}, 56, exported_at=at(30)
+    ),
+    "traffic_two_left_out": lambda raw: _sized(raw, LATE_THIN, LATE_THIN, 42, exported_at=at(33)),
+    "traffic_exported_early": lambda raw: _sized(raw, EARLY, EARLY, 35, exported_at=at(33)),
+    "traffic_one_length": lambda raw: _sized(raw, {0: 10, 3: 10, 6: 10}, {0: 10, 3: 10, 6: 10}, 56),
+    "traffic_one_priced_arm": lambda raw: _sized(
+        raw,
+        _flat_sizes(20, 5),
+        _flat_sizes(30, 5),
+        35,
+        extra={"variant_c": _flat_sizes(2, 5)},
+        arms=THREE_ARMS,
+    ),
+    "traffic_three_arms": lambda raw: _sized(
+        raw,
+        _flat_sizes(20, 5),
+        _flat_sizes(30, 5),
+        35,
+        extra={"variant_c": _flat_sizes(60, 5)},
+        arms=THREE_ARMS,
+    ),
+}
+SPIKY = {0: 100, 1: 100, 2: 100, 3: 10, 4: 10}
+EARLY = {0: 40, 1: 40, 2: 40, 3: 12, 4: 25}
+EARLY_ARM = {0: 100, 1: 100, 2: 100, 3: 20, 4: 20}
+EARLY_CONTROL = {0: 60, 1: 60, 2: 60, 3: 13, 4: 13}
+LATE_THIN = {0: 100, 1: 100, 2: 100, 3: 20, 4: 20, 5: 20}
+
 SCENARIOS = {
     "quiet": _quiet,
     "fading": _fading,
@@ -163,6 +253,7 @@ SCENARIOS = {
     "interim": lambda raw_spec: _context(
         raw_spec, {"variant_b": _weeks(FADE)}, stretch=False, days=56
     ),
+    **TRAFFIC_SCENARIOS,
 }
 
 
@@ -327,6 +418,7 @@ def test_the_plan_of_an_arm_shows_every_block_and_the_minimum_it_needed(raw_spec
         "allocation_ratio": 1.0,
         "as_of": None,
         "completeness_checked": False,
+        "traffic_needed": None,
         "attempts": [
             {
                 "block_days": 7,
@@ -964,3 +1056,695 @@ def test_expected_events_are_counted_for_a_binary_metric_and_not_for_a_continuou
         0.0375,
     )
     assert sessions["detectable"]["absolute"]["linear_fade"]["share_of_control_mean"] > 1
+
+
+# --- The traffic a test that could not run would need ----------------------------------------
+
+CAVEATS = (
+    "About the traffic figures: they assume that the extra players arrive in the same weeks and in"
+    " the same proportions between the arms, and are exposed at the same rate, so arrivals that"
+    " come in spikes may not repeat; and they concern the sizes of the cohorts only, so a scale"
+    " can still drop a cohort it cannot estimate (no variation, or a mean that is not positive)."
+    " They do not price a longer run, or growing one arm only, which can cost less."
+)
+NUMBERING = (
+    "Cohort numbers count blocks of 7 or 14 days from 0, starting at design.start_utc, or at the"
+    " first assignment when the spec registers none."
+)
+INTERIM_TRAFFIC = (
+    "This is an interim look: the weeks the assignments do not reach count as empty in the"
+    " traffic figures, which describe the data so far and not a finished run, so a figure can"
+    " fall as they fill."
+)
+EMPTY_INTERIM = (
+    "The assignments cover only part of the planned window, so some weeks of it are empty here"
+    " and more of the same traffic could not fill them. If the run is still going, run to the"
+    " planned end and look again; if it stopped, check whether assignment or exposure stopped"
+    " early."
+)
+PREFERRED = (
+    " The preferred minimum is a quarter of the registered share of a block; it is used only"
+    " while it keeps at least 90% of the cohorts that reach the floor."
+)
+
+
+def _left_out(when: str, cohorts: str) -> str:
+    return (
+        f"Cohorts were left out because their outcome windows had not closed by {when}: {cohorts}. "
+    )
+
+
+def _price(factor: str, unit: str, sets: str) -> str:
+    return (
+        f"{factor} times the traffic observed (every cohort of both arms scaled together) would"
+        f" meet the size rules for the cohorts, with {unit} cohorts at that multiple, and keep"
+        " meeting them at any larger multiple. At that multiple these sizes reach what is wanted"
+        f" (the counts are as observed): {sets}."
+    )
+
+
+def _notes_of(raw_spec, name: str) -> list[str]:
+    return cohort_report(TRAFFIC_SCENARIOS[name](raw_spec), None)["notes"]
+
+
+def _arm_note(raw_spec, name: str, arm: str = "variant_b") -> str:
+    (note,) = (
+        n for n in _notes_of(raw_spec, name) if n.startswith(f"arm {arm}:") and ", metric " not in n
+    )
+    return note
+
+
+def _shared(raw_spec, name: str) -> list[str]:
+    """The notes about traffic that are not about one arm, in the order they are printed."""
+    shared = (NUMBERING, INTERIM_TRAFFIC, CAVEATS)
+    return [n for n in _notes_of(raw_spec, name) if n in shared]
+
+
+def test_the_finding_prices_the_traffic_a_test_that_could_not_run_would_need(raw_spec) -> None:
+    """Flat weeks of 20: the floor wants 1.5 times, the weekly median of 60 wants 3 times."""
+    report = cohort_report(TRAFFIC_SCENARIOS["traffic_median"](raw_spec), None)
+
+    binding = {
+        "kind": "weekly_median",
+        "block_days": 7,
+        "block": None,
+        "side": "smaller_arm",
+        "have": 20,
+        "need": 60,
+    }
+    assert report["plans"]["variant_b"]["traffic_needed"] == {
+        "windows_close_at": None,
+        "now": {"factor": 3.0, "block_days": 7, "binding": [binding], "first_pass": None},
+        "after_windows_close": None,
+        "waiting_suffices": False,
+        "blocker": None,
+        "attempts": [
+            {
+                "block_days": 7,
+                "reason": "fewer_than_3_cohorts_reach_minimum",
+                "left_out": [],
+                "now": 3.0,
+                "after_windows_close": None,
+            }
+        ],
+    }
+    assert _arm_note(raw_spec, "traffic_median") == (
+        "arm variant_b: 3 times the traffic observed (every cohort of both arms scaled together)"
+        " would meet the size rules for the cohorts, with weekly cohorts at that multiple, and"
+        " keep meeting them at any larger multiple. At that multiple these sizes reach what is"
+        " wanted (the counts are as observed): the median over the weeks of the smaller arm's"
+        " size is 20 players and 60 are wanted for weekly cohorts."
+    )
+
+
+def test_the_shared_notes_follow_the_arm_notes_and_the_interim_one_only_on_an_interim_look(
+    raw_spec,
+) -> None:
+    """The weeks run to day 28 of a 35-day plan: an interim look. Stretched to the last day it is
+    not, and the notes do not say so. The numbering note appears only if a cohort number does."""
+    assert _shared(raw_spec, "traffic_median") == [INTERIM_TRAFFIC, CAVEATS]
+    assert _shared(raw_spec, "traffic_median_complete") == [CAVEATS]
+    assert _shared(raw_spec, "traffic_spiky") == [NUMBERING, INTERIM_TRAFFIC, CAVEATS]
+    notes = _notes_of(raw_spec, "traffic_spiky")
+    assert notes.index(NUMBERING) > notes.index(_arm_note(raw_spec, "traffic_spiky"))
+    assert notes[-1] == CAVEATS
+
+
+def test_the_numbering_note_is_printed_if_any_arm_names_a_cohort_and_not_only_the_last(
+    raw_spec,
+) -> None:
+    """Variant b names weeks 3 and 4; variant c, 10 against 340, is more than 9 to 1 apart."""
+    context = _sized(
+        raw_spec,
+        SPIKY,
+        SPIKY,
+        35,
+        extra={"variant_c": _flat_sizes(2, 5)},
+        arms=THREE_ARMS,
+    )
+
+    notes = cohort_report(context, None)["notes"]
+
+    assert NUMBERING in notes and notes.count(NUMBERING) == 1
+
+
+def test_a_plan_of_8_weeks_names_both_block_lengths_each_on_its_own(raw_spec) -> None:
+    report = cohort_report(TRAFFIC_SCENARIOS["traffic_fortnight"](raw_spec), None)
+
+    traffic = report["plans"]["variant_b"]["traffic_needed"]
+    assert [(a["block_days"], a["now"]) for a in traffic["attempts"]] == [(7, 6.0), (14, 1.5)]
+    assert (traffic["now"]["factor"], traffic["now"]["block_days"]) == (1.5, 14)
+    assert {(b["block_days"], b["side"]) for b in traffic["now"]["binding"]} == {
+        (14, "arm"),
+        (14, "control"),
+    }
+    assert _arm_note(raw_spec, "traffic_fortnight") == (
+        "arm variant_b: "
+        + _price(
+            "1.5",
+            "14-day",
+            "both arms have 20 players in 14-day cohorts 0, 1, 2 and 3, where 30 are wanted",
+        )
+        + " Each block length on its own: weekly cohorts, 6 times; 14-day cohorts, 1.5 times."
+    )
+
+
+def test_thin_weeks_are_named_and_so_is_a_raised_floor_with_the_arm_that_must_grow(
+    raw_spec,
+) -> None:
+    assert _arm_note(raw_spec, "traffic_spiky") == "arm variant_b: " + _price(
+        "3", "weekly", "both arms have 10 players in weekly cohorts 3 and 4, where 30 are wanted"
+    )
+    assert _arm_note(raw_spec, "traffic_raised_floor") == (
+        "arm variant_b: "
+        + _price(
+            "4.9",
+            "weekly",
+            "control has 20 players in weekly cohorts 0, 1, 2, 3 and 4, where 98 are wanted",
+        )
+        + " The floor is 98 instead of 30 because the two arms differ about 4 to 1; a smaller gap"
+        " between the arms lowers it."
+    )
+
+
+def test_the_ratio_of_the_arms_is_rounded_up_so_that_it_is_never_shown_at_or_below_the_knee(
+    raw_spec,
+) -> None:
+    """The arms are 340 and 206 players: 1.6505 to 1, a floor of 34, shown as 1.66."""
+    plan = cohort_report(TRAFFIC_SCENARIOS["traffic_floor_ratio"](raw_spec), None)["plans"]
+
+    assert (plan["variant_b"]["floor"], plan["variant_b"]["allocation_ratio"]) == (34, 1.650485)
+    assert _arm_note(raw_spec, "traffic_floor_ratio") == (
+        "arm variant_b: "
+        + _price(
+            "2.62",
+            "weekly",
+            "control has 13 players in weekly cohorts 3 and 4, where 34 are wanted",
+        )
+        + " The floor is 34 instead of 30 because the two arms differ about 1.66 to 1; a smaller"
+        " gap between the arms lowers it."
+    )
+
+
+def test_a_raised_floor_is_not_mentioned_when_it_is_not_what_sets_the_traffic(raw_spec) -> None:
+    """Unequal arms 80 to 40 raise the floor to 43, but the weekly median of 60 sets 1.5 times."""
+    context = _sized(raw_spec, _flat_sizes(80, 5), _flat_sizes(40, 5), 35)
+    notes = cohort_report(context, None)["notes"]
+
+    assert not any("The floor is" in n for n in notes)
+    assert any(n.startswith("arm variant_b: 1.5 times the traffic") for n in notes)
+
+
+def test_the_preferred_minimum_is_explained_when_it_is_named_and_a_first_pass_is_said() -> None:
+    """The plan passes at 1.08 times, fails above it, and keeps passing from 3.58."""
+    attempt, plan = _island_for_text()
+    traffic = traffic_needed(plan)
+
+    text = _price_text("a", plan, traffic.now)
+
+    assert (traffic.now.factor, traffic.now.first_pass) == (3.58, 1.08)
+    assert text == (
+        _price(
+            "3.58",
+            "weekly",
+            "both arms have 28 players in weekly cohort 10, where the preferred minimum is 100",
+        )
+        + " The plan already passes at 1.08 times, but not at every larger multiple (the preferred"
+        " minimum is judged again as the cohorts grow), so 3.58 is where it keeps passing."
+        + PREFERRED
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "blocker", "sentence"),
+    [
+        (
+            "traffic_short",
+            "plan_too_short",
+            "More traffic would not help: the planned window holds fewer than 3 whole blocks. A"
+            " plan of at least 21 days holds 3 weekly blocks.",
+        ),
+        (
+            "traffic_unequal",
+            "arms_too_unequal",
+            "More traffic in the same proportions would not help: the two arms differ in size by"
+            " more than 9 to 1, and the smaller arm would have to grow relative to the larger.",
+        ),
+        (
+            "traffic_empty",
+            "empty_cohorts",
+            "More of the same traffic would not help: too few blocks of the window hold players of"
+            " both arms (the test needs 3 usable cohorts, at least one in each half of the"
+            " window, and for weekly blocks the median week must not be empty), and scaling what"
+            " was observed cannot fill an empty one. Check whether assignment or exposure"
+            " stopped or began late.",
+        ),
+        ("traffic_empty_interim", "empty_cohorts", EMPTY_INTERIM),
+    ],
+)
+def test_when_more_traffic_is_not_the_remedy_the_finding_says_why(
+    raw_spec, name, blocker, sentence
+) -> None:
+    report = cohort_report(TRAFFIC_SCENARIOS[name](raw_spec), None)
+
+    traffic = report["plans"]["variant_b"]["traffic_needed"]
+    assert (traffic["now"], traffic["after_windows_close"], traffic["blocker"]) == (
+        None,
+        None,
+        blocker,
+    )
+    assert f"arm variant_b: {sentence}" in report["notes"]
+    assert not _shared(raw_spec, name)
+
+
+def test_when_waiting_is_the_remedy_the_finding_says_when_to_export_again(raw_spec) -> None:
+    """Week 2 is left out of a 21-day plan; its windows close on day 21, 2026-05-02. Nothing
+    helps as exported, and once it is counted the weekly cohorts meet the rules as they are."""
+    report = cohort_report(TRAFFIC_SCENARIOS["traffic_waiting"](raw_spec), None)
+
+    traffic = report["plans"]["variant_b"]["traffic_needed"]
+    assert traffic["now"] is None and traffic["waiting_suffices"] is True
+    assert traffic["windows_close_at"] == "2026-05-02T00:00:00+00:00"
+    assert traffic["after_windows_close"] == {
+        "factor": 1.0,
+        "block_days": 7,
+        "binding": [],
+        "first_pass": None,
+    }
+    assert traffic["attempts"][0]["left_out"] == [2]
+    assert _arm_note(raw_spec, "traffic_waiting") == (
+        "arm variant_b: "
+        + _left_out("2026-04-30 00:00 UTC", "weekly cohort 2")
+        + "Export again after 2026-05-02 00:00 UTC, once they have closed: weekly cohorts would"
+        " then meet the size rules at the traffic observed. As exported, no multiple of the"
+        " traffic would do."
+    )
+    assert CAVEATS not in report["notes"] and NUMBERING in report["notes"]
+
+
+def test_cohorts_left_out_are_not_called_empty_and_the_price_is_given_for_after_they_close(
+    raw_spec,
+) -> None:
+    assert _arm_note(raw_spec, "traffic_after_waiting") == (
+        "arm variant_b: "
+        + _left_out("2026-05-08 00:00 UTC", "weekly cohorts 3 and 4")
+        + "With those cohorts left out, no multiple of the traffic would do. Once they have"
+        " closed (after 2026-05-16 00:00 UTC) and are counted, "
+        + _price(
+            "3",
+            "weekly",
+            "both arms have 10 players in weekly cohorts 3 and 4, where 30 are wanted",
+        )
+    )
+    assert CAVEATS in _notes_of(raw_spec, "traffic_after_waiting")
+
+
+def test_a_block_length_that_only_waits_is_not_priced_as_if_nothing_helped(raw_spec) -> None:
+    """Six weeks of 40, exported on day 40: weekly blocks need 1.5 times for their median;
+    14-day blocks need no traffic once week 5 is counted, and the finding says so first."""
+    report = cohort_report(TRAFFIC_SCENARIOS["traffic_mixed"](raw_spec), None)
+
+    traffic = report["plans"]["variant_b"]["traffic_needed"]
+    assert traffic["waiting_suffices"] and traffic["now"]["factor"] == 1.5
+    assert [
+        (a["block_days"], a["reason"], a["left_out"], a["now"], a["after_windows_close"])
+        for a in traffic["attempts"]
+    ] == [
+        (7, "cohorts_too_small_for_weekly_blocks", [5], 1.5, 1.5),
+        (14, "outcome_window_incomplete", [2], None, 1.0),
+    ]
+    assert _arm_note(raw_spec, "traffic_mixed") == (
+        "arm variant_b: "
+        + _left_out("2026-05-21 00:00 UTC", "weekly cohort 5; 14-day cohort 2")
+        + "Export again after 2026-05-23 00:00 UTC, once they have closed: 14-day cohorts would"
+        " then meet the size rules at the traffic observed. Without waiting, "
+        + _price(
+            "1.5",
+            "weekly",
+            "the median over the weeks of the smaller arm's size is 40 players and 60 are wanted"
+            " for weekly cohorts",
+        )
+        + " Each block length on its own: weekly cohorts, 1.5 times as exported and 1.5 times"
+        " once the cohorts left out are counted; 14-day cohorts, no multiple would do as exported"
+        " and no extra traffic once the cohorts left out are counted."
+    )
+
+
+def test_each_block_length_gives_both_its_prices_when_cohorts_were_left_out(raw_spec) -> None:
+    """Eight weeks of 20, exported on day 30: weekly needs 3 times once counted, fortnights none."""
+    assert _arm_note(raw_spec, "traffic_two_lengths_waiting") == (
+        "arm variant_b: "
+        + _left_out("2026-05-11 00:00 UTC", "weekly cohorts 4, 5, 6 and 7; 14-day cohorts 2 and 3")
+        + "Export again after 2026-06-06 00:00 UTC, once they have closed: 14-day cohorts would"
+        " then meet the size rules at the traffic observed. As exported, no multiple of the"
+        " traffic would do. Each block length on its own: weekly cohorts, no multiple would do as"
+        " exported and 3 times once the cohorts left out are counted; 14-day cohorts, no"
+        " multiple would do as exported and no extra traffic once the cohorts left out are"
+        " counted."
+    )
+
+
+def test_every_cohort_left_out_is_left_out_of_what_sets_the_traffic(raw_spec) -> None:
+    """Weeks 4 and 5 are left out; week 3, with 20, is what sets 1.5 times, and only week 3."""
+    report = cohort_report(TRAFFIC_SCENARIOS["traffic_two_left_out"](raw_spec), None)
+
+    traffic = report["plans"]["variant_b"]["traffic_needed"]
+    assert {(b["block"], b["side"]) for b in traffic["now"]["binding"]} == {
+        (3, "arm"),
+        (3, "control"),
+    }
+    assert traffic["attempts"][0]["left_out"] == [4, 5]
+    assert traffic["windows_close_at"] == "2026-05-23T00:00:00+00:00"
+
+
+def test_a_block_length_with_no_multiple_says_so_beside_the_one_that_has_one(raw_spec) -> None:
+    """Players in weeks 0, 3 and 6 of 8: the weekly median is 0, so weekly blocks cannot be
+    helped, while 14-day blocks of 10 need 3 times."""
+    report = cohort_report(TRAFFIC_SCENARIOS["traffic_one_length"](raw_spec), None)
+
+    traffic = report["plans"]["variant_b"]["traffic_needed"]
+    assert [(a["block_days"], a["now"], a["after_windows_close"]) for a in traffic["attempts"]] == [
+        (7, None, None),
+        (14, 3.0, None),
+    ]
+    assert _arm_note(raw_spec, "traffic_one_length") == (
+        "arm variant_b: "
+        + _price(
+            "3",
+            "14-day",
+            "both arms have 10 players in 14-day cohorts 0, 1 and 3, where 30 are wanted",
+        )
+        + " Each block length on its own: weekly cohorts, no multiple would do; 14-day cohorts,"
+        " 3 times."
+    )
+
+
+def test_the_price_as_exported_and_the_price_after_the_windows_close_are_both_given(
+    raw_spec,
+) -> None:
+    """Week 4 is left out. As exported, week 3's 12 players must reach 30: 2.5 times. Counted,
+    week 4 has 25 and the weekly median of 40 is what binds: 1.5 times."""
+    report = cohort_report(TRAFFIC_SCENARIOS["traffic_exported_early"](raw_spec), None)
+
+    traffic = report["plans"]["variant_b"]["traffic_needed"]
+    assert (traffic["now"]["factor"], traffic["after_windows_close"]["factor"]) == (2.5, 1.5)
+    assert traffic["waiting_suffices"] is False
+    assert _arm_note(raw_spec, "traffic_exported_early") == (
+        "arm variant_b: "
+        + _left_out("2026-05-14 00:00 UTC", "weekly cohort 4")
+        + "As exported, "
+        + _price(
+            "2.5", "weekly", "both arms have 12 players in weekly cohort 3, where 30 are wanted"
+        )
+        + " Once they have closed (after 2026-05-16 00:00 UTC) and are counted, "
+        + _price(
+            "1.5",
+            "weekly",
+            "the median over the weeks of the smaller arm's size is 40 players and 60 are wanted"
+            " for weekly cohorts",
+        )
+    )
+
+
+def test_the_same_price_before_and_after_the_windows_close_is_given_once(raw_spec) -> None:
+    """Five weeks of 40 in a 35-day plan, week 4 left out: the median of 40 sets 1.5 times
+    whether or not week 4 is counted."""
+    context = _sized(raw_spec, _flat_sizes(40, 5), _flat_sizes(40, 5), 35, exported_at=at(33))
+    report = cohort_report(context, None)
+
+    traffic = report["plans"]["variant_b"]["traffic_needed"]
+    assert (traffic["now"]["factor"], traffic["after_windows_close"]["factor"]) == (1.5, 1.5)
+    note = next(
+        n for n in report["notes"] if n.startswith("arm variant_b:") and ", metric" not in n
+    )
+    assert "Whether or not they are counted, 1.5 times the traffic" in note
+    assert note.count("times the traffic observed (every cohort") == 1
+
+
+def test_each_arm_gets_its_own_price_and_the_assumptions_are_said_once(raw_spec) -> None:
+    report = cohort_report(TRAFFIC_SCENARIOS["traffic_three_arms"](raw_spec), None)
+
+    plans = report["plans"]
+    assert {a: (p["traffic_needed"]["now"]["factor"], p["floor"]) for a, p in plans.items()} == {
+        "variant_b": (3.0, 30),
+        "variant_c": (2.0, 43),
+    }
+    assert _arm_note(raw_spec, "traffic_three_arms", "variant_b").startswith(
+        "arm variant_b: 3 times the traffic"
+    )
+    assert _arm_note(raw_spec, "traffic_three_arms", "variant_c").startswith(
+        "arm variant_c: 2 times the traffic"
+    )
+    notes = report["notes"]
+    assert notes.count(CAVEATS) == 1 and notes[-1] == CAVEATS
+    assert notes.index(_arm_note(raw_spec, "traffic_three_arms", "variant_b")) < notes.index(
+        _arm_note(raw_spec, "traffic_three_arms", "variant_c")
+    )
+
+
+def test_the_assumptions_are_said_when_any_arm_is_priced_and_not_only_the_last(raw_spec) -> None:
+    """Variant b is priced; variant c, 10 against control's 150, is more than 9 to 1 apart."""
+    report = cohort_report(TRAFFIC_SCENARIOS["traffic_one_priced_arm"](raw_spec), None)
+
+    plans = report["plans"]
+    assert plans["variant_b"]["traffic_needed"]["now"]["factor"] == 3.0
+    assert plans["variant_c"]["traffic_needed"]["blocker"] == "arms_too_unequal"
+    assert report["notes"].count(CAVEATS) == 1
+    assert report["notes"].count(INTERIM_TRAFFIC) == 1
+
+
+def test_a_stop_for_another_reason_gets_no_traffic_sentence(raw_spec) -> None:
+    """The units are not independent, so no cohort plan is the reason; the plan still shows."""
+    context = _sized(
+        raw_spec,
+        _flat_sizes(20, 5),
+        _flat_sizes(20, 5),
+        35,
+        population__randomization_unit="session",
+    )
+
+    report = cohort_report(context, None)
+
+    assert {t["reason"] for t in report["tests"]} == {"unit_not_independent"}
+    assert not any("times the traffic" in n or "More traffic" in n for n in report["notes"])
+    assert not any(n in (CAVEATS, NUMBERING, INTERIM_TRAFFIC) for n in report["notes"])
+    assert report["plans"]["variant_b"]["traffic_needed"]["now"]["factor"] == 3.0
+
+
+def test_a_plan_that_runs_has_no_traffic_to_price(raw_spec) -> None:
+    report = cohort_report(_fading(raw_spec), None)
+
+    assert all(plan["traffic_needed"] is None for plan in report["plans"].values())
+    assert not any("traffic" in n for n in report["notes"])
+
+
+def test_the_binding_sizes_read_as_sentences_for_each_kind_side_and_tie() -> None:
+    thin = Binding(kind="preferred", block_days=7, block=10, side="control", have=28, need=100)
+    two = [
+        Binding(kind="floor", block_days=14, block=b, side="arm", have=20, need=30) for b in (1, 2)
+    ]
+    both = [
+        Binding(kind="floor", block_days=7, block=3, side=side, have=1, need=30)
+        for side in ("arm", "control")
+    ]
+    median = Binding(
+        kind="weekly_median", block_days=7, block=None, side="smaller_arm", have=20.5, need=60
+    )
+
+    assert _binding_text("b", (thin,)) == (
+        "control has 28 players in weekly cohort 10, where the preferred minimum is 100"
+    )
+    assert _binding_text("b", tuple(two)) == (
+        "arm b has 20 players in 14-day cohorts 1 and 2, where 30 are wanted"
+    )
+    assert _binding_text("b", tuple(both)) == (
+        "both arms have 1 player in weekly cohort 3, where 30 are wanted"
+    )
+    assert _binding_text("b", (thin, *two, median)) == (
+        "control has 28 players in weekly cohort 10, where the preferred minimum is 100; "
+        "arm b has 20 players in 14-day cohorts 1 and 2, where 30 are wanted; "
+        "the median over the weeks of the smaller arm's size is 20.5 players and 60 are wanted "
+        "for weekly cohorts"
+    )
+    big = Binding(kind="floor", block_days=7, block=0, side="arm", have=1_000_000, need=2_000_000)
+    assert _binding_text("b", (big,)) == (
+        "arm b has 1000000 players in weekly cohort 0, where 2000000 are wanted"
+    )
+
+
+def test_arm_and_control_naming_different_cohorts_are_told_apart() -> None:
+    def binding(block, side):
+        return Binding(kind="floor", block_days=7, block=block, side=side, have=20, need=30)
+
+    named = (binding(1, "arm"), binding(2, "arm"), binding(3, "control"))
+
+    assert _binding_text("b", named) == (
+        "arm b has 20 players in weekly cohorts 1 and 2, where 30 are wanted; "
+        "control has 20 players in weekly cohort 3, where 30 are wanted"
+    )
+
+
+def test_numbers_are_printed_whole_or_to_a_tenth_and_prices_to_a_hundredth() -> None:
+    assert [_count(n) for n in (20, 20.0, 20.5, 1_000_000)] == ["20", "20", "20.5", "1000000"]
+    assert [_players(n) for n in (1, 2, 0.5)] == ["1 player", "2 players", "0.5 players"]
+    assert [_times(f) for f in (3.0, 1.5, 4.9, 1.43, 12345.64, 2.01)] == [
+        "3",
+        "1.5",
+        "4.9",
+        "1.43",
+        "12345.64",
+        "2.01",
+    ]
+
+
+def _island_for_text():
+    """A 20-week plan: it passes at 1.08 times, fails from 1.11 and keeps passing from 3.58."""
+    sizes = {b: (150, 150) for b in range(8)} | {8: (90, 90), 9: (90, 90), 10: (28, 28)}
+    attempt = Attempt(
+        block_days=7,
+        window_blocks=20,
+        sizes={b: {"a": x, "c": y} for b, (x, y) in sizes.items()},
+        usable=(),
+        usable_at_floor=(),
+        preferred_used=False,
+        minimum_arm=Minimum(registered=None, achieved=0, preferred=100, used=30),
+        minimum_control=Minimum(registered=None, achieved=0, preferred=100, used=30),
+        median_smaller_arm=0.0,
+        covers_window=False,
+        incomplete=(),
+        reason="fewer_than_3_cohorts_reach_minimum",
+    )
+    plan = CohortPlan(
+        arm="a",
+        control="c",
+        block_days=None,
+        usable=(),
+        reason=attempt.reason,
+        attempts=(attempt,),
+        floor=30,
+    )
+    return attempt, plan
+
+
+def test_a_block_length_that_no_multiple_can_help_even_counted_is_said_so_beside_the_one_that_can(
+    raw_spec,
+) -> None:
+    """Players in weeks 0, 3 and 6 of 8, exported on day 30 so that week 6 is left out: weekly
+    blocks have a median of 0 however they are counted; 14-day blocks need 3 times once counted."""
+    report = cohort_report(TRAFFIC_SCENARIOS["traffic_one_length_waiting"](raw_spec), None)
+
+    traffic = report["plans"]["variant_b"]["traffic_needed"]
+    assert traffic["now"] is None and traffic["waiting_suffices"] is False
+    assert traffic["after_windows_close"]["factor"] == 3.0
+    assert [(a["block_days"], a["now"], a["after_windows_close"]) for a in traffic["attempts"]] == [
+        (7, None, None),
+        (14, None, 3.0),
+    ]
+    note = _arm_note(raw_spec, "traffic_one_length_waiting")
+    assert note.endswith(
+        " Each block length on its own: weekly cohorts, no multiple would do as exported and no"
+        " multiple would do once the cohorts left out are counted; 14-day cohorts, no multiple"
+        " would do as exported and 3 times once the cohorts left out are counted."
+    )
+
+
+def test_the_first_pass_is_carried_into_the_evidence() -> None:
+    price = Price(factor=3.58, block_days=7, binding=(), first_pass=1.08)
+
+    assert _price_evidence(price) == {
+        "factor": 3.58,
+        "block_days": 7,
+        "binding": [],
+        "first_pass": 1.08,
+    }
+    assert _price_evidence(None) is None
+
+
+def test_the_time_to_export_again_is_in_utc_and_rounded_up_to_the_minute() -> None:
+    moment = datetime(2026, 5, 2, 0, 0, tzinfo=UTC)
+
+    assert _when(moment) == "2026-05-02 00:00 UTC"
+    assert _when(moment + timedelta(seconds=1)) == "2026-05-02 00:01 UTC"
+    assert _when(moment + timedelta(microseconds=1)) == "2026-05-02 00:01 UTC"
+    assert _when(datetime(2026, 5, 2, 2, 0, tzinfo=timezone(timedelta(hours=2)))) == (
+        "2026-05-02 00:00 UTC"
+    )
+    assert _when(datetime(2026, 5, 2, 0, 0)) == "2026-05-02 00:00 UTC"
+    assert _when(datetime(2026, 5, 1, 23, 59, 59, tzinfo=UTC)) == "2026-05-02 00:00 UTC"
+
+
+def _first_traffic_note(report: dict) -> str:
+    return next(
+        n for n in report["notes"] if n.startswith("arm variant_b:") and ", metric" not in n
+    )
+
+
+def _with_a_late_window(raw_spec, *, exported_at, who="control"):
+    """Three weeks of 80 in a 21-day plan, with one player of week 2 whose window ends 30
+    seconds after the usual seven days (an explicit window_end)."""
+    rows = cohort_rows("control", _weeks([10] * 3)) + cohort_rows("variant_b", _weeks([10] * 3))
+    late = next(r for r in rows if r.arm == who and r.player_id.rsplit("_", 2)[1] == "02")
+    late.window_end = at(21) + timedelta(seconds=30)
+    return cohort_context(raw_spec, rows, days=21, arms=TWO_ARMS, exported_at=exported_at)
+
+
+@pytest.mark.parametrize("who", ["control", "variant_b"])
+def test_exporting_again_after_the_time_given_makes_the_plan_pass_as_the_finding_says(
+    raw_spec, who
+) -> None:
+    """Whichever arm holds the window that closes last, with a window_end of its own and a
+    number of seconds: the time given, rounded up to the minute, is early enough and late enough,
+    and the first moment at which the plan passes is the moment the window closes."""
+    report = cohort_report(_with_a_late_window(raw_spec, exported_at=at(19), who=who), None)
+    traffic = report["plans"]["variant_b"]["traffic_needed"]
+    closes = datetime.fromisoformat(traffic["windows_close_at"])
+
+    assert closes == at(21) + timedelta(seconds=30) and traffic["waiting_suffices"] is True
+    note = next(
+        n for n in report["notes"] if n.startswith("arm variant_b:") and ", metric" not in n
+    )
+    assert "Export again after 2026-05-02 00:01 UTC, once they have closed" in note
+
+    def planned(moment):
+        context = _with_a_late_window(raw_spec, exported_at=moment, who=who)
+        return plan_cohorts(context, "variant_b")
+
+    assert not planned(closes - timedelta(seconds=1)).evaluated
+    at_closing = planned(closes)
+    assert (
+        at_closing.evaluated
+        and at_closing.block_days == traffic["after_windows_close"]["block_days"]
+    )
+    assert planned(closes.replace(second=0) + timedelta(minutes=1)).evaluated
+
+
+def test_the_last_window_to_close_is_the_controls_when_the_control_holds_it(raw_spec) -> None:
+    """The control's window ends 30 seconds late and the arm's does not: the date is control's."""
+    report = cohort_report(_with_a_late_window(raw_spec, exported_at=at(19)), None)
+    traffic = report["plans"]["variant_b"]["traffic_needed"]
+
+    assert traffic["windows_close_at"] == "2026-05-02T00:00:30+00:00"
+    quiet = cohort_context(
+        raw_spec,
+        cohort_rows("control", _weeks([10] * 3)) + cohort_rows("variant_b", _weeks([10] * 3)),
+        days=21,
+        arms=TWO_ARMS,
+        exported_at=at(19),
+    )
+    assert (
+        cohort_report(quiet, None)["plans"]["variant_b"]["traffic_needed"]["windows_close_at"]
+        == "2026-05-02T00:00:00+00:00"
+    )
+
+
+def test_a_window_that_closes_exactly_at_the_export_is_closed_and_names_no_time(raw_spec) -> None:
+    """Five weeks of 20 in a 35-day plan exported at the moment week 4's windows close: nothing
+    is left out, so there is no time to wait for, though the plan still needs 3 times."""
+    context = _sized(raw_spec, _flat_sizes(20, 5), _flat_sizes(20, 5), 35, exported_at=at(35))
+
+    report = cohort_report(context, None)
+
+    traffic = report["plans"]["variant_b"]["traffic_needed"]
+    assert traffic["windows_close_at"] is None and traffic["after_windows_close"] is None
+    assert traffic["now"]["factor"] == 3.0
+    assert all(a["left_out"] == [] for a in traffic["attempts"])

@@ -68,3 +68,44 @@ def cohort_context(
         **{**SESSIONS, **more},
     )
     return ResultsContext.of(spec, build_data(rows, exported_at=exported_at))
+
+
+def sized_context(
+    raw_spec,
+    arm: dict[int, int],
+    control: dict[int, int],
+    *,
+    days: int,
+    copies: int = 1,
+    exported_at=None,
+    extra: dict[str, dict[int, int]] | None = None,
+    arms=TWO_ARMS,
+    stretch: bool = False,
+    **more,
+) -> ResultsContext:
+    """`arm[b]` and `control[b]` players first exposed in weekly block b, `copies` times over.
+
+    Only the sizes matter here: every player has the default outcomes. A copy is a distinct
+    player with the same times, so `copies` multiplies every cohort exactly. `extra` gives the
+    sizes of further arms by name (with `arms` listing them all, as in THREE_ARMS). With
+    `stretch`, the last control player is placed on the last day of the plan (which must be
+    the last block of its window), so that the assignments span the planned duration and the
+    run is not an interim look.
+    """
+    rows = []
+    cohorts = {"variant_b": arm, "control": control, **(extra or {})}
+    for name, sizes in cohorts.items():
+        for block, count in sizes.items():
+            for i in range(count * copies):
+                rows.append(
+                    Row(
+                        f"{name}_{block:02d}_{i:05d}",
+                        name,
+                        assigned_at=at(7 * block),
+                        exposed_at=at(7 * block, 1),
+                    )
+                )
+    if stretch:
+        last = max(i for i, row in enumerate(rows) if row.arm == "control")
+        rows[last].assigned_at, rows[last].exposed_at = at(days - 1, 23), at(days - 1, 23.5)
+    return cohort_context(raw_spec, rows, days=days, arms=arms, exported_at=exported_at, **more)

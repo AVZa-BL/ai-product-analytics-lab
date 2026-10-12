@@ -840,3 +840,32 @@ def test_the_fortnightly_attempt_has_its_own_incomplete_blocks(raw_spec) -> None
     weekly, fortnightly = plan.attempts
     assert weekly.incomplete == (7,) and fortnightly.incomplete == (3,)
     assert plan.block_days == 14 and plan.usable == (0, 1, 2)
+
+
+def test_the_weekly_median_is_that_of_the_smaller_arm_in_each_week_and_may_be_a_half(
+    raw_spec,
+) -> None:
+    """Four weeks: the smaller of the two arms has 10, 21, 30 and 40, whose median is 25.5."""
+    rows = _rows("control", {0: 12, 1: 30, 2: 31, 3: 40}) + _rows(
+        "variant_b", {0: 10, 1: 21, 2: 30, 3: 50}
+    )
+    context = _context(raw_spec, rows, days=28)
+
+    (attempt,) = plan_cohorts(context, "variant_b").attempts
+
+    assert attempt.median_smaller_arm == 25.5
+    even = _context(
+        raw_spec,
+        _rows("control", {0: 30, 1: 31, 2: 32, 3: 34})
+        + _rows("variant_b", {0: 30, 1: 31, 2: 32, 3: 34}),
+        days=28,
+    )
+    (whole,) = plan_cohorts(even, "variant_b").attempts
+    assert whole.median_smaller_arm == 31.5 and isinstance(whole.median_smaller_arm, float)
+    odd = _context(
+        raw_spec,
+        _rows("control", {0: 30, 1: 31, 2: 32}) + _rows("variant_b", {0: 30, 1: 31, 2: 32}),
+        days=21,
+    )
+    (single,) = plan_cohorts(odd, "variant_b").attempts
+    assert single.median_smaller_arm == 31.0 and isinstance(single.median_smaller_arm, float)
