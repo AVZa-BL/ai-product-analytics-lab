@@ -653,8 +653,9 @@ def _notes(
         mean, worst = 100 * NULL_FLAG_RATE_MEAN, 100 * NULL_FLAG_RATE_MAX
         notes.append(
             f"{ran} {'test' if ran == 1 else 'tests'} ran. In the simulations of design section "
-            f"21.5 (two arms, no change over time) the trigger flagged {mean:.1f}% of tests on "
-            f"average and at most {worst:.1f}%, so about {summary['flags_by_chance']:.2g} flags "
+            f"21.5 (two arms of equal size, no change over time) the trigger flagged {mean:.1f}% "
+            f"of tests on average and at most {worst:.1f}%, so about "
+            f"{summary['flags_by_chance']:.2g} flags "
             f"(at most {summary['flags_by_chance_at_most']:.2g}) would be expected by chance alone."
         )
     return notes

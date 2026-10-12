@@ -809,8 +809,9 @@ def test_the_flags_chance_alone_would_give_are_the_measured_rates_times_the_test
     assert summary["flags_by_chance"] == pytest.approx(2 * NULL_FLAG_RATE_MEAN)
     assert summary["flags_by_chance_at_most"] == pytest.approx(2 * NULL_FLAG_RATE_MAX)
     assert (
-        "2 tests ran. In the simulations of design section 21.5 (two arms, no change over time) the"
-        " trigger flagged 3.5% of tests on average and at most 5.1%, so about 0.069 flags (at most"
+        "2 tests ran. In the simulations of design section 21.5 (two arms of equal size, no change"
+        " over time) the trigger flagged 3.5% of tests on average and at most 5.1%, so about 0.069"
+        " flags (at most"
         " 0.1) would be expected by chance alone."
     ) in report["notes"]
 

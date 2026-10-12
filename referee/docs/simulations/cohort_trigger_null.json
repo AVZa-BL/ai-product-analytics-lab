@@ -5,7 +5,7 @@
  "seed": 20261211,
  "numpy": "2.5.3",
  "scipy": "1.18.1",
- "command": "python tests/cohort_simulation.py",
+ "command": "python tests/cohort_simulation.py --reps 5000 --seed 20261211 --out docs/simulations/cohort_trigger_null.json",
  "cells": [
   {"outcome": "normal", "cohorts": 3, "n": 30, "arms": 2, "scenario": "zero", "reps": 5000, "seed": 20261211, "q_abs": 0.028, "s_abs": 0.0272, "q_log": 0.0254, "s_log": 0.0256, "absolute": 0.0408, "relative": 0.0382, "both": 0.0378, "q_both": 0.025, "any_arm_both": 0.0378},
   {"outcome": "normal", "cohorts": 3, "n": 30, "arms": 2, "scenario": "relative", "reps": 5000, "seed": 20261211, "q_abs": 0.0244, "s_abs": 0.0238, "q_log": 0.0226, "s_log": 0.021, "absolute": 0.0372, "relative": 0.034, "both": 0.032, "q_both": 0.021, "any_arm_both": 0.032},
