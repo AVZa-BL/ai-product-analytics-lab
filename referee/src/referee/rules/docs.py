@@ -73,9 +73,10 @@ _POWER_NOTES = """\
 _RESULTS_NOTE = """\
 A results rule looks at an experiment's exported data together with its spec (design
 section 21), not at the spec alone. A results review ends in a **verdict**, which follows from
-the findings: `invalid` if any is a blocker, `caution` if any is a warning, `clear` otherwise.
-`clear` says that the rules which ran found nothing; it does not say the effect is real. The
-design review does not run these rules.
+the findings: `invalid` if any is a blocker, `caution` if any is a warning, `clear` otherwise
+(an info finding is listed and does not change the verdict). `clear` says that the rules which
+ran found nothing that blocks or warns; it does not say the effect is real. The design review
+does not run these rules.
 """
 
 _OUTRO = """\

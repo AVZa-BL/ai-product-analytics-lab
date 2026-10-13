@@ -1,8 +1,9 @@
-"""The pooled effect of an arm against control, for heavy-tailed outcomes (design section 21.5).
+"""The pooled effect of an arm against control, for heavy-tailed outcomes (design section 21.10).
 
-Step 7b of milestone 4b-2. RES-008 will show, next to each other, Welch's 95% interval and a
-seeded percentile bootstrap interval for the difference of means of an arm and control. This
-measures how often each interval excludes the TRUE difference when the outcome is a revenue
+Step 7b of milestone 4b-2. RES-008 prints Welch's 95% interval for the difference of means of
+an arm and control and shows no bootstrap interval (section 21.11); this study measured the
+seeded percentile bootstrap interval as well, to decide that. It measures how often each
+interval excludes the TRUE difference when the outcome is a revenue
 that most players leave at zero, by the split between the arms, the size of the smaller arm,
 the effect, the heaviness of the tail and the share of players who spend, on which side it
 misses, and what candidate warnings (Kohavi's skewness rule, a kurtosis, a top-1% share) say in

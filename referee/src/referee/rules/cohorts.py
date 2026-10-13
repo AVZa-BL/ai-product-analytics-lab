@@ -17,10 +17,17 @@ from __future__ import annotations
 
 import math
 import re
+import statistics
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from referee.cohort_effects import (
+    FADE_COHORTS,
+    FADE_FAMILIES,
+    FADE_FLAG_RATES,
+    FADE_FLAG_RATES_ADDED,
+    FADE_MAX_ALLOCATION_RATIO,
+    FADE_SIZES,
     NULL_FLAG_RATE_MAX,
     NULL_FLAG_RATE_MEAN,
     POWER,
@@ -49,6 +56,7 @@ from referee.cohorts import (
     traffic_needed,
 )
 from referee.methods import CohortShape
+from referee.pooled_rates import UNIT, percent
 from referee.results import ExportMetric, ResultsContext
 
 _DIGITS = 6
@@ -198,6 +206,19 @@ def _share(shift: float, mean: float) -> float | None:
     return _round(shift / mean) if mean > 0 else None
 
 
+def _design(test: CohortTest, plan: CohortPlan, arms: int) -> dict[str, Any]:
+    """What the simulations of the fade were indexed by, as this test has it: the number of
+    non-control arms, the cohorts the absolute scale used, the median over them of the players
+    in the smaller arm, and how unequal the arms are overall."""
+    sizes = [min(c.n_arm, c.n_control) for c in test.absolute.cohorts]
+    return {
+        "non_control_arms": arms,
+        "cohorts": len(sizes),
+        "players_an_arm_median": statistics.median(sizes) if sizes else None,
+        "allocation_ratio": _round(plan.allocation_ratio),
+    }
+
+
 def _entry(
     context: ResultsContext, plan: CohortPlan, metric: ExportMetric, arms: int
 ) -> dict[str, Any]:
@@ -213,6 +234,7 @@ def _entry(
     entry = {
         **base,
         "block_days": plan.block_days,
+        "design": _design(test, plan, arms),
         "scales": {"absolute": _scale(test.absolute), "log_ratio": _scale(test.log_ratio)},
         "trigger": {
             "level": decision.level,
@@ -327,6 +349,126 @@ def _population_note(context: ResultsContext) -> str:
     return f"population.kind is declared as {kind}. {unchecked}"
 
 
+def _thousands(number: float) -> str:
+    """A count with thousands separators: whole numbers as they are, a half to one decimal."""
+    return f"{number:,.0f}" if number == int(number) else f"{number:,.1f}"
+
+
+def _pct(rate: float) -> str:
+    return percent(round(rate * UNIT))
+
+
+def _span(low: float, high: float) -> str:
+    return f"{_pct(low)} to {_pct(high)}"
+
+
+def _nearest_size(players: float) -> int:
+    """The simulated number of players an arm in a cohort nearest to `players`, in log scale."""
+    return min(FADE_SIZES, key=lambda size: abs(math.log(players / size)))
+
+
+def _outside_simulations(entry: dict[str, Any]) -> list[str]:
+    """How this test differs from the cohort design the fade was simulated for, if it does."""
+    design, reasons = entry["design"], []
+    if design["non_control_arms"] > 1:
+        reasons.append(f"{design['non_control_arms']} arms against control")
+    ratio = design["allocation_ratio"]
+    if ratio is not None and ratio > FADE_MAX_ALLOCATION_RATIO:
+        rounded_up = math.ceil(round(ratio * 100, 6)) / 100
+        reasons.append(f"arms that differ in size by about {_times(rounded_up)} to 1")
+    if not FADE_COHORTS[0] <= design["cohorts"] <= FADE_COHORTS[-1]:
+        reasons.append(f"{design['cohorts']} cohorts")
+    players = design["players_an_arm_median"]
+    if players is None or not FADE_SIZES[0] <= players <= FADE_SIZES[-1]:
+        reasons.append(f"cohorts of about {_thousands(players or 0)} players an arm")
+    if entry["control_baseline"]["moves"]:
+        reasons.append("a control baseline that moves between the cohorts")
+    return reasons
+
+
+_FADE_KINDS = {
+    "revenue_like": "revenue-like metrics",
+    "binary": "a binary metric at a rate of 10%",
+    "poisson": "counts simulated as Poisson",
+}
+_FADE_ASSUMES = (
+    "That figure takes the standard errors as known and the effect as leaving the spread of the "
+    "arm unchanged."
+)
+_FADE_STEP = "The step was not simulated, and the test could have missed anything smaller."
+
+
+def _overall_span(family: str) -> tuple[float, float]:
+    """The lowest and the highest share of runs over the cohort sizes simulated."""
+    rates = FADE_FLAG_RATES[family].values()
+    return min(low for low, _ in rates), max(high for _, high in rates)
+
+
+def _shares(families: tuple[str, ...], rates_of) -> str:
+    """The share of runs for each kind of metric, in a clause: "in 36.3% to 38.3% of runs for a
+    binary metric at a rate of 10% and in 71.9% to 74.5% of runs for counts simulated as
+    Poisson"."""
+    return " and ".join(
+        f"in {_span(*rates_of(family))} of runs for {_FADE_KINDS[family]}" for family in families
+    )
+
+
+def _fade_rates(entry: dict[str, Any]) -> str:
+    """What share of runs flagged a fade of the size a finding prints, in Referee's simulations
+    (design section 21.5), for the kind of metric, if the test is inside what was simulated."""
+    families = FADE_FAMILIES.get(entry["metric"])
+    if families is None:
+        return (
+            f"{_FADE_ASSUMES} Referee did not simulate this kind of metric, so it does not know "
+            f"what share of runs would flag a fade of this size. {_FADE_STEP}"
+        )
+    reasons = _outside_simulations(entry)
+    if reasons:
+        return (
+            f"{_FADE_ASSUMES} Referee simulated the trigger only for two arms of the same size "
+            f"(a test within {_times(FADE_MAX_ALLOCATION_RATIO)} to 1 counts as the same here), a "
+            f"control baseline that does not move, {FADE_COHORTS[0]} or {FADE_COHORTS[-1]} "
+            f"cohorts and {_join_or([f'{size:,}' for size in FADE_SIZES])} players an arm in a "
+            "cohort (a count or a size between those counts as inside here). "
+            f"This test has {_join(reasons)}, so what share of runs would flag a fade of this "
+            "size is not known here; in the cases simulated the trigger flagged a fade of this "
+            f"size {_shares(families, _overall_span)}. {_FADE_STEP}"
+        )
+    players = entry["design"]["players_an_arm_median"]
+    size = _nearest_size(players)
+    text = (
+        f"{_FADE_ASSUMES} In Referee's simulations (design section 21.5: two arms of the same "
+        f"size, a control baseline that does not move, {FADE_COHORTS[0]} and "
+        f"{FADE_COHORTS[-1]} cohorts, with {size:,} players an arm in a cohort, the nearest "
+        f"size to this test's; a count or a size between those simulated counts as inside "
+        f"here, and this test has {entry['design']['cohorts']} cohorts and about "
+        f"{_thousands(players)} players an arm) the trigger, which needs the log-ratio scale "
+        "as well, "
+        "flagged a fade of exactly this size "
+        f"{_shares(families, lambda family: FADE_FLAG_RATES[family][size])}: "
+        "below the 80% in every case simulated."
+    )
+    if "revenue_like" in families:
+        added = FADE_FLAG_RATES_ADDED["revenue_like"][size]
+        text += (
+            " The effect in those simulations multiplied what the players who spend spend; "
+            f"when the same amount was added to every player the rate was {_span(*added)}."
+        )
+    return f"{text} {_FADE_STEP}"
+
+
+def _join(items: list[str]) -> str:
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def _join_or(items: list[str]) -> str:
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + " or " + items[-1]
+
+
 def _entry_note(entry: dict[str, Any]) -> str:
     label = f"arm {entry['arm']}, metric {entry['metric']}"
     if entry["status"] == "not_evaluated":
@@ -345,13 +487,12 @@ def _entry_note(entry: dict[str, Any]) -> str:
     fade = _amount(entry["detectable"]["absolute"]["linear_fade"])
     step = _amount(entry["detectable"]["absolute"]["step"])
     sentence = (
-        f"{label}: not flagged. With 80% probability the test would have flagged a linear fade "
-        f"(a difference between the arm and control of {fade} in the first cohort that falls "
-        f"in a straight line to nothing in the last) or a step (a difference of {step} in the "
-        "first half of the cohorts and nothing in the second), in the metric's units, and it "
-        "could have missed anything smaller. The figure is a little optimistic, because the "
-        "trigger needs the log-ratio scale too. A result that is not flagged does not show "
-        "that the effect is the same in every cohort."
+        f"{label}: not flagged. The usual power calculation puts at 80% the chance that the "
+        f"test would have flagged a linear fade (a difference between the arm and control of "
+        f"{fade} in the first cohort that falls in a straight line to nothing in the last) or "
+        f"a step (a difference of {step} in the first half of the cohorts and nothing in the "
+        f"second), in the metric's units. {_fade_rates(entry)} A result that is not flagged "
+        "does not show that the effect is the same in every cohort."
     )
     if entry["trigger"]["absolute"] != entry["trigger"]["log_ratio"]:
         shown = "absolute" if entry["trigger"]["absolute"] else "log-ratio"

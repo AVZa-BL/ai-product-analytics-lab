@@ -1,7 +1,8 @@
 """Rules about what the data of a finished experiment shows (RES).
 
-The data-fit rules of design section 21.4 are here; the effect rules follow in milestone 4b-2.
-A rule reads a `ResultsContext` and returns the evidence that triggered it.
+The data-fit rules of design section 21.4 are here, with the effect rules RES-007 and RES-008;
+RES-004 follows in milestone 4b-2. A rule reads a `ResultsContext` and returns the evidence that
+triggered it.
 """
 
 from __future__ import annotations
@@ -17,13 +18,16 @@ from referee.methods import (
     homogeneity_test,
     srm_test,
 )
+from referee.pooled_rates import EXCESS_RATE, NOMINAL_RATE, UNIT, percent
 from referee.results import ResultsContext, difference_summary, effect_estimates
 from referee.rules.base import Escalation, Rule
 from referee.rules.cohorts import cohort_report
+from referee.rules.heavy_tails import heavy_tail_report
 from referee.rules.references import (
     COCHRAN_1954,
     FABIJAN_ET_AL_2019,
     HIGGINS_THOMPSON_2002,
+    KOHAVI_ET_AL_2014,
     KOHAVI_TANG_XU_2020,
 )
 
@@ -288,6 +292,25 @@ def _effect_differs_between_cohorts(context: ResultsContext) -> dict[str, Any] |
     return report
 
 
+def _heavy_tailed_metric(context: ResultsContext) -> dict[str, Any] | None:
+    """The signs of a heavy tail (design section 21.11), when any arm and metric shows one."""
+    report = heavy_tail_report(context)
+    if not report["summary"]["tripped"]:
+        return None
+    return report
+
+
+def _simulated_rate_is_high(evidence: dict[str, Any]) -> bool:
+    """The largest simulated rate for the effects nearer the difference seen (both ranges, when
+    it cannot be told which are nearer) is above `EXCESS_RATE`, or a comparison lies beyond the
+    simulated cases in a direction in which the rates rose."""
+    summary = evidence.get("summary", {})
+    largest = summary.get("largest_simulated_rate")
+    return (largest is not None and largest > EXCESS_RATE / UNIT) or bool(
+        summary.get("floor_ranges")
+    )
+
+
 RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
     Rule(
         id="RES-001",
@@ -418,6 +441,90 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         ),
         references=(COCHRAN_1954, HIGGINS_THOMPSON_2002, KOHAVI_TANG_XU_2020),
         check=_effect_differs_between_cohorts,
+    ),
+    Rule(
+        id="RES-008",
+        severity="info",
+        title=(
+            "Skewed or heavy-tailed metric: its 95% interval can be wrong more or less often "
+            "than 5% of the time"
+        ),
+        fires_when=(
+            "For a non-control arm and a metric of the spec that is not binary (the primary "
+            "metric or a guardrail), the analysed players of the arm and of control are "
+            "compared, and at least one of three signs shows in either group: the rule of "
+            "thumb of Kohavi, Deng, Longbotham and Xu (2014), a sample skewness above 1 in size "
+            "in a group of fewer players than 355 times the square of that skewness; an excess "
+            "kurtosis above 100; or the top 1% of the group's players (at least one) holding "
+            "more than half of the total of the metric. Every split between the arms is read, "
+            "equal arms included. The skewness, kurtosis and share are rounded to 6 places and "
+            "the decision is made on the rounded figures that the evidence shows. A group that "
+            "cannot be read (fewer than 2 players, every value 0 or the same, a negative value, "
+            "values that are not finite or are too large or too small to measure) is reported "
+            "with its reason and the pair is judged on the other group; a pair with no sign "
+            "and a group that could not be read is reported as not evaluated and does not "
+            "fire the rule on its own."
+        ),
+        why_it_matters=(
+            "Welch's interval for a difference of means, the one Referee prints, assumes that "
+            "the mean of each arm is nearly normal. For a metric that most players leave at "
+            "zero and a few drive up, that takes more players than an experiment often has "
+            "(by the rule of thumb of Kohavi et al., revenue per user, with a skewness of about "
+            "18, needs about 114,000 users), and below that size the interval is wrong more or "
+            "less often than the 5% it states. Referee measured how often for a revenue-like "
+            "metric of independent players in two arms (design section 21.10), and the "
+            "finding quotes the simulated cases on each side of the comparison: with equal "
+            "arms the interval "
+            "was mostly close to or under 5% for a small effect and above it for a large one; "
+            "with arms of unequal size it was often above 5%, for a small effect mostly on the "
+            "side that makes the larger arm look better than it is, and it was worst when the "
+            "control was the larger arm (the arm there being the group with the higher mean); "
+            "and at 9 to 1 with no effect it was worse the fewer "
+            "the players who spend in the smaller arm. These rates come from one simulated "
+            "family and are not a measure of the experiment in hand. A quiet RES-008 is not "
+            "evidence that the interval is reliable: in the simulations every run of a "
+            "revenue-like metric showed a sign. For a metric that is not revenue-like the "
+            "finding gives the signs and says that no error rate was measured."
+        ),
+        remediation=(
+            "Where an entry gives a simulated rate, read it in place of 5%: an interval that "
+            "failed in 10% of simulated experiments behaved like a 90% interval, and for a "
+            "small effect and arms of unequal size it mostly favoured the larger group. Where "
+            "an entry states no error rate (a metric that is not revenue-like, units that are "
+            "not independent players, a group with no analysed players, or no player who "
+            "spends in the smaller group), treat its "
+            "interval as unchecked: the signs show that it may be unreliable, but Referee has "
+            "not measured how much. Do not call the result "
+            "significant, or not, on one edge of this interval: if an end of it is close to "
+            "zero or to a decision threshold, say that the result is uncertain. Where you can "
+            "choose, do not make the control the larger arm, which was the worst case in the "
+            "simulations (where the arm has the higher mean; for a metric you expect to fall, "
+            "avoid the larger arm instead), and plan for more players who spend in the "
+            "smaller arm. For a "
+            "decision that rests on this metric, consider a less skewed version of it (a cap "
+            "on the amount per player, or a transformation): Kohavi et al. report that capping "
+            "revenue per user cut its skewness from about 18 to about 5. It changes what is "
+            "estimated, and Referee has not measured how well capping, trimming or a "
+            "transformation works, so register the choice before the next test and not after "
+            "seeing the data. Referee shows no bootstrap interval, because in its simulations "
+            "the percentile bootstrap interval failed more often than Welch's in most of the "
+            "cells it was run on."
+        ),
+        references=(KOHAVI_ET_AL_2014, KOHAVI_TANG_XU_2020),
+        check=_heavy_tailed_metric,
+        escalation=Escalation(
+            to="warning",
+            when=(
+                "the simulated range for the effects nearer the difference seen (both ranges, "
+                "when the means cannot be compared) reaches above "
+                f"{percent(EXCESS_RATE)}, which is {EXCESS_RATE / NOMINAL_RATE:g} times the "
+                f"{percent(NOMINAL_RATE)[:-3]}% an interval of this level should fail in, or "
+                "that comparison lies beyond the simulated cases in a direction in which the "
+                "simulated rates rose, so that the true rate is probably above the range "
+                "printed."
+            ),
+            applies=_simulated_rate_is_high,
+        ),
     ),
     Rule(
         id="RES-011",

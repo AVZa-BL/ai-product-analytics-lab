@@ -316,6 +316,71 @@ def test_the_excess_kurtosis_is_what_scipy_returns_by_default(seed: int) -> None
     )
 
 
+@pytest.mark.parametrize("seed", range(6))
+def test_the_skewness_is_what_scipy_returns_by_default(seed: int) -> None:
+    values = _lognormal(seed, 300 + 100 * seed)
+
+    assert heavy_tail_measures(values).skewness == pytest.approx(stats.skew(values), rel=1e-9)
+
+
+def test_the_skewness_of_a_few_large_values_is_large_and_of_their_mirror_image_is_not() -> None:
+    one_spender = [1.0] + [0.0] * 99  # a Bernoulli sample with p = 1/100
+    expected = (1 - 2 * 0.01) / math.sqrt(0.01 * 0.99)
+
+    assert heavy_tail_measures(one_spender).skewness == pytest.approx(expected, rel=1e-12)
+    assert heavy_tail_measures([1.0] * 99 + [0.0]).skewness == pytest.approx(-expected, rel=1e-12)
+    assert heavy_tail_measures(one_spender).excess_kurtosis == pytest.approx(
+        100**2 / 99 - 6, rel=1e-12
+    )
+
+
+@pytest.mark.parametrize("big", [1e80, 1e154, 1e300])
+def test_values_too_large_for_a_fourth_power_are_refused_as_a_stats_error(big: float) -> None:
+    with pytest.raises(StatsError, match="too large"):
+        heavy_tail_measures([0.0] * 50 + [big, 2 * big])
+
+
+@pytest.mark.parametrize("values", [[1e308] * 3 + [0.0], [1e308, 1e308], [1.7e308, 1.7e308, 0.0]])
+def test_finite_values_whose_sum_is_beyond_any_float_are_a_stats_error_too(
+    values: list[float],
+) -> None:
+    with pytest.raises(StatsError, match="too large"):
+        heavy_tail_measures(values)
+
+
+@pytest.mark.parametrize("values", [[1e-100, 2e-100, 4e-100], [1e-120, 0.0, 3e-120, 9e-120]])
+def test_values_so_small_that_a_power_of_their_spread_underflows_are_a_stats_error(
+    values: list[float],
+) -> None:
+    with pytest.raises(StatsError, match="too large or too small"):
+        heavy_tail_measures(values)
+
+
+@pytest.mark.parametrize("values", [[0.7] * 3, [0.1 + 0.2, 0.3, 0.3], [5.0, 5.0], [1e-200] * 50])
+def test_values_that_do_not_vary_are_a_no_variation_error(values: list[float]) -> None:
+    with pytest.raises(NoVariationError):
+        heavy_tail_measures(values)
+
+
+@pytest.mark.parametrize("values", [[0.0] * 50 + [1e-200, 2e-200, 5e-200], [1e-200, 2e-200]])
+def test_values_that_differ_but_whose_squared_spread_underflows_are_not_said_to_be_the_same(
+    values: list[float],
+) -> None:
+    with pytest.raises(StatsError, match="too large or too small") as raised:
+        heavy_tail_measures(values)
+
+    assert not isinstance(raised.value, NoVariationError)
+
+
+def test_large_values_that_still_fit_are_measured() -> None:
+    values = [0.0] * 50 + [1e70, 2e70]
+
+    result = heavy_tail_measures(values)
+
+    assert result.skewness == pytest.approx(stats.skew(values), rel=1e-9)
+    assert result.excess_kurtosis == pytest.approx(stats.kurtosis(values), rel=1e-9)
+
+
 def test_a_normal_sample_has_excess_kurtosis_near_zero_and_a_lognormal_one_far_above() -> None:
     rng = random.Random(2)
     normal = [rng.gauss(50.0, 5.0) for _ in range(20_000)]

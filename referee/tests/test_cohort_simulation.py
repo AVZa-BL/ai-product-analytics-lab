@@ -2177,7 +2177,7 @@ def _figures_outside(text: str, phrases: list[str]) -> list[str]:
         assert text.count(phrase) == 1, phrase
         text = text.replace(phrase, " ", 1)
     text = text.replace("4b-2", " ").replace("RES-007", " ").replace("RES-008", " ")
-    text = re.sub(r"(?<![\d.])21\.[5-9](?![\d%])", " ", text)  # a reference to a section
+    text = re.sub(r"(?<![\d.])21\.(?:[5-9]|1[01])(?![\d%])", " ", text)  # a section reference
     text = re.sub(r"(?<!\d)(5|95)th\b", " ", text)  # the ordinal of a percentile
     return re.findall(r"\d[\d,.]*%?", text)
 
@@ -2380,10 +2380,10 @@ def test_the_other_sections_carry_what_the_heavy_study_changes() -> None:
     assert f"flagged in {sentences['spread']}, 21.5)" in amendment
     assert "costs up to 3 points of power, 5 for a binary outcome" not in amendment
     assert "so the figure is a little optimistic)" not in amendment
-    # the note a finding prints still says so, and the design says that this is known to be wrong
-    assert ("a little optimistic" in inspect.getsource(cohort_rule)) == (
-        "still calls it a little optimistic" in amendment
-    )
+    # the note a finding prints no longer says so, and the design says that it was replaced
+    assert "a little optimistic" not in inspect.getsource(cohort_rule)
+    assert "still calls it a little optimistic" not in amendment
+    assert "was replaced in 4b-2 by the measured shares of runs (21.11)" in amendment
     assert "computed at the trigger's level for Q-or-slope on the absolute scale" in amendment
     assert "computed for the trigger actually used" not in amendment
     assert (
@@ -2392,7 +2392,10 @@ def test_the_other_sections_carry_what_the_heavy_study_changes() -> None:
     ) in amendment
     assert f"the share of paying players was fixed at {sentences['payers']}" in amendment
     assert "Not adopted in 4b-2: the bootstrap of RES-008 in the cohort test" in amendment
-    assert "Open for 4b-2, with RES-008: what RES-007 prints as the smallest change" in amendment
+    assert (
+        "Decided in 4b-2, with RES-008 (21.11): what RES-007 prints as the smallest change"
+        in amendment
+    )
     assert "cohorts of very different sizes in one experiment (21.1 has Q alone" in amendment
     assert "the shift a finding prints for three arms, for arms of unequal size" in amendment
     assert "Settled in 4b-2" not in amendment

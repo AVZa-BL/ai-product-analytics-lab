@@ -47,6 +47,47 @@ BASELINE_LEVEL = 0.05  # a control baseline that changes across cohorts, at this
 # cells of design section 21.5 (mean and maximum); a test checks them against the saved study.
 NULL_FLAG_RATE_MEAN = 0.0346
 NULL_FLAG_RATE_MAX = 0.0508
+
+# The share of runs in which the trigger flagged a linear fade of exactly the size a finding
+# prints, in the simulations of design section 21.5: two arms of equal size, a stable baseline,
+# 4 and 8 cohorts, by the kind of metric and the players an arm in a cohort (the lowest and the
+# highest over the cells). `FADE_FLAG_RATES_ADDED` is the same fade added to every player, not
+# multiplied into what the players who spend spend. Tests check both against the saved study.
+FADE_SIZES = (100, 300, 1000)
+FADE_COHORTS = (4, 8)
+FADE_FLAG_RATES: dict[str, dict[int, tuple[float, float]]] = {
+    "revenue_like": {
+        100: (0.059666666666666666, 0.22766666666666666),
+        300: (0.145, 0.3993333333333333),
+        1000: (0.26766666666666666, 0.5363333333333333),
+    },
+    "binary": {
+        100: (0.3626666666666667, 0.38266666666666665),
+        300: (0.5093333333333333, 0.5616666666666666),
+        1000: (0.6393333333333333, 0.654),
+    },
+    "poisson": {
+        100: (0.7043333333333334, 0.7096666666666667),
+        300: (0.719, 0.745),
+        1000: (0.7506666666666667, 0.7706666666666667),
+    },
+}
+FADE_FLAG_RATES_ADDED: dict[str, dict[int, tuple[float, float]]] = {
+    "revenue_like": {
+        100: (0.42866666666666664, 0.527),
+        300: (0.464, 0.561),
+        1000: (0.507, 0.67),
+    },
+}
+# Which simulated kinds of metric stand for each export metric (design section 21.11): the
+# purchases are a count that is mostly 0 or 1, so both the binary and the Poisson row are given.
+FADE_FAMILIES: dict[str, tuple[str, ...]] = {
+    "revenue_usd_7d": ("revenue_like",),
+    "purchased_7d": ("binary",),
+    "sessions_7d": ("poisson",),
+    "purchases_7d": ("binary", "poisson"),
+}
+FADE_MAX_ALLOCATION_RATIO = 1.25  # arms differing by more than this were not simulated (equal)
 SHAPES: tuple[CohortShape, CohortShape] = ("linear_fade", "step")
 LowInformation = Literal[
     "shift_exceeds_control_mean",

@@ -125,6 +125,20 @@ METRICS: Mapping[str, ExportMetric] = {
 }
 
 
+MetricFamily = Literal["revenue_like", "count", "binary"]
+
+# What kind of values each export metric holds, which decides what Referee has simulated for it.
+# `revenue_like`: an amount of money that most players leave at zero (the family of the pooled-
+# effect study, design section 21.10); `count`: a whole number of events per player (not
+# simulated for the pooled effect); `binary`: 0 or 1.
+METRIC_FAMILIES: Mapping[str, MetricFamily] = {
+    "sessions_7d": "count",
+    "purchases_7d": "count",
+    "revenue_usd_7d": "revenue_like",
+    "purchased_7d": "binary",
+}
+
+
 @dataclass(frozen=True, kw_only=True)
 class ResultsContext:
     """Everything a results rule may read.

@@ -25,6 +25,7 @@ from referee.methods import (
 from referee.results import ResultsContext
 from referee.review import review_results
 from referee.rules import RESULTS_RULES
+from referee.rules.heavy_tails import heavy_tail_report
 
 FIXTURE = Path(__file__).parent / "data" / "hybrid_offer_page_5000"
 
@@ -1118,6 +1119,7 @@ def test_a_results_review_of_the_committed_export_lists_every_data_fit_rule_that
         "RES-002",
         "RES-003",
         "RES-007",
+        "RES-008",
         "RES-011",
         "RES-012",
         "RES-013",
@@ -1531,6 +1533,13 @@ def test_a_session_count_beyond_any_float_gives_an_error_in_the_estimate_not_a_c
     assert (
         by_arm["variant_b"]["with_late_exposed"]["error"] == "control must hold only finite numbers"
     )
+    # RES-008 reads the same values: the group holding the infinite count cannot be read, the
+    # other is constant, so the pair is counted as not evaluated and the rule stays quiet.
+    (entry,) = heavy_tail_report(ResultsContext.of(spec, build_data(rows)))["tests"]
+    assert entry["groups"]["control"]["unread"] == "not_computable"
+    assert entry["groups"]["variant_b"]["unread"] == "no_variation"
+    assert entry["status"] == "not_evaluated"
+    assert not any(f.rule_id == "RES-008" for f in review.findings)
 
 
 # RES-013 --------------------------------------------------------------------------------------

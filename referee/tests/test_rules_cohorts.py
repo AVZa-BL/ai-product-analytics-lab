@@ -269,11 +269,12 @@ def _config_of(context: ResultsContext):
 # --- The rule ------------------------------------------------------------------------------
 
 
-def test_res_007_is_a_warning_between_res_003_and_res_011_citing_the_heterogeneity_literature():
+def test_res_007_is_a_warning_between_res_003_and_res_008_citing_the_heterogeneity_literature():
     ids = [rule.id for rule in RESULTS_RULES]
 
     assert RES_007.severity == "warning" and RES_007.escalation is None
-    assert ids[ids.index("RES-003") + 1 : ids.index("RES-011")] == ["RES-007"]
+    assert ids[ids.index("RES-003") + 1 : ids.index("RES-008")] == ["RES-007"]
+    assert ids[ids.index("RES-007") + 1 : ids.index("RES-011")] == ["RES-008"]
     for author in ("Cochran", "Higgins", "Trustworthy"):
         assert any(author in reference for reference in RES_007.references), author
     assert "0.025 divided by the number of non-control arms" in RES_007.fires_when
@@ -591,8 +592,10 @@ def test_a_quiet_result_says_what_it_could_have_seen_in_units_and_as_a_share_of_
         },
         abs=1e-6,
     )
-    assert "With 80% probability" in note and "it could have missed anything smaller" in note
-    assert "a little optimistic" in note
+    assert "The usual power calculation puts at 80% the chance that the test would have" in note
+    assert "the test could have missed anything smaller" in note
+    assert "a little optimistic" not in note
+    assert "The step was not simulated" in note
     assert "does not show that the effect is the same in every cohort" in note
 
 

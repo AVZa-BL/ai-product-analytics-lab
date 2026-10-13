@@ -1035,8 +1035,8 @@ def _sentences() -> dict[str, str]:
 def _section() -> str:
     parts = DESIGN.split("\n### 21.10 ")
     assert len(parts) == 2, "section 21.10 is not there exactly once"
-    text = parts[1].split("\nDelivered in:")[0]
-    assert DESIGN.index("### 21.9 ") < DESIGN.index("### 21.10 ")
+    text = parts[1].split("\n### 21.11 ")[0].split("\nDelivered in:")[0]
+    assert DESIGN.index("### 21.9 ") < DESIGN.index("### 21.10 ") < DESIGN.index("### 21.11 ")
     return text
 
 
@@ -1048,7 +1048,8 @@ def _figures_outside(text: str, phrases: list[str]) -> list[str]:
         assert text.count(phrase) == 1, phrase
         text = text.replace(phrase, " ", 1)
     text = text.replace("4b-2", " ").replace("RES-008", " ").replace("top-1%", " ")
-    text = re.sub(r"(?<![\d.])21\.(?:[5-9]|10)(?![\d%])", " ", text)  # a reference to a section
+    text = text.replace("section 8", " ")
+    text = re.sub(r"(?<![\d.])21\.(?:[5-9]|1[01])(?![\d%])", " ", text)  # a reference to a section
     text = re.sub(r"(?<!\d)(5|95)th\b", " ", text)  # the ordinal of a percentile
     return re.findall(r"\d[\d,.]*%?", text)
 
@@ -1297,7 +1298,7 @@ def test_the_readme_and_the_design_text_name_the_command_that_makes_the_file() -
     )
     assert POOLED["command"].endswith(f"--out docs/simulations/{NAME}.json")
     nine = DESIGN.split("### 21.9 ")[1].split("### 21.10 ")[0]
-    assert "Open for 4b-2, with RES-008, after the pooled study (21.10)" in nine
+    assert "Decided in 4b-2 (21.11), after the pooled study (21.10)" in nine
     assert "the gaps of the pooled study are listed in 21.10" in nine.lower()
     assert "whether the size that the rule reads is the number of players or the number of" in nine
     assert "players who spend, which the rates followed better" in nine

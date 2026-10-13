@@ -37,7 +37,8 @@ class StatsError(ValueError):
 
 
 class NoVariationError(StatsError):
-    """Neither group varies, so a standard error would be 0 and nothing can be tested."""
+    """Nothing varies (neither group, or the one group measured), so a standard error or a
+    kurtosis would be 0 or undefined and nothing can be tested."""
 
 
 class NonPositiveMeanError(StatsError):
@@ -526,9 +527,16 @@ def two_proportion_difference(
 # --- How heavy the tail of a metric is -----------------------------------------------------
 
 
+_TOO_LARGE_FOR_MOMENTS = (
+    "the values hold numbers too large or too small to sum or to take their fourth power, so "
+    "the skewness and kurtosis cannot be computed"
+)
+
+
 @dataclass(frozen=True, kw_only=True)
 class HeavyTail:
     n: int
+    skewness: float
     excess_kurtosis: float
     top_percent: int
     top_count: int
@@ -538,11 +546,15 @@ class HeavyTail:
 def heavy_tail_measures(values: Sequence[float], *, top_percent: int = 1) -> HeavyTail:
     """How concentrated and how heavy-tailed a non-negative metric is. A description, not a test.
 
-    `excess_kurtosis` is m4 / m2^2 - 3 with the moments taken about the mean and divided by n
-    (what `scipy.stats.kurtosis` returns by default), so it is 0 for a normal distribution.
+    `skewness` is m3 / m2^1.5 and `excess_kurtosis` is m4 / m2^2 - 3, with the moments taken about
+    the mean and divided by n (what `scipy.stats.skew` and `scipy.stats.kurtosis` return by
+    default); the kurtosis is 0 for a normal distribution.
     `top_share` is the share of the total held by the largest `ceil(n * top_percent / 100)`
     values, the same rule the lab's readout uses for revenue. Both are noisy for small groups.
-    Raises `StatsError` for fewer than 2 values, no variation, a negative value or a total of 0.
+    Raises `StatsError` for fewer than 2 values, a negative value, a total of 0 or values so
+    large or so small that their sum or a power of their spread overflows or underflows (about
+    1e77 and above, or the spread below about 1e-77), and `NoVariationError` (a `StatsError`)
+    when they do not vary.
     """
     if (
         isinstance(top_percent, bool)
@@ -555,20 +567,32 @@ def heavy_tail_measures(values: Sequence[float], *, top_percent: int = 1) -> Hea
         raise StatsError(f"values needs at least 2 values, got {len(numbers)}")
     if min(numbers) < 0:
         raise StatsError("the top share is defined for non-negative values only")
-    total = math.fsum(numbers)
+    try:
+        total = math.fsum(numbers)
+    except OverflowError:  # the values are finite but their sum is beyond any float
+        raise StatsError(_TOO_LARGE_FOR_MOMENTS) from None
     if total == 0:
         raise StatsError("the values sum to 0, so no value holds a share of the total")
     n = len(numbers)
     mean = total / n
-    second = math.fsum((v - mean) ** 2 for v in numbers) / n
-    if second == 0 or _is_constant(numbers):
-        raise StatsError("the values do not vary, so the kurtosis is undefined")
-    fourth = math.fsum((v - mean) ** 4 for v in numbers) / n
+    if _is_constant(numbers):
+        raise NoVariationError("the values do not vary, so the kurtosis is undefined")
+    try:
+        second = math.fsum((v - mean) ** 2 for v in numbers) / n
+        if second == 0:  # the values differ, but their squared spread is below any float
+            raise StatsError(_TOO_LARGE_FOR_MOMENTS)
+        third = math.fsum((v - mean) ** 3 for v in numbers) / n
+        fourth = math.fsum((v - mean) ** 4 for v in numbers) / n
+        skewness = third / second**1.5
+        excess_kurtosis = fourth / second**2 - 3.0
+    except (OverflowError, ZeroDivisionError):  # a power of the spread is beyond any float
+        raise StatsError(_TOO_LARGE_FOR_MOMENTS) from None
     top_count = (n * top_percent + 99) // 100
     top = sorted(numbers, reverse=True)[:top_count]
     return HeavyTail(
         n=n,
-        excess_kurtosis=fourth / second**2 - 3.0,
+        skewness=skewness,
+        excess_kurtosis=excess_kurtosis,
         top_percent=top_percent,
         top_count=top_count,
         top_share=math.fsum(top) / total,

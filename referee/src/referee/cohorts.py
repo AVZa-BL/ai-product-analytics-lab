@@ -123,16 +123,26 @@ def cohort_sizes(context: ResultsContext, block_days: int) -> dict[int, dict[str
     }
 
 
-def cohort_gate(context: ResultsContext, metric: ExportMetric) -> GateReason | None:
-    """Why the cohort test may not run on this spec and metric at all, or None.
+def units_independent(context: ResultsContext) -> bool:
+    """Whether the spec randomises and analyses one class of independent players.
 
-    The units must be one class of independent players (`player` and `user`, or `device` for
-    both), and the metric must not be a ratio, which the test was never validated for.
+    That is `player` and `user` (one person), or `device` for both. A session or a cluster
+    holds several observations of one unit, and a mix of the two classes counts a unit once
+    in one place and more than once in the other.
     """
     population = context.spec.population
     randomization = UNIT_CLASS.get(population.randomization_unit)
     analysis = UNIT_CLASS.get(population.analysis_unit)
-    if randomization is None or analysis is None or randomization != analysis:
+    return randomization is not None and randomization == analysis
+
+
+def cohort_gate(context: ResultsContext, metric: ExportMetric) -> GateReason | None:
+    """Why the cohort test may not run on this spec and metric at all, or None.
+
+    The units must be one class of independent players (`units_independent`), and the metric
+    must not be a ratio, which the test was never validated for.
+    """
+    if not units_independent(context):
         return "unit_not_independent"
     if metric.kind == "ratio":
         return "ratio_metric_not_validated"

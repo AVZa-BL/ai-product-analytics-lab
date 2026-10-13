@@ -36,6 +36,7 @@ KEY_TERMS = {
     "RES-002": "fewer players than",
     "RES-003": "design.min_duration_days",
     "RES-007": "0.025 divided by the number of non-control arms",
+    "RES-008": "355 times the square of that skewness",
     "RES-011": "divided by the number of weeks",
     "RES-012": "after their first purchase",
     "RES-013": "arm_config_version",
@@ -114,7 +115,7 @@ def test_each_rule_sits_under_its_own_group() -> None:
 def test_the_summary_counts_and_lists_every_rule() -> None:
     text = render_rules_markdown()
 
-    assert "24 rules by default severity: 7 blockers, 15 warnings, 2 info." in text
+    assert "25 rules by default severity: 7 blockers, 15 warnings, 3 info." in text
     for r in CATALOGUE:
         assert f"| {r.id} | {r.severity} | {r.title} |" in text
 
@@ -202,11 +203,14 @@ def test_an_escalation_is_documented_after_the_fires_when_and_only_for_rules_tha
     assert "- **Escalates to blocker when:** it is bad." in text
 
 
-def test_the_committed_catalogue_documents_the_one_escalation_there_is() -> None:
-    escalating = [r.id for r in CATALOGUE if r.escalation is not None]
+def test_the_committed_catalogue_documents_the_escalations_there_are() -> None:
+    escalating = {r.id: r.escalation.to for r in CATALOGUE if r.escalation is not None}
+    text = DOC.read_text(encoding="utf-8")
 
-    assert escalating == ["RES-012"]
-    assert DOC.read_text(encoding="utf-8").count("Escalates to") == 1
+    assert escalating == {"RES-008": "warning", "RES-012": "blocker"}
+    assert text.count("Escalates to") == 2
+    assert text.count("Escalates to warning when") == 1
+    assert text.count("Escalates to blocker when") == 1
 
 
 def test_the_intro_does_not_claim_a_results_rule_looks_at_the_spec_alone() -> None:

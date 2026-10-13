@@ -163,7 +163,16 @@ def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_4b_2_is
     catalogue = set(re.findall(r"(?:DES|RES)-0\d\d", seed_list))
     named = set(re.findall(r"(?:DES|RES)-0\d\d", amendment))
     new_rules = {"RES-012", "RES-013", "DES-009"}
-    built_so_far = {"RES-001", "RES-002", "RES-003", "RES-007", "RES-011", "RES-012", "RES-013"}
+    built_so_far = {
+        "RES-001",
+        "RES-002",
+        "RES-003",
+        "RES-007",
+        "RES-008",
+        "RES-011",
+        "RES-012",
+        "RES-013",
+    }
     built = {rule.id for rule in ALL_RULES} | {rule.id for rule in RESULTS_RULES}
 
     assert {"RES-001", "RES-002", "RES-003", "RES-004", "RES-007", "RES-008"} <= named
@@ -176,8 +185,8 @@ def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_4b_2_is
         assert branch in amendment
     assert built_so_far <= {rule.id for rule in RESULTS_RULES}
     assert not {rule.id for rule in ALL_RULES} & {rule_id for rule_id in named if "RES" in rule_id}
-    assert not {"RES-004", "RES-008", "DES-009"} & built, (
-        "RES-004, RES-008 and DES-009 arrive in 4b-2; update this test and section 21 when they do"
+    assert not {"RES-004", "DES-009"} & built, (
+        "RES-004 and DES-009 arrive in 4b-2; update this test and section 21 when they do"
     )
 
 
@@ -222,8 +231,10 @@ def test_the_readme_names_every_runtime_dependency_the_project_declares() -> Non
 def test_the_readme_names_the_results_rules_that_are_built_and_says_no_command_runs_them() -> None:
     sentence = next(line for line in README.splitlines() if "results rules built so far" in line)
 
+    number = {7: "seven", 8: "eight", 9: "nine", 10: "ten", 11: "eleven", 12: "twelve"}
     assert all(rule.id in sentence for rule in RESULTS_RULES)
-    assert f"the {len(RESULTS_RULES)} results rules" not in sentence  # the ids, not a count
+    assert f"the {number[len(RESULTS_RULES)]} results rules built so far" in sentence
+    assert f"the {len(RESULTS_RULES)} results rules" not in sentence  # the words, not a digit
     assert "no command runs them yet" in sentence
 
 

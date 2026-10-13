@@ -3,6 +3,9 @@
 KOHAVI_TANG_XU_2020 = (
     "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020."
 )
+KOHAVI_ET_AL_2014 = (
+    "Kohavi, Deng, Longbotham, Xu. Seven Rules of Thumb for Web Site Experimenters. KDD 2014."
+)
 KOHAVI_ET_AL_2012 = (
     "Kohavi, Deng, Frasca, Longbotham, Walker, Xu. "
     "Trustworthy Online Controlled Experiments: Five Puzzling Outcomes Explained. KDD 2012."

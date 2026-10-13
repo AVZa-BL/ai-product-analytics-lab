@@ -25,7 +25,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 
 ## Summary
 
-24 rules by default severity: 7 blockers, 15 warnings, 2 info.
+25 rules by default severity: 7 blockers, 15 warnings, 3 info.
 
 | ID | Severity | Title |
 | --- | --- | --- |
@@ -50,6 +50,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 | RES-002 | blocker | Fewer players than the registered sample size |
 | RES-003 | blocker | Ran for less than the registered minimum duration |
 | RES-007 | warning | The effect differs between cohorts of first exposure, or the test could not run |
+| RES-008 | info | Skewed or heavy-tailed metric: its 95% interval can be wrong more or less often than 5% of the time |
 | RES-011 | warning | Sample ratio drifts over time although the total passes |
 | RES-012 | warning | Players first exposed after their first purchase |
 | RES-013 | warning | An arm's configuration changed during the test |
@@ -214,9 +215,10 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 
 A results rule looks at an experiment's exported data together with its spec (design
 section 21), not at the spec alone. A results review ends in a **verdict**, which follows from
-the findings: `invalid` if any is a blocker, `caution` if any is a warning, `clear` otherwise.
-`clear` says that the rules which ran found nothing; it does not say the effect is real. The
-design review does not run these rules.
+the findings: `invalid` if any is a blocker, `caution` if any is a warning, `clear` otherwise
+(an info finding is listed and does not change the verdict). `clear` says that the rules which
+ran found nothing that blocks or warns; it does not say the effect is real. The design review
+does not run these rules.
 
 ### RES-001: Sample ratio mismatch: the arms are not the size the allocation promised
 
@@ -255,6 +257,17 @@ design review does not run these rules.
 - **References:**
   - Cochran. The Combination of Estimates from Different Experiments. Biometrics 10(1), 1954.
   - Higgins, Thompson. Quantifying Heterogeneity in a Meta-Analysis. Statistics in Medicine 21(11), 2002.
+  - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+### RES-008: Skewed or heavy-tailed metric: its 95% interval can be wrong more or less often than 5% of the time
+
+- **Severity:** info
+- **Fires when:** For a non-control arm and a metric of the spec that is not binary (the primary metric or a guardrail), the analysed players of the arm and of control are compared, and at least one of three signs shows in either group: the rule of thumb of Kohavi, Deng, Longbotham and Xu (2014), a sample skewness above 1 in size in a group of fewer players than 355 times the square of that skewness; an excess kurtosis above 100; or the top 1% of the group's players (at least one) holding more than half of the total of the metric. Every split between the arms is read, equal arms included. The skewness, kurtosis and share are rounded to 6 places and the decision is made on the rounded figures that the evidence shows. A group that cannot be read (fewer than 2 players, every value 0 or the same, a negative value, values that are not finite or are too large or too small to measure) is reported with its reason and the pair is judged on the other group; a pair with no sign and a group that could not be read is reported as not evaluated and does not fire the rule on its own.
+- **Escalates to warning when:** the simulated range for the effects nearer the difference seen (both ranges, when the means cannot be compared) reaches above 7.5%, which is 1.5 times the 5% an interval of this level should fail in, or that comparison lies beyond the simulated cases in a direction in which the simulated rates rose, so that the true rate is probably above the range printed.
+- **Why it matters:** Welch's interval for a difference of means, the one Referee prints, assumes that the mean of each arm is nearly normal. For a metric that most players leave at zero and a few drive up, that takes more players than an experiment often has (by the rule of thumb of Kohavi et al., revenue per user, with a skewness of about 18, needs about 114,000 users), and below that size the interval is wrong more or less often than the 5% it states. Referee measured how often for a revenue-like metric of independent players in two arms (design section 21.10), and the finding quotes the simulated cases on each side of the comparison: with equal arms the interval was mostly close to or under 5% for a small effect and above it for a large one; with arms of unequal size it was often above 5%, for a small effect mostly on the side that makes the larger arm look better than it is, and it was worst when the control was the larger arm (the arm there being the group with the higher mean); and at 9 to 1 with no effect it was worse the fewer the players who spend in the smaller arm. These rates come from one simulated family and are not a measure of the experiment in hand. A quiet RES-008 is not evidence that the interval is reliable: in the simulations every run of a revenue-like metric showed a sign. For a metric that is not revenue-like the finding gives the signs and says that no error rate was measured.
+- **What to do:** Where an entry gives a simulated rate, read it in place of 5%: an interval that failed in 10% of simulated experiments behaved like a 90% interval, and for a small effect and arms of unequal size it mostly favoured the larger group. Where an entry states no error rate (a metric that is not revenue-like, units that are not independent players, a group with no analysed players, or no player who spends in the smaller group), treat its interval as unchecked: the signs show that it may be unreliable, but Referee has not measured how much. Do not call the result significant, or not, on one edge of this interval: if an end of it is close to zero or to a decision threshold, say that the result is uncertain. Where you can choose, do not make the control the larger arm, which was the worst case in the simulations (where the arm has the higher mean; for a metric you expect to fall, avoid the larger arm instead), and plan for more players who spend in the smaller arm. For a decision that rests on this metric, consider a less skewed version of it (a cap on the amount per player, or a transformation): Kohavi et al. report that capping revenue per user cut its skewness from about 18 to about 5. It changes what is estimated, and Referee has not measured how well capping, trimming or a transformation works, so register the choice before the next test and not after seeing the data. Referee shows no bootstrap interval, because in its simulations the percentile bootstrap interval failed more often than Welch's in most of the cells it was run on.
+- **References:**
+  - Kohavi, Deng, Longbotham, Xu. Seven Rules of Thumb for Web Site Experimenters. KDD 2014.
   - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
 
 ### RES-011: Sample ratio drifts over time although the total passes
