@@ -1,0 +1,7 @@
+Event Name,Event description,Trigger,Property,Property type,Required,PII,Possible values,Property description,Status
+shop_opened,The shop screen is opened,The shop screen is shown,player_id,String,✓,,,Opaque player id,Live
+,,,entry_point,Enum,,,menu|level_end|push,Where the shop was opened from,
+,,,contact_email,String,,Yes,,Receipt address,
+purchase_made,A purchase succeeds,The store confirms the purchase,player_id,String,✓,,,Opaque player id,To do
+,,,price_minor,Integer,✓,,,Price in minor units,
+,,,currency_code,String,✓,,,ISO 4217 code,

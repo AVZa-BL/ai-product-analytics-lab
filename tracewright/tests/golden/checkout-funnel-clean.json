@@ -1,0 +1,20 @@
+{
+  "report_version": 1,
+  "kind": "plan_review",
+  "tracewright_version": "0.1.0",
+  "plan": {
+    "id": "checkout_funnel",
+    "title": "Checkout funnel",
+    "events": 3,
+    "metrics": 2,
+    "sha256": "a6b19ef4032d14571991b7c7156b5402b76f4de989a744184f971654e613db0b"
+  },
+  "recommendation": "proceed",
+  "blocking_rule_ids": [],
+  "counts": {
+    "blocker": 0,
+    "warning": 0,
+    "info": 0
+  },
+  "findings": []
+}

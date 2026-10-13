@@ -1,0 +1,9 @@
+Tracking Call,Parameter,Data Type,Mandatory?,Allowed Values,Description,Fires when,Team,Implementation Status,Jira,Notes
+level_completed,,,,,A player finishes a level,The result screen is shown,progression,Live,TRK-12,
+level_completed,player_id,string,Yes,,Opaque player id,,,,,
+level_completed,level_id,string,Yes,,Level identifier,,,,,
+level_completed,stars,int,No,,Stars earned (0-3),,,,,check range
+level_completed,difficulty,enum,No,easy | normal | hard,Difficulty chosen,,,,,
+shop_opened,,,,,The shop screen is opened,The shop screen is shown,monetisation,To do,TRK-31,
+shop_opened,player_id,string,Yes,,Opaque player id,,,,,
+shop_opened,entry_point,enum,No,menu | level_end | push,Where the shop was opened from,,,,,

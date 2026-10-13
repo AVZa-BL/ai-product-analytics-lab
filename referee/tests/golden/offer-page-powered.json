@@ -1,0 +1,18 @@
+{
+  "report_version": 1,
+  "kind": "design_review",
+  "referee_version": "0.1.0",
+  "spec": {
+    "id": "hybrid_offer_page_2026_10_powered",
+    "title": "Subscription offer page variants (planned for 98 days)",
+    "sha256": "b576c2926810c71f1228751421d11e940bc928bd3539bb3556467b2b0576089a"
+  },
+  "recommendation": "proceed",
+  "blocking_rule_ids": [],
+  "counts": {
+    "blocker": 0,
+    "warning": 0,
+    "info": 0
+  },
+  "findings": []
+}

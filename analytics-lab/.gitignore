@@ -1,0 +1,37 @@
+# Local Python environment
+.venv/
+
+# macOS
+.DS_Store
+
+# dbt generated files
+**/target/
+**/logs/
+**/dbt_packages/
+**/.user.yml
+
+# Local databases
+**/*.duckdb
+**/*.duckdb.wal
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Secrets
+.env
+
+# Generated analytics data
+data/raw/
+data/generated/
+generation_manifest.json
+
+# Python packaging and test caches
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Generated notebook artifacts; the committed results JSON is the published evidence.
+reports/**/figures/
+notebooks/**/*.ipynb

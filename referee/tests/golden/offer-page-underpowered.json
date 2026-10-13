@@ -1,0 +1,113 @@
+{
+  "report_version": 1,
+  "kind": "design_review",
+  "referee_version": "0.1.0",
+  "spec": {
+    "id": "hybrid_offer_page_2026_10",
+    "title": "Subscription offer page variants",
+    "sha256": "b0332774feccd582db109bfffff10e1330ce418ab28471ccb625fe0b00af10e8"
+  },
+  "recommendation": "revise",
+  "blocking_rule_ids": [
+    "DES-001",
+    "PRO-001"
+  ],
+  "counts": {
+    "blocker": 2,
+    "warning": 3,
+    "info": 1
+  },
+  "findings": [
+    {
+      "rule_id": "DES-001",
+      "severity": "blocker",
+      "title": "Design cannot reach the planned power",
+      "evidence": {
+        "required_total": 389060,
+        "achievable_total": 58800,
+        "required_days": 93,
+        "required_days_whole_weeks": 98,
+        "planned_duration_days": 14,
+        "requested_mde_relative": 0.05,
+        "achievable_mde_relative": 0.131
+      },
+      "why_it_matters": "With too few units a real effect of the planned size is likely to be missed, and a result of no significant difference then says little. If the target effect cannot exist at all, for example a rate above 1 after the relative lift, no sample size can reach it.",
+      "remediation": "Run for the required days, bring in more eligible units, accept the larger minimum detectable effect the evidence reports, or choose a target effect that can exist.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020."
+      ]
+    },
+    {
+      "rule_id": "PRO-001",
+      "severity": "blocker",
+      "title": "No stopping rule declared",
+      "evidence": {
+        "field": "procedure.stopping_rule",
+        "value": null
+      },
+      "why_it_matters": "Looking at results repeatedly and stopping when they look significant pushes the false-positive rate of a fixed-horizon test well above the chosen alpha. Without a declared rule, a planned stop cannot be told from a peek.",
+      "remediation": "Set procedure.stopping_rule to fixed_horizon (analyse once, at the planned end) or to sequential (and use a test designed for repeated looks).",
+      "references": [
+        "Johari, Koomen, Pekelis, Walsh. Peeking at A/B Tests: Why It Matters, and What to Do About It. KDD 2017.",
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020."
+      ]
+    },
+    {
+      "rule_id": "DES-006",
+      "severity": "warning",
+      "title": "Interference between units is possible",
+      "evidence": {
+        "randomization_unit": "player",
+        "interference": null
+      },
+      "why_it_matters": "If one player's treatment can change another's behaviour, as with social or multiplayer features, units are not independent and the measured effect can be biased.",
+      "remediation": "Randomize at a level that contains the interaction (clusters of players), or set population.interference to none_expected and record why.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020."
+      ]
+    },
+    {
+      "rule_id": "DES-008",
+      "severity": "warning",
+      "title": "No pre-period covariate declared",
+      "evidence": {
+        "field": "design.pre_period_covariate",
+        "value": null
+      },
+      "why_it_matters": "A covariate measured before the experiment lets the analysis remove variance that has nothing to do with the treatment (CUPED), which can shorten the test or sharpen the estimate.",
+      "remediation": "Declare design.pre_period_covariate, for example the primary metric measured for each unit before exposure.",
+      "references": [
+        "Deng, Xu, Kohavi, Walker. Improving the Sensitivity of Online Controlled Experiments by Utilizing Pre-Experiment Data. WSDM 2013."
+      ]
+    },
+    {
+      "rule_id": "PRO-002",
+      "severity": "warning",
+      "title": "No sample-ratio-mismatch check scheduled",
+      "evidence": {
+        "field": "procedure.srm_check_cadence",
+        "value": null
+      },
+      "why_it_matters": "When arm counts depart from the registered allocation, assignment or logging is broken and the comparison is invalid. The mismatch is found only if someone checks.",
+      "remediation": "Set procedure.srm_check_cadence to daily (recommended) or weekly, and act on a mismatch before reading any result.",
+      "references": [
+        "Fabijan et al. Diagnosing Sample Ratio Mismatch in Online Controlled Experiments. KDD 2019.",
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020."
+      ]
+    },
+    {
+      "rule_id": "PRO-004",
+      "severity": "info",
+      "title": "Bucketing salt not declared",
+      "evidence": {
+        "field": "procedure.bucketing_salt",
+        "value": null
+      },
+      "why_it_matters": "Assignment hashes the unit ID with a salt. Reusing one salt across experiments gives them the same bucket boundaries, which can carry one experiment's effect into the next.",
+      "remediation": "Set procedure.bucketing_salt to a value unique to this experiment, for example its id.",
+      "references": [
+        "Kohavi, Deng, Frasca, Longbotham, Walker, Xu. Trustworthy Online Controlled Experiments: Five Puzzling Outcomes Explained. KDD 2012."
+      ]
+    }
+  ]
+}

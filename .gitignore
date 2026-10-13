@@ -1,37 +1,18 @@
-# Local Python environment
+# Patterns for every project in this repository. Each project keeps its own
+# .gitignore for anything specific to it; patterns with a slash in the middle
+# are relative to the folder that holds the .gitignore, so they cannot live here.
+
+# Local Python environments and caches
 .venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+*.egg-info/
 
 # macOS
 .DS_Store
 
-# dbt generated files
-**/target/
-**/logs/
-**/dbt_packages/
-**/.user.yml
-
-# Local databases
-**/*.duckdb
-**/*.duckdb.wal
-
-# Python-generated files
-__pycache__/
-*.py[cod]
-.ipynb_checkpoints/
-
 # Secrets
 .env
-
-# Generated analytics data
-data/raw/
-data/generated/
-generation_manifest.json
-
-# Python packaging and test caches
-*.egg-info/
-.pytest_cache/
-.ruff_cache/
-
-# Generated notebook artifacts; the committed results JSON is the published evidence.
-reports/**/figures/
-notebooks/**/*.ipynb

@@ -1,0 +1,10 @@
+Tracewright tracking-plan review
+Plan:      checkout_funnel - Checkout funnel
+Contents:  3 events, 2 metrics
+Plan hash: sha256:a6b19ef4032d14571991b7c7156b5402b76f4de989a744184f971654e613db0b
+Version:   Tracewright 0.1.0
+
+Recommendation: PROCEED
+Findings: none
+
+Tracewright is advisory: it recommends, and does not approve or block a release.
