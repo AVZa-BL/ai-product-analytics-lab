@@ -265,6 +265,7 @@ def test_an_internal_failure_exits_3_so_it_is_not_mistaken_for_a_blocker(
 # --- As a real process -----------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_python_dash_m_referee_exits_with_the_documented_statuses(
     section_6: Path, clean: Path, tmp_path: Path
 ) -> None:
@@ -277,6 +278,7 @@ def test_python_dash_m_referee_exits_with_the_documented_statuses(
     assert unreadable.stdout == "" and "cannot be read" in unreadable.stderr
 
 
+@pytest.mark.slow
 def test_a_terminal_that_cannot_show_a_character_gets_an_escape_not_a_crash(
     tmp_path: Path, raw_spec: dict
 ) -> None:
@@ -290,6 +292,7 @@ def test_a_terminal_that_cannot_show_a_character_gets_an_escape_not_a_crash(
     assert result.stderr == ""
 
 
+@pytest.mark.slow
 def test_the_command_is_deterministic_across_processes(section_6: Path) -> None:
     first = run_process("review-design", str(section_6), "--format", "json")
     second = run_process("review-design", str(section_6), "--format", "json")

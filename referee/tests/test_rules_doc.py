@@ -65,6 +65,7 @@ def test_the_committed_catalogue_is_what_the_rules_generate() -> None:
     )
 
 
+@pytest.mark.slow
 def test_the_documented_command_regenerates_the_committed_file() -> None:
     result = subprocess.run(
         [sys.executable, "-m", "referee.rules.docs"],
