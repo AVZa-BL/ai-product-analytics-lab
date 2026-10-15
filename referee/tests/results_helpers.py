@@ -8,7 +8,6 @@ from referee.data import Assignment, ExperimentData, Exposure, Outcome
 from referee.spec import ExperimentSpec
 
 T0 = datetime(2026, 4, 11, tzinfo=UTC)
-ARMS = ("control", "variant_b", "variant_c")
 
 
 def at(days: float = 0.0, hours: float = 0.0) -> datetime:

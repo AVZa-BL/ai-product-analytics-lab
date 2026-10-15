@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, get_args
 
 from tracewright.plan import PLAN_VERSION, VERSION_KEY, PropertyType, TrackingPlan
+from tracewright.reader import escape_text
 from tracewright.sheets import values
 from tracewright.sheets.layout import CANONICAL, Layout, resolve_layout
 from tracewright.sheets.table import Table, TableError, read_csv_text
@@ -161,7 +162,7 @@ def _preview(plan: TrackingPlan) -> list[str]:
         more = len(event.properties) - 30
         tail = f", ... and {more} more" if more > 0 else ""
         listed = ", ".join(shown) or "no properties"
-        lines.append(f"  {event.name} ({event.status}): {listed}{tail}")
+        lines.append(escape_text(f"  {event.name} ({event.status}): {listed}{tail}"))
     return lines
 
 

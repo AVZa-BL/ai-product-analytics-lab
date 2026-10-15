@@ -113,7 +113,7 @@ jobs:
       - name: Lint
         run: ruff check src tests
       - name: Test
-        run: python -m pytest -q -n auto
+        run: python -m pytest -q
 
   # The same gate on macOS. Referee's statistics run on numpy and scipy, whose compiled code and
   # floating-point behaviour differ between platforms, and a report must give the same numbers
@@ -138,7 +138,7 @@ jobs:
       - name: Lint
         run: ruff check src tests
       - name: Test
-        run: python -m pytest -q -n auto
+        run: python -m pytest -q
 
   tracewright-quality-gate:
     needs: changes
@@ -159,4 +159,4 @@ jobs:
       - name: Lint
         run: ruff check src tests
       - name: Test
-        run: python -m pytest -q -n auto
+        run: python -m pytest -q

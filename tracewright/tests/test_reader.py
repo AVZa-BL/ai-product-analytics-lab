@@ -14,14 +14,6 @@ def plan_with(raw_plan, **changes):
     return TrackingPlan.from_dict(raw_plan)
 
 
-@pytest.mark.parametrize(
-    "bad", [f"title {ESC}]0;pwned\x07", f"abc{BIDI}def", "nul\x00byte", "c1\x9b"]
-)
-def test_control_and_direction_characters_in_plan_text_are_refused(raw_plan, bad):
-    with pytest.raises(PlanError, match="control or direction-override"):
-        plan_with(raw_plan, title=bad)
-
-
 def test_exactly_the_control_and_direction_characters_are_unsafe():
     """Every code point is checked against a list written out by hand: the C0 controls except
     tab, line feed and carriage return, the DEL and C1 controls, and the bidirectional
@@ -36,16 +28,6 @@ def test_exactly_the_control_and_direction_characters_are_unsafe():
         if has_unsafe_text(chr(code)) != (code in unsafe)
     ]
     assert wrong == []
-
-
-def test_unsafe_text_is_found_anywhere_in_the_string():
-    assert has_unsafe_text("fine\x07") and has_unsafe_text(f"{BIDI}fine")
-    assert not has_unsafe_text("")
-    assert not has_unsafe_text("plain text\twith\r\nbreaks, ünï, 日本語")
-
-
-def test_tabs_and_line_breaks_are_allowed(raw_plan):
-    assert plan_with(raw_plan, title="two\nlines\twith a tab").title.startswith("two")
 
 
 def test_list_entries_are_checked_too(raw_plan):

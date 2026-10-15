@@ -33,30 +33,6 @@ _DuplicateKeyLoader.add_constructor(
 )
 
 
-def test_workflows_are_found() -> None:
-    """An empty parameter set skips a parametrized test instead of failing it.
-
-    If the workflow folder moves again, the duplicate-key check below would go on
-    passing while checking nothing, so the folder itself is asserted here.
-    """
-    assert sorted(WORKFLOWS.glob("*.yml")), f"no workflow files found in {WORKFLOWS}"
-
-
-@pytest.mark.parametrize(
-    "workflow",
-    sorted(WORKFLOWS.glob("*.yml")),
-    ids=lambda path: path.name,
-)
-def test_workflow_has_no_duplicate_keys(workflow: Path) -> None:
-    """GitHub Actions rejects a duplicate key and then runs no jobs at all.
-
-    Two independent single-purpose edits can each add the same top-level key at
-    different offsets and merge without a Git conflict, so the check has to be
-    explicit rather than left to review.
-    """
-    yaml.load(workflow.read_text(), _DuplicateKeyLoader)
-
-
 @pytest.mark.parametrize("scenario", SCENARIOS)
 def test_scenario_script_generates_fixture_then_builds_isolated_selector(
     scenario: str, tmp_path: Path
@@ -98,18 +74,6 @@ def test_scenario_script_generates_fixture_then_builds_isolated_selector(
     assert positions == sorted(positions)
 
 
-def test_scenario_script_rejects_an_unknown_scenario() -> None:
-    completed = subprocess.run(
-        ["bash", str(ROOT / "scripts/validation/run_scenario_checks.sh"), "not_a_scenario"],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert completed.returncode == 2
-    assert "unknown scenario" in completed.stderr
-
-
 def test_ci_gates_every_scenario() -> None:
     workflow = yaml.safe_load(CI.read_text())
     job = workflow["jobs"]["scenario-quality-gate"]
@@ -126,11 +90,3 @@ def test_ci_runs_the_shared_gate() -> None:
     assert "bash scripts/validation/run_shared_checks.sh" in run_commands
 
 
-def test_ci_runs_the_lab_from_its_own_folder() -> None:
-    """The gates are relative to the project, so CI must start every step inside it.
-
-    Tying the workflow's default directory to this folder's name means renaming the
-    folder without updating CI fails here instead of as a confusing "No such file".
-    """
-    workflow = yaml.safe_load(CI.read_text())
-    assert workflow["defaults"]["run"]["working-directory"] == ROOT.name

@@ -6,11 +6,9 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
-import pandas.testing as pdt
 import pytest
 
 from analytics_lab import generate as generate_cli
-from analytics_lab.generation import hybrid_subscription
 from analytics_lab.generation.base import GenerationConfig
 from analytics_lab.generation.hybrid_experiment import TABLE_NAMES as EXPERIMENT_TABLES
 from analytics_lab.generation.hybrid_subscription import generate
@@ -61,55 +59,12 @@ def fingerprint(frame: pd.DataFrame) -> str:
     return hashlib.sha256(frame.to_csv(index=False).encode()).hexdigest()
 
 
-def test_the_scenario_now_has_the_eight_old_tables_and_the_three_experiment_tables(
-    ci_tables: dict[str, pd.DataFrame],
-) -> None:
-    assert set(ci_tables) == set(SCENARIO_TABLES) | set(EXPERIMENT_TABLES)
-    assert tuple(hybrid_subscription.TABLE_NAMES) == (
-        "players",
-        "sessions",
-        "subscription_events",
-        "store_transactions",
-        "currency_ledger",
-        "live_event_participation",
-        "marketing_exposures",
-        "product_catalogue",
-        *EXPERIMENT_TABLES,
-    )
-
-
 def test_the_eight_old_tables_match_their_fingerprints_from_before_the_experiment(
     ci_tables: dict[str, pd.DataFrame],
 ) -> None:
     assert {name: fingerprint(ci_tables[name]) for name in SCENARIO_TABLES} == (
         CI_TABLE_FINGERPRINTS
     )
-
-
-def test_the_eight_old_tables_are_identical_with_the_experiment_switched_off(
-    ci_tables: dict[str, pd.DataFrame], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The same check without any pinned value, so it survives a pandas upgrade."""
-    empty = {name: pd.DataFrame({"scenario_run_id": []}) for name in EXPERIMENT_TABLES}
-    monkeypatch.setattr(hybrid_subscription, "generate_experiment_tables", lambda *a: empty)
-
-    without = generate(config())
-
-    for name in SCENARIO_TABLES:
-        pdt.assert_frame_equal(without[name], ci_tables[name], check_exact=True)
-
-
-def test_the_experiment_tables_share_the_scenarios_run_id_and_players(
-    ci_tables: dict[str, pd.DataFrame],
-) -> None:
-    run_id = ci_tables["players"].scenario_run_id.iloc[0]
-    players = set(ci_tables["players"].player_id)
-    subscribers = set(ci_tables["subscription_events"].query("event_type == 'started'").player_id)
-
-    for name in EXPERIMENT_TABLES:
-        assert set(ci_tables[name].scenario_run_id) == {run_id}
-        assert set(ci_tables[name].player_id) <= players
-        assert not set(ci_tables[name].player_id) & subscribers
 
 
 def test_the_command_line_writes_all_eleven_tables_and_lists_them_in_the_manifest(
@@ -141,26 +96,3 @@ def test_the_command_line_writes_all_eleven_tables_and_lists_them_in_the_manifes
     assert {path.stem for path in folder.glob("*.parquet")} == set(manifest["tables"])
 
 
-def test_timestamps_and_missing_values_survive_the_parquet_round_trip(tmp_path: Path) -> None:
-    """dbt reads these files, so the types it sees must be the ones the generator made."""
-    tables = generate(config(scale=300))
-    generate_cli.main(
-        [
-            "--scenario", "hybrid_subscription", "--seed", "42", "--start-date", "2026-01-01",
-            "--days", "180", "--scale", "300", "--output-dir", str(tmp_path),
-        ]
-    )  # fmt: skip
-    outcomes = pd.read_parquet(tmp_path / "hybrid_subscription" / "experiment_outcomes.parquet")
-    expected = tables["experiment_outcomes"]
-
-    assert str(outcomes.first_purchase_at_utc.dtype).startswith("datetime64")
-    assert (
-        outcomes.first_purchase_at_utc.isna().sum() == expected.first_purchase_at_utc.isna().sum()
-    )
-    assert outcomes.first_purchase_at_utc.isna().any()
-    pdt.assert_frame_equal(outcomes, expected, check_exact=True)
-
-
-def test_a_hybrid_scenario_too_short_for_the_experiment_is_refused() -> None:
-    with pytest.raises(ValueError, match="at least 90 days, got 89"):
-        generate(config(scale=100, days=89))

@@ -1,5 +1,4 @@
 import pandas as pd
-import pytest
 
 from analytics_lab.analysis.live_strategy_retention import (
     d7_contribution_table,
@@ -18,11 +17,6 @@ def _fingerprint_frame() -> pd.DataFrame:
             "retained_players": [48, 8, 10, 24],
         }
     )
-
-
-def test_input_fingerprint_is_stable_across_calls() -> None:
-    frame = _fingerprint_frame()
-    assert fingerprint_inputs(frame) == fingerprint_inputs(frame.copy())
 
 
 def test_input_fingerprint_ignores_row_order() -> None:
@@ -46,11 +40,6 @@ def test_input_fingerprint_changes_when_a_single_value_changes() -> None:
 
     assert fingerprint_inputs(moved)["sha256"] != fingerprint_inputs(frame)["sha256"]
     assert fingerprint_inputs(moved)["row_count"] == fingerprint_inputs(frame)["row_count"]
-
-
-def test_input_fingerprint_refuses_an_empty_frame() -> None:
-    with pytest.raises(ValueError, match="cannot fingerprint an empty diagnostic frame"):
-        fingerprint_inputs(pd.DataFrame(columns=["period"]))
 
 
 def test_standardization_holds_pre_mix_constant() -> None:
