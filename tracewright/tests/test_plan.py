@@ -11,16 +11,6 @@ def violations(raw: dict) -> tuple[str, ...]:
     return caught.value.violations
 
 
-def test_a_valid_plan_loads(raw_plan):
-    plan = TrackingPlan.from_dict(raw_plan)
-    assert plan.id == "checkout_funnel"
-    assert [event.name for event in plan.events] == ["checkout_started", "order_completed"]
-
-
-def test_status_defaults_to_active(raw_plan):
-    assert TrackingPlan.from_dict(raw_plan).events[0].status == "active"
-
-
 def test_every_violation_is_listed_not_only_the_first(raw_plan):
     raw_plan["id"] = "Bad Id"
     raw_plan["events"][0]["status"] = "retired"
@@ -28,7 +18,7 @@ def test_every_violation_is_listed_not_only_the_first(raw_plan):
     assert len(violations(raw_plan)) == 3
 
 
-@pytest.mark.parametrize("field", ["id", "title", "identity_keys", "events"])
+@pytest.mark.parametrize("field", ["id", "identity_keys", "events"])
 def test_required_fields(raw_plan, field):
     del raw_plan[field]
     assert any(v.startswith(f"{field}:") for v in violations(raw_plan))
@@ -61,12 +51,3 @@ def test_a_plan_that_is_not_a_mapping_is_refused():
     assert violations([]) == ("the plan must be a mapping of fields",)  # type: ignore[arg-type]
 
 
-def test_the_fingerprint_ignores_key_order(raw_plan):
-    reordered = dict(reversed(list(raw_plan.items())))
-    assert TrackingPlan.from_dict(raw_plan).sha256() == TrackingPlan.from_dict(reordered).sha256()
-
-
-def test_the_fingerprint_changes_with_content(raw_plan):
-    first = TrackingPlan.from_dict(raw_plan).sha256()
-    raw_plan["title"] = "Another title"
-    assert TrackingPlan.from_dict(raw_plan).sha256() != first

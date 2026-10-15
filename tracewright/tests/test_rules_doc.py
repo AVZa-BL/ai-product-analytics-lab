@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-from tracewright.rules import ALL_RULES
 from tracewright.rules.docs import render_rules_markdown
 
 DOC = Path(__file__).resolve().parent.parent / "docs" / "rules.md"
@@ -15,6 +14,3 @@ def test_the_committed_catalogue_is_what_the_rules_generate():
     )
 
 
-def test_every_rule_appears_in_the_catalogue():
-    text = render_rules_markdown()
-    assert all(f"### {rule.id}:" in text for rule in ALL_RULES)

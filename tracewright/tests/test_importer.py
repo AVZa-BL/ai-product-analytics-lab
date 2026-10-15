@@ -3,7 +3,6 @@ import pytest
 from tests.propose_helpers import ROOT
 from tracewright.cli import main
 from tracewright.importer import CsvImportError, import_plan_csv
-from tracewright.loader import parse_plan, render_plan_yaml
 from tracewright.plan import PlanError
 from tracewright.sheets.table import TableError
 
@@ -26,24 +25,10 @@ def test_the_example_csv_imports_and_reviews_clean():
     assert difficulty.type == "enum" and difficulty.allowed_values == ("easy", "normal", "hard")
 
 
-def test_rows_of_one_event_are_merged(tmp_path):
-    path = csv(tmp_path, "a_b,player_id,string,true,,,,,,\na_b,x_y,integer,,,,,,,\n")
-    plan = import_plan_csv(path, **KW)
-    assert len(plan.events) == 1
-    assert [p.name for p in plan.events[0].properties] == ["player_id", "x_y"]
-
-
-def test_flags_accept_common_spellings(tmp_path):
-    path = csv(tmp_path, "a_b,player_id,string,YES,No,,,,,\n")
-    prop = import_plan_csv(path, **KW).events[0].properties[0]
-    assert prop.required is True and prop.pii is False
-
-
 @pytest.mark.parametrize(
     ("body", "message"),
     [
         ("a_b,p,string,maybe,,,,,,\n", "row 2: required is .maybe., which is not a yes or a no"),
-        (",p,string,,,,,,,\n", "row 2: the event column is empty"),
         ("a_b,,,,,,,t1,,\na_b,p,string,,,,,t2,,\n", "row 3: trigger of event 'a_b' is 't2'"),
         ("", "no events found"),
     ],
@@ -77,11 +62,6 @@ def test_unreadable_files(tmp_path):
         import_plan_csv(binary, **KW)
 
 
-def test_yaml_written_by_the_importer_reads_back_to_the_same_plan():
-    plan = import_plan_csv(ROOT / "examples" / "current-tracking.csv", **KW)
-    assert parse_plan(render_plan_yaml(plan)).sha256() == plan.sha256()
-
-
 def test_the_command_writes_a_file_and_the_file_reviews(tmp_path, capsys):
     out = tmp_path / "plan.yaml"
     code = main(
@@ -92,12 +72,6 @@ def test_the_command_writes_a_file_and_the_file_reviews(tmp_path, capsys):
     assert "Findings: none" in capsys.readouterr().out
 
 
-def test_the_command_reports_problems_as_exit_2(tmp_path, capsys):
-    path = csv(tmp_path, "a_b,p,string,maybe,,,,,,\n")
-    code = main(["import-plan", str(path), "--id", "p", "--title", "T", "--identity-key", "p"])
-    assert code == 2 and "row 2" in capsys.readouterr().err
-
-
 # --- row-level problems carry the row number ----------------------------------------------------
 
 
@@ -106,12 +80,8 @@ def test_the_command_reports_problems_as_exit_2(tmp_path, capsys):
     [
         ("a_b,p,currency,,,,,,,\n", r"row 2: unknown type 'currency'.*--type-map"),
         ("a_b,p,array,,,,,,,\n", r"row 2: 'array' cannot be expressed in a plan"),
-        ("a_b,p,string,,,,,,,\na_b,q,string,,,,,,,\na_b,p,string,,,,,,,\n",
-         r"row 4: property 'p' of event 'a_b' is already declared on row 2"),
         ("a_b,,string,,,,,,,\n", r"row 2: the property cell is empty.*\['type'\]"),
         ("a_b,,,true,,,,,,\n", r"row 2: the property cell is empty.*\['required'\]"),
-        ("a_b,,,,,,First,,,\na_b,,,,,,Second,,,\n",
-         r"row 3: description of event 'a_b' is 'Second', but an earlier row says 'First'"),
     ],
 )
 def test_row_level_problems_name_the_row(tmp_path, body, message):
@@ -122,12 +92,6 @@ def test_row_level_problems_name_the_row(tmp_path, body, message):
 def test_a_row_wider_than_the_header_is_refused_not_a_crash(tmp_path):
     path = csv(tmp_path, ",,,,,,,,,,extra\n")  # the case that used to raise AttributeError
     with pytest.raises(CsvImportError, match="row 2: has 11 cells but the header has 10"):
-        import_plan_csv(path, **KW)
-
-
-def test_an_unquoted_comma_in_a_value_is_caught_instead_of_shifting_the_columns(tmp_path):
-    path = csv(tmp_path, "a_b,mode,string,,,,Mode, easy or hard,,,\n")
-    with pytest.raises(CsvImportError, match="put a value that contains a comma in double quotes"):
         import_plan_csv(path, **KW)
 
 

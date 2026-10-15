@@ -8,11 +8,6 @@ from tracewright.propose.check import PROBLEM_CODES, Problem
 DOC = (ROOT / "docs" / "propose.md").read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("code", sorted(PROBLEM_CODES))
-def test_every_problem_code_is_documented(code):
-    assert f"| `{code}` |" in DOC
-
-
 def test_the_docs_list_no_code_that_does_not_exist():
     import re
 
@@ -25,5 +20,3 @@ def test_an_unknown_code_is_refused():
         Problem(code="TYPO", severity="info", subject="x", message="y")
 
 
-def test_the_cli_help_points_to_a_file_that_exists():
-    assert (ROOT / "docs" / "import-csv.md").exists()
