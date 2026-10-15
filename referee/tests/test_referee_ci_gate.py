@@ -24,7 +24,7 @@ def test_ci_lints_and_tests_referee() -> None:
     """A missing job raises KeyError, so CI silently dropping Referee cannot pass."""
     commands = [step.get("run", "") for step in _referee_job()["steps"]]
     assert "ruff check src tests" in commands
-    assert "python -m pytest -q" in commands
+    assert "python -m pytest -q -n auto" in commands
 
 
 def _job(name: str) -> dict:
