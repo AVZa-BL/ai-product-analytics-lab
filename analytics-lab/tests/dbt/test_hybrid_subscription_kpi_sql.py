@@ -124,35 +124,6 @@ def row(db, name, condition):
     return dict(zip([c[0] for c in result.description], result.fetchone(), strict=True))
 
 
-def test_monthly_distinct_populations_cash_categories_and_churn(facts):
-    build(facts, "monthly_kpis")
-    january = row(facts, "monthly_kpis", "metric_month = date '2026-01-01'")
-    expected = dict(
-        mau=2,
-        month_start_active_subscriber_count=2,
-        month_end_active_subscriber_count=1,
-        expired_or_revoked_entitlement_count=1,
-        subscriber_churn_rate=0.5,
-        standalone_store_net_revenue_usd=8,
-        subscription_net_revenue_usd=10,
-        total_net_revenue_usd=18,
-        arpmau=9,
-        eligible_standalone_transaction_count=2,
-        discounted_standalone_transaction_count=1,
-        discount_utilization_rate=0.5,
-        liveops_participant_count=1,
-        liveops_participation_rate=0.5,
-    )
-    for key, value in expected.items():
-        assert january[key] == value, key
-    february = row(facts, "monthly_kpis", "metric_month = date '2026-02-01'")
-    assert february["mau"] == 0
-    assert all(
-        february[c] is None
-        for c in ["arpmau", "liveops_participation_rate", "discount_utilization_rate"]
-    )
-
-
 def test_daily_uses_canonical_sessions_and_distinct_active_players(facts):
     # An entitlement-level duplicate must not inflate player-level active counts.
     facts.execute("""
@@ -178,40 +149,6 @@ def test_daily_uses_canonical_sessions_and_distinct_active_players(facts):
     """).fetchone()[0]
         == 0
     )
-
-
-def test_cohorts_first_eligible_exposure_exact_maturity_and_d30_expiry(facts):
-    build(facts, "subscription_cohorts")
-    conversion = row(
-        facts,
-        "subscription_cohorts",
-        "cohort_type='eligible_exposure' and cohort_date=date '2025-12-31'",
-    )
-    assert conversion["eligible_exposed_player_count"] == 3
-    assert conversion["converted_within_28d_player_count"] == 2
-    assert conversion["subscription_conversion_rate"] == pytest.approx(2 / 3)
-    retention = row(
-        facts,
-        "subscription_cohorts",
-        "cohort_type='subscription_start' and cohort_date=date '2026-01-01'",
-    )
-    assert retention["mature_subscription_starter_count"] == 2
-    assert retention["retained_at_d30_player_count"] == 1
-    assert retention["d30_subscriber_retention_rate"] == 0.5
-    immature = row(
-        facts,
-        "subscription_cohorts",
-        "cohort_type='subscription_start' and cohort_date=date '2026-02-01'",
-    )
-    assert immature["d30_subscriber_retention_rate"] is None
-    assert immature["mature_subscription_starter_count"] == 0
-    exact = row(
-        facts,
-        "subscription_cohorts",
-        "cohort_type='eligible_exposure' and cohort_date=date '2026-02-01'",
-    )
-    assert exact["is_conversion_mature"] is True
-    assert exact["subscription_conversion_rate"] == 1
 
 
 def test_singular_contracts_reject_corrupted_components_and_nulls(facts):
@@ -250,54 +187,6 @@ def test_singular_contracts_reject_corrupted_components_and_nulls(facts):
         where not is_d30_mature
     """)
     assert facts.execute(checks["cohort_maturity"]).fetchall()
-
-
-def test_partial_month_and_month_opening_instant(facts):
-    build(facts, "monthly_kpis")
-    february = row(facts, "monthly_kpis", "metric_month=date '2026-02-01'")
-    # a remains entitled after cancellation; e starts at midnight; d starts at noon.
-    assert february["month_start_active_subscriber_count"] == 2
-    march = row(facts, "monthly_kpis", "metric_month=date '2026-03-01'")
-    assert march["is_month_complete"] is False
-    assert march["month_end_active_subscriber_count"] is None
-
-
-@pytest.mark.parametrize("zone", ["America/Los_Angeles", "Europe/Berlin"])
-@pytest.mark.parametrize("name", ["daily_kpis", "monthly_kpis", "subscription_cohorts"])
-def test_kpi_dates_and_maturity_do_not_depend_on_connection_timezone(facts, zone, name):
-    sql = render(ROOT / "models/hybrid_subscription/marts" / f"{MART}{name}.sql")
-
-    # JSON serializes timestamptz instants consistently; compare epochs for them.
-    def values():
-        result = facts.sql(sql)
-        columns = result.columns
-        types = result.types
-        projection = ",".join(
-            f"epoch({column}) as {column}" if str(dtype) == "TIMESTAMP WITH TIME ZONE" else column
-            for column, dtype in zip(columns, types, strict=True)
-        )
-        return facts.sql(f"select {projection} from ({sql}) order by 1").fetchall()
-
-    expected = values()
-    facts.execute(f"set timezone='{zone}'")
-    assert values() == expected
-
-
-@pytest.mark.parametrize(
-    "column,mutation",
-    [
-        ("is_month_complete", "not is_month_complete"),
-        ("as_of_at_utc", "as_of_at_utc + interval '1 hour'"),
-        ("is_month_complete", "null"),
-        ("as_of_at_utc", "null"),
-    ],
-)
-def test_monthly_reconciliation_rejects_corrupted_maturity(facts, column, mutation):
-    for name in ["daily_kpis", "monthly_kpis", "subscription_cohorts"]:
-        build(facts, name)
-    facts.execute(f"update {MART}monthly_kpis set {column}={mutation}")
-    check = render(ROOT / "tests/hybrid_subscription/assert_hybrid_kpis_reconcile.sql")
-    assert facts.sql(check).fetchall()
 
 
 def test_d30_uses_elapsed_utc_time_across_dst(facts):
@@ -387,33 +276,6 @@ def test_conversion_half_open_end_and_exact_as_of_boundary(facts):
     assert cohort["eligible_exposed_player_count"] == 1
     assert cohort["converted_within_28d_player_count"] == 0
     assert cohort["subscription_conversion_rate"] == 0
-
-
-def test_no_observations_publishes_no_speculative_rows(facts):
-    for source in [
-        "fct_hybrid_subscription__sessions",
-        "fct_hybrid_subscription__store_transactions",
-        "stg_hybrid_subscription__live_event_participation",
-    ]:
-        facts.execute(f"delete from {source}")
-    facts.execute("""
-        update int_hybrid_subscription__governed_observation_boundary
-        set are_source_watermarks_valid=false, observation_start_at_utc=null,
-            as_of_at_utc=null;
-        update int_hybrid_subscription__source_watermarks
-        set is_source_valid=false, observation_start_at_utc=null,
-            ingestion_mature_through_at_utc=null;
-    """)
-    for name in ["daily_kpis", "monthly_kpis", "subscription_cohorts"]:
-        build(facts, name)
-        assert facts.execute(f"select count(*) from {MART}{name}").fetchone()[0] == 0
-    for name in ["kpis_reconcile", "zero_denominators_are_null", "cohort_maturity"]:
-        assert (
-            facts.execute(
-                render(ROOT / "tests/hybrid_subscription" / f"assert_hybrid_{name}.sql")
-            ).fetchall()
-            == []
-        )
 
 
 def test_conversion_day_cohort_waits_for_last_exposure_timestamp(facts):

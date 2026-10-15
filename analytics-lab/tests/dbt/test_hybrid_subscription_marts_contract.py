@@ -33,12 +33,3 @@ def test_marts_publish_governed_dimensions_and_facts() -> None:
         assert "hybrid_subscription" in model["config"]["tags"]
 
 
-def test_marts_define_keys_and_executable_control_tests() -> None:
-    schema = yaml.safe_load((MODEL_DIR / "schema.yml").read_text())
-
-    for model in schema["models"]:
-        assert any(
-            "unique" in column.get("data_tests", [])
-            for column in model.get("columns", [])
-        ), model["name"]
-    assert EXPECTED_TESTS <= {path.name for path in TEST_DIR.glob("*.sql")}

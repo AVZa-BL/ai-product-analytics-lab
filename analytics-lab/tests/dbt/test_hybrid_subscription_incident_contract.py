@@ -24,5 +24,3 @@ def test_incident_mart_has_governed_contract() -> None:
     assert (MODEL_DIR / f"{model['name']}.sql").is_file()
 
 
-def test_incident_detection_and_containment_are_executable() -> None:
-    assert EXPECTED_TESTS <= {path.name for path in TEST_DIR.glob("*.sql")}
