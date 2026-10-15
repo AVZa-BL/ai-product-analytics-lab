@@ -25,19 +25,6 @@ GOLDEN = ROOT / "tests" / "golden"
 EXIT_STATUS = {"offer-page-underpowered": 1, "offer-page-powered": 0}
 NAMES = sorted(EXIT_STATUS)
 
-# What the powered example changes, and nothing else, compared with the underpowered one.
-DIFFERENCES = {
-    "id",
-    "title",
-    "population.exposure_timing",
-    "population.interference",
-    "design.planned_duration_days",
-    "design.pre_period_covariate",
-    "procedure.stopping_rule",
-    "procedure.srm_check_cadence",
-    "procedure.bucketing_salt",
-}
-
 
 def _paths(value: object, prefix: str = "") -> dict[str, object]:
     if isinstance(value, dict):

@@ -507,7 +507,6 @@ def test_a_results_review_of_the_committed_export_lists_every_data_fit_rule_that
 # --- After the independent review of 4b-1 ---------------------------------------------------------
 
 LATE = {"exposed_at": at(0, 5), "purchases": 1, "first_purchase_at": at(0, 1)}
-BUYER = {"purchases": 1, "first_purchase_at": at(0, 9)}
 RES_002, RES_003, RES_011, RES_012, RES_013 = (
     _rule(rule_id) for rule_id in ("RES-002", "RES-003", "RES-011", "RES-012", "RES-013")
 )
@@ -615,15 +614,6 @@ def test_res_011_still_finds_a_real_mismatch_in_a_small_trailing_week(raw_spec) 
     assert small["method"] == "exact" and small["flagged"] is True
     assert finding.evidence["by_week"][0]["method"] == "chi_square"
     assert finding.evidence["total"]["method"] == "chi_square"
-
-
-def _late_exposure_rows(exposed: tuple[int, int], late: tuple[int, int]) -> list[Row]:
-    return [
-        *crowd("control", exposed[0] - late[0], prefix="c"),
-        *crowd("control", late[0], prefix="cl", **LATE),
-        *crowd("variant_b", exposed[1] - late[1], prefix="v"),
-        *crowd("variant_b", late[1], prefix="vl", **LATE),
-    ]
 
 
 def test_the_committed_exports_late_exposure_is_tested_exactly_and_still_gives_p_0_72(

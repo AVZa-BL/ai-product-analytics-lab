@@ -173,13 +173,4 @@ def test_an_error_without_a_position_is_reported_with_the_source_alone() -> None
 
 # --- A timestamp YAML cannot build ---------------------------------------------------------------
 
-IMPOSSIBLE_TIMESTAMPS = [
-    "2026-02-30T00:00:00Z",
-    "2026-13-01T00:00:00Z",
-    "2026-11-02T24:00:00Z",
-    "2026-11-02T00:00:00+24:00",
-    "2026-11-02T00:00:00+99:00",
-    "0000-01-01T00:00:00Z",
-]
-
 

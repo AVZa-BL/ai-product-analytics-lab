@@ -1,9 +1,6 @@
 """The `referee review-design` command: output, exit codes and what goes to which stream."""
 
 import json
-import os
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -19,16 +16,6 @@ def run(capsys: pytest.CaptureFixture[str], *argv: str) -> tuple[int, str, str]:
     code = main(list(argv))
     captured = capsys.readouterr()
     return code, captured.out, captured.err
-
-
-def run_process(*argv: str, env: dict | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        [sys.executable, "-m", "referee", *argv],
-        capture_output=True,
-        text=True,
-        env={**os.environ, **(env or {})},
-        check=False,
-    )
 
 
 @pytest.fixture

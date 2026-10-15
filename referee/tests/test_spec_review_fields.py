@@ -16,8 +16,6 @@ ENUM_FIELDS = {
     "procedure.srm_check_cadence": ["weekly"],
 }
 TEXT_FIELDS = ["design.pre_period_covariate", "procedure.bucketing_salt"]
-TIMESTAMP_FIELDS = ["design.start_utc"]
-ALL_FIELDS = [*ENUM_FIELDS, *TEXT_FIELDS, *TIMESTAMP_FIELDS]
 
 
 def _put(raw: dict, dotted: str, value: object) -> None:

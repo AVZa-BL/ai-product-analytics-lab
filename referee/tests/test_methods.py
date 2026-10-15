@@ -315,11 +315,6 @@ def test_an_alpha_outside_zero_to_one_is_refused_for_ratios() -> None:
 
 # --- Cohort heterogeneity ----------------------------------------------------------------
 
-# variant_b and variant_c against control by assignment week in the lab's seed-42 5,000-player
-# data: the readout's published differences (+1.52, +0.64, -0.17 for variant_b), to 3 places.
-PLANTED_FADE = ([1.519, 0.645, -0.174], [0.257, 0.239, 0.260])
-NO_FADE = ([0.080, 0.158, 0.823], [0.254, 0.247, 0.315])
-
 
 def test_a_hand_worked_example_with_unequal_weights() -> None:
     # weights 1 and 1/4: pooled 0.6, Q = 0.36 + 0.25 * 2.4^2 = 1.8; slope 3 with error 1/sqrt(0.2)
@@ -662,18 +657,6 @@ def test_a_homogeneity_test_refuses_what_it_cannot_answer(
 
 
 # --- Edges found by the independent review of 4b-1 -----------------------------------------------
-
-
-def _exact_homogeneity_chi_square(successes: list[int], totals: list[int]):
-    """Pearson's statistic in exact rational arithmetic, rounded once."""
-    from fractions import Fraction
-
-    pooled = Fraction(sum(successes), sum(totals))
-    total = sum(
-        (Fraction(s) - n * pooled) ** 2 / (n * pooled * (1 - pooled))
-        for s, n in zip(successes, totals, strict=True)
-    )
-    return float(total)
 
 
 @pytest.mark.parametrize(

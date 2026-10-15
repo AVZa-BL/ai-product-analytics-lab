@@ -261,11 +261,6 @@ def test_an_experiment_that_is_not_in_the_files_is_refused_listing_the_ones_that
 # --- A file cut short, and what a short row means -------------------------------------------
 
 
-def _replace_last_line(path: Path, text: str) -> None:
-    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-    path.write_text("".join(lines[:-1]) + text, encoding="utf-8")
-
-
 def test_a_csv_syntax_error_names_its_line_and_says_reading_of_the_file_stops(
     tmp_path: Path,
 ) -> None:

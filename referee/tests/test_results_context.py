@@ -192,17 +192,6 @@ def test_the_export_metrics_are_the_four_the_design_names() -> None:
 # --- The estimate the rules quote ---------------------------------------------------------------
 
 
-def _estimate_rows() -> list[Row]:
-    return [
-        *[Row(f"c{i:02d}", "control", sessions=2 + i % 5, purchases=int(i < 6)) for i in range(40)],
-        *[
-            Row(f"b{i:02d}", "variant_b", sessions=3 + i % 7, purchases=int(i < 12))
-            for i in range(40)
-        ],
-        *[Row(f"z{i:02d}", "variant_c", sessions=9) for i in range(40)],
-    ]
-
-
 # --- After the independent review of 4b-1 ---------------------------------------------------------
 
 

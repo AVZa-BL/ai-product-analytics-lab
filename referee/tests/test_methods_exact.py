@@ -9,12 +9,11 @@ does.
 import itertools
 import math
 
-import numpy as np
 import pytest
 from scipy import stats
 
 from referee import methods
-from referee.methods import SMALL_EXPECTED_COUNT, homogeneity_test, srm_test
+from referee.methods import SMALL_EXPECTED_COUNT, homogeneity_test
 
 # --- Listing every outcome ---------------------------------------------------------------------
 
@@ -37,24 +36,6 @@ def test_a_listing_is_refused_beyond_the_limit_and_allowed_at_it(monkeypatch) ->
 
 
 # --- The sample ratio ----------------------------------------------------------------------------
-
-
-def _brute_multinomial(observed: list[int], shares: list[float]) -> float:
-    total = sum(observed)
-
-    def probability(counts) -> float:
-        coefficient = math.factorial(total)
-        for count in counts:
-            coefficient //= math.factorial(count)
-        return coefficient * math.prod(s**c for s, c in zip(shares, counts, strict=True))
-
-    seen = probability(observed)
-    every = (
-        counts
-        for counts in itertools.product(range(total + 1), repeat=len(observed))
-        if sum(counts) == total
-    )
-    return math.fsum(p for p in map(probability, every) if p <= seen * (1 + 1e-7))
 
 
 def test_a_split_that_is_exactly_as_likely_counts_against_the_observed_one() -> None:
@@ -117,16 +98,6 @@ def test_homogeneity_test_falls_back_to_the_chi_square_beyond_the_listing_limit(
 
 
 # --- Why: the false-alarm rate -----------------------------------------------------------------
-
-
-def _flag_probability(n: int, share: float, alpha: float, **options) -> float:
-    """P(srm_test flags) for n units split by chance at the registered share (exact sum)."""
-    counts = range(n + 1)
-    flags = [
-        srm_test([n - k, k], [1 - share, share], alpha=alpha, **options).flagged for k in counts
-    ]
-    pmf = stats.binom.pmf(np.arange(n + 1), n, share)
-    return float(pmf[np.array(flags)].sum())
 
 
 # --- Edges ---------------------------------------------------------------------------------------

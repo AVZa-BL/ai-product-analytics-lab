@@ -9,16 +9,12 @@ that design section 20.4 states.
 
 import json
 import shutil
-from collections import defaultdict
 from pathlib import Path
 
 import pytest
 
 from referee import data
 from referee.data import ExperimentData, load_export
-from referee.methods import (
-    welch_difference,
-)
 
 FIXTURE = Path(__file__).parent / "data" / "hybrid_offer_page_5000"
 EXPERIMENT = "hybrid_offer_page"
@@ -39,25 +35,6 @@ def _weeks(export: ExperimentData, *, by: str) -> dict[str, int]:
     for exposure in export.exposures:  # already ordered by player and time
         first.setdefault(exposure.player_id, exposure.exposed_at)
     return {player: (moment - start).days // 7 for player, moment in first.items()}
-
-
-def _cohorts(export: ExperimentData, arm: str, weeks: dict[str, int], *, floor: int = 2):
-    """The sessions difference against control in each week, as Welch gives it.
-
-    A week is used when both the arm and control hold at least `floor` players in it.
-    """
-    arm_of = {a.player_id: a.arm for a in export.assignments}
-    sessions = {o.player_id: float(o.sessions_7d) for o in export.outcomes}
-    groups: dict[tuple[str, int], list[float]] = defaultdict(list)
-    for player, week in weeks.items():
-        groups[(arm_of[player], week)].append(sessions[player])
-    usable = [
-        w
-        for w in sorted({w for _, w in groups})
-        if len(groups[(arm, w)]) >= floor and len(groups[("control", w)]) >= floor
-    ]
-    fits = [welch_difference(groups[(arm, w)], groups[("control", w)]) for w in usable]
-    return usable, fits
 
 
 # --- The files themselves ----------------------------------------------------------------
