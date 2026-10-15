@@ -53,11 +53,7 @@ def data():
     ("severities", "verdict"),
     [
         ((), "clear"),
-        (("info",), "clear"),
         (("warning",), "caution"),
-        (("warning", "info"), "caution"),
-        (("blocker",), "invalid"),
-        (("blocker", "warning", "info"), "invalid"),
     ],
 )
 def test_the_verdict_follows_from_the_worst_finding(

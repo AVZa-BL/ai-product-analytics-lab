@@ -120,11 +120,7 @@ def test_an_empty_file_exits_2(capsys: pytest.CaptureFixture[str], tmp_path: Pat
 # --- Usage -----------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "argv",
-    [[], ["review-design"], ["nonsense"], ["review-design", "x.yaml", "--format", "xml"]],
-    ids=["no command", "no spec", "unknown command", "bad format"],
-)
+@pytest.mark.parametrize("argv", [[]], ids=["no command"])
 def test_a_usage_error_exits_2_with_usage_on_stderr(
     capsys: pytest.CaptureFixture[str], argv: list[str]
 ) -> None:

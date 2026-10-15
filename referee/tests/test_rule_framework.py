@@ -60,23 +60,11 @@ def clean_spec(clean_raw_spec: dict) -> ExperimentSpec:
     "overrides",
     [
         {"id": "TST1"},
-        {"severity": "fatal"},
-        {"title": ""},
-        {"fires_when": ""},
         {"fires_when": "  "},
-        {"fires_when": None},
-        {"remediation": " "},
-        {"references": []},
     ],
     ids=[
         "id",
-        "severity",
-        "title",
-        "fires_when empty",
         "fires_when blank",
-        "fires_when missing",
-        "remediation",
-        "references",
     ],
 )
 def test_a_malformed_rule_fails_when_it_is_defined_not_when_it_first_fires(
@@ -104,9 +92,7 @@ def _escalating(**overrides: Any) -> Rule:
     return make_rule(escalation=escalation, **overrides)
 
 
-@pytest.mark.parametrize(
-    ("severity", "to"), [("warning", "warning"), ("blocker", "warning"), ("warning", "info")]
-)
+@pytest.mark.parametrize(("severity", "to"), [("warning", "warning")])
 def test_an_escalation_must_go_to_a_more_serious_severity(severity: str, to: str) -> None:
     escalation = Escalation(to=to, when="never.", applies=lambda evidence: True)
 

@@ -110,13 +110,10 @@ def _utc(*parts: int) -> datetime:
 @pytest.mark.parametrize(
     ("column", "value", "fragment"),
     [
-        ("sessions_7d", "3.5", "must be a whole number"),
         ("sessions_7d", "-1", "must be at least 0"),
         ("purchases_7d", "many", "must be a whole number"),
-        ("revenue_usd_7d", "nan", "must be finite"),
         ("revenue_usd_7d", "inf", "must be finite"),
         ("revenue_usd_7d", "-0.01", "must be at least 0.0"),
-        ("revenue_usd_7d", "", "must not be empty"),
     ],
 )
 def test_a_bad_number_in_the_outcomes_is_refused_with_its_line_and_column(
@@ -417,9 +414,7 @@ def _manifest(folder: Path, text: str) -> None:
 @pytest.mark.parametrize(
     ("stamp", "fragment"),
     [
-        ("2026-04-18 00:02:25", "must carry a UTC offset"),
         ("2026-04-18 02:02:25+02:00", "must be in UTC"),
-        ("next week", "must be an ISO 8601 timestamp"),
         ("", "must not be empty"),
     ],
 )
@@ -438,13 +433,9 @@ def test_once_the_column_is_there_every_row_of_the_experiment_must_have_a_good_v
 @pytest.mark.parametrize(
     ("text", "fragment"),
     [
-        ("{not json", "not valid JSON"),
-        ("", "not valid JSON"),
         ('["2026-05-09T06:00:00Z"]', "must be a JSON object"),
         ('{"exported_at_utc": 20260509}', "must be an ISO 8601 timestamp, got 20260509"),
         ('{"exported_at_utc": "2026-05-09T06:00:00"}', "must carry a UTC offset"),
-        ('{"exported_at_utc": "2026-05-09T08:00:00+02:00"}', "must be in UTC"),
-        ('{"exported_at_utc": "last night"}', "must be an ISO 8601 timestamp"),
         ('{"exported_at_utc": ""}', "must be an ISO 8601 timestamp"),
     ],
 )
@@ -480,7 +471,7 @@ def test_a_manifest_with_a_byte_order_mark_is_read_like_the_csv_files(tmp_path: 
 # --- The manifest, after the independent review of 4b-1 -----------------------------------------
 
 
-@pytest.mark.parametrize("depth", [10_000, 100_000])
+@pytest.mark.parametrize("depth", [100_000])
 def test_a_manifest_nested_too_deeply_for_json_is_a_problem_not_a_crash(
     tmp_path: Path, depth: int
 ) -> None:

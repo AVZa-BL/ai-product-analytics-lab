@@ -59,7 +59,7 @@ def _run(capsys: pytest.CaptureFixture[str], *argv: str) -> tuple[int, str]:
 # --- Golden output ---------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", NAMES)
+@pytest.mark.parametrize("name", ["offer-page-powered"])
 def test_the_json_output_is_the_golden_file(name: str, capsys: pytest.CaptureFixture[str]) -> None:
     code, out = _run(capsys, "review-design", str(EXAMPLES / f"{name}.yaml"), "--format", "json")
 

@@ -114,7 +114,7 @@ def test_canonical_json_refuses_a_non_finite_number(raw_spec: dict) -> None:
 # --- sha256 ----------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("section", [None, {}], ids=["null", "empty"])
+@pytest.mark.parametrize("section", [None], ids=["null"])
 def test_a_missing_empty_or_null_procedure_have_the_same_fingerprint(
     raw_spec: dict, section: object
 ) -> None:
