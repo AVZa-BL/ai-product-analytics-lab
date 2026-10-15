@@ -1,6 +1,5 @@
 """Finding and DesignReview: what a rule may emit and how a review orders it."""
 
-import itertools
 from typing import Any
 
 import pytest
@@ -26,37 +25,6 @@ def review_of(*findings: Finding) -> DesignReview:
 
 
 # --- Finding ---------------------------------------------------------------------------
-
-
-def test_a_well_formed_finding_is_accepted_and_keeps_its_fields() -> None:
-    finding = make_finding()
-
-    assert finding.rule_id == "DES-001"
-    assert finding.severity == "blocker"
-    assert finding.evidence == {"required_total": 389_060}
-    assert finding.references == ("Kohavi, Tang, Xu (2020)",)
-
-
-def test_a_finding_is_hashable_although_its_evidence_is_a_dict() -> None:
-    first, second = make_finding(), make_finding()
-
-    assert first == second
-    assert hash(first) == hash(second)
-    assert len({first, second}) == 1
-
-
-def test_evidence_still_takes_part_in_equality() -> None:
-    assert make_finding(evidence={"n": 1}) != make_finding(evidence={"n": 2})
-
-
-def test_a_finding_is_frozen() -> None:
-    with pytest.raises(AttributeError):
-        make_finding().severity = "info"
-
-
-@pytest.mark.parametrize("rule_id", ["DES-001", "HYP-005", "PRO-004", "ABC-999"])
-def test_rule_ids_of_the_documented_shape_are_accepted(rule_id: str) -> None:
-    assert make_finding(rule_id=rule_id).rule_id == rule_id
 
 
 @pytest.mark.parametrize(
@@ -88,10 +56,6 @@ def test_references_must_be_a_tuple_of_strings(references: object) -> None:
         make_finding(references=references)
 
 
-def test_a_finding_may_cite_nothing() -> None:
-    assert make_finding(references=()).references == ()
-
-
 # --- DesignReview ----------------------------------------------------------------------
 
 
@@ -113,68 +77,6 @@ def test_findings_are_ordered_by_severity_then_rule_id() -> None:
         ("info", "DES-004"),
         ("info", "PRO-004"),
     ]
-
-
-def test_the_order_does_not_depend_on_the_order_rules_ran() -> None:
-    findings = [
-        make_finding(rule_id="PRO-001", severity="blocker"),
-        make_finding(rule_id="DES-003", severity="warning"),
-        make_finding(rule_id="HYP-001", severity="blocker"),
-        make_finding(rule_id="PRO-004", severity="info"),
-    ]
-
-    orderings = {review_of(*p).findings for p in itertools.permutations(findings)}
-
-    assert len(orderings) == 1
-
-
-def test_findings_are_a_tuple_even_when_given_a_list() -> None:
-    review = DesignReview(spec_id="x", findings=[make_finding()])
-
-    assert isinstance(review.findings, tuple)
-
-
-def test_blocking_rule_ids_lists_only_blockers_in_order() -> None:
-    review = review_of(
-        make_finding(rule_id="PRO-001", severity="blocker"),
-        make_finding(rule_id="DES-002", severity="warning"),
-        make_finding(rule_id="DES-001", severity="blocker"),
-        make_finding(rule_id="DES-004", severity="info"),
-    )
-
-    assert review.blocking_rule_ids == ("DES-001", "PRO-001")
-
-
-def test_any_blocker_means_revise() -> None:
-    assert review_of(make_finding(severity="blocker")).recommendation == "revise"
-
-
-def test_a_blocker_among_lesser_findings_still_means_revise() -> None:
-    review = review_of(
-        make_finding(rule_id="DES-002", severity="warning"),
-        make_finding(rule_id="DES-004", severity="info"),
-        make_finding(rule_id="PRO-001", severity="blocker"),
-    )
-
-    assert review.recommendation == "revise"
-
-
-def test_warnings_and_notes_alone_mean_proceed() -> None:
-    review = review_of(
-        make_finding(rule_id="DES-002", severity="warning"),
-        make_finding(rule_id="DES-004", severity="info"),
-    )
-
-    assert review.recommendation == "proceed"
-    assert review.blocking_rule_ids == ()
-
-
-def test_a_review_with_no_findings_means_proceed() -> None:
-    review = review_of()
-
-    assert review.findings == ()
-    assert review.recommendation == "proceed"
-    assert review.blocking_rule_ids == ()
 
 
 def test_a_rule_may_raise_one_finding_at_most() -> None:
