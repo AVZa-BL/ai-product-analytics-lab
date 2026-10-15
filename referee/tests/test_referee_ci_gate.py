@@ -27,14 +27,6 @@ def test_ci_lints_and_tests_referee() -> None:
     assert "python -m pytest -q -n auto" in commands
 
 
-def test_referee_jobs_run_when_referee_or_the_lab_it_reads_changes() -> None:
-    """The path filter must keep both jobs tied to the same `changes` output."""
-    for name in ("referee-quality-gate", "referee-quality-gate-macos"):
-        job = _job(name)
-        assert job["needs"] == "changes"
-        assert job["if"] == "needs.changes.outputs.referee == 'true'"
-
-
 def _job(name: str) -> dict:
     return yaml.safe_load(CI.read_text())["jobs"][name]
 

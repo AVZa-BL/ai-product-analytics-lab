@@ -26,7 +26,6 @@ def _commands() -> list[list[str]]:
 # --- The README ------------------------------------------------------------------------
 
 
-@pytest.mark.slow
 def test_the_readme_commands_run_as_written_with_the_statuses_the_prose_promises() -> None:
     statuses = []
     for argv in _commands():

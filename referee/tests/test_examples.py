@@ -148,7 +148,6 @@ def test_an_example_reviews_the_same_when_loaded_and_reviewed_directly(name: str
 
 
 @pytest.mark.parametrize("name", NAMES)
-@pytest.mark.slow
 def test_the_command_in_each_examples_header_gives_the_golden_text(name: str) -> None:
     """Run from the referee/ folder with a relative path, exactly as the header says."""
     result = subprocess.run(
