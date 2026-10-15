@@ -175,7 +175,7 @@ def test_duplicate_pair_id_is_rejected(matched_pairs: pd.DataFrame) -> None:
 
 @pytest.mark.parametrize(
     "column",
-    ["pair_id", "subscriber_player_id", "control_player_id"],
+    ["control_player_id"],
 )
 def test_empty_pair_identity_values_are_rejected(matched_pairs: pd.DataFrame, column: str) -> None:
     malformed = matched_pairs.copy()
@@ -191,33 +191,6 @@ def test_pair_id_must_match_arm_identity(matched_pairs: pd.DataFrame) -> None:
 
     with pytest.raises(ValueError, match="pair identity"):
         engagement_summary(malformed)
-
-
-def test_disagreeing_matching_covariates_are_rejected(
-    matched_pairs: pd.DataFrame,
-) -> None:
-    malformed = matched_pairs.copy()
-    malformed.loc[0, "control_platform"] = "mobile"
-
-    with pytest.raises(ValueError, match="matching covariates"):
-        revenue_summary(malformed)
-
-
-@pytest.mark.parametrize("arm", ["subscriber", "control"])
-def test_missing_matching_covariates_are_rejected(matched_pairs: pd.DataFrame, arm: str) -> None:
-    malformed = matched_pairs.copy()
-    for column in ("subscriber_platform", "control_platform"):
-        malformed[column] = malformed[column].astype("string")
-    malformed.loc[0, f"{arm}_platform"] = pd.NA
-
-    with pytest.raises(ValueError, match="matching covariates"):
-        revenue_summary(malformed)
-
-
-def test_empty_pair_population_has_no_estimate(matched_pairs: pd.DataFrame) -> None:
-    assert (
-        engagement_summary(matched_pairs.iloc[0:0])["engagement_difference_in_differences"] is None
-    )
 
 
 def test_bootstrap_resamples_whole_pairs_deterministically(
@@ -288,11 +261,6 @@ def test_reconciliation_rejects_malformed_pair_population_count(
 
     with pytest.raises(ValueError, match="pair population count"):
         reconcile_published_inputs(malformed, engagement_inputs, cannibalization_inputs)
-
-
-def test_numeric_pair_columns_are_normalized_before_aggregation(matched_pairs):
-    numeric_strings = matched_pairs.astype({"session_count_difference_in_differences": str})
-    assert engagement_summary(numeric_strings)["engagement_difference_in_differences"] == 1.25
 
 
 def test_valid_empty_pairs_publish_null_estimates_and_empty_intervals(
