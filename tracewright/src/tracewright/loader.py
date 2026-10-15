@@ -15,6 +15,7 @@ from typing import Any
 import yaml
 
 from tracewright.plan import TrackingPlan
+from tracewright.reader import escape_text
 
 
 class LoadError(ValueError):
@@ -52,7 +53,7 @@ class _PlanLoader(yaml.SafeLoader):
                 written = getattr(key_node, "value", key_node)
                 raise LoadError(
                     f'{where}: key {written!r} is read by YAML as {key!r}, not as text; '
-                    f'quote it: "{written}":'
+                    f'quote it: "{escape_text(str(written))}":'
                 )
             if key in first_line:
                 raise LoadError(

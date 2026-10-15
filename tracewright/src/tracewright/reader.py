@@ -31,6 +31,18 @@ def has_unsafe_text(text: str) -> bool:
     )
 
 
+def escape_text(text: str) -> str:
+    """The text with control characters and line or paragraph separators written as escapes
+    (`\\n`, `\\r`, `\\x1b`, `\\u2028`), for text that is shown as it is. Tab and line breaks pass
+    `has_unsafe_text`, so a file could use them to forge a line of output. Other text is kept."""
+    return "".join(
+        char.encode("unicode_escape").decode("ascii")
+        if unicodedata.category(char) in ("Cc", "Zl", "Zp")
+        else char
+        for char in text
+    )
+
+
 class Node:
     """A mapping being read: collects violations with their path and tracks unread keys."""
 

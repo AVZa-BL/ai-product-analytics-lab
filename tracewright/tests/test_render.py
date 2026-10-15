@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 
@@ -65,6 +66,18 @@ def test_hostile_model_text_cannot_make_a_link_an_image_or_a_new_table_row():
     for line in report.splitlines():  # no stray table row was made from the injected text
         if line.startswith("| a | b |"):
             pytest.fail("injected text became a table row")
+
+
+def test_a_backslash_cannot_undo_an_escape():
+    data = final_proposal()
+    data["feature"]["name"] = "\\[x\\](https://evil.example/l)"
+    data["new_events"][0]["properties"][-1]["name"] = "cost\\|rest"
+    report = render_markdown(run(data))
+    # A `](` is a live link unless its bracket has an odd number of backslashes before it.
+    assert not re.search(r"(?<!\\)(?:\\\\)*\]\(", report)
+    # Likewise a pipe ends a table cell unless an odd number of backslashes precedes it.
+    (row,) = [line for line in report.splitlines() if line.startswith("| `cost")]
+    assert len(re.split(r"(?<!\\)(?:\\\\)*\|", row)) == 8  # six cells between the outer pipes
 
 
 # --- the labels a reader relies on --------------------------------------------------------------

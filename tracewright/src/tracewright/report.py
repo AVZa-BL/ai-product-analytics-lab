@@ -14,6 +14,7 @@ from typing import Any
 from tracewright import __version__
 from tracewright.findings import PlanReview
 from tracewright.plan import TrackingPlan
+from tracewright.reader import escape_text
 
 REPORT_VERSION = 1
 _SEVERITIES = ("blocker", "warning", "info")
@@ -61,7 +62,7 @@ def render_json(report: dict[str, Any]) -> str:
 
 
 def _value(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, allow_nan=False)
+    return escape_text(json.dumps(value, ensure_ascii=False, allow_nan=False))
 
 
 def _paragraph(text: str, indent: str) -> list[str]:
@@ -73,7 +74,7 @@ def render_text(report: dict[str, Any]) -> str:
     plan, counts = report["plan"], report["counts"]
     lines = [
         "Tracewright tracking-plan review",
-        f"Plan:      {plan['id']} - {plan['title']}",
+        f"Plan:      {plan['id']} - {escape_text(plan['title'])}",
         f"Contents:  {plan['events']} events, {plan['metrics']} metrics",
         f"Plan hash: sha256:{plan['sha256']}",
         f"Version:   Tracewright {report['tracewright_version']}",
