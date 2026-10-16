@@ -106,6 +106,7 @@ def test_json_output_is_the_report(
         "DES-006",
         "DES-008",
         "PRO-002",
+        "DES-009",
         "PRO-004",
     ]
 
@@ -122,7 +123,7 @@ def test_the_output_is_the_same_whatever_the_file_is_called_or_where_it_is(
     assert outputs[0] == outputs[1] != ""
 
 
-def test_a_worst_case_spec_reports_seventeen_findings(
+def test_a_worst_case_spec_reports_eighteen_findings(
     capsys: pytest.CaptureFixture[str], tmp_path: Path, worst_raw_spec: dict
 ) -> None:
     path = write_yaml(tmp_path, worst_raw_spec)
@@ -130,7 +131,7 @@ def test_a_worst_case_spec_reports_seventeen_findings(
     code, out, _ = run(capsys, "review-design", str(path), "--format", "json")
 
     assert code == 1
-    assert len(json.loads(out)["findings"]) == 17
+    assert len(json.loads(out)["findings"]) == 18
 
 
 # --- Input that cannot be reviewed: exit 2, nothing on stdout --------------------------

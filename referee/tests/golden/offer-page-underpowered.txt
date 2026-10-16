@@ -5,7 +5,7 @@ Referee:   0.1.0
 
 Recommendation: REVISE
 Blocking rules: DES-001, PRO-001
-Findings: blockers 2, warnings 3, info 1
+Findings: blockers 2, warnings 3, info 2
 
 [BLOCKER] DES-001: Design cannot reach the planned power
     Evidence:
@@ -91,6 +91,37 @@ Findings: blockers 2, warnings 3, info 1
         Experiments. KDD 2019.
       - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge
         University Press, 2020.
+
+[INFO] DES-009: The cohort check of the results review will probably not run
+    Evidence:
+      reasons: ["window_holds_fewer_than_3_blocks"]
+      planned_duration_days: 14
+      whole_weekly_blocks: 2
+      minimum_weekly_blocks: 3
+      block_days: 7
+      daily_eligible_units: 4200
+      smallest_arm: "control"
+      smallest_allocation: 0.5
+      expected_players_per_block: 14700.0
+      minimum_expected_players: 45
+      minimum_planned_days: 21
+    Why it matters:
+      After the experiment, the cohort check of the results review (RES-007) compares an
+      arm's effect between cohorts of first exposure, to find an effect that changes
+      with the time players joined (a launch, a promotion, a change in who is acquired).
+      It works in blocks of 7 days, or of 14 days on a plan of 42 days or more, and
+      needs 3 blocks in which both arms reach 30 players, with a usable block in each
+      half of the window. A plan with fewer than 3 whole weekly blocks cannot form them,
+      and an arm expected to hold fewer than 45 players in a block seldom fills 3 to 30.
+      The check will then probably report that it could not run, and an effect that
+      changes over time would go unseen. This is a forecast from the plan, not a finding
+      about the data.
+    What to do:
+      If the effect over time matters for this change, plan at least 21 days (42 days or
+      more allows blocks of 14 days, which need fewer players a week), bring in more
+      eligible units each day, or give the smallest arm a larger share; the evidence
+      says what would be enough. Otherwise accept that the cohort check will probably
+      not run. The other results checks are not affected.
 
 [INFO] PRO-004: Bucketing salt not declared
     Evidence:

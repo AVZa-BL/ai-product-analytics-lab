@@ -247,14 +247,14 @@ def test_a_saved_json_report_renders_to_the_same_text(mixed_report: dict) -> Non
     assert render_text(json.loads(render_json(mixed_report))) == render_text(mixed_report)
 
 
-# --- All 17 rules ----------------------------------------------------------------------
+# --- All 18 rules ----------------------------------------------------------------------
 
 
-def test_a_spec_that_breaks_every_rule_reports_all_seventeen(worst_raw_spec: dict) -> None:
+def test_a_spec_that_breaks_every_rule_reports_all_eighteen(worst_raw_spec: dict) -> None:
     spec, review = _review(worst_raw_spec)
 
     assert sorted(f.rule_id for f in review.findings) == sorted(rule.id for rule in ALL_RULES)
-    assert len(review.findings) == 17
+    assert len(review.findings) == 18
 
 
 def test_every_kind_of_evidence_renders_in_both_formats(worst_raw_spec: dict) -> None:
@@ -267,4 +267,4 @@ def test_every_kind_of_evidence_renders_in_both_formats(worst_raw_spec: dict) ->
     assert from_json == json.loads(json.dumps(report))
     assert [f["rule_id"] for f in from_json["findings"]] == [f.rule_id for f in review.findings]
     assert all(f"{f.rule_id}: {f.title}" in text for f in review.findings)
-    assert from_json["counts"] == {"blocker": 4, "warning": 11, "info": 2}
+    assert from_json["counts"] == {"blocker": 4, "warning": 11, "info": 3}

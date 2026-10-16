@@ -96,7 +96,7 @@ def test_the_underpowered_example_is_blocked_for_the_reasons_the_design_gives() 
 
     assert report["recommendation"] == "revise"
     assert report["blocking_rule_ids"] == ["DES-001", "PRO-001"]
-    assert report["counts"] == {"blocker": 2, "warning": 3, "info": 1}
+    assert report["counts"] == {"blocker": 2, "warning": 3, "info": 2}
     # Design section 17.4: it needs 389,060 units and its 14 days deliver 58,800.
     assert des_001["evidence"]["required_total"] == 389_060
     assert des_001["evidence"]["achievable_total"] == 58_800

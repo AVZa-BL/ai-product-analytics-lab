@@ -186,9 +186,7 @@ def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_4b_2_is
         assert branch in amendment
     assert built_so_far <= {rule.id for rule in RESULTS_RULES}
     assert not {rule.id for rule in ALL_RULES} & {rule_id for rule_id in named if "RES" in rule_id}
-    assert not {"DES-009"} & built, (
-        "DES-009 arrives in 4b-2; update this test and section 21 when it does"
-    )
+    assert "DES-009" in built and "DES-009" in {rule.id for rule in ALL_RULES}
 
 
 def test_the_milestone_4b_amendment_quotes_the_numbers_the_code_reproduces() -> None:

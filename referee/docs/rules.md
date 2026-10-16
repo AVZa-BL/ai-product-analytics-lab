@@ -25,7 +25,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 
 ## Summary
 
-26 rules by default severity: 7 blockers, 16 warnings, 3 info.
+27 rules by default severity: 7 blockers, 16 warnings, 4 info.
 
 | ID | Severity | Title |
 | --- | --- | --- |
@@ -42,6 +42,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 | DES-006 | warning | Interference between units is possible |
 | DES-007 | blocker | Exposure is recorded after the treatment starts acting |
 | DES-008 | warning | No pre-period covariate declared |
+| DES-009 | info | The cohort check of the results review will probably not run |
 | PRO-001 | blocker | No stopping rule declared |
 | PRO-002 | warning | No sample-ratio-mismatch check scheduled |
 | PRO-003 | warning | No guardrail metrics declared |
@@ -123,7 +124,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 ### DES-003: Planned duration is under 14 days
 
 - **Severity:** warning
-- **Fires when:** design.planned_duration_days is below 14.
+- **Fires when:** design.planned_duration_days is below 14. When population.kind is new_users, the evidence adds a note on the accrual window and the 7-day outcome window.
 - **Why it matters:** Effects can be larger or smaller in the first days after a change than later, as users react to novelty or adapt to it. A short test cannot show which, so it may report an effect that does not last.
 - **What to do:** Plan at least 14 days, or record why novelty and primacy effects are not expected for this change.
 - **References:**
@@ -171,6 +172,14 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 - **What to do:** Declare design.pre_period_covariate, for example the primary metric measured for each unit before exposure.
 - **References:**
   - Deng, Xu, Kohavi, Walker. Improving the Sensitivity of Online Controlled Experiments by Utilizing Pre-Experiment Data. WSDM 2013.
+
+### DES-009: The cohort check of the results review will probably not run
+
+- **Severity:** info
+- **Fires when:** The planned window holds fewer than 3 whole weekly blocks (design.planned_duration_days is 20 or less), or the smallest arm is expected to get fewer than 45 players in a block: 7 times population.daily_eligible_units times the smallest allocation for a plan shorter than 42 days, 14 times that for a plan of 42 days or more, where the cohort check can use blocks of 14 days. The evidence gives the reasons, the expected players and what would be enough.
+- **Why it matters:** After the experiment, the cohort check of the results review (RES-007) compares an arm's effect between cohorts of first exposure, to find an effect that changes with the time players joined (a launch, a promotion, a change in who is acquired). It works in blocks of 7 days, or of 14 days on a plan of 42 days or more, and needs 3 blocks in which both arms reach 30 players, with a usable block in each half of the window. A plan with fewer than 3 whole weekly blocks cannot form them, and an arm expected to hold fewer than 45 players in a block seldom fills 3 to 30. The check will then probably report that it could not run, and an effect that changes over time would go unseen. This is a forecast from the plan, not a finding about the data.
+- **What to do:** If the effect over time matters for this change, plan at least 21 days (42 days or more allows blocks of 14 days, which need fewer players a week), bring in more eligible units each day, or give the smallest arm a larger share; the evidence says what would be enough. Otherwise accept that the cohort check will probably not run. The other results checks are not affected.
+- **References:** none
 
 ## Procedure rules (PRO)
 

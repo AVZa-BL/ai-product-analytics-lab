@@ -66,7 +66,7 @@ def _sentences() -> dict[str, str]:
 def _section() -> str:
     parts = DESIGN.split("\n### 21.12 ")
     assert len(parts) == 2, "section 21.12 is not there exactly once"
-    text = parts[1].split("\nDelivered in:")[0]
+    text = parts[1].split("\n### 21.13 ")[0].split("\nDelivered in:")[0]
     assert DESIGN.index("### 21.11 ") < DESIGN.index("### 21.12 ")
     return text
 
@@ -78,7 +78,7 @@ def _figures_outside(text: str, phrases: list[str]) -> list[str]:
         text = text.replace(phrase, " ", 1)
     for name in ("4b-2", "4c", "RES-004", "res004", "RES-006", "RES-008", "DES-009", "section 8"):
         text = text.replace(name, " ")
-    text = re.sub(r"(?<![\d.])21\.(?:[1-9]|1[0-2])(?![\d%])", " ", text)  # a section reference
+    text = re.sub(r"(?<![\d.])21\.(?:[1-9]|1[0-3])(?![\d%])", " ", text)  # a section reference
     return re.findall(r"\d[\d,.]*%?|\b(?:third|half|quarter|twice|double)\b", text)
 
 
@@ -102,7 +102,7 @@ def test_the_check_for_figures_finds_a_figure_that_is_there() -> None:
     assert _figures_outside(text, sentences) == []
     for extra, found in [
         (" It fires at 10%.", ["10%"]),
-        (" See 21.13 now.", ["21.13"]),
+        (" See 21.14 now.", ["21.14"]),
         (" At a third of it.", ["third"]),
         (" In 12 cases.", ["12"]),
     ]:

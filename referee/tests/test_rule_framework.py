@@ -24,6 +24,7 @@ CATALOGUE_SEVERITY = {
     "DES-006": "warning",
     "DES-007": "blocker",
     "DES-008": "warning",
+    "DES-009": "info",
     "PRO-001": "blocker",
     "PRO-002": "warning",
     "PRO-003": "warning",

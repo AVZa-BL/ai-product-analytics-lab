@@ -28,6 +28,7 @@ KEY_TERMS = {
     "DES-006": "population.interference",
     "DES-007": "population.exposure_timing",
     "DES-008": "design.pre_period_covariate",
+    "DES-009": "population.daily_eligible_units",
     "PRO-001": "procedure.stopping_rule",
     "PRO-002": "procedure.srm_check_cadence",
     "PRO-003": "no guardrails",
@@ -116,7 +117,7 @@ def test_each_rule_sits_under_its_own_group() -> None:
 def test_the_summary_counts_and_lists_every_rule() -> None:
     text = render_rules_markdown()
 
-    assert "26 rules by default severity: 7 blockers, 16 warnings, 3 info." in text
+    assert "27 rules by default severity: 7 blockers, 16 warnings, 4 info." in text
     for r in CATALOGUE:
         assert f"| {r.id} | {r.severity} | {r.title} |" in text
 
