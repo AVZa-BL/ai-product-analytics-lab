@@ -9,7 +9,11 @@ import pytest
 from scipy import stats
 from statsmodels.stats.meta_analysis import combine_effects
 from statsmodels.stats.multitest import multipletests
-from statsmodels.stats.proportion import confint_proportions_2indep, proportions_ztest
+from statsmodels.stats.proportion import (
+    confint_proportions_2indep,
+    proportion_confint,
+    proportions_ztest,
+)
 from statsmodels.stats.weightstats import CompareMeans, DescrStatsW
 
 from referee import methods
@@ -28,10 +32,14 @@ from referee.methods import (
     heavy_tail_measures,
     homogeneity_test,
     log_mean_ratio,
+    mean_interval,
+    mean_ratio,
+    proportion_interval,
     ratio_difference,
     ratio_estimate,
     srm_test,
     two_proportion_difference,
+    values_are_constant,
     welch_correction,
     welch_difference,
 )
@@ -1731,3 +1739,153 @@ def test_the_shapes_of_a_change_across_the_cohorts() -> None:
     assert _cohort_pattern([0, 1, 2, 3], "step") == [1.0, 1.0, 0.0, 0.0]
     assert _cohort_pattern([0, 1, 2, 3, 4], "step") == [1.0, 1.0, 0.0, 0.0, 0.0]  # the middle is 2
     assert _cohort_pattern([2, 3, 5, 9], "step") == [1.0, 1.0, 1.0, 0.0]  # the middle is 5.5
+
+
+# --- One group on its own --------------------------------------------------------------------
+
+
+def test_the_interval_for_one_mean_is_worked_out_by_hand() -> None:
+    found = mean_interval([2.0, 4.0, 6.0])  # mean 4, s^2 = 4, se = sqrt(4/3), 2 degrees of freedom
+
+    se = math.sqrt(4 / 3)
+    margin = 4.302652729749462 * se  # the 97.5th percentile of t with 2 degrees of freedom
+    assert (found.n, found.mean, found.degrees_of_freedom) == (3, 4.0, 2.0)
+    assert found.std_error == pytest.approx(se, rel=1e-12)
+    assert (found.ci_low, found.ci_high) == pytest.approx((4 - margin, 4 + margin), rel=1e-12)
+    assert found.confidence == 0.95
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_the_interval_for_one_mean_agrees_with_scipy_and_statsmodels(seed: int) -> None:
+    rng = random.Random(400 + seed)
+    values = [rng.lognormvariate(1.0, rng.choice([0.3, 1.2])) for _ in range(rng.randint(2, 300))]
+
+    found = mean_interval(values, alpha=0.1)
+    low, high = DescrStatsW(values).tconfint_mean(alpha=0.1)
+    scipy_low, scipy_high = stats.t.interval(
+        0.9, len(values) - 1, loc=np.mean(values), scale=stats.sem(values)
+    )
+
+    assert (found.ci_low, found.ci_high) == pytest.approx((low, high), rel=1e-9)
+    assert (found.ci_low, found.ci_high) == pytest.approx((scipy_low, scipy_high), rel=1e-9)
+    assert found.confidence == pytest.approx(0.9)
+
+
+@pytest.mark.parametrize(
+    ("values", "error"),
+    [
+        ([], StatsError),
+        ([1.0], StatsError),
+        ([3.0, 3.0, 3.0], NoVariationError),
+        ([0.0] * 50, NoVariationError),
+        ([1.0, math.nan], StatsError),
+        ([1.0, math.inf], StatsError),
+        ([1e300, -1e300, 0.0], StatsError),  # a square beyond any float
+    ],
+)
+def test_an_interval_for_one_mean_is_refused_where_the_data_cannot_give_one(
+    values: list[float], error: type[Exception]
+) -> None:
+    with pytest.raises(error):
+        mean_interval(values)
+
+
+@pytest.mark.parametrize("alpha", [0.0, 1.0, -0.1, 1.5, math.nan])
+def test_an_interval_for_one_mean_needs_an_alpha_between_zero_and_one(alpha: float) -> None:
+    with pytest.raises(StatsError, match="alpha"):
+        mean_interval([1.0, 2.0, 4.0], alpha=alpha)
+    with pytest.raises(StatsError, match="alpha"):
+        proportion_interval(3, 10, alpha=alpha)
+
+
+@pytest.mark.parametrize("n", [1, 2, 7, 20, 100, 1000, 25000])
+def test_the_wilson_interval_agrees_with_statsmodels_for_every_count(n: int) -> None:
+    for successes in sorted({0, 1, 2, n // 3, n // 2, n - 2, n - 1, n} & set(range(n + 1))):
+        found = proportion_interval(successes, n)
+        low, high = proportion_confint(successes, n, alpha=0.05, method="wilson")
+
+        assert (found.ci_low, found.ci_high) == pytest.approx((low, high), abs=1e-12), (
+            successes,
+            n,
+        )
+        assert found.rate == successes / n and 0 <= found.ci_low <= found.rate <= found.ci_high <= 1
+
+
+def test_the_wilson_interval_has_width_at_a_rate_of_zero_and_of_one() -> None:
+    none, every = proportion_interval(0, 40), proportion_interval(40, 40)
+
+    assert none.ci_low == 0.0 and 0.08 < none.ci_high < 0.10  # the Wald interval would be a point
+    assert every.ci_high == 1.0 and 0.90 < every.ci_low < 0.92
+
+
+@pytest.mark.parametrize(
+    ("successes", "n"), [(1, 0), (-1, 5), (6, 5), (1.5, 5), (1, 5.5), (True, 5), (0, -3)]
+)
+def test_the_wilson_interval_refuses_counts_that_are_not_possible(successes, n) -> None:
+    with pytest.raises(StatsError):
+        proportion_interval(successes, n)
+
+
+# --- The ratio of two means, with its interval ------------------------------------------------
+
+
+def test_the_interval_for_a_ratio_of_means_is_worked_out_from_the_log_scale() -> None:
+    treatment, control = [3.0, 5.0, 7.0, 9.0], [10.0, 12.0, 14.0, 16.0, 18.0]
+
+    found = mean_ratio(treatment, control)
+    log = log_mean_ratio(treatment, control)
+    margin = float(stats.t.ppf(0.975, log.degrees_of_freedom)) * log.std_error
+
+    assert found.ratio == pytest.approx(6.0 / 14.0, rel=1e-12)
+    assert found.ci_low == pytest.approx(math.exp(math.log(6.0 / 14.0) - margin), rel=1e-12)
+    assert found.ci_high == pytest.approx(math.exp(math.log(6.0 / 14.0) + margin), rel=1e-12)
+    assert 0 < found.ci_low < found.ratio < found.ci_high
+    assert found.ci_high / found.ratio == pytest.approx(found.ratio / found.ci_low, rel=1e-12)
+    assert (found.n_treatment, found.n_control, found.confidence) == (4, 5, 0.95)
+
+
+def test_the_ratio_interval_covers_the_true_ratio_about_as_often_as_it_says() -> None:
+    rng = np.random.default_rng(2026)
+    hits, runs = 0, 1500
+    for _ in range(runs):
+        treatment = rng.gamma(4.0, 2.0, 120) * 0.8  # a true ratio of 0.8
+        control = rng.gamma(4.0, 2.0, 150)
+        found = mean_ratio(treatment.tolist(), control.tolist())
+        hits += found.ci_low <= 0.8 <= found.ci_high
+
+    assert 0.93 <= hits / runs <= 0.97
+
+
+@pytest.mark.parametrize(
+    ("treatment", "control", "error"),
+    [
+        ([0.0, 0.0, 0.0], [1.0, 2.0, 3.0], NonPositiveMeanError),
+        ([1.0, 2.0, 3.0], [0.0, 0.0], NonPositiveMeanError),
+        ([2.0, 2.0], [3.0, 3.0], NoVariationError),
+        ([1.0], [1.0, 2.0], StatsError),
+    ],
+)
+def test_a_ratio_of_means_is_refused_where_it_has_no_meaning(treatment, control, error) -> None:
+    with pytest.raises(error):
+        mean_ratio(treatment, control)
+
+
+def test_a_ratio_interval_needs_an_alpha_between_zero_and_one() -> None:
+    with pytest.raises(StatsError, match="alpha"):
+        mean_ratio([1.0, 2.0, 4.0], [2.0, 3.0, 5.0], alpha=1.0)
+
+
+@pytest.mark.parametrize(
+    ("values", "constant"),
+    [
+        ([], False),  # no values are not "the same value"
+        ([3.0], True),
+        ([0.0, 0.0, 0.0], True),
+        ([0.7] * 3, True),
+        ([0.1 + 0.2, 0.3], True),  # equal up to rounding
+        ([1.0, 1.0000001], False),
+        ([1e-170, 2e-170], False),  # tiny, and not the same
+    ],
+)
+def test_values_are_constant_when_equal_up_to_rounding(values, constant) -> None:
+    assert values_are_constant(values) is constant

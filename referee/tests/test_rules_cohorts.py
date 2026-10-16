@@ -273,7 +273,7 @@ def test_res_007_is_a_warning_between_res_003_and_res_008_citing_the_heterogenei
     ids = [rule.id for rule in RESULTS_RULES]
 
     assert RES_007.severity == "warning" and RES_007.escalation is None
-    assert ids[ids.index("RES-003") + 1 : ids.index("RES-008")] == ["RES-007"]
+    assert ids[ids.index("RES-004") + 1 : ids.index("RES-008")] == ["RES-007"]
     assert ids[ids.index("RES-007") + 1 : ids.index("RES-011")] == ["RES-008"]
     for author in ("Cochran", "Higgins", "Trustworthy"):
         assert any(author in reference for reference in RES_007.references), author

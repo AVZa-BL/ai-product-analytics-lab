@@ -61,6 +61,12 @@ def _is_constant(values: Sequence[float]) -> bool:
     return high - low <= 8 * sys.float_info.epsilon * max(abs(low), abs(high))
 
 
+def values_are_constant(values: Sequence[float]) -> bool:
+    """Whether the values are equal up to a few units of floating-point rounding (the test the
+    functions of this module use for "does not vary"); False for no values."""
+    return bool(values) and _is_constant(values)
+
+
 def _is_whole(value: float) -> bool:
     """A whole number, as an int, a numpy integer or a float without a fraction; not a bool."""
     if isinstance(value, bool | np.bool_):
@@ -450,6 +456,47 @@ def log_mean_ratio(treatment: Sequence[float], control: Sequence[float]) -> LogR
     )
 
 
+@dataclass(frozen=True, kw_only=True)
+class MeanRatio:
+    """mean(treatment) / mean(control), with an interval from the log scale."""
+
+    n_treatment: int
+    n_control: int
+    mean_treatment: float
+    mean_control: float
+    ratio: float
+    ci_low: float
+    ci_high: float
+    degrees_of_freedom: float
+    confidence: float
+
+
+def mean_ratio(
+    treatment: Sequence[float], control: Sequence[float], *, alpha: float = 0.05
+) -> MeanRatio:
+    """The ratio of two group means with its (1 - alpha) interval.
+
+    The interval is exp(log ratio +- t * se) with `log_mean_ratio`'s delta-method standard error
+    and Satterthwaite degrees of freedom, so it is asymmetric on the ratio scale, never reaches
+    below 0, and allows for the uncertainty of the control's mean (a difference divided by the
+    control's observed mean does not). Raises what `log_mean_ratio` raises.
+    """
+    _check_alpha(alpha)
+    found = log_mean_ratio(treatment, control)
+    margin = float(stats.t.ppf(1 - alpha / 2, found.degrees_of_freedom)) * found.std_error
+    return MeanRatio(
+        n_treatment=found.n_treatment,
+        n_control=found.n_control,
+        mean_treatment=found.mean_treatment,
+        mean_control=found.mean_control,
+        ratio=found.mean_treatment / found.mean_control,
+        ci_low=math.exp(found.log_ratio - margin),
+        ci_high=math.exp(found.log_ratio + margin),
+        degrees_of_freedom=found.degrees_of_freedom,
+        confidence=1 - alpha,
+    )
+
+
 # --- A difference in proportions (binary metrics) ------------------------------------------
 
 
@@ -521,6 +568,90 @@ def two_proportion_difference(
         ci_low=difference - margin,
         ci_high=difference + margin,
         confidence=1 - alpha,
+    )
+
+
+# --- One group on its own: the mean and the rate -------------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class MeanInterval:
+    """The mean of one group, from the t distribution."""
+
+    n: int
+    mean: float
+    std_error: float
+    degrees_of_freedom: float
+    ci_low: float
+    ci_high: float
+    confidence: float
+
+
+def mean_interval(values: Sequence[float], *, alpha: float = 0.05) -> MeanInterval:
+    """The (1 - alpha) t interval for the mean of one group: mean +- t * s / sqrt(n).
+
+    It is the one-group form of `welch_difference`. Raises `StatsError` for fewer than 2
+    values and `NoVariationError` when they do not vary, because the standard error is then 0
+    and the interval would claim a certainty the data cannot give (a caller that knows better
+    can take the mean of such a group itself).
+    """
+    _check_alpha(alpha)
+    numbers = _finite(values, "values")
+    mean, variance = _mean_and_variance(numbers, "values")
+    if variance == 0:
+        raise NoVariationError("the values do not vary, so the standard error is 0")
+    std_error = math.sqrt(variance / len(numbers))
+    degrees = float(len(numbers) - 1)
+    margin = float(stats.t.ppf(1 - alpha / 2, degrees)) * std_error
+    return MeanInterval(
+        n=len(numbers),
+        mean=mean,
+        std_error=std_error,
+        degrees_of_freedom=degrees,
+        ci_low=mean - margin,
+        ci_high=mean + margin,
+        confidence=1 - alpha,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class RateInterval:
+    """The rate of one group, from the Wilson score interval."""
+
+    n: int
+    successes: int
+    rate: float
+    ci_low: float
+    ci_high: float
+    confidence: float
+
+
+def proportion_interval(successes: int, n: int, *, alpha: float = 0.05) -> RateInterval:
+    """The (1 - alpha) Wilson score interval for one rate.
+
+    With z the normal quantile and p = successes / n, the interval is centred on
+    (p + z^2 / 2n) / (1 + z^2 / n) with half-width z / (1 + z^2 / n) * sqrt(p (1 - p) / n +
+    z^2 / 4n^2). Unlike the Wald interval it stays inside [0, 1] and keeps its width for a rate
+    of 0 or 1 or a small group. Reference: Wilson (1927), "Probable inference, the law of
+    succession, and statistical inference"; Brown, Cai and DasGupta (2001), "Interval
+    estimation for a binomial proportion", Statistical Science. Raises `StatsError` for counts
+    that are not whole numbers or not possible.
+    """
+    _check_alpha(alpha)
+    if not (_is_whole(successes) and _is_whole(n)):
+        raise StatsError(f"counts must be whole numbers, got {successes} and {n}")
+    if n < 1 or not 0 <= successes <= n:
+        raise StatsError(f"{successes} successes out of {n} is not possible")
+    z = float(stats.norm.ppf(1 - alpha / 2))
+    rate = successes / n
+    scale = 1 + z * z / n
+    centre = (rate + z * z / (2 * n)) / scale
+    half = z / scale * math.sqrt(rate * (1 - rate) / n + z * z / (4 * n * n))
+    # The closed form gives exactly 0 and 1 at the ends; the float arithmetic can miss by 1e-19.
+    low = 0.0 if successes == 0 else min(rate, max(0.0, centre - half))
+    high = 1.0 if successes == n else max(rate, min(1.0, centre + half))
+    return RateInterval(
+        n=n, successes=successes, rate=rate, ci_low=low, ci_high=high, confidence=1 - alpha
     )
 
 

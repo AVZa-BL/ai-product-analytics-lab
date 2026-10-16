@@ -13,7 +13,7 @@ Under development, in milestones:
 | 1 | Experiment spec schema and validation | Done |
 | 2 | Design-review rules, power calculations, `review-design` CLI | Done |
 | 3 | Synthetic experiment in the lab's hybrid scenario | Done |
-| 4 | Results review, `review-results` CLI, decision memo | In progress: the export reader and the statistics (4a) are done; the data-fit rules (4b-1) are built; of the effect rules (4b-2) RES-007 and RES-008 are built and RES-004 and DES-009 are planned; the report, the command and the memo (4c) are planned |
+| 4 | Results review, `review-results` CLI, decision memo | In progress: the export reader and the statistics (4a) are done; the data-fit rules (4b-1) are built; of the effect rules (4b-2) RES-004, RES-007 and RES-008 are built and DES-009 is planned; the report, the command and the memo (4c) are planned |
 
 ## Reviewing a design
 
@@ -33,7 +33,7 @@ The first prints a review that recommends **revise**: the design needs 389,060 u
 | 2 | The spec cannot be read or is not valid (every violation is listed) |
 | 3 | A failure inside Referee itself |
 
-Referee is advisory. `proceed` means the design raised none of the objections of the 17 design-review rules in [`docs/rules.md`](docs/rules.md), the catalogue with what triggers each and why it matters. It does not mean the experiment is worth running. The catalogue also lists the eight results rules built so far (RES-001, RES-002, RES-003, RES-007, RES-008, RES-011, RES-012, RES-013); they read an experiment's data as well as its spec, and no command runs them yet.
+Referee is advisory. `proceed` means the design raised none of the objections of the 17 design-review rules in [`docs/rules.md`](docs/rules.md), the catalogue with what triggers each and why it matters. It does not mean the experiment is worth running. The catalogue also lists the nine results rules built so far (RES-001, RES-002, RES-003, RES-004, RES-007, RES-008, RES-011, RES-012, RES-013); they read an experiment's data as well as its spec, and no command runs them yet.
 
 Things to know when writing a spec:
 

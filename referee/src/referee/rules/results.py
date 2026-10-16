@@ -1,7 +1,7 @@
 """Rules about what the data of a finished experiment shows (RES).
 
-The data-fit rules of design section 21.4 are here, with the effect rules RES-007 and RES-008;
-RES-004 follows in milestone 4b-2. A rule reads a `ResultsContext` and returns the evidence that
+The data-fit rules of design section 21.4 are here, with the guardrail rule RES-004 and the effect
+rules RES-007 and RES-008. A rule reads a `ResultsContext` and returns the evidence that
 triggered it.
 """
 
@@ -22,6 +22,7 @@ from referee.pooled_rates import EXCESS_RATE, NOMINAL_RATE, UNIT, percent
 from referee.results import ResultsContext, difference_summary, effect_estimates
 from referee.rules.base import Escalation, Rule
 from referee.rules.cohorts import cohort_report
+from referee.rules.guardrails import guardrail_report
 from referee.rules.heavy_tails import heavy_tail_report
 from referee.rules.references import (
     COCHRAN_1954,
@@ -292,6 +293,20 @@ def _effect_differs_between_cohorts(context: ResultsContext) -> dict[str, Any] |
     return report
 
 
+def _guardrail_breached(context: ResultsContext) -> dict[str, Any] | None:
+    """A guardrail worse than its tolerance, shown or possible (design section 21.12)."""
+    report = guardrail_report(context)
+    summary = report["summary"]
+    if not (summary["breach_shown"] or summary["breach_possible"]):
+        return None
+    return report
+
+
+def _breach_is_shown(evidence: dict[str, Any]) -> bool:
+    """The whole 95% interval for the harm lies beyond the tolerance in at least one comparison."""
+    return bool(evidence.get("summary", {}).get("breach_shown"))
+
+
 def _heavy_tailed_metric(context: ResultsContext) -> dict[str, Any] | None:
     """The signs of a heavy tail (design section 21.11), when any arm and metric shows one."""
     report = heavy_tail_report(context)
@@ -393,6 +408,87 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         ),
         references=(KOHAVI_TANG_XU_2020,),
         check=_shorter_than_the_registered_minimum,
+    ),
+    Rule(
+        id="RES-004",
+        severity="warning",
+        title="A guardrail is worse than its tolerance allows, or may be",
+        fires_when=(
+            "For a non-control arm and a guardrail of the spec, on the analysed players, the "
+            "harm is measured as a share of a reference value (positive when worse in the "
+            "guardrail's harmful_direction) against two references: control's observed mean "
+            "(the arm's mean over control's, with a 95% interval from the log scale and "
+            "Satterthwaite's degrees of freedom) and the registered baseline (the arm's own "
+            "mean with a t interval, or its rate with a Wilson interval). The rule fires when, "
+            "on either reference, the point estimate of the harm is beyond "
+            "tolerance_relative, strictly. The breach is shown when the whole 95% interval is "
+            "beyond it, and possible when only the point estimate is. Two kinds of reading "
+            "can only make a breach possible: an interval with no width (every player of a "
+            "group has the same value) when that many players alike would arise by chance, at "
+            "the other group's share of players with that value, in at least 2.5% of samples; "
+            "and the registered-baseline reading of a revenue-like guardrail whose fall is "
+            "harmful, for a group with some spread, whose t interval lies wholly below the "
+            "true mean more often than it should (a guardrail is revenue-like by its metric "
+            "name). The harm and its "
+            "interval are rounded to 6 places and the "
+            "decision is made on the rounded figures that the evidence shows. A comparison "
+            "with a point estimate within the tolerance does not fire the rule, even where "
+            "its interval reaches beyond it; the evidence marks it as one in which the data "
+            "cannot rule out a breach. A reference that cannot be measured (a group with "
+            "fewer than 2 players, though one is enough for the rate of a binary guardrail "
+            "against the registered baseline; no variation in both groups; a mean not above "
+            "0 against control's mean; a registered baseline not above 0; numbers too large "
+            "or too small) is reported with its reason and the other decides."
+        ),
+        why_it_matters=(
+            "A guardrail is the registered limit on what a change may cost. A change that "
+            "improves the primary metric and breaks a guardrail has not won on the primary "
+            "metric alone, and a harm that is real in the sample may be larger or smaller in "
+            "the population, so a point estimate beyond the tolerance is not the same as a "
+            "breach. Referee therefore separates a breach that is shown (the whole interval "
+            "is beyond the tolerance) from one that is only possible (the interval still "
+            "reaches inside it), and reads the harm against control's observed mean, which "
+            "is the change the experiment caused, and against the registered baseline, which "
+            "is the spec as written. When the two disagree, the stricter decides and the note "
+            "says which; when control itself is beyond the tolerance of the registered "
+            "baseline, the baseline may no longer describe the traffic, and a breach against "
+            "it alone does not show that the arm caused it. The intervals are unadjusted for "
+            "the number of arms and guardrails, so with several of them some will miss. A "
+            "guardrail within its tolerance is not a finding, and where its interval reaches "
+            "beyond the tolerance the data cannot rule out a breach."
+        ),
+        remediation=(
+            "Do not decide on the primary metric alone. If a shown breach rests only on the "
+            "registered baseline (the note says which reference decides), or the note says "
+            "that control itself is beyond the baseline's tolerance, first check whether the "
+            "baseline still describes this traffic (season, platform mix, a change since it "
+            "was registered): read the arm against control, and register a new baseline for "
+            "the next test, not for this one. If the reading against control's mean also "
+            "shows the breach, find what the arm does to the guardrail and either fix it or "
+            "drop the arm; the tolerance was registered before the data, so do not move it "
+            "now. For a breach that is only possible, the data cannot tell a breach from "
+            "noise: have the guardrail's owner decide in writing, before the decision, "
+            "whether the possible harm is acceptable, or run a new registered test of the "
+            "guardrail with its own sample size, analysed once at its end. Do not keep adding "
+            "players to this test until the interval clears the tolerance: that is another "
+            "look at the data, the 95% interval does not cover it, and Referee does not "
+            "adjust for it. For a binary guardrail with few events or non-events the interval "
+            "is rough, and for a revenue-like one it is less reliable than 95% suggests: see "
+            "the note."
+        ),
+        references=(KOHAVI_TANG_XU_2020,),
+        check=_guardrail_breached,
+        escalation=Escalation(
+            to="blocker",
+            when=(
+                "the breach is shown in at least one comparison: the whole 95% interval for the "
+                "harm is beyond the tolerance on at least one of the two references, not "
+                "counting an interval with no width that chance could explain or the "
+                "registered-baseline reading of a revenue-like guardrail whose fall is "
+                "harmful, for a group with some spread, which count as possible."
+            ),
+            applies=_breach_is_shown,
+        ),
     ),
     Rule(
         id="RES-007",

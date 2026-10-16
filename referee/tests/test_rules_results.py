@@ -1118,6 +1118,7 @@ def test_a_results_review_of_the_committed_export_lists_every_data_fit_rule_that
         "RES-001",
         "RES-002",
         "RES-003",
+        "RES-004",
         "RES-007",
         "RES-008",
         "RES-011",

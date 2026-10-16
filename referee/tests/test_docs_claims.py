@@ -167,6 +167,7 @@ def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_4b_2_is
         "RES-001",
         "RES-002",
         "RES-003",
+        "RES-004",
         "RES-007",
         "RES-008",
         "RES-011",
@@ -185,8 +186,8 @@ def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_4b_2_is
         assert branch in amendment
     assert built_so_far <= {rule.id for rule in RESULTS_RULES}
     assert not {rule.id for rule in ALL_RULES} & {rule_id for rule_id in named if "RES" in rule_id}
-    assert not {"RES-004", "DES-009"} & built, (
-        "RES-004 and DES-009 arrive in 4b-2; update this test and section 21 when they do"
+    assert not {"DES-009"} & built, (
+        "DES-009 arrives in 4b-2; update this test and section 21 when it does"
     )
 
 

@@ -277,7 +277,7 @@ def _sentences() -> dict[str, str]:
 def _section() -> str:
     parts = DESIGN.split("\n### 21.11 ")
     assert len(parts) == 2, "section 21.11 is not there exactly once"
-    text = parts[1].split("\nDelivered in:")[0]
+    text = parts[1].split("\n### 21.12 ")[0].split("\nDelivered in:")[0]
     assert DESIGN.index("### 21.10 ") < DESIGN.index("### 21.11 ")
     return text
 

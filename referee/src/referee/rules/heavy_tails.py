@@ -14,7 +14,6 @@ that no error rate was measured for it. Nothing here names a cause.
 
 from __future__ import annotations
 
-import math
 from collections.abc import Sequence
 from fractions import Fraction
 from typing import Any
@@ -52,6 +51,7 @@ from referee.pooled_rates import (
     percent,
 )
 from referee.results import METRIC_FAMILIES, ExportMetric, ResultsContext
+from referee.rules.text import join_and, sig
 
 CONFIDENCE = 0.95
 _RATE_DIGITS = 5  # a rate is a whole number of 1/UNIT = 1/100,000
@@ -124,24 +124,8 @@ def _ratio(value: Fraction | int) -> str:
     return f"{float(number):,.{places}f}".rstrip("0").rstrip(".")
 
 
-def _list(items: Sequence[str]) -> str:
-    if len(items) <= 1:
-        return "".join(items)
-    return ", ".join(items[:-1]) + " and " + items[-1]
-
-
-def _sig(value: float, digits: int = 3) -> str:
-    """`value` to `digits` significant figures, with thousands separators and no exponent.
-
-    A value is never shown as 0 or as a negative zero unless it is 0: -0.00005 is "-0.00005".
-    """
-    if value == 0:
-        return "0"
-    exponent = math.floor(math.log10(abs(value)))
-    if abs(round(value, digits - 1 - exponent)) >= 10 ** (exponent + 1):  # 9.996 rounds to 10
-        exponent += 1
-    places = digits - 1 - exponent
-    return f"{round(value, places):,.{max(0, places)}f}"
+_list = join_and
+_sig = sig
 
 
 def _measure(value: float) -> str:
