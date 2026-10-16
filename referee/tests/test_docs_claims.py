@@ -155,9 +155,7 @@ def test_the_milestone_4_amendment_names_rules_and_files_and_its_new_rules_are_r
     assert not ({"RES-012", "RES-013"} & {rule.id for rule in ALL_RULES})
 
 
-def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_4b_2_is_unfinished() -> (
-    None
-):
+def test_the_milestone_4b_amendment_names_rules_and_files_that_exist_and_4b_2_is_built() -> None:
     amendment = DESIGN.split("\n## 21. Amendment")[1]
     seed_list = DESIGN.split("## 8. Rule catalogue")[1].split("## 9.")[0]
     catalogue = set(re.findall(r"(?:DES|RES)-0\d\d", seed_list))

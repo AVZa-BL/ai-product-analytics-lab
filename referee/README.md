@@ -13,7 +13,7 @@ Under development, in milestones:
 | 1 | Experiment spec schema and validation | Done |
 | 2 | Design-review rules, power calculations, `review-design` CLI | Done |
 | 3 | Synthetic experiment in the lab's hybrid scenario | Done |
-| 4 | Results review, `review-results` CLI, decision memo | In progress: the export reader and the statistics (4a) are done; the data-fit rules (4b-1) are built; of the effect rules (4b-2) RES-004, RES-007 and RES-008 are built, with the design rule DES-009; the report, the command and the memo (4c) are planned |
+| 4 | Results review, `review-results` CLI, decision memo | In progress: the export reader and the statistics (4a) are done; the data-fit rules (4b-1) and the effect rules (4b-2: RES-004, RES-007 and RES-008, with the design rule DES-009) are built; the report, the command and the memo (4c) are planned |
 
 ## Reviewing a design
 
