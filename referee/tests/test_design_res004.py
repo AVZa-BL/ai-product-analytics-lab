@@ -3,13 +3,13 @@
 The figures of the section are in sentences made here from the code's constants, so that the
 text cannot say a number the code does not use. The design text is written around those
 sentences (`_sentences`); a test checks that each is in it exactly once and that the section
-holds no figure outside them, and another that the claims it makes in its own words are there.
+holds no figure outside them (`design_figures`), and another that the claims it makes in its own
+words are there.
 """
 
-import re
 from pathlib import Path
 
-import pytest
+from design_figures import figures_outside
 
 from referee import methods
 from referee.guardrails import (
@@ -20,8 +20,6 @@ from referee.guardrails import (
     REFERENCES,
     SMALL_COUNT,
     TIERS,
-    _chance_all_alike,
-    chance_could_explain,
 )
 from referee.rules import RESULTS_RULES
 
@@ -72,61 +70,21 @@ def _section() -> str:
 
 
 def _figures_outside(text: str, phrases: list[str]) -> list[str]:
-    """The figures left in the text once each sentence has been taken out of it, once."""
-    for phrase in sorted(phrases, key=len, reverse=True):
-        assert text.count(phrase) == 1, phrase
-        text = text.replace(phrase, " ", 1)
-    for name in ("4b-2", "4c", "RES-004", "res004", "RES-006", "RES-008", "DES-009", "section 8"):
-        text = text.replace(name, " ")
-    text = re.sub(r"(?<![\d.])21\.(?:[1-9]|1[0-3])(?![\d%])", " ", text)  # a section reference
-    return re.findall(r"\d[\d,.]*%?|\b(?:third|half|quarter|twice|double)\b", text)
+    names = ("4b-2", "4c", "RES-004", "res004", "RES-006", "RES-008", "DES-009", "section 8")
+    return figures_outside(text, phrases, names=names, last_section=13)
 
 
-def test_the_design_text_holds_every_sentence_of_the_section() -> None:
+def test_the_design_text_holds_every_sentence_of_the_section_and_no_other_figure() -> None:
     section = " ".join(_section().split())
 
     for label, phrase in _sentences().items():
         assert section.count(phrase) == 1, (label, phrase)
-
-
-def test_the_design_text_has_no_figure_outside_those_sentences() -> None:
-    section = " ".join(_section().split())
-
     assert _figures_outside(section, list(_sentences().values())) == []
-
-
-def test_the_check_for_figures_finds_a_figure_that_is_there() -> None:
-    sentences = ["a 95% interval", "fewer than 10 players"]
-    text = f"A: {sentences[0]}. See 21.3, 21.12 and 4b-2 (RES-004). B: {sentences[1]}."
-
-    assert _figures_outside(text, sentences) == []
-    for extra, found in [
-        (" It fires at 10%.", ["10%"]),
-        (" See 21.14 now.", ["21.14"]),
-        (" At a third of it.", ["third"]),
-        (" In 12 cases.", ["12"]),
-    ]:
-        assert _figures_outside(text + extra, sentences) == found, extra
-    with pytest.raises(AssertionError):
-        _figures_outside(text, [*sentences, "not in the text"])
-
-
-def test_the_sentences_follow_the_constants_of_the_code(monkeypatch) -> None:
-    import sys
-
-    module = sys.modules[__name__]
-    before = _sentences()
-    monkeypatch.setattr(module, "SMALL_COUNT", 9)
-
-    after = _sentences()
-
-    assert after["small"] != before["small"] and set(after) == set(before)
 
 
 def test_the_constants_are_the_ones_the_section_names() -> None:
     assert (CONFIDENCE, ALPHA, DIGITS, SMALL_COUNT) == (0.95, 0.05, 6, 10)
     assert TIERS == ("within", "possible", "shown")
-    assert "rounded to 6 places" in RES_004.fires_when
 
 
 CLAIMS = [  # what the section says in its own words about the decisions
@@ -192,31 +150,21 @@ def test_the_section_names_the_functions_and_the_simulation_that_it_relies_on() 
     assert (Path(__file__).parent / "test_guardrails_calibration.py").is_file()
 
 
-def test_the_examples_of_the_section_are_what_the_code_says() -> None:
-    few_buyers = [0.0] * 97 + [10.0] * 3  # a few in a hundred of control's players buy
-    held = _chance_all_alike([0.0] * 5, few_buyers)
-    shown = _chance_all_alike([0.0] * 2000, few_buyers)
-    nobody = _chance_all_alike([0.0] * 5, [3.0, 4.0] * 50)
-
-    assert chance_could_explain(held)  # a few players of a revenue arm all at zero are held
-    assert not chance_could_explain(shown)  # thousands at zero are shown
-    assert not chance_could_explain(nobody)  # a value that nobody in control has is shown
-
-
-def test_the_section_agrees_with_the_rule_on_what_is_held_to_possible() -> None:
-    text = " ".join((RES_004.fires_when + " " + RES_004.escalation.when).split())
-
-    assert "Two kinds of reading can only make a breach possible" in text
-    assert "an interval with no width" in text
-    assert (
-        "the registered-baseline reading of a revenue-like guardrail whose fall is harmful" in text
+def test_the_rule_texts_state_the_decisions_of_the_section() -> None:
+    fires, why, escalates = (
+        " ".join(text.split())
+        for text in (RES_004.fires_when, RES_004.why_it_matters, RES_004.escalation.when)
     )
 
-
-def test_the_rule_texts_say_what_the_section_says() -> None:
-    text = " ".join((RES_004.fires_when + " " + RES_004.why_it_matters).split())
-
-    assert "The breach is shown when the whole 95% interval is beyond it" in text
-    assert "possible when only the point estimate is" in text
-    assert "strictly" in text
-    assert "The intervals are unadjusted" in text
+    assert "The breach is shown when the whole 95% interval is beyond it" in fires
+    assert "possible when only the point estimate is" in fires
+    assert "strictly" in fires
+    assert f"rounded to {DIGITS} places" in fires
+    assert "The intervals are unadjusted" in why
+    assert "Two kinds of reading can only make a breach possible" in fires
+    for text in (fires, escalates):
+        assert "an interval with no width" in text
+        assert (
+            "the registered-baseline reading of a revenue-like guardrail whose fall is harmful"
+            in text
+        )

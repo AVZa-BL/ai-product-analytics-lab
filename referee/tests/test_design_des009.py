@@ -6,8 +6,9 @@ sentences (`_sentences`); a test checks that each is in it exactly once and that
 holds no figure outside them, and another that the claims it makes in its own words are there.
 """
 
-import re
 from pathlib import Path
+
+from design_figures import figures_outside
 
 from referee import cohorts
 from referee.rules import ALL_RULES
@@ -62,15 +63,8 @@ def _section() -> str:
 
 
 def _figures_outside(text: str, phrases: list[str]) -> list[str]:
-    """The figures left in the text once each sentence has been taken out of it, once."""
-    for phrase in sorted(phrases, key=len, reverse=True):
-        assert text.count(phrase) == 1, phrase
-        text = text.replace(phrase, " ", 1)
-    for name in ("4b-2", "4c", "des009", "window_holds_fewer_than_3_blocks"):
-        text = text.replace(name, " ")
-    text = re.sub(r"\b[A-Z]{3}-\d{3}\b", " ", text)  # a rule id
-    text = re.sub(r"(?<![\d.])21\.(?:[1-9]|1[0-3])(?![\d%])", " ", text)  # a section reference
-    return re.findall(r"\d[\d,.]*%?|\b(?:third|half|quarter|twice|double)\b", text)
+    names = ("4b-2", "4c", "des009", "window_holds_fewer_than_3_blocks")
+    return figures_outside(text, phrases, names=names, patterns=(r"\b[A-Z]{3}-\d{3}\b",))
 
 
 def test_the_design_text_holds_every_sentence_of_the_section_and_no_other_figure() -> None:

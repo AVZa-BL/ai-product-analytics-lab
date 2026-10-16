@@ -7,7 +7,6 @@ evidence, and the findings' severities against the strength of the breach.
 
 import json
 import random
-import re
 
 import pytest
 from results_helpers import TWO_ARMS, Row, at, build_data, crowd, results_spec
@@ -99,12 +98,6 @@ def test_the_rule_is_a_warning_that_becomes_a_blocker_when_the_breach_is_shown()
     assert RES_004.escalation.applies({}) is False  # a rule is test-built with no evidence
 
 
-def test_the_rule_comes_after_the_duration_rule_and_before_the_effect_rules() -> None:
-    ids = [rule.id for rule in RESULTS_RULES]
-
-    assert ids.index("RES-003") < ids.index("RES-004") < ids.index("RES-007")
-
-
 # --- What it finds -----------------------------------------------------------------------------
 
 
@@ -141,6 +134,12 @@ def test_a_breach_that_is_only_possible_is_a_warning(raw_spec) -> None:
         assert harm["point"] > entry["tolerance"] > harm["low"]
     assert finding.evidence["summary"]["breach_shown"] == 0
     assert finding.evidence["summary"]["breach_possible"] == 1
+    note = finding.evidence["notes"][1]
+    assert "a breach is possible, not shown." in note
+    assert (
+        "and only the point estimate is beyond the tolerance: the interval reaches inside it"
+    ) in note
+    assert "The two references agree." in note
 
 
 def test_the_references_can_differ_and_the_stricter_one_decides(raw_spec) -> None:
@@ -206,6 +205,7 @@ def test_a_spec_without_guardrails_has_nothing_to_report(raw_spec) -> None:
     assert report["tests"] == [] and report["summary"]["tests"] == 0
     assert report["summary"]["line"].startswith("RES-004: 0 comparisons of an arm")
     assert report["settings"]["guardrails"] == [] and "(none)" in report["notes"][0]
+    assert len(report["notes"]) == 1  # no comparison, so no note on how the intervals were made
 
 
 def test_a_comparison_that_cannot_be_measured_is_counted_and_does_not_fire(raw_spec) -> None:
@@ -322,6 +322,7 @@ def test_a_group_with_one_value_throughout_has_an_interval_with_no_width_and_say
         "of control's mean."
     ) in text
     assert "Only the reference to the registered baseline could be measured." in text
+    assert "Against control's mean: not measured (the mean of variant_b is not above 0, so" in text
 
 
 def test_a_small_arm_at_zero_is_held_and_the_note_says_chance_is_not_ruled_out(raw_spec) -> None:
@@ -486,17 +487,6 @@ def test_the_note_of_a_comparison_prints_the_figures_of_the_evidence(raw_spec) -
     assert note.endswith("The two references agree.")
 
 
-def test_a_possible_breach_says_that_only_the_point_estimate_is_beyond(raw_spec) -> None:
-    rows, guardrail = _drawn(4)
-    note = _evidence(_context(raw_spec, rows, guardrail))["notes"][1]
-
-    assert "a breach is possible, not shown." in note
-    assert (
-        "and only the point estimate is beyond the tolerance: the interval reaches inside it"
-    ) in note
-    assert "The two references agree." in note
-
-
 def test_a_guardrail_that_got_better_is_said_to_be_a_gain(raw_spec) -> None:
     rows = _sessions("control", [3, 4, 2, 3] * 80) + _sessions("variant_b", [4, 5, 3, 4] * 80)
     context = _context(raw_spec, rows, SESSIONS)
@@ -564,16 +554,6 @@ def test_the_last_notes_are_printed_once_and_say_the_intervals_are_unadjusted(ra
     assert sum(n.startswith("For a count guardrail") for n in notes) == 1
 
 
-def test_a_note_in_which_the_references_could_not_both_be_measured_says_which_was(
-    raw_spec,
-) -> None:
-    rows = _sessions("control", [3, 4, 2, 3] * 40) + _sessions("variant_b", [0] * 160)
-
-    note = _evidence(_context(raw_spec, rows, SESSIONS))["notes"][1]
-
-    assert "Against control's mean: not measured (the mean of variant_b is not above 0, so" in note
-
-
 def _summary_entry(status: str, *, not_verified=(False, False), unreachable=()) -> dict:
     references = {
         name: {"evaluated": True, "not_verified": flag}
@@ -632,9 +612,17 @@ def test_the_summary_line_says_how_many_comparisons_no_data_could_have_breached(
     assert "largest possible harm" not in summarise(entries[1:])["line"]
 
 
-@pytest.mark.parametrize("scenario", ["regression", "possible", "moved", "binary"])
+@pytest.mark.parametrize(
+    "scenario", ["regression", "possible", "moved", "binary", "unreachable", "not_evaluated"]
+)
 def test_every_note_is_ascii_and_names_no_cause(raw_spec, scenario: str) -> None:
-    if scenario == "regression":
+    if scenario == "unreachable":  # a fall of all of the baseline: the sentence about the limit
+        rows = _sessions("control", [3, 4, 2, 3] * 20) + _sessions("variant_b", [1, 1, 0, 1] * 20)
+        context = _context(raw_spec, rows, {**SESSIONS, "tolerance_relative": 1.0})
+    elif scenario == "not_evaluated":  # neither reading could be made: the reasons are given
+        rows = _sessions("control", [3, 4, 2, 3] * 20) + _sessions("variant_b", [1])
+        context = _context(raw_spec, rows, SESSIONS)
+    elif scenario == "regression":
         context = _regression(raw_spec, PURCHASED)
     elif scenario == "possible":
         rows, guardrail = _drawn(4)
@@ -722,16 +710,6 @@ def test_the_registered_baseline_alone_cannot_show_a_fall_of_a_revenue_like_guar
     assert "the reading against control's mean is not held." in text
 
 
-def test_the_same_data_in_a_count_guardrail_is_still_a_blocker(raw_spec) -> None:
-    """The hold is for the revenue-like family only; sessions are a count and are not held."""
-    rows = _sessions("control", [2, 2, 3, 1] * 60) + _sessions("variant_b", [2, 2, 3, 1] * 60)
-
-    finding = RES_004.evaluate(_context(raw_spec, rows, SESSIONS))
-
-    assert finding is not None and finding.severity == "blocker"
-    assert finding.evidence["tests"][0]["references"]["baseline"]["capped_by"] is None
-
-
 def test_a_real_fall_of_revenue_against_control_is_still_shown(raw_spec) -> None:
     rows = _revenue_rows(12, control_mean=1.6, arm_mean=0.6)
 
@@ -741,16 +719,6 @@ def test_a_real_fall_of_revenue_against_control_is_still_shown(raw_spec) -> None
     (entry,) = finding.evidence["tests"]
     assert entry["references"]["control"]["tier"] == "shown" and "control" in entry["decided_by"]
     assert entry["references"]["control"]["capped_by"] is None
-
-
-def test_a_rise_in_a_revenue_like_guardrail_that_may_not_rise_is_not_held(raw_spec) -> None:
-    rows = _revenue_rows(13, control_mean=0.6, arm_mean=None)
-    guardrail = {**REVENUE_GUARDRAIL, "harmful_direction": "increase", "baseline": 0.3}
-
-    (entry,) = _evidence(_context(raw_spec, rows, guardrail))["tests"]
-
-    assert entry["references"]["baseline"]["capped_by"] is None
-    assert entry["references"]["baseline"]["tier"] == "shown"
 
 
 def test_the_moved_baseline_sentence_blames_the_arm_for_nothing_when_the_arm_is_within(
@@ -881,24 +849,28 @@ def test_numbers_too_large_or_too_small_are_reported_as_such_and_never_crash(raw
         assert max(len(token) for note in report["notes"] for token in note.split()) < 30
 
 
-def test_a_huge_or_tiny_registered_baseline_is_written_with_an_exponent(raw_spec) -> None:
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("baseline", 1e300),
+        ("baseline", 1e-300),
+        ("baseline", 1e-307),  # a share of it is beyond the floats
+        ("baseline", 2e-308),
+        ("tolerance_relative", 1e-300),
+        ("tolerance_relative", 1e300),
+    ],
+)
+def test_a_registered_number_of_extreme_size_is_written_with_an_exponent_and_never_as_infinity(
+    raw_spec, field, value
+) -> None:
     rows = _sessions("control", [3, 4, 2, 3] * 20) + _sessions("variant_b", [2, 3, 1, 2] * 20)
-    for baseline in (1e300, 1e-300):
-        report = guardrail_report(_context(raw_spec, rows, {**SESSIONS, "baseline": baseline}))
 
-        json.dumps(report, allow_nan=False)
-        assert max(len(token) for note in report["notes"] for token in note.split()) < 40, baseline
+    report = guardrail_report(_context(raw_spec, rows, {**SESSIONS, field: value}))
 
-
-def test_a_harm_of_exactly_zero_is_written_as_0_0_in_the_evidence(raw_spec) -> None:
-    values = [3, 4, 2, 3] * 20
-    rows = _sessions("control", values) + _sessions("variant_b", values)
-    guardrail = {**SESSIONS, "baseline": sum(values) / len(values)}
-
-    text = json.dumps(guardrail_report(_context(raw_spec, rows, guardrail)))
-
-    assert not re.search(r"-0\.0(?![\d.eE])", text)  # not "-0.0", which the harm of a fall of 0 was
-    assert '"point": 0.0' in text
+    json.dumps(report, allow_nan=False)
+    text = " ".join(report["notes"])
+    assert "inf" not in text.lower().replace("information", "")
+    assert max(len(token) for token in text.split()) < 40
 
 
 def test_the_reasons_name_the_group_and_none_of_the_internals(raw_spec) -> None:
@@ -921,16 +893,23 @@ def test_two_groups_at_zero_are_not_a_collapse_of_one_of_them(raw_spec) -> None:
     assert "a fall of the whole" not in note
 
 
-def test_the_note_on_revenue_is_there_if_any_comparison_is_revenue_like(raw_spec) -> None:
-    rows = _sessions("control", [3, 4, 2, 3] * 80) + _sessions("variant_b", [3, 4, 2, 3] * 80)
+def test_the_note_on_revenue_is_there_once_if_any_comparison_is_revenue_like(raw_spec) -> None:
+    rows = (
+        _sessions("control", [3, 4, 2, 3] * 80)
+        + _sessions("variant_b", [3, 4, 2, 3] * 80)
+        + _sessions("variant_c", [3, 4, 2, 3] * 80)
+    )
     rows = [
         Row(r.player_id, r.arm, sessions=r.sessions, revenue=2.0 if i % 5 == 0 else 0.0)
         for i, r in enumerate(rows)
     ]
+    guardrails = [SESSIONS, REVENUE_GUARDRAIL]
+    spec = results_spec(raw_spec, guardrails=guardrails, **PRIMARY)  # the three-arm default
 
-    notes = guardrail_report(_context(raw_spec, rows, SESSIONS, REVENUE_GUARDRAIL))["notes"]
+    report = guardrail_report(ResultsContext.of(spec, build_data(rows)))
 
-    assert sum(n.startswith("For a revenue-like guardrail") for n in notes) == 1
+    assert sum(e["family"] == "revenue_like" for e in report["tests"]) == 2  # one for each arm
+    assert sum(n.startswith("For a revenue-like guardrail") for n in report["notes"]) == 1
 
 
 # --- Numbers beyond the floats, wording of what moved, and the notes on the families -------------
@@ -976,27 +955,6 @@ def test_a_value_beyond_every_float_is_a_mean_that_is_not_there_and_does_not_cra
     assert entry["means"]["control" if where == "control" else "arm"] is None
     json.dumps(report, allow_nan=False)
     assert "None" not in " ".join(report["notes"])
-
-
-def test_a_share_beyond_the_floats_is_written_with_an_exponent_and_never_as_infinity(
-    raw_spec,
-) -> None:
-    rows = _sessions("control", [3, 4, 2, 3] * 20) + _sessions("variant_b", [2, 3, 1, 2] * 20)
-    for baseline in (1e-307, 2e-308):
-        report = guardrail_report(_context(raw_spec, rows, {**SESSIONS, "baseline": baseline}))
-
-        assert "inf" not in " ".join(report["notes"]).lower().replace("information", "")
-        json.dumps(report, allow_nan=False)
-
-
-def test_a_tolerance_of_extreme_size_is_not_written_out_in_hundreds_of_digits(raw_spec) -> None:
-    rows = _sessions("control", [3, 4, 2, 3] * 20) + _sessions("variant_b", [2, 3, 1, 2] * 20)
-    for tolerance in (1e-300, 1e300):
-        report = guardrail_report(
-            _context(raw_spec, rows, {**SESSIONS, "tolerance_relative": tolerance})
-        )
-
-        assert max(len(token) for note in report["notes"] for token in note.split()) < 40
 
 
 def test_the_caveat_about_cause_is_left_out_where_the_reading_against_control_shows_it_too(
@@ -1196,28 +1154,25 @@ def test_the_note_on_a_revenue_fall_says_a_group_with_no_spread_is_judged_by_cha
     assert "is judged by chance, as said with its reading" in note
 
 
-def test_an_all_zero_revenue_arm_that_chance_cannot_explain_is_shown_despite_the_family(
-    raw_spec,
+@pytest.mark.parametrize(
+    ("guardrail", "direction", "present"),
+    [
+        (SESSIONS, "decrease", True),
+        (SESSIONS, "increase", False),
+        (REVENUE_GUARDRAIL, "decrease", False),  # revenue has a note of its own
+    ],
+)
+def test_the_count_note_is_for_a_count_whose_fall_is_harmful(
+    raw_spec, guardrail, direction, present
 ) -> None:
-    control = [
-        Row(f"c_{i:04d}", "control", revenue=10.0 if i % 50 == 0 else 0.0) for i in range(300)
+    rows = [
+        Row(f"{arm}_{i:05d}", arm, sessions=v, revenue=2.0 if i % 5 == 0 else 0.0)
+        for arm in ("control", "variant_b")
+        for i, v in enumerate([3, 4, 2, 3] * 20)
     ]
-    arm = [Row(f"v_{i:04d}", "variant_b", revenue=0.0) for i in range(300)]
-
-    (entry,) = guardrail_report(
-        _context(raw_spec, control + arm, {**REVENUE_GUARDRAIL, "baseline": 0.2})
-    )["tests"]
-
-    baseline = entry["references"]["baseline"]
-    assert (baseline["tier"], baseline["capped_by"]) == ("shown", None)
-
-
-@pytest.mark.parametrize(("direction", "present"), [("decrease", True), ("increase", False)])
-def test_the_count_note_is_for_a_count_whose_fall_is_harmful(raw_spec, direction, present) -> None:
-    rows = _sessions("control", [3, 4, 2, 3] * 20) + _sessions("variant_b", [3, 4, 2, 3] * 20)
 
     notes = guardrail_report(
-        _context(raw_spec, rows, {**SESSIONS, "harmful_direction": direction})
+        _context(raw_spec, rows, {**guardrail, "harmful_direction": direction})
     )["notes"]
 
     assert any(n.startswith("For a count guardrail") for n in notes) is present

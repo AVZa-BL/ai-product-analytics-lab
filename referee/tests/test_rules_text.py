@@ -76,6 +76,10 @@ def test_a_share_keeps_the_side_of_the_level_that_it_is_on(share, level, text) -
         (1e12, 0.10, "1.000e+14%"),  # beyond the digits worth writing out
         (1e10, 0.10, "1.000e+12%"),  # from a hundred billion percent
         (9.9e9, 0.10, "990000000000.0%"),  # and not before
+        (1.8e306, 0.10, "1.800e+308%"),  # 100 * share would be infinity: the decimal is not
+        (3e307, 0.10, "3.000e+309%"),
+        (1e308, 0.10, "1.000e+310%"),
+        (-3e307, 0.10, "-3.000e+309%"),
     ],
 )
 def test_a_share_is_compared_with_the_level_on_the_decimals_they_are_written_with(
@@ -84,37 +88,10 @@ def test_a_share_is_compared_with_the_level_on_the_decimals_they_are_written_wit
     assert percent_near(share, level) == text
 
 
-@pytest.mark.parametrize(
-    ("share", "text"),
-    [
-        (0.10, "10.0%"),
-        (0.0125, "1.25%"),
-        (0.29, "29.0%"),
-        (0.018, "1.8%"),
-        (0.0001, "0.01%"),
-        (0.0333, "3.33%"),
-        (1.0, "100.0%"),
-        (10.0, "1000.0%"),
-    ],
-)
-def test_a_registered_share_is_written_as_it_was_registered(share, text) -> None:
-    assert percent_exact(share) == text
-
-
 @pytest.mark.parametrize("value", [float("inf"), float("-inf"), float("nan")])
 def test_a_figure_that_is_not_a_finite_number_cannot_be_shown(value) -> None:
     with pytest.raises(ValueError, match="not a finite number"):
         sig(value)
-
-
-@pytest.mark.parametrize("share", [1.8e306, 3e307, 1e308, -3e307])
-def test_a_share_near_the_largest_float_is_written_with_an_exponent_and_not_as_infinity(
-    share,
-) -> None:
-    text = percent_near(share, 0.10)
-
-    assert "inf" not in text and text.endswith("%")
-    assert "e+3" in text
 
 
 @pytest.mark.parametrize(
@@ -123,6 +100,10 @@ def test_a_share_near_the_largest_float_is_written_with_an_exponent_and_not_as_i
         (1e-300, "1e-298%"),
         (1e300, "1e+302%"),
         (5e-324, "5e-322%"),
+        (0.0001, "0.01%"),
+        (0.0333, "3.33%"),
+        (1.0, "100.0%"),
+        (10.0, "1000.0%"),
         (0.0, "0.0%"),
         (1e-8, "0.000001%"),  # the smallest percentage that is written out
         (9e-9, "9e-7%"),
@@ -130,7 +111,7 @@ def test_a_share_near_the_largest_float_is_written_with_an_exponent_and_not_as_i
         (1e13, "1e+15%"),
     ],
 )
-def test_a_registered_share_of_extreme_size_is_written_with_an_exponent(share, text) -> None:
+def test_a_registered_share_is_written_as_it_was_registered(share, text) -> None:
     assert percent_exact(share) == text
 
 

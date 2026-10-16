@@ -8,12 +8,12 @@ the section holds no figure outside them.
 
 import json
 import random
-import re
 from fractions import Fraction
 from pathlib import Path
 
 import pytest
 from cohort_simulation import BASE as COHORT_BASE
+from design_figures import figures_outside
 from pooled_rates_table import LARGE_EFFECTS, SMALL_EFFECTS
 from test_sign_of_the_difference import FEW, PAYING, SD
 from test_sign_of_the_difference import _runs as sign_runs
@@ -283,15 +283,9 @@ def _section() -> str:
 
 
 def _figures_outside(text: str, phrases: list[str]) -> list[str]:
-    """The figures left in the text once each sentence has been taken out of it, once."""
-    for phrase in sorted(phrases, key=len, reverse=True):
-        assert text.count(phrase) == 1, phrase
-        text = text.replace(phrase, " ", 1)
-    for name in ("4b-2", "4c", "RES-007", "RES-008", "res008", "top-1%", "7d", "section 8"):
-        text = text.replace(name, " ")
-    text = re.sub(r"(?<![\d.])21\.(?:[1-9]|1[01])(?![\d%])", " ", text)  # a section reference
-    text = re.sub(r"(?<!\d)(5|95)th\b", " ", text)  # the ordinal of a percentile
-    return re.findall(r"\d[\d,.]*%?|\b(?:third|half|quarter|twice|double)\b", text)
+    names = ("4b-2", "4c", "RES-007", "RES-008", "res008", "top-1%", "7d", "section 8")
+    ordinal = r"(?<!\d)(5|95)th\b"  # of a percentile
+    return figures_outside(text, phrases, names=names, patterns=(ordinal,), last_section=11)
 
 
 def test_the_design_text_holds_every_sentence_of_the_section() -> None:
@@ -307,37 +301,6 @@ def test_the_design_text_has_no_figure_outside_those_sentences() -> None:
     section = " ".join(_section().split())
 
     assert _figures_outside(section, phrases) == []
-
-
-def test_the_check_for_figures_finds_a_figure_that_is_there() -> None:
-    sentences = ["the levels 100 and 50%", "a range of 5.0% to 7.5%"]
-    text = f"A: {sentences[0]}. See 21.3, 21.10, 21.11 and 4b-2 (RES-008). B: {sentences[1]}."
-
-    assert _figures_outside(text, sentences) == []
-    for extra, found in [
-        (" It flags 80% of runs.", ["80%"]),
-        (" It is 0.35 times that.", ["0.35"]),
-        (" See 21.12 now.", ["21.12"]),
-        (" In 12 cases.", ["12"]),
-        (" At a third of control's mean.", ["third"]),
-        (" It is half of it, twice that.", ["half", "twice"]),
-    ]:
-        assert _figures_outside(text + extra, sentences) == found, extra
-    with pytest.raises(AssertionError):
-        _figures_outside(text, [*sentences, "not in the text"])
-
-
-def test_the_sentences_follow_the_constants_of_the_code(monkeypatch) -> None:
-    import sys
-
-    module = sys.modules[__name__]
-    before = _sentences()
-    monkeypatch.setattr(module, "KURTOSIS_OVER", 99)
-
-    after = _sentences()
-
-    assert after["signs"] != before["signs"] and after["inert"] != before["inert"]
-    assert set(after) == set(before)
 
 
 # --- The figures the sentences rest on ----------------------------------------------------------

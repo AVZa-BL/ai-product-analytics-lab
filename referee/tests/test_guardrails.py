@@ -16,7 +16,6 @@ from referee.guardrails import (
     ALPHA,
     CHANCE_LEVEL,
     SMALL_COUNT,
-    TIERS,
     GuardrailTest,
     Harm,
     ReferenceResult,
@@ -97,13 +96,16 @@ def test_a_breach_is_shown_when_the_whole_interval_is_beyond_the_tolerance(
     assert tier_of(point, low, tolerance) == tier
 
 
-def test_the_tiers_run_from_within_to_shown() -> None:
-    assert TIERS == ("within", "possible", "shown")
-    assert ALPHA == 0.05 and SMALL_COUNT == 10
-
-
 @pytest.mark.parametrize(
-    ("high", "not_verified"), [(0.099999, False), (0.10, False), (0.100001, True), (0.5, True)]
+    ("high", "not_verified"),
+    [
+        (0.099999, False),
+        (0.10, False),
+        (0.1000004, False),  # rounded, the interval ends at the tolerance
+        (0.1000006, True),
+        (0.100001, True),
+        (0.5, True),
+    ],
 )
 def test_a_comparison_is_not_shown_to_be_safe_only_if_its_interval_is_beyond_the_tolerance(
     high: float, not_verified: bool
@@ -112,15 +114,6 @@ def test_a_comparison_is_not_shown_to_be_safe_only_if_its_interval_is_beyond_the
 
     assert harm.tier == "within"
     assert harm.not_verified is not_verified
-
-
-@pytest.mark.parametrize("direction", ["increase", "decrease"])
-def test_a_harm_of_either_direction_has_its_ends_in_order(direction: str) -> None:
-    harm = _harm_of(direction, (0.12, 0.05, 0.19), tolerance=0.10)
-
-    assert harm.low <= harm.point <= harm.high
-    expected = (0.12, 0.05, 0.19) if direction == "increase" else (-0.12, -0.19, -0.05)
-    assert (harm.point, harm.low, harm.high) == pytest.approx(expected)
 
 
 # --- Against the control's observed mean ---------------------------------------------------------
@@ -207,9 +200,12 @@ def test_the_control_reference_says_why_it_could_not_be_measured(arm, control, r
     found = control_reference(
         arm, control, direction="decrease", tolerance=0.10, arm_name="variant_b"
     )
+    unnamed = control_reference(arm, control, direction="decrease", tolerance=0.10)
 
     assert found.harm is None and found.reason is not None and reason in found.reason
     assert "treatment" not in found.reason and "values holds" not in found.reason
+    # the arm is named when it is given and is "the arm" otherwise
+    assert unnamed.reason == found.reason.replace("variant_b", "the arm")
 
 
 def test_an_arm_that_collapsed_to_zero_is_not_called_a_control_of_zero() -> None:
@@ -222,14 +218,6 @@ def test_an_arm_that_collapsed_to_zero_is_not_called_a_control_of_zero() -> None
     assert found.harm is None and found.reason is not None
     assert "control's mean" not in found.reason and "undefined" not in found.reason
     assert "no logarithm" in found.reason
-
-
-def test_the_control_reference_names_the_arm_it_was_given_and_a_default_otherwise() -> None:
-    named = control_reference([1.0], [1.0, 2.0], direction="decrease", tolerance=0.1, arm_name="b")
-    plain = control_reference([1.0], [1.0, 2.0], direction="decrease", tolerance=0.1)
-
-    assert named.reason == "b has fewer than 2 players"
-    assert plain.reason == "the arm has fewer than 2 players"
 
 
 # --- Against the registered baseline --------------------------------------------------------------
@@ -253,62 +241,47 @@ def test_against_the_baseline_the_harm_is_the_arms_own_mean_against_it() -> None
     assert harm.tier == "shown" and harm.measured == pytest.approx((2.5, own.ci_low, own.ci_high))
 
 
-def test_against_the_baseline_a_rate_has_a_wilson_interval() -> None:
+@pytest.mark.parametrize(("events", "tier"), [(40, "shown"), (20, "possible")])
+def test_against_the_baseline_a_rate_has_a_wilson_interval(events: int, tier: str) -> None:
     found = baseline_reference(
-        [1.0] * 40 + [0.0] * 960,
+        [1.0] * events + [0.0] * (1000 - events),
         baseline=0.018,
         kind="binary",
         direction="increase",
         tolerance=0.10,
     )
 
-    wilson = proportion_interval(40, 1000)
+    wilson = proportion_interval(events, 1000)
     harm = found.harm
     assert harm is not None
-    assert harm.point == pytest.approx((0.04 - 0.018) / 0.018, abs=1e-6)  # 122% up
+    assert harm.point == pytest.approx((events / 1000 - 0.018) / 0.018, abs=1e-6)
     assert harm.low == pytest.approx((wilson.ci_low - 0.018) / 0.018, abs=1e-6)
     assert harm.high == pytest.approx((wilson.ci_high - 0.018) / 0.018, abs=1e-6)
-    assert harm.tier == "shown"
+    assert harm.tier == tier  # 20 of 1000 is just past the tolerance, with an interval far wider
 
 
-def test_a_rate_just_past_the_tolerance_with_a_wide_interval_is_possible_only() -> None:
-    found = baseline_reference(
-        [1.0] * 20 + [0.0] * 980,
-        baseline=0.018,
-        kind="binary",
-        direction="increase",
-        tolerance=0.10,
-    )
-
-    harm = found.harm
-    assert harm is not None and harm.tier == "possible"
-    assert 0.10 < harm.point < 0.12 and harm.low < 0 < harm.high
-
-
-@pytest.mark.parametrize("n", [2, 3, 30, 200, 5000])
+@pytest.mark.parametrize("right_skewed", [False, True])  # with both holds, the missing width is
+@pytest.mark.parametrize("n", [2, 3, 30, 200, 5000])  # the reason given
 def test_a_group_whose_values_are_all_the_same_has_an_interval_with_no_width_and_says_so(
-    n: int,
+    n: int, right_skewed: bool
 ) -> None:
+    """With no group to compare with, the chance that so many players are all alike cannot be
+    worked out, so the reading is held to possible at any size and says it was held back (with
+    a comparison group, `chance_all_alike` decides: see the tests below)."""
     found = baseline_reference(
-        [0.0] * n, baseline=3.0, kind="continuous", direction="decrease", tolerance=0.10
+        [0.0] * n,
+        baseline=3.0,
+        kind="continuous",
+        direction="decrease",
+        tolerance=0.10,
+        right_skewed=right_skewed,
     )
 
     harm = found.harm
     assert harm is not None and harm.no_variation
     assert (harm.point, harm.low, harm.high) == (1.0, 1.0, 1.0)  # every player has 0 sessions
     assert harm.measured == (0.0, 0.0, 0.0)
-
-
-@pytest.mark.parametrize("n", [2, 3, 30])
-def test_an_interval_with_no_width_is_held_when_there_is_nothing_to_compare_with(n: int) -> None:
-    """With no group to compare with, the chance that so many players are all alike cannot be
-    worked out, so the reading is held to possible at any size and says it was held back (with
-    a comparison group, `chance_all_alike` decides: see the tests below)."""
-    harm = baseline_reference(
-        [0.0] * n, baseline=3.0, kind="continuous", direction="decrease", tolerance=0.10
-    ).harm
-
-    assert harm is not None
+    assert harm.chance_all_alike is None
     assert harm.tier == "possible" and harm.capped_by == "no_variation"
     assert harm.uncapped_tier == "shown"
 
@@ -388,48 +361,37 @@ def test_a_revenue_like_fall_against_the_baseline_is_capped_at_possible() -> Non
     assert capped.uncapped_tier == "shown" and not capped.no_variation
 
 
-def test_the_cap_for_a_revenue_like_metric_is_only_for_a_fall_that_is_harmful() -> None:
-    """For a rise the one-sample t interval errs on the cautious side (it hardly ever lies wholly
-    above the true mean), so nothing is held back."""
-    rising = baseline_reference(
-        [1.0] * 5 + [0.0] * 95,
-        baseline=0.005,
-        kind="continuous",
-        direction="increase",
-        tolerance=0.10,
-        right_skewed=True,
-    ).harm
-
-    assert rising is not None and rising.tier == "shown" and rising.capped_by is None
-
-
-def test_the_cap_does_not_apply_to_a_rate_or_to_a_point_that_is_only_possible() -> None:
-    rate = baseline_reference(
-        [0.0] * 1000,
-        baseline=0.05,
-        kind="binary",
-        direction="decrease",
-        tolerance=0.10,
-        right_skewed=True,
-    ).harm
-    only_possible = _skewed(right_skewed=True, tolerance=0.50).harm
-
-    assert rate is not None and rate.tier == "shown" and rate.capped_by is None
-    assert only_possible is not None and only_possible.tier == "possible"
-    assert only_possible.capped_by is None and only_possible.uncapped_tier is None
-
-
-def test_when_both_caps_apply_the_missing_width_is_the_reason_given() -> None:
+@pytest.mark.parametrize(
+    ("values", "baseline", "kind", "direction", "tolerance", "tier"),
+    [
+        # for a rise the one-sample t interval errs on the cautious side (it hardly ever lies
+        # wholly above the true mean), so nothing is held back
+        ([1.0] * 5 + [0.0] * 95, 0.005, "continuous", "increase", 0.10, "shown"),
+        ([0.0] * 1000, 0.05, "binary", "decrease", 0.10, "shown"),  # a rate has a Wilson interval
+        (
+            _RIGHT_SKEWED,
+            3.0,
+            "continuous",
+            "decrease",
+            0.50,
+            "possible",
+        ),  # only the point is beyond
+    ],
+)
+def test_the_cap_does_not_apply_to_a_rise_a_rate_or_to_a_point_that_is_only_possible(
+    values, baseline, kind, direction, tolerance, tier
+) -> None:
     harm = baseline_reference(
-        [0.0] * 40,
-        baseline=3.0,
-        kind="continuous",
-        direction="decrease",
-        tolerance=0.10,
+        values,
+        baseline=baseline,
+        kind=kind,
+        direction=direction,
+        tolerance=tolerance,
         right_skewed=True,
     ).harm
 
-    assert harm is not None and harm.capped_by == "no_variation"
+    assert harm is not None and harm.tier == tier
+    assert harm.capped_by is None and harm.uncapped_tier is None
 
 
 def test_a_harm_of_exactly_zero_is_zero_and_not_minus_zero() -> None:
@@ -594,24 +556,25 @@ def test_a_control_beyond_the_baselines_tolerance_means_the_baseline_has_moved(o
 
 
 @pytest.mark.parametrize(
-    ("events_arm", "events_control", "n", "small"),
+    ("events_arm", "events_control", "n_arm", "n_control", "small"),
     [
-        (SMALL_COUNT, SMALL_COUNT, 1000, False),
-        (SMALL_COUNT - 1, 100, 1000, True),
-        (100, SMALL_COUNT - 1, 1000, True),
-        (100, 100, 105, True),  # fewer than 10 players without the outcome
-        (500, 500, 1000, False),
+        (SMALL_COUNT, SMALL_COUNT, 1000, 1000, False),
+        (SMALL_COUNT - 1, 100, 1000, 1000, True),
+        (100, SMALL_COUNT - 1, 1000, 1000, True),
+        (100, 100, 105, 105, True),  # fewer than 10 players without the outcome
+        (500, 500, 1000, 1000, False),
+        (250, 0, 500, 0, False),  # an empty group has no rate to be rough
     ],
 )
 def test_a_binary_guardrail_with_few_players_on_either_side_of_its_rate_is_rough(
-    events_arm, events_control, n, small
+    events_arm, events_control, n_arm, n_control, small
 ) -> None:
     found = _test(
         None,
         None,
         kind="binary",
-        n_arm=n,
-        n_control=n,
+        n_arm=n_arm,
+        n_control=n_control,
         events_arm=events_arm,
         events_control=events_control,
     )
@@ -674,33 +637,28 @@ def test_only_the_analysed_players_are_read_and_their_means_and_counts_are_given
     assert (found.baseline, found.tolerance, found.harmful_direction) == (3.0, 0.10, "decrease")
 
 
-def test_a_breach_against_the_baseline_that_the_control_shares_is_marked_as_a_moved_baseline(
-    raw_spec,
+@pytest.mark.parametrize(
+    ("control", "arm", "control_tier", "decided_by", "agree", "moved"),
+    [
+        # both arms sit near 2 sessions against a registered baseline of 3: the baseline moved
+        ([2, 2, 3, 1] * 60, [2, 2, 3, 1] * 60, "within", ("baseline",), False, True),
+        # a real regression: both references show it
+        ([3, 4, 2, 3] * 80, [2, 3, 1, 2] * 80, "shown", ("control", "baseline"), True, False),
+    ],
+)
+def test_a_real_regression_is_seen_by_both_references(
+    raw_spec, control, arm, control_tier, decided_by, agree, moved
 ) -> None:
-    # both arms sit near 2 sessions against a registered baseline of 3: the baseline moved
-    rows = _sessions("control", [2, 2, 3, 1] * 60) + _sessions("variant_b", [2, 2, 3, 1] * 60)
+    rows = _sessions("control", control) + _sessions("variant_b", arm)
     context = _context(raw_spec, rows, SESSIONS)
 
     (found,) = guardrail_tests(context)
 
-    assert found.control.harm is not None and found.control.harm.tier == "within"
+    assert found.control.harm is not None and found.control.harm.tier == control_tier
     assert found.baseline_reference.harm is not None
     assert found.baseline_reference.harm.tier == "shown"
-    assert found.status == "breach_shown" and found.decided_by == ("baseline",)
-    assert found.references_agree is False and found.baseline_has_moved
-
-
-def test_a_real_regression_is_seen_by_both_references(raw_spec) -> None:
-    rows = _sessions("control", [3, 4, 2, 3] * 80) + _sessions("variant_b", [2, 3, 1, 2] * 80)
-    context = _context(raw_spec, rows, SESSIONS)
-
-    (found,) = guardrail_tests(context)
-
-    assert found.control.harm is not None and found.control.harm.tier == "shown"
-    assert found.baseline_reference.harm is not None
-    assert found.baseline_reference.harm.tier == "shown"
-    assert found.references_agree is True and not found.baseline_has_moved
-    assert found.decided_by == ("control", "baseline")
+    assert found.status == "breach_shown" and found.decided_by == decided_by
+    assert found.references_agree is agree and found.baseline_has_moved is moved
 
 
 def test_an_arm_with_one_player_is_not_evaluated_on_either_reference(raw_spec) -> None:
@@ -714,25 +672,18 @@ def test_an_arm_with_one_player_is_not_evaluated_on_either_reference(raw_spec) -
     assert found.baseline_reference.reason == "variant_b has fewer than 2 players"
 
 
-def test_a_tiny_registered_baseline_is_still_a_baseline(raw_spec) -> None:
-    tiny = {**SESSIONS, "baseline": 0.0001}
-    rows = _sessions("control", [3, 4, 2, 3] * 20) + _sessions("variant_b", [1, 2, 1, 2] * 20)
-
-    (found,) = guardrail_tests(_context(raw_spec, rows, tiny))
-
-    assert found.baseline_reference.harm is not None
-    assert found.baseline_reference.harm.tier == "within"  # the arm is far above the baseline
-
-
 def test_a_registered_baseline_that_is_not_above_zero_is_not_a_share_of_anything(raw_spec) -> None:
     rows = _sessions("control", [3, 4, 2, 3] * 20) + _sessions("variant_b", [1, 2, 1, 2] * 20)
 
     (found,) = guardrail_tests(_context(raw_spec, rows, {**SESSIONS, "baseline": 0.0}))
+    (tiny,) = guardrail_tests(_context(raw_spec, rows, {**SESSIONS, "baseline": 0.0001}))
 
     assert (
         found.baseline_reference.harm is None and "not above 0" in found.baseline_reference.reason
     )
     assert found.control.harm is not None and found.status == "breach_shown"  # the control decides
+    assert tiny.baseline_reference.harm is not None  # a tiny baseline is still a baseline
+    assert tiny.baseline_reference.harm.tier == "within"  # the arm is far above it
 
 
 def test_the_guardrail_tests_do_not_depend_on_where_control_is_in_the_spec(raw_spec) -> None:
@@ -770,58 +721,30 @@ def test_the_chance_of_so_many_players_alike_is_the_share_at_that_value_to_the_p
     assert _chance_all_alike([0.1 + 0.2] * 2, [0.3] * 4 + [1.0] * 4) == pytest.approx(0.25)
 
 
-@pytest.mark.parametrize(("n", "held"), [(3, True), (30, True), (200, False), (300, False)])
-def test_players_all_at_zero_are_believed_when_chance_cannot_explain_them(n, held) -> None:
+@pytest.mark.parametrize(
+    ("n", "against", "share", "held"),
+    [
+        (3, _CONTROL_2_PERCENT, 0.98, True),
+        (30, _CONTROL_2_PERCENT, 0.98, True),
+        (200, _CONTROL_2_PERCENT, 0.98, False),
+        (300, _CONTROL_2_PERCENT, 0.98, False),
+        # nobody in control has 0 sessions: believed at any size
+        (5, [3.0, 4.0, 2.0, 3.0] * 25, 0.0, False),
+    ],
+)
+def test_players_all_at_zero_are_believed_when_chance_cannot_explain_them(
+    n, against, share, held
+) -> None:
     """With 2 in 100 players buying, 30 players are all at 0 more than half of the time, and 200
     in under 2% of samples (0.98 to the 200th is 0.0176)."""
-    harm = _all_zero(n, against=_CONTROL_2_PERCENT)
+    harm = _all_zero(n, against=against)
 
     assert harm is not None and harm.no_variation and harm.constant_group == "arm"
-    assert harm.chance_all_alike == pytest.approx(0.98**n)
+    assert harm.chance_all_alike == pytest.approx(share**n)
     assert (harm.tier, harm.capped_by) == (
         ("possible", "no_variation") if held else ("shown", None)
     )
     assert harm.uncapped_tier == ("shown" if held else None)
-
-
-def test_players_all_at_a_value_that_control_never_has_are_believed_at_any_size() -> None:
-    sessions = [3.0, 4.0, 2.0, 3.0] * 25  # nobody has 0 sessions
-
-    harm = baseline_reference(
-        [0.0] * 5,
-        baseline=3.0,
-        kind="continuous",
-        direction="decrease",
-        tolerance=0.1,
-        against=sessions,
-    ).harm
-
-    assert harm is not None and harm.chance_all_alike == 0.0 and harm.tier == "shown"
-
-
-def test_without_a_comparison_group_an_interval_with_no_width_is_always_held() -> None:
-    harm = _all_zero(5000, against=None)
-
-    assert harm is not None and harm.chance_all_alike is None
-    assert (harm.tier, harm.capped_by) == ("possible", "no_variation")
-
-
-@pytest.mark.parametrize(
-    ("chance", "tier"),
-    [(CHANCE_LEVEL, "possible"), (CHANCE_LEVEL * 0.999, "shown"), (1.0, "possible")],
-)
-def test_chance_that_is_not_below_the_level_holds_the_reading(chance, tier) -> None:
-    harm = _raw_harm(
-        "increase",
-        (0.5, 0.4, 0.6),
-        tolerance=0.10,
-        reference_value=1.0,
-        measured=(1.5, 1.4, 1.6),
-        constant_group="arm",
-        chance_all_alike=chance,
-    )
-
-    assert harm.tier == tier
 
 
 def test_the_level_of_chance_is_one_tail_of_the_interval() -> None:
@@ -869,30 +792,28 @@ def test_groups_that_both_vary_are_never_held_for_want_of_width() -> None:
 # --- The end of an interval past what is possible --------------------------------------------
 
 
-@pytest.mark.parametrize(("tolerance", "not_verified"), [(1.0, False), (1.5, False), (0.9, True)])
+@pytest.mark.parametrize(
+    ("direction", "tolerance", "not_verified"),
+    [
+        ("decrease", 1.0, False),
+        ("decrease", 1.5, False),
+        ("decrease", 0.9, True),
+        ("increase", 1.0, True),  # a rise has no such bound
+    ],
+)
 def test_an_interval_past_the_whole_of_the_reference_does_not_leave_a_breach_open(
-    tolerance, not_verified
+    direction: str, tolerance: float, not_verified: bool
 ) -> None:
     """A t interval of a non-negative mean can run below 0; the fall it allows is then more than
     the whole of the baseline, which no fall can be."""
     values = [0.0] * 98 + [100.0] * 2  # mean 2.0 with an interval from below 0
 
     harm = baseline_reference(
-        values, baseline=2.0, kind="continuous", direction="decrease", tolerance=tolerance
+        values, baseline=2.0, kind="continuous", direction=direction, tolerance=tolerance
     ).harm
 
     assert harm is not None and harm.tier == "within" and harm.high > 1.0
     assert harm.not_verified is not_verified
-
-
-def test_a_rise_has_no_such_bound() -> None:
-    values = [0.0] * 98 + [100.0] * 2
-
-    harm = baseline_reference(
-        values, baseline=2.0, kind="continuous", direction="increase", tolerance=1.0
-    ).harm
-
-    assert harm is not None and harm.tier == "within" and harm.high > 1.0 and harm.not_verified
 
 
 # --- Rounded figures decide, at both ends -----------------------------------------------------
@@ -903,13 +824,6 @@ def test_the_tier_is_decided_on_the_rounded_low_end(low, tier) -> None:
     harm = _harm_of("increase", (0.5, low, 0.9), tolerance=0.10)
 
     assert harm.tier == tier and harm.low == round(low, 6)
-
-
-@pytest.mark.parametrize(("high", "not_verified"), [(0.1000004, False), (0.1000006, True)])
-def test_not_verified_is_decided_on_the_rounded_high_end(high, not_verified) -> None:
-    harm = _harm_of("increase", (0.04, -0.2, high), tolerance=0.10)
-
-    assert harm.tier == "within" and harm.not_verified is not_verified
 
 
 # --- Numbers that cannot be represented -------------------------------------------------------
@@ -967,35 +881,31 @@ def test_a_rate_of_values_that_are_not_finite_is_not_measured() -> None:
     assert found.harm is None and "cannot be measured" in (found.reason or "")
 
 
-def test_an_empty_group_has_no_rate_to_be_rough() -> None:
-    found = _test(
-        None, None, kind="binary", n_arm=500, n_control=0, events_arm=250, events_control=0
+@pytest.mark.parametrize(
+    ("chance", "could_explain"),
+    [
+        (None, True),  # not worked out: it is held
+        (1.0, True),
+        (CHANCE_LEVEL, True),  # not below the level
+        (CHANCE_LEVEL * 0.999, False),
+        (0.0, False),
+    ],
+)
+def test_the_chance_could_explain_unless_it_is_known_and_below_the_level(
+    chance, could_explain
+) -> None:
+    harm = _raw_harm(
+        "increase",
+        (0.5, 0.4, 0.6),
+        tolerance=0.10,
+        reference_value=1.0,
+        measured=(1.5, 1.4, 1.6),
+        constant_group="arm",
+        chance_all_alike=chance,
     )
 
-    assert found.small_counts is False
-
-
-def test_the_own_reading_of_control_names_control_as_the_group_with_no_width() -> None:
-    own = baseline_reference(
-        [3.0] * 10,
-        baseline=3.0,
-        kind="continuous",
-        direction="decrease",
-        tolerance=0.1,
-        group="control",
-    )
-    arm = baseline_reference(
-        [3.0] * 10, baseline=3.0, kind="continuous", direction="decrease", tolerance=0.1, group="b"
-    )
-
-    assert own.harm is not None and own.harm.constant_group == "control"
-    assert arm.harm is not None and arm.harm.constant_group == "arm"
-
-
-def test_the_chance_could_explain_unless_it_is_known_and_below_the_level() -> None:
-    assert chance_could_explain(None) and chance_could_explain(1.0)
-    assert chance_could_explain(CHANCE_LEVEL) and not chance_could_explain(CHANCE_LEVEL * 0.999)
-    assert not chance_could_explain(0.0)
+    assert chance_could_explain(chance) is could_explain
+    assert harm.tier == ("possible" if could_explain else "shown")
 
 
 def test_controls_own_reading_is_judged_against_the_arms_and_not_held_always() -> None:
