@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from referee.cohorts import FALLBACK_BLOCK_DAYS, FALLBACK_MIN_PLAN_DAYS, MIN_COHORTS
+from referee.cohorts import MIN_COHORTS, forecast_reason, population_units_independent
 from referee.rules.base import ReviewContext, Rule
 from referee.rules.references import DENG_ET_AL_2013, DUNNETT_1955, KOHAVI_TANG_XU_2020
 from referee.spec import ALLOCATION_TOLERANCE
@@ -13,11 +13,9 @@ from referee.spec import ALLOCATION_TOLERANCE
 DAYS_PER_WEEK = 7
 MIN_DURATION_DAYS = 14
 OUTCOME_WINDOW_DAYS = 7  # each player's outcome totals cover the seven days after assignment
-WEEKLY_COHORTS_FOR_NEW_USERS = 4  # the cohorts the note on new users counts on (section 21.8)
-# Players a block is expected to hold in the smallest arm, below which the cohort check (RES-007)
-# will probably not find three blocks of 30. Judgement (section 21.9): half as many again as the
-# floor of 30, so that most blocks reach it.
-EXPECTED_PLAYERS_PER_BLOCK = 45
+# The cohorts the note on new users counts on (section 21.8): the fewest the cohort check can
+# compare, and one more because the last week's outcome windows are still open when accrual ends.
+WEEKLY_COHORTS_FOR_NEW_USERS = MIN_COHORTS + 1
 _EFFECT_DIGITS = 4
 
 
@@ -57,15 +55,18 @@ def _not_whole_weeks(context: ReviewContext) -> dict[str, Any] | None:
 
 
 def _new_users_note() -> str:
-    needed = WEEKLY_COHORTS_FOR_NEW_USERS * DAYS_PER_WEEK
+    least = MIN_COHORTS * DAYS_PER_WEEK
+    more = WEEKLY_COHORTS_FOR_NEW_USERS * DAYS_PER_WEEK
     return (
         "population.kind is new_users: design.planned_duration_days is the accrual window, the "
         "days in which new players are assigned. Each player's outcome window of "
         f"{OUTCOME_WINDOW_DAYS} days follows that player's assignment, so the last outcomes "
         f"arrive {OUTCOME_WINDOW_DAYS} days after accrual ends, and the accrual window and the "
-        "outcome window must both fit in the time available. "
-        f"{WEEKLY_COHORTS_FOR_NEW_USERS} weekly cohorts of new players, which the cohort check "
-        f"(RES-007) compares, need {needed} days of accrual."
+        "outcome window must both fit in the time available. The cohort check (RES-007) needs "
+        f"{MIN_COHORTS} weekly cohorts of new players, which is {least} days of accrual; "
+        f"{WEEKLY_COHORTS_FOR_NEW_USERS} weekly cohorts, {more} days, if the export is taken "
+        "when accrual ends, because the outcome windows of the last week are still open then "
+        "and that cohort is left out."
     )
 
 
@@ -84,42 +85,88 @@ def _too_short(context: ReviewContext) -> dict[str, Any] | None:
     return evidence
 
 
+def _forecast(days: int, daily: int, arm_share: float, control_share: float) -> str | None:
+    ratio = round(max(arm_share, control_share) / min(arm_share, control_share), 9)
+    return forecast_reason(
+        planned_days=days,
+        arm_per_week=DAYS_PER_WEEK * daily * arm_share,
+        control_per_week=DAYS_PER_WEEK * daily * control_share,
+        ratio=ratio,
+    )
+
+
+def _daily_units_that_pass(days: int, daily: int, arm_share: float, control_share: float) -> int:
+    """The fewest daily eligible units, at least `daily`, at which an even-arrival plan of
+    `days` passes the cohort gates for this arm. The arms must be within 9:1 and the window
+    must hold 3 weekly blocks, which the caller sees to; more players then only help, so the
+    answer is found by doubling and then halving."""
+    low, high = daily, daily
+    while _forecast(days, high, arm_share, control_share) is not None:
+        low, high = high, high * 2
+    while high - low > 1:
+        middle = (low + high) // 2
+        if _forecast(days, middle, arm_share, control_share) is None:
+            high = middle
+        else:
+            low = middle
+    return high
+
+
 def _cohort_check_unlikely(context: ReviewContext) -> dict[str, Any] | None:
-    """The plan holds too few weekly blocks, or the smallest arm too few players in a block, for
-    the cohort check (RES-007) to find three blocks of 30 (design section 21.8)."""
+    """The cohort check (RES-007) would not run on this plan even if players arrived evenly:
+    the gates of `plan_cohorts` applied to the expected players (design section 21.13)."""
     spec = context.spec
     days = spec.design.planned_duration_days
     daily = spec.population.daily_eligible_units
-    smallest = min(spec.arms, key=lambda arm: arm.allocation)
-    # RES-007 falls back to 14-day blocks on a plan of 42 days or more (section 21.5).
-    block_days = FALLBACK_BLOCK_DAYS if days >= FALLBACK_MIN_PLAN_DAYS else DAYS_PER_WEEK
-    expected = block_days * daily * smallest.allocation
-    weekly_blocks = days // DAYS_PER_WEEK
-    reasons = []
-    if weekly_blocks < MIN_COHORTS:
-        reasons.append("window_holds_fewer_than_3_blocks")
-    if expected < EXPECTED_PLAYERS_PER_BLOCK:
-        reasons.append("too_few_players_in_a_block")
-    if not reasons:
+    control = next(arm for arm in spec.arms if arm.is_control)
+    versus = [arm for arm in spec.arms if not arm.is_control]
+    weekly = DAYS_PER_WEEK * daily
+    limited = []
+    for arm in versus:
+        reason = _forecast(days, daily, arm.allocation, control.allocation)
+        if reason is not None:
+            smaller, larger = sorted((arm.allocation, control.allocation))
+            limited.append(
+                {
+                    "arm": arm.name,
+                    "reason": reason,
+                    "allocation_ratio": round(larger / smaller, _EFFECT_DIGITS),
+                    "expected_players_per_week": {
+                        "arm": round(weekly * arm.allocation, _EFFECT_DIGITS),
+                        "control": round(weekly * control.allocation, _EFFECT_DIGITS),
+                    },
+                }
+            )
+    units_ok = population_units_independent(spec.population)
+    if not limited and units_ok:
         return None
     evidence: dict[str, Any] = {
-        "reasons": reasons,
+        "reasons": sorted(
+            {item["reason"] for item in limited} | (set() if units_ok else {"unit_not_independent"})
+        ),
         "planned_duration_days": days,
-        "whole_weekly_blocks": weekly_blocks,
+        "whole_weekly_blocks": days // DAYS_PER_WEEK,
         "minimum_weekly_blocks": MIN_COHORTS,
-        "block_days": block_days,
         "daily_eligible_units": daily,
-        "smallest_arm": smallest.name,
-        "smallest_allocation": smallest.allocation,
-        "expected_players_per_block": round(expected, _EFFECT_DIGITS),
-        "minimum_expected_players": EXPECTED_PLAYERS_PER_BLOCK,
+        "arms_checked": len(versus),
+        "comparisons": limited,
     }
-    if "window_holds_fewer_than_3_blocks" in reasons:
+    if not units_ok:
+        evidence["randomization_unit"] = spec.population.randomization_unit
+        evidence["analysis_unit"] = spec.population.analysis_unit
+    if any(item["reason"] == "window_holds_fewer_than_3_blocks" for item in limited):
         evidence["minimum_planned_days"] = MIN_COHORTS * DAYS_PER_WEEK
-    if "too_few_players_in_a_block" in reasons:
-        evidence["daily_eligible_units_needed"] = math.ceil(
-            EXPECTED_PLAYERS_PER_BLOCK / (block_days * smallest.allocation)
-        )
+    # More daily units help wherever the arms are within 9:1; a plan that is too short is priced
+    # at the shortest window the check accepts.
+    window = max(days, MIN_COHORTS * DAYS_PER_WEEK)
+    by_name = {arm.name: arm for arm in versus}
+    prices = [
+        _daily_units_that_pass(window, daily, by_name[item["arm"]].allocation, control.allocation)
+        for item in limited
+        if item["reason"] != "allocation_too_unequal"
+    ]
+    if prices:
+        evidence["daily_eligible_units_for_even_arrivals"] = max(prices)
     return evidence
 
 
@@ -335,32 +382,42 @@ DES_008 = Rule(
 DES_009 = Rule(
     id="DES-009",
     severity="info",
-    title="The cohort check of the results review will probably not run",
+    title="The cohort check of the results review would not run on this plan",
     fires_when=(
-        "The planned window holds fewer than 3 whole weekly blocks (design.planned_duration_days "
-        "is 20 or less), or the smallest arm is expected to get fewer than 45 players in a block: "
-        "7 times population.daily_eligible_units times the smallest allocation for a plan "
-        "shorter than 42 days, 14 times that for a plan of 42 days or more, where the cohort "
-        "check can use blocks of 14 days. The evidence gives the reasons, the expected players "
-        "and what would be enough."
+        "For a non-control arm against control, the plan fails a gate of the cohort check of "
+        "the results review (RES-007) even if players arrive perfectly evenly: the planned "
+        "window holds fewer than 3 whole weekly blocks (design.planned_duration_days is 20 or "
+        "less); or the expected players of a week, 7 times population.daily_eligible_units "
+        "times the arm's allocation, do not reach the floor of 30 players in the arm or in "
+        "control (a floor that rises when the arms differ by more than 1.5 to 1), or, on "
+        "weekly blocks, a median of 60 players in the smaller of the two, and a plan of 42 days "
+        "or more does not pass on blocks of 14 days either; or the arms differ by more than "
+        "9 to 1. It also fires when population.randomization_unit and population.analysis_unit "
+        "are not one class of independent units (player and user, or device for both). The "
+        "evidence gives the reasons, the arms concerned and what would be enough for even "
+        "arrivals."
     ),
     why_it_matters=(
-        "After the experiment, the cohort check of the results review (RES-007) compares an "
-        "arm's effect between cohorts of first exposure, to find an effect that changes with "
-        "the time players joined (a launch, a promotion, a change in who is acquired). It "
-        "works in blocks of 7 days, or of 14 days on a plan of 42 days or more, and needs 3 "
-        "blocks in which both arms reach 30 players, with a usable block in each half of the "
-        "window. A plan with fewer than 3 whole weekly blocks cannot form them, and an arm "
-        "expected to hold fewer than 45 players in a block seldom fills 3 to 30. The check "
-        "will then probably report that it could not run, and an effect that changes over time "
-        "would go unseen. This is a forecast from the plan, not a finding about the data."
+        "After the experiment, the cohort check of the results review (RES-007) compares each "
+        "arm's effect between cohorts of first exposure, to find an effect that differs between "
+        "the players who joined in different weeks (a launch, a promotion, a change in who is "
+        "acquired). It does not test for novelty or adaptation: DES-003 is the rule for those. "
+        "It works in blocks of 7 days, or of 14 days on a plan of 42 days or more, and the "
+        "gates above are its own, applied to the plan's expected numbers. Real arrivals are "
+        "less even than expected numbers, so a plan that only just passes still fails in many "
+        "runs; this rule names the plans that fail even in the best case. When the check "
+        "cannot run, the results review says so in a RES-007 warning and its verdict is "
+        "caution, not clear. This is a forecast from the plan, not a finding about the data."
     ),
     remediation=(
-        "If the effect over time matters for this change, plan at least 21 days (42 days or more "
-        "allows blocks of 14 days, which need fewer players a week), bring in more "
-        "eligible units each day, or give the smallest arm a larger share; the evidence says what "
-        "would be enough. Otherwise accept that the cohort check will probably "
-        "not run. The other results checks are not affected."
+        "If an effect that differs between the weeks players joined could matter for this "
+        "change, plan at least 21 days (42 days or more allows blocks of 14 days, which need "
+        "fewer players a week), bring in more eligible units each day or give the smaller arm "
+        "a larger share, keep the arms within 9 to 1, and randomise and analyse in the same "
+        "independent unit (player, user or device). The evidence gives the units a day that "
+        "pass with even arrivals; allow more, because arrivals vary (design section 21.6: "
+        "spiky arrivals need 1.5 to 3 times as much). Otherwise accept that the cohort check "
+        "will not run: the other results checks are not affected."
     ),
     references=(),
     check=_cohort_check_unlikely,

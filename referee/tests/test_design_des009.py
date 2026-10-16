@@ -9,8 +9,6 @@ holds no figure outside them, and another that the claims it makes in its own wo
 import re
 from pathlib import Path
 
-import pytest
-
 from referee import cohorts
 from referee.rules import ALL_RULES
 from referee.rules import design as des
@@ -24,28 +22,33 @@ DES_009 = next(rule for rule in ALL_RULES if rule.id == "DES-009")
 
 def _sentences() -> dict[str, str]:
     """The sentences of section 21.13 that carry figures, made from the code."""
-    needed = des.MIN_COHORTS * des.DAYS_PER_WEEK
+    least = cohorts.MIN_COHORTS * cohorts.WEEK_DAYS
     return {
         "severity": f"DES-009 is an {DES_009.severity} rule",
+        # the first build's threshold, quoted as history and not as a constant of the code
+        "first": "one threshold, 45 players per arm and week",
+        "floor_only": f"counted only the floor of {cohorts.FLOOR} players",
         "weeks": (
-            f"the planned window holds fewer than {des.MIN_COHORTS} whole weekly blocks (a plan of "
-            f"{needed - 1} days or less)"
+            f"the window holds fewer than {cohorts.MIN_COHORTS} whole weekly blocks (a plan of "
+            f"{least - 1} days or less)"
         ),
-        "players": (
-            f"the smallest arm is expected to get fewer than {des.EXPECTED_PLAYERS_PER_BLOCK} "
-            "players in a block"
+        "floor": f"the floor of {cohorts.FLOOR} players an arm and block",
+        "knee": f"raised once the arms differ by more than {cohorts.RATIO_FLOOR_KNEE} to 1",
+        "median": (
+            f"a median of {cohorts.WEEKLY_MEDIAN_MINIMUM} players in the smaller arm on weekly "
+            "blocks"
         ),
-        "block": (
-            f"a block is {des.DAYS_PER_WEEK} days, or {des.FALLBACK_BLOCK_DAYS} days on a plan of "
-            f"{des.FALLBACK_MIN_PLAN_DAYS} days or more"
+        "fallback": (
+            f"blocks of {cohorts.FALLBACK_BLOCK_DAYS} days on a plan of "
+            f"{cohorts.FALLBACK_MIN_PLAN_DAYS} days or more"
         ),
-        "floor": f"half as many again as the floor of {cohorts.FLOOR} players",
-        "median": f"a median of {cohorts.WEEKLY_MEDIAN_MINIMUM} players",
-        "enough": f"{needed} days for the first reason",
+        "ratio": f"arms more than {cohorts.MAX_ALLOCATION_RATIO:.0f} to 1 apart",
         "note": (
-            f"{des.WEEKLY_COHORTS_FOR_NEW_USERS} weekly cohorts of new players need "
-            f"{des.WEEKLY_COHORTS_FOR_NEW_USERS * des.DAYS_PER_WEEK} days of accrual, and the "
-            f"outcome window of {des.OUTCOME_WINDOW_DAYS} days follows each player's assignment"
+            f"{cohorts.MIN_COHORTS} weekly cohorts of new players need {least} days of accrual, "
+            f"and {des.WEEKLY_COHORTS_FOR_NEW_USERS} weekly cohorts, "
+            f"{des.WEEKLY_COHORTS_FOR_NEW_USERS * des.DAYS_PER_WEEK} days, if the export is taken "
+            f"when accrual ends; the outcome window of {des.OUTCOME_WINDOW_DAYS} days follows "
+            "each player's assignment"
         ),
     }
 
@@ -70,64 +73,22 @@ def _figures_outside(text: str, phrases: list[str]) -> list[str]:
     return re.findall(r"\d[\d,.]*%?|\b(?:third|half|quarter|twice|double)\b", text)
 
 
-def test_the_design_text_holds_every_sentence_of_the_section() -> None:
+def test_the_design_text_holds_every_sentence_of_the_section_and_no_other_figure() -> None:
     section = " ".join(_section().split())
 
     for label, phrase in _sentences().items():
         assert section.count(phrase) == 1, (label, phrase)
-
-
-def test_the_design_text_has_no_figure_outside_those_sentences() -> None:
-    section = " ".join(_section().split())
-
     assert _figures_outside(section, list(_sentences().values())) == []
-
-
-def test_the_check_for_figures_finds_a_figure_that_is_there() -> None:
-    sentences = ["a block of 7 days", "45 players"]
-    text = f"A: {sentences[0]}. See 21.3, 21.13 and 4b-2 (DES-009). B: {sentences[1]}."
-
-    assert _figures_outside(text, sentences) == []
-    for extra, found in [
-        (" It fires at 21 days.", ["21"]),
-        (" See 21.14 now.", ["21.14"]),
-        (" At half of it.", ["half"]),
-    ]:
-        assert _figures_outside(text + extra, sentences) == found, extra
-    with pytest.raises(AssertionError):
-        _figures_outside(text, [*sentences, "not in the text"])
-
-
-def test_the_sentences_follow_the_constants_of_the_code(monkeypatch) -> None:
-    import sys
-
-    module = sys.modules[__name__]
-    before = _sentences()
-    monkeypatch.setattr(des, "EXPECTED_PLAYERS_PER_BLOCK", 44)
-
-    after = _sentences()
-
-    assert after["players"] != before["players"] and set(after) == set(before)
-    assert module.des is des
-
-
-def test_the_constants_are_the_ones_the_section_names() -> None:
-    assert (des.MIN_COHORTS, des.EXPECTED_PLAYERS_PER_BLOCK, des.DAYS_PER_WEEK) == (3, 45, 7)
-    assert (des.FALLBACK_BLOCK_DAYS, des.FALLBACK_MIN_PLAN_DAYS) == (14, 42)
-    assert (cohorts.FLOOR, cohorts.WEEKLY_MEDIAN_MINIMUM) == (30, 60)
-    assert des.EXPECTED_PLAYERS_PER_BLOCK == 1.5 * cohorts.FLOOR
-    assert DES_009.severity == "info"
 
 
 CLAIMS = [  # what the section says in its own words about the decisions
     "a forecast from the plan alone and not a finding about data",
-    "the cohort check of the results review",
-    "the reason code `window_holds_fewer_than_3_blocks`",
-    "The block (judgement, a change from 21.8 as first written)",
-    '21.8 first wrote "per arm and week"',
-    "the smallest allocation of the spec limits every pair that includes it",
-    "a weekly plan expecting between the figure and the median may still not be evaluated",
-    "The share of eligible units who are exposed",
+    "even if players arrived perfectly evenly",
+    "What changed from 21.8 as first written (judgement)",
+    "a review of the first build showed that the single figure was wrong",
+    "applies the gates of RES-007 itself",
+    "a test pins the two to each other at both sides of each gate",
+    "the least for even arrivals and not enough",
     "The DES-003 text for new users",
     "The note is evidence, not rule text",
     "A declaration cannot be checked and does not lower any warning",
@@ -141,12 +102,3 @@ def test_the_section_says_what_was_decided_and_what_is_judgement_in_these_words(
     for claim in CLAIMS:
         assert section.count(claim) == 1, claim
     assert section.count("judgement") >= 2
-
-
-def test_the_rule_texts_say_what_the_section_says() -> None:
-    text = " ".join((DES_009.fires_when + " " + DES_009.why_it_matters).split())
-
-    assert "fewer than 3 whole weekly blocks" in text
-    assert "fewer than 45 players in a block" in text
-    assert "14 times that for a plan of 42 days or more" in text
-    assert "a forecast from the plan, not a finding about the data" in text

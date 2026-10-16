@@ -4,6 +4,7 @@ import math
 from datetime import timedelta
 
 import pytest
+from cohort_helpers import sized_context
 from results_helpers import TWO_ARMS, Row, at, build_data, results_spec
 
 from referee.cohorts import (
@@ -13,6 +14,7 @@ from referee.cohorts import (
     allocation_ratio,
     cohort_gate,
     cohort_sizes,
+    forecast_reason,
     plan_cohorts,
     raised_floor,
 )
@@ -869,3 +871,48 @@ def test_the_weekly_median_is_that_of_the_smaller_arm_in_each_week_and_may_be_a_
     )
     (single,) = plan_cohorts(odd, "variant_b").attempts
     assert single.median_smaller_arm == 31.0 and isinstance(single.median_smaller_arm, float)
+
+
+@pytest.mark.parametrize(
+    ("days", "arm", "control"),
+    [
+        (14, 100, 100),  # two whole weeks
+        (20, 100, 100),
+        (21, 100, 100),  # three
+        (21, 59, 59),  # the weekly median of 60
+        (21, 60, 60),
+        (41, 59, 59),  # no fall-back to 14-day blocks under 42 days
+        (41, 60, 60),
+        (42, 59, 59),  # 14-day blocks of 118
+        (42, 14, 14),  # of 28, under the floor of 30
+        (42, 15, 15),
+        (28, 120, 60),  # 2 to 1: the floor rises to 43
+        (28, 100, 40),  # 2.5 to 1: 55, over the 40 that control holds
+        (28, 200, 70),  # 2.9 to 1: 66
+        (28, 210, 70),  # 3 to 1: 69
+        (28, 240, 60),  # 4 to 1: 98
+        (28, 540, 60),  # 9 to 1: 258
+        (28, 600, 60),  # beyond 9 to 1
+        (28, 60, 600),
+    ],
+)
+def test_the_forecast_for_even_arrivals_is_the_reason_of_the_real_plan(
+    raw_spec, days: int, arm: int, control: int
+) -> None:
+    """DES-009 prices a plan with `forecast_reason`; with the same players in every week, the
+    real plan must give the same answer, at both sides of each gate."""
+    weeks = days // 7
+    context = sized_context(
+        raw_spec,
+        {b: arm for b in range(weeks)},
+        {b: control for b in range(weeks)},
+        days=days,
+    )
+
+    plan = plan_cohorts(context, "variant_b")
+
+    ratio = max(arm, control) / min(arm, control)
+    assert (
+        forecast_reason(planned_days=days, arm_per_week=arm, control_per_week=control, ratio=ratio)
+        == plan.reason
+    )

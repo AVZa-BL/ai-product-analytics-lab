@@ -22,6 +22,7 @@ from fractions import Fraction
 from typing import Literal
 
 from referee.results import ExportMetric, ResultsContext
+from referee.spec import Population
 
 FLOOR = 30  # players per arm and cohort, never lowered (section 21.5)
 PREFERRED_DIVISOR = 4  # the preferred minimum is a quarter of the planned share per block
@@ -123,17 +124,21 @@ def cohort_sizes(context: ResultsContext, block_days: int) -> dict[int, dict[str
     }
 
 
-def units_independent(context: ResultsContext) -> bool:
-    """Whether the spec randomises and analyses one class of independent players.
+def population_units_independent(population: Population) -> bool:
+    """Whether a population randomises and analyses one class of independent players.
 
     That is `player` and `user` (one person), or `device` for both. A session or a cluster
     holds several observations of one unit, and a mix of the two classes counts a unit once
     in one place and more than once in the other.
     """
-    population = context.spec.population
     randomization = UNIT_CLASS.get(population.randomization_unit)
     analysis = UNIT_CLASS.get(population.analysis_unit)
     return randomization is not None and randomization == analysis
+
+
+def units_independent(context: ResultsContext) -> bool:
+    """`population_units_independent` for the spec of a results context."""
+    return population_units_independent(context.spec.population)
 
 
 def cohort_gate(context: ResultsContext, metric: ExportMetric) -> GateReason | None:
@@ -303,6 +308,45 @@ def _attempt(
         incomplete=incomplete,
         reason=reason,
     )
+
+
+def forecast_reason(
+    *, planned_days: int, arm_per_week: float, control_per_week: float, ratio: float | None
+) -> NotEvaluated | None:
+    """Why `plan_cohorts` would not run on a plan whose every week holds exactly the expected
+    players (arrivals perfectly even), or None if it would. Design review rule DES-009 uses it.
+
+    It is the gates of `plan_cohorts` applied to those sizes, by the same functions: the arms
+    within 9:1 (`ratio` is the larger allocation over the smaller), the floor raised with the
+    ratio, whole blocks in the window, the median of the smaller arm for weekly blocks, and
+    14-day blocks on a plan of 42 days or more, whose reason is the weekly attempt's. With even
+    arrivals every block is usable or none is, so the preferred minimum (which can only drop
+    blocks that pass the floor, and never below 3 of them) cannot change the answer and is
+    left at the floor. Real arrivals vary, so a plan that passes here can still fail.
+    """
+    if ratio is not None and ratio > MAX_ALLOCATION_RATIO:
+        return "allocation_too_unequal"
+    floor = FLOOR if ratio is None else raised_floor(ratio)
+
+    def attempt(block_days: int) -> NotEvaluated | None:
+        blocks = planned_days // block_days
+        scale = block_days / WEEK_DAYS
+        size = {
+            "arm": round(arm_per_week * scale, 9),
+            "control": round(control_per_week * scale, 9),
+        }
+        sizes = {block: dict(size) for block in range(blocks)}
+        minimum = Minimum(registered=None, achieved=0, preferred=floor, used=floor)
+        chosen = _select(sizes, "arm", "control", floor, minimum, minimum, blocks, set())
+        median = float(_median_smaller(sizes, "arm", "control", blocks))
+        return _reason(chosen, blocks, block_days, median)
+
+    weekly = attempt(WEEK_DAYS)
+    if weekly is None:
+        return None
+    if planned_days >= FALLBACK_MIN_PLAN_DAYS and attempt(FALLBACK_BLOCK_DAYS) is None:
+        return None
+    return weekly
 
 
 def plan_cohorts(context: ResultsContext, arm: str, *, as_of: datetime | None = None) -> CohortPlan:
