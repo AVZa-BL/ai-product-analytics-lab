@@ -1,6 +1,6 @@
 # vid-to-mp3
 
-Takes the sound from video files (iPhone `.MOV` / `.mp4`) and saves it as MP3, using [ffmpeg](https://ffmpeg.org). The video is not changed.
+Takes the sound from the video files in a folder (iPhone `.MOV` / `.mp4`) and saves it as MP3, using [ffmpeg](https://ffmpeg.org). The video is not changed.
 
 ## Setup
 
@@ -15,15 +15,23 @@ No Python packages are needed (Python 3.10 or newer).
 
 ## Use
 
-```bash
-# one file: writes IMG_1234.mp3 next to IMG_1234.MOV
-python vid_to_mp3.py ~/Movies/IMG_1234.MOV
+Put the videos in the target folder, then run the script. The target defaults to `~/Projects/mini-projs/vid-to-mp3/input`; the MP3s are written to its `mp3` subfolder:
 
-# several files, MP3s collected in one folder (created if missing)
-python vid_to_mp3.py -o ~/Music/from-video ~/Movies/*.MOV
+```text
+input/
+├── IMG_1234.MOV        <- your videos (.mov, .mp4, .m4v)
+├── IMG_1235.MOV
+└── mp3/                <- created by the script
+    ├── IMG_1234.mp3
+    └── IMG_1235.mp3
 ```
 
-Existing MP3s are never overwritten; the file is reported and the rest of the batch carries on. The exit code is 1 if any file failed (for example a video with no audio track).
+```bash
+python vid_to_mp3.py                       # the default target
+python vid_to_mp3.py ~/Movies/trip         # another target; writes ~/Movies/trip/mp3/
+```
+
+Only the files directly in the target are converted (subfolders, including `mp3`, are not searched). Existing MP3s are never overwritten; the file is reported and the rest carries on. The exit code is 1 if any file failed (for example a video with no audio track) or the target holds no videos, and 2 if ffmpeg is missing or the target is not a folder.
 
 The quality is variable bit rate, about 190 kbit/s (`-q:a 2`), a common "transparent for most listeners" setting. For a different one, change that value in `vid_to_mp3.py` (0 is best, 9 smallest).
 

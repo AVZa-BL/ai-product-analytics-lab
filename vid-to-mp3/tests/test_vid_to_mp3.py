@@ -28,19 +28,24 @@ def streams(path: Path) -> list[dict]:
 
 def test_output_is_audio_only_mp3_with_the_source_duration(tmp_path):
     video = make_video(tmp_path / "IMG 0001.MOV", audio=True)  # a space, as in real file names
-    mp3 = convert(video)
+    mp3 = convert(video, tmp_path / "out")
     (stream,) = streams(mp3)
     assert (mp3.name, stream["codec_name"]) == ("IMG 0001.mp3", "mp3")
     assert float(stream["duration"]) == pytest.approx(1.0, abs=0.1)
 
 
-def test_existing_output_is_kept_and_a_silent_video_is_reported(tmp_path, capsys):
-    with_audio = make_video(tmp_path / "a.mov", audio=True)
-    silent = make_video(tmp_path / "b.mov", audio=False)
-    convert(with_audio)
-    marker = (tmp_path / "a.mp3").stat().st_mtime_ns
+def test_folder_run_converts_videos_into_the_subfolder_and_never_overwrites(tmp_path, capsys):
+    make_video(tmp_path / "a.mov", audio=True)
+    make_video(tmp_path / "b.MOV", audio=False)  # no sound: fails, but must not stop the batch
+    (tmp_path / "notes.txt").write_text("not a video")
 
-    assert main([str(with_audio), str(silent)]) == 1  # one failure must not stop the batch
-    assert (tmp_path / "a.mp3").stat().st_mtime_ns == marker
-    assert not (tmp_path / "b.mp3").exists()
-    assert "a.mp3" in capsys.readouterr().err
+    assert main([str(tmp_path)]) == 1
+    assert sorted(f.name for f in (tmp_path / "mp3").iterdir()) == ["a.mp3"]
+    out = capsys.readouterr()
+    assert "b.MOV" in out.err
+    assert "notes.txt" not in out.out + out.err
+
+    first = (tmp_path / "mp3" / "a.mp3").stat().st_mtime_ns
+    main([str(tmp_path)])
+    assert (tmp_path / "mp3" / "a.mp3").stat().st_mtime_ns == first
+    assert "a.mp3" in capsys.readouterr().err  # the skip is reported, not shown as converted

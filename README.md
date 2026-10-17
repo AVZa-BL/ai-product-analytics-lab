@@ -9,7 +9,7 @@ A home for portfolio projects in product analytics. Each project lives in its ow
 | [`analytics-lab/`](analytics-lab/) | AI Product Analytics Lab: governed, reproducible product analytics across three synthetic business scenarios, with metric contracts, decision memos and trusted evaluation cases for AI-assisted analysis | Complete |
 | [`referee/`](referee/) | Referee: a deterministic, rule-based reviewer for A/B/n experiment designs and readouts ("ruff for experiments") | In development |
 | [`tracewright/`](tracewright/) | Tracewright: proposes the tracking a new feature needs (events, properties, data types and the reasons) from its design documents and the current tracking plan, and reviews tracking plans with deterministic rules | Proposer, reviewer and Google Sheets input built and tested offline; not yet run against a live model or a real sheet. Next: a trial on a real document and a real sheet |
-| [`vid-to-mp3/`](vid-to-mp3/) | Vid to MP3: a small ffmpeg script that saves the sound of iPhone videos as MP3 files | Complete |
+| [`vid-to-mp3/`](vid-to-mp3/) | Vid to MP3: a small ffmpeg script that saves the sound of the iPhone videos in a folder as MP3 files in its `mp3` subfolder | Complete |
 
 Start with the lab's [README](analytics-lab/README.md), or go straight to its [getting-started guide](analytics-lab/docs/getting_started.md). The [Referee](referee/README.md) and [Tracewright](tracewright/README.md) READMEs show their status and how to run them.
 
