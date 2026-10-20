@@ -404,10 +404,17 @@ class ControlBaseline:
 def control_baseline(
     context: ResultsContext, plan: CohortPlan, metric: ExportMetric
 ) -> ControlBaseline:
-    """The control arm's mean by cohort over the blocks `plan` uses, and its homogeneity."""
+    """The control arm's mean by cohort over the cohorts the test compared, and its homogeneity.
+
+    These are the usable blocks of `plan` less any that both scales left out of the test (a
+    block without an event in either arm, say): a control cohort that was never compared does
+    not say whether control moves across the ones that were.
+    """
     if not plan.evaluated or plan.block_days is None:
         raise ValueError(f"the plan for {plan.arm!r} is not evaluated: {plan.reason}")
-    wanted = set(plan.usable)
+    wanted = {c.block for scale in cohort_test(context, plan, metric).scales for c in scale.cohorts}
+    if not wanted:
+        raise ValueError(f"the test for {plan.arm!r} compared no cohort on either scale")
     values: dict[int, list[float]] = defaultdict(list)
     for player in context.analysed:
         if player.arm != plan.control:

@@ -25,7 +25,9 @@ from referee.guardrails import (
     chance_could_explain,
     control_reference,
     guardrail_tests,
+    hold_for_a_moved_baseline,
     tier_of,
+    window_is_open,
 )
 from referee.guardrails import _harm as _raw_harm
 from referee.methods import mean_interval, mean_ratio, proportion_interval
@@ -54,9 +56,11 @@ REVENUE = {
 }
 
 
-def _context(raw_spec, rows: list[Row], *guardrails: dict, arms=TWO_ARMS) -> ResultsContext:
+def _context(
+    raw_spec, rows: list[Row], *guardrails: dict, arms=TWO_ARMS, exported_at=None
+) -> ResultsContext:
     spec = results_spec(raw_spec, arms=arms, guardrails=list(guardrails), **REVENUE)
-    return ResultsContext.of(spec, build_data(rows))
+    return ResultsContext.of(spec, build_data(rows, exported_at=exported_at))
 
 
 def _sessions(arm: str, values: list[int]) -> list[Row]:
@@ -637,28 +641,150 @@ def test_only_the_analysed_players_are_read_and_their_means_and_counts_are_given
     assert (found.baseline, found.tolerance, found.harmful_direction) == (3.0, 0.10, "decrease")
 
 
+def _assigned_over_two_weeks(arm: str, closed: list[int], open_: list[int]) -> list[Row]:
+    """5 players an arm on each of 14 days; the sessions of those assigned on days 0 to 7 are
+    `closed` (a whole week's) and of those on days 8 to 13 `open_` (what a week cut short at the
+    end of day 14 would hold). The seven-day window of a player closes a week after the
+    assignment, so by the end of day 14 the first eight days' have."""
+    rows = []
+    for i in range(70):
+        day = i // 5
+        values = closed if day <= 7 else open_
+        rows.append(
+            Row(
+                f"{arm}_{i:05d}",
+                arm,
+                assigned_at=at(days=day),
+                exposed_at=at(days=day, hours=1),
+                sessions=values[i % len(values)],
+            )
+        )
+    return rows
+
+
+def test_players_whose_outcome_window_is_open_at_the_export_are_not_read(raw_spec) -> None:
+    # Two identical arms, a baseline of 3 sessions a week and a tolerance of 10%: the players
+    # whose window is open hold 1 a week on average only because the week is not over.
+    rows = _assigned_over_two_weeks("control", [2, 4], [0, 2]) + _assigned_over_two_weeks(
+        "variant_b", [2, 4], [0, 2]
+    )
+    end = at(days=14)
+
+    (read,) = guardrail_tests(_context(raw_spec, rows, SESSIONS, exported_at=end))
+    (unknown,) = guardrail_tests(_context(raw_spec, rows, SESSIONS))
+
+    assert (read.n_arm, read.n_control) == (40, 40) and read.mean_arm == pytest.approx(3.0)
+    assert read.status == "within_tolerance" and read.baseline_has_moved is False
+    assert (unknown.n_arm, unknown.n_control) == (70, 70)  # no time for the export: all are read
+    harm = unknown.baseline_reference.harm
+    assert harm is not None and harm.uncapped_tier == "shown"  # the open windows read as a fall
+    assert harm.tier == "possible" and harm.capped_by == "moved_baseline"  # control's are too
+    assert unknown.control.harm is not None and unknown.control.harm.tier == "within"
+
+
+def test_a_window_that_closes_at_the_export_is_complete_and_its_own_end_is_used(raw_spec) -> None:
+    end = at(days=14)
+    rows = [
+        Row("a", "control", assigned_at=at(days=7), exposed_at=at(days=7, hours=1)),
+        Row("b", "control", assigned_at=at(days=7, hours=1), exposed_at=at(days=7, hours=2)),
+        Row(
+            "c",
+            "variant_b",
+            assigned_at=at(days=13),
+            exposed_at=at(days=13, hours=1),
+            window_end=end,
+        ),
+        Row("d", "variant_b", assigned_at=at(days=13), exposed_at=at(days=13, hours=1)),
+    ]
+    context = _context(raw_spec, rows, SESSIONS, exported_at=end)
+    by_id = {player.player_id: player for player in context.players}
+
+    assert [window_is_open(by_id[name], end) for name in "abcd"] == [False, True, False, True]
+    assert not any(window_is_open(player, None) for player in context.players)
+
+
 @pytest.mark.parametrize(
-    ("control", "arm", "control_tier", "decided_by", "agree", "moved"),
+    ("control", "arm", "tiers", "status", "decided_by", "agree", "moved"),
     [
-        # both arms sit near 2 sessions against a registered baseline of 3: the baseline moved
-        ([2, 2, 3, 1] * 60, [2, 2, 3, 1] * 60, "within", ("baseline",), False, True),
+        # both arms sit near 2 sessions against a registered baseline of 3: the baseline moved,
+        # the arm is what control is, and the reading against the baseline is held to possible
+        (
+            [2, 2, 3, 1] * 60,
+            [2, 2, 3, 1] * 60,
+            ("within", "possible"),
+            "breach_possible",
+            ("baseline",),
+            False,
+            True,
+        ),
         # a real regression: both references show it
-        ([3, 4, 2, 3] * 80, [2, 3, 1, 2] * 80, "shown", ("control", "baseline"), True, False),
+        (
+            [3, 4, 2, 3] * 80,
+            [2, 3, 1, 2] * 80,
+            ("shown", "shown"),
+            "breach_shown",
+            ("control", "baseline"),
+            True,
+            False,
+        ),
     ],
 )
 def test_a_real_regression_is_seen_by_both_references(
-    raw_spec, control, arm, control_tier, decided_by, agree, moved
+    raw_spec, control, arm, tiers, status, decided_by, agree, moved
 ) -> None:
     rows = _sessions("control", control) + _sessions("variant_b", arm)
     context = _context(raw_spec, rows, SESSIONS)
 
     (found,) = guardrail_tests(context)
 
-    assert found.control.harm is not None and found.control.harm.tier == control_tier
-    assert found.baseline_reference.harm is not None
-    assert found.baseline_reference.harm.tier == "shown"
-    assert found.status == "breach_shown" and found.decided_by == decided_by
+    assert found.control.harm is not None and found.baseline_reference.harm is not None
+    assert (found.control.harm.tier, found.baseline_reference.harm.tier) == tiers
+    assert found.status == status and found.decided_by == decided_by
     assert found.references_agree is agree and found.baseline_has_moved is moved
+    held = found.baseline_reference.harm
+    assert (held.capped_by, held.uncapped_tier) == (
+        ("moved_baseline", "shown") if moved else (None, None)
+    )
+
+
+_TIER_OF = {  # a harm of each tier at a tolerance of 10%
+    "shown": (0.2, 0.15, 0.3),
+    "possible": (0.2, 0.0, 0.3),
+    "within": (0.04, -0.2, 0.06),
+}
+
+
+def _result(tier: str | None, reference: str = "baseline") -> ReferenceResult:
+    harm = None if tier is None else _harm_of("increase", _TIER_OF[tier], tolerance=0.10)
+    return ReferenceResult(reference=reference, harm=harm, reason=None if harm else "no")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("reading", "versus", "own", "held"),
+    [
+        ("shown", "within", "shown", True),  # the arm may be what control is, control being off
+        ("shown", "possible", "shown", False),  # the arm may be worse than control
+        ("shown", "shown", "shown", False),
+        ("shown", None, "shown", False),  # no reading against control: nothing says it is alike
+        ("shown", "within", "possible", False),  # control only possibly beyond the baseline
+        ("shown", "within", "within", False),  # the baseline did not move: the arm is the cause
+        ("shown", "within", None, False),
+        ("possible", "within", "shown", False),  # not shown, so nothing to hold
+        ("within", "within", "shown", False),
+        (None, "within", "shown", False),  # no baseline reading
+    ],
+)
+def test_a_baseline_reading_that_control_shares_is_held_to_possible_only_then(
+    reading, versus, own, held
+) -> None:
+    result = hold_for_a_moved_baseline(_result(reading), _result(versus, "control"), _result(own))
+
+    if not held:
+        assert result == _result(reading)
+        return
+    assert result.harm is not None and result.harm.tier == "possible"
+    assert (result.harm.capped_by, result.harm.uncapped_tier) == ("moved_baseline", "shown")
+    assert result.harm.point == _result(reading).harm.point  # the figures are left as they were
 
 
 def test_an_arm_with_one_player_is_not_evaluated_on_either_reference(raw_spec) -> None:

@@ -22,8 +22,8 @@ Both are unadjusted 95% intervals for each arm and guardrail. Harm is a share of
 positive when worse. Decisions use the shares rounded to `DIGITS` places, so that the evidence
 and the decision cannot disagree.
 
-Two kinds of reading are not allowed to be `shown`, because their intervals cannot carry that
-claim there:
+Three kinds of reading are not allowed to be `shown`: two because their intervals cannot carry
+that claim there, and one because the arm may owe it nothing:
 
 - a group whose values are all the same has an interval with no width. That is believed only
   when chance cannot explain it: if the other group, which the group would be drawn from had
@@ -34,7 +34,11 @@ claim there:
   registered baseline when a fall is harmful and the group has some spread. The t interval for
   the mean of such data lies
   wholly below the true mean far more often than 2.5% of the time, which for a guardrail whose
-  fall is harmful is a false breach; the reading against control's mean is not held.
+  fall is harmful is a false breach; the reading against control's mean is not held;
+- the arm's reading against the registered baseline when control itself is shown beyond the
+  baseline's tolerance and the reading against control's mean is within it
+  (`hold_for_a_moved_baseline`): the arm may be what control is, and the baseline no longer what
+  the traffic gives.
 
 A held reading is counted as `possible` (its point estimate is beyond the tolerance) and the
 evidence says why.
@@ -44,7 +48,8 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime
 from typing import Literal
 
 from referee.methods import (
@@ -55,7 +60,7 @@ from referee.methods import (
     proportion_interval,
     values_are_constant,
 )
-from referee.results import METRIC_FAMILIES, ResultsContext
+from referee.results import METRIC_FAMILIES, PlayerRecord, ResultsContext
 from referee.spec import Guardrail
 
 ALPHA = 0.05
@@ -72,7 +77,7 @@ SMALL_COUNT = 10
 Reference = Literal["control", "baseline"]
 Tier = Literal["within", "possible", "shown"]
 Status = Literal["breach_shown", "breach_possible", "within_tolerance", "not_evaluated"]
-Cap = Literal["no_variation", "heavy_tail"]  # why a reading that would be `shown` is `possible`
+Cap = Literal["no_variation", "heavy_tail", "moved_baseline"]  # why `shown` is `possible`
 REFERENCES: tuple[Reference, ...] = ("control", "baseline")
 TIERS: tuple[Tier, ...] = ("within", "possible", "shown")  # least to most serious
 _UNMEASURABLE = "cannot be measured (a value is not a finite number, or is too large or too small)"
@@ -448,11 +453,41 @@ def _events(values: Sequence[float]) -> int:
     return round(math.fsum(values))
 
 
+def window_is_open(player: PlayerRecord, as_of: datetime | None) -> bool:
+    """Whether the player's seven-day outcome window closes after `as_of`, the time of the export.
+
+    A window that closes exactly at `as_of` is complete (as in `referee.cohorts`). With no time
+    for the export nothing can be told, and no window is taken to be open.
+    """
+    return as_of is not None and player.window_closes_at > as_of
+
+
+def hold_for_a_moved_baseline(
+    reading: ReferenceResult, versus: ReferenceResult, own: ReferenceResult
+) -> ReferenceResult:
+    """The reading of an arm against the registered baseline, held to `possible` when it can owe
+    nothing to the arm.
+
+    Control itself is shown beyond the tolerance of the baseline (`own`) and the reading against
+    control's mean (`versus`) is within it: the arm may be what control is, and the baseline no
+    longer what the traffic gives. A reading that is not `shown`, or a control reading that is
+    possible, shown or unmeasured, is left as it is.
+    """
+    harm = reading.harm
+    if harm is None or harm.tier != "shown" or own.harm is None or own.harm.tier != "shown":
+        return reading
+    if versus.harm is None or versus.harm.tier != "within":
+        return reading
+    held = replace(harm, tier="possible", capped_by="moved_baseline", uncapped_tier="shown")
+    return replace(reading, harm=held)
+
+
 def guardrail_tests(context: ResultsContext) -> list[GuardrailTest]:
     """Every non-control arm against control on every guardrail, in the spec's order.
 
     The guardrails come in the order the spec lists them and the arms inside each in the spec's
-    order. The players are the analysed ones (design section 21.3).
+    order. The players are the analysed ones (design section 21.3) whose outcome window had
+    closed when the export was taken, where its time is known (section 21.12).
     """
     tests: list[GuardrailTest] = []
     for guardrail in context.spec.guardrails:
@@ -464,7 +499,10 @@ def _tests_of(context: ResultsContext, guardrail: Guardrail) -> list[GuardrailTe
     metric = context.metrics[guardrail.name]
     values: dict[str, list[float]] = {name: [] for name in context.arm_names}
     for player in context.analysed:
-        values[player.arm].append(metric.value(player))
+        # A window still open holds part of a week of sessions, purchases or revenue: its mean
+        # falls short of a registered baseline that is a whole week's, whatever the arm did.
+        if not window_is_open(player, context.exported_at):
+            values[player.arm].append(metric.value(player))
     control = values[context.control]
     options = {
         "direction": guardrail.harmful_direction,
@@ -483,26 +521,29 @@ def _tests_of(context: ResultsContext, guardrail: Guardrail) -> list[GuardrailTe
     ]
     own = baseline_reference(control, group="control", against=others, **baseline_options)
     binary = guardrail.kind == "binary"
-    return [
-        GuardrailTest(
-            arm=arm,
-            guardrail=guardrail.name,
-            kind=guardrail.kind,
-            harmful_direction=guardrail.harmful_direction,
-            tolerance=guardrail.tolerance_relative,
-            baseline=guardrail.baseline,
-            n_arm=len(values[arm]),
-            n_control=len(control),
-            mean_arm=_mean(values[arm]),
-            mean_control=_mean(control),
-            events_arm=_events(values[arm]) if binary else None,
-            events_control=_events(control) if binary else None,
-            control=control_reference(values[arm], control, arm_name=arm, **options),
-            baseline_reference=baseline_reference(
-                values[arm], group=arm, against=control, **baseline_options
-            ),
-            control_on_baseline=own,
+    tests = []
+    for arm in context.arm_names:
+        if arm == context.control:
+            continue
+        versus = control_reference(values[arm], control, arm_name=arm, **options)
+        reading = baseline_reference(values[arm], group=arm, against=control, **baseline_options)
+        tests.append(
+            GuardrailTest(
+                arm=arm,
+                guardrail=guardrail.name,
+                kind=guardrail.kind,
+                harmful_direction=guardrail.harmful_direction,
+                tolerance=guardrail.tolerance_relative,
+                baseline=guardrail.baseline,
+                n_arm=len(values[arm]),
+                n_control=len(control),
+                mean_arm=_mean(values[arm]),
+                mean_control=_mean(control),
+                events_arm=_events(values[arm]) if binary else None,
+                events_control=_events(control) if binary else None,
+                control=versus,
+                baseline_reference=hold_for_a_moved_baseline(reading, versus, own),
+                control_on_baseline=own,
+            )
         )
-        for arm in context.arm_names
-        if arm != context.control
-    ]
+    return tests

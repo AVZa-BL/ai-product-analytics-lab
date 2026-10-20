@@ -237,6 +237,24 @@ def test_usable_cohorts_must_reach_into_both_halves_of_the_window(raw_spec) -> N
     assert plan.reason == "cohorts_do_not_cover_the_window"
 
 
+@pytest.mark.parametrize(("first", "covers"), [(-1, False), (0, True)])
+def test_a_cohort_exposed_before_the_start_is_not_in_the_first_half_of_the_window(
+    raw_spec, first: int, covers: bool
+) -> None:
+    def rows(arm: str) -> list[Row]:
+        early = [
+            Row(f"{arm}_a_{i:04d}", arm, assigned_at=at(0), exposed_at=at(7 * first, 1))
+            for i in range(100)
+        ]
+        return early + _rows(arm, {2: 100, 3: 100})  # blocks 2 and 3 are the second half
+
+    context = _context(raw_spec, rows("control") + rows("variant_b"), design__mde_relative=2.0)
+
+    attempt = plan_cohorts(context, "variant_b").attempts[0]
+
+    assert attempt.usable == (first, 2, 3) and attempt.covers_window is covers
+
+
 def test_a_cohort_after_the_end_of_the_window_counts_as_the_second_half(raw_spec) -> None:
     context = _both(
         raw_spec, {0: 80, 1: 80, 2: 80, 3: 5, 4: 5, 6: 80}, days=35, design__mde_relative=2.0

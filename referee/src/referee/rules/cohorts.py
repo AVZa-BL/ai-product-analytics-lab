@@ -55,9 +55,10 @@ from referee.cohorts import (
     plan_cohorts,
     traffic_needed,
 )
-from referee.methods import CohortShape
+from referee.methods import CohortShape, StatsError
 from referee.pooled_rates import UNIT, percent
-from referee.results import ExportMetric, ResultsContext
+from referee.results import DAYS_PER_BLOCK, ExportMetric, ResultsContext
+from referee.rules.text import join_and
 
 _DIGITS = 6
 
@@ -251,9 +252,12 @@ def _entry(
             "scales_not_evaluated": [scale.scale for scale in missing],
         }
 
-    baseline = control_baseline(context, plan, metric)
-    absolute = _shifts(test.absolute, decision.level)
-    relative = _shifts(test.log_ratio, decision.level)
+    try:
+        baseline = control_baseline(context, plan, metric)
+        absolute = _shifts(test.absolute, decision.level)
+        relative = _shifts(test.log_ratio, decision.level)
+    except StatsError as error:  # a shift that no power can reach: reported, not raised
+        return {**entry, "status": "not_evaluated", "reason": "not_estimable", "error": str(error)}
     mean = baseline.pooled_mean
     labels = low_information(
         shift=absolute["linear_fade"],
@@ -362,6 +366,12 @@ def _span(low: float, high: float) -> str:
     return f"{_pct(low)} to {_pct(high)}"
 
 
+def _ratio_text(ratio: float) -> str:
+    """The ratio of the arms' sizes rounded up to a hundredth, without the error of a float:
+    2.2 is 220.00000000000003 hundredths and must not be shown as 2.21."""
+    return _times(math.ceil(round(ratio * 100, 6)) / 100)
+
+
 def _nearest_size(players: float) -> int:
     """The simulated number of players an arm in a cohort nearest to `players`, in log scale."""
     return min(FADE_SIZES, key=lambda size: abs(math.log(players / size)))
@@ -374,8 +384,7 @@ def _outside_simulations(entry: dict[str, Any]) -> list[str]:
         reasons.append(f"{design['non_control_arms']} arms against control")
     ratio = design["allocation_ratio"]
     if ratio is not None and ratio > FADE_MAX_ALLOCATION_RATIO:
-        rounded_up = math.ceil(round(ratio * 100, 6)) / 100
-        reasons.append(f"arms that differ in size by about {_times(rounded_up)} to 1")
+        reasons.append(f"arms that differ in size by about {_ratio_text(ratio)} to 1")
     if not FADE_COHORTS[0] <= design["cohorts"] <= FADE_COHORTS[-1]:
         reasons.append(f"{design['cohorts']} cohorts")
     players = design["players_an_arm_median"]
@@ -430,7 +439,7 @@ def _fade_rates(entry: dict[str, Any]) -> str:
             f"control baseline that does not move, {FADE_COHORTS[0]} or {FADE_COHORTS[-1]} "
             f"cohorts and {_join_or([f'{size:,}' for size in FADE_SIZES])} players an arm in a "
             "cohort (a count or a size between those counts as inside here). "
-            f"This test has {_join(reasons)}, so what share of runs would flag a fade of this "
+            f"This test has {join_and(reasons)}, so what share of runs would flag a fade of this "
             "size is not known here; in the cases simulated the trigger flagged a fade of this "
             f"size {_shares(families, _overall_span)}. {_FADE_STEP}"
         )
@@ -457,12 +466,6 @@ def _fade_rates(entry: dict[str, Any]) -> str:
     return f"{text} {_FADE_STEP}"
 
 
-def _join(items: list[str]) -> str:
-    if len(items) <= 1:
-        return "".join(items)
-    return ", ".join(items[:-1]) + " and " + items[-1]
-
-
 def _join_or(items: list[str]) -> str:
     if len(items) <= 1:
         return "".join(items)
@@ -474,7 +477,8 @@ def _entry_note(entry: dict[str, Any]) -> str:
     if entry["status"] == "not_evaluated":
         where = entry.get("scales_not_evaluated")
         scales = f" on the {' and '.join(where)} scale" if where else ""
-        return f"{label}: not evaluated{scales} ({entry['reason']})."
+        said = f": {entry['error']}" if entry.get("error") else ""
+        return f"{label}: not evaluated{scales} ({entry['reason']}{said})."
     labels = entry["low_information"]
     if entry["status"] == "flagged":
         sentence = f"{label}: the effect differs between cohorts of first exposure."
@@ -496,9 +500,14 @@ def _entry_note(entry: dict[str, Any]) -> str:
     )
     if entry["trigger"]["absolute"] != entry["trigger"]["log_ratio"]:
         shown = "absolute" if entry["trigger"]["absolute"] else "log-ratio"
+        why = (
+            ", because a baseline that moves can make either scale show one"
+            if entry["control_baseline"]["moves"]
+            else ", and one scale alone is not enough to say that the effect differs"
+        )
         sentence += (
             f" The {shown} scale alone shows a difference between cohorts; an arm is flagged "
-            "only when both do, because a baseline that moves can make either scale show one."
+            f"only when both do{why}."
         )
     if labels:
         sentence += f" The test has low information here ({', '.join(labels)})."
@@ -620,7 +629,7 @@ def _price_text(arm: str, plan: CohortPlan, price: Price) -> str:
             f"{_times(price.factor)} is where it keeps passing."
         )
     if any(b.kind == "floor" for b in price.binding) and plan.floor > FLOOR:
-        ratio = _times(math.ceil(plan.allocation_ratio * 100) / 100)
+        ratio = _ratio_text(plan.allocation_ratio)
         sentence += (
             f" The floor is {plan.floor} instead of {FLOOR} because the two arms differ about "
             f"{ratio} to 1; a smaller gap between the arms lowers it."
@@ -718,6 +727,49 @@ def _traffic_note(
     return f"arm {arm}: " + " ".join(parts)
 
 
+def _configuration_note(
+    arm: str, changed: dict[str, Any], entries: list[dict[str, Any]], control: str
+) -> str:
+    """RES-013 for one arm, and whether the cohorts that were compared hold more than one of
+    its versions.
+
+    The cohorts of a test carry the version of its own arm and of control. Each test that ran
+    is judged on the weeks of the blocks it compared on either scale (a block of 14 days is two
+    weeks), by the versions its players first saw, so a change in a week that was left out, or
+    after the last cohort, is said to fall outside them. A test with no cohort on either scale,
+    because a gate or the plan stopped it, compared nothing.
+    """
+    weeks = ", ".join(str(week) for week in changed["mixed_weeks"]) or "none"
+    seen = {item["week"]: {v["version"] for v in item["versions"]} for item in changed["by_week"]}
+    ran = split = False
+    for entry in entries:
+        if arm not in (control, entry["arm"]):
+            continue
+        blocks = {
+            c["block"] for scale in entry.get("scales", {}).values() for c in scale["cohorts"]
+        }
+        if not blocks:
+            continue
+        width = entry["block_days"] // DAYS_PER_BLOCK
+        versions = set().union(*(seen.get(b * width + i, ()) for b in blocks for i in range(width)))
+        ran, split = True, split or len(versions) > 1
+    head = (
+        f"RES-013: the configuration of arm {arm} changed during the test (weeks of first "
+        f"exposure holding more than one version: {weeks}). "
+    )
+    if not ran:
+        return head + "The cohort test did not run for it, so no cohorts were compared."
+    if split:
+        return head + (
+            "The version change falls in the same weeks as the cohorts compared, so a "
+            "difference between cohorts may be the change itself."
+        )
+    return head + (
+        "In each test the cohorts compared first saw a single version of it, so the version "
+        "change falls outside them."
+    )
+
+
 def _notes(
     context: ResultsContext,
     entries: list[dict[str, Any]],
@@ -781,14 +833,10 @@ def _notes(
             "difference between cohorts."
         )
     if configuration is not None:
-        for arm, changed in configuration["arms"].items():
-            weeks = ", ".join(str(week) for week in changed["mixed_weeks"]) or "none"
-            notes.append(
-                f"RES-013: the configuration of arm {arm} changed during the test (weeks of "
-                f"first exposure holding more than one version: {weeks}). The version change "
-                "falls in the same weeks as the cohorts compared, so a difference between "
-                "cohorts may be the change itself."
-            )
+        notes.extend(
+            _configuration_note(arm, changed, entries, context.control)
+            for arm, changed in configuration["arms"].items()
+        )
     ran = summary["evaluated"]
     if ran:
         mean, worst = 100 * NULL_FLAG_RATE_MEAN, 100 * NULL_FLAG_RATE_MAX
@@ -806,7 +854,7 @@ def cohort_report(context: ResultsContext, configuration: dict[str, Any] | None)
     """The cohort test for every non-control arm and metric of the spec, with its sentences.
 
     `configuration` is the evidence of RES-013 (None if that rule is quiet), so that the notes
-    can say where a version change falls in the same weeks as the cohorts.
+    can say whether a version change falls among the cohorts compared.
     """
     arms = [name for name in context.arm_names if name != context.control]
     plans = {arm: plan_cohorts(context, arm) for arm in arms}

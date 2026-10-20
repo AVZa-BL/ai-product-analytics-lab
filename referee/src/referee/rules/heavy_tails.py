@@ -800,7 +800,10 @@ _NEARER_NOTE = (
     "counts as that), less is nearer none and +20%. That is a judgement at one level, so a "
     "difference close to it can switch which range sets the severity. With few players who "
     "spend the means seen often differ by that much even when the true effect is none or "
-    "+20%, so the label is a weak guide to the true effect; both ranges are always printed."
+    "+20%, so the label is a weak guide to the true effect; both ranges are always printed. "
+    "The severity follows the label, so with arms of about equal size an experiment with no "
+    "effect can read as a warning and one with a large effect as info; Referee has not "
+    "measured how often."
 )
 _NOISE_NOTE = (
     "A rate is a share of simulated experiments and carries noise: it is within about 0.3 "
@@ -823,7 +826,10 @@ _PAYERS_NOTE = (
     "Referee places a comparison among the simulated cases by the split between the groups and "
     "the number of players who spend in the smaller group, not the number of players: at 9 to 1 "
     "with no effect the rate followed that number in the simulations (design section 21.10); "
-    "at other splits this was not checked."
+    "at other splits this was not checked. Above the largest number simulated the range of "
+    "that case is used; where the simulated rate fell as the number grew, the true rate "
+    "beyond it may be lower, so that range may be a ceiling and not a measure, and the "
+    "severity it sets can stay a warning however many players spend."
 )
 _BOOTSTRAP_NOTE = (
     "Referee shows no bootstrap interval. In its simulations the percentile bootstrap interval "

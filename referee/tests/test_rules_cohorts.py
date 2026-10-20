@@ -5,7 +5,9 @@ spread, so each scenario's outcome can be reasoned out before it is run.
 """
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta, timezone
+from typing import get_args
 
 import pytest
 from cohort_helpers import (
@@ -15,11 +17,12 @@ from cohort_helpers import (
     sized_context,
     spread,
 )
-from results_helpers import TWO_ARMS, at
+from results_helpers import TWO_ARMS, Row, at
 
 from referee.cohort_effects import (
     NULL_FLAG_RATE_MAX,
     NULL_FLAG_RATE_MEAN,
+    DropReason,
     ScaleTest,
     cohort_test,
     detectable_shifts,
@@ -28,17 +31,21 @@ from referee.cohorts import (
     Attempt,
     Binding,
     CohortPlan,
+    GateReason,
     Minimum,
+    NotEvaluated,
     Price,
     plan_cohorts,
     traffic_needed,
 )
+from referee.methods import StatsError
 from referee.results import ResultsContext
 from referee.rules import RESULTS_RULES
 from referee.rules.cohorts import (
     _amount,
     _binding_text,
     _count,
+    _entry_note,
     _players,
     _price_evidence,
     _price_text,
@@ -651,6 +658,13 @@ def test_without_a_registered_effect_that_small_the_same_flag_has_no_such_label(
     assert not any("lead to re-check" in note for note in report["notes"])
 
 
+def test_the_catalogue_names_every_reason_the_test_can_give_for_not_running() -> None:
+    codes = [*get_args(NotEvaluated), *get_args(GateReason), *get_args(DropReason)]
+
+    assert len(codes) == 11
+    assert [code for code in codes if code not in RES_007.fires_when] == []
+
+
 def test_one_scale_alone_does_not_flag_and_the_note_says_so_and_why(raw_spec) -> None:
     context = _baseline_moves(raw_spec)
 
@@ -666,6 +680,17 @@ def test_one_scale_alone_does_not_flag_and_the_note_says_so_and_why(raw_spec) ->
         " The absolute scale alone shows a difference between cohorts; an arm is flagged only when"
         " both do, because a baseline that moves can make either scale show one."
     ) in note
+
+
+def test_the_one_scale_clause_blames_a_moving_baseline_only_where_it_moves(raw_spec) -> None:
+    (entry,) = cohort_report(_baseline_moves(raw_spec), None)["tests"]
+    still = {**entry, "control_baseline": {**entry["control_baseline"], "moves": False}}
+
+    note = _entry_note(still)
+
+    assert "an arm is flagged only when both do, and one scale alone is not enough" in note
+    assert "baseline that moves" not in note
+    assert "because a baseline that moves" in _entry_note(entry)
 
 
 def test_the_changing_baseline_sentence_appears_only_when_the_control_mean_moves(raw_spec) -> None:
@@ -901,6 +926,136 @@ def test_a_version_change_at_a_week_boundary_is_reported_with_no_mixed_weeks(raw
     ) in notes
 
 
+def _hotfix(raw_spec, arm, **more):
+    """The fade, with `arm` moving to version 2 half way through week 4, the last week."""
+    flat, fade = _weeks(FLAT), _weeks(FADE)
+    weeks = {"control": flat, "variant_b": fade}
+    rows = []
+    for name, per_week in weeks.items():
+        if name != arm:
+            rows += cohort_rows(name, per_week)
+            continue
+        rows += cohort_rows(name, {**per_week, 4: per_week[4][:40]}, tag="a")
+        rows += cohort_rows(name, {4: per_week[4][40:]}, tag="b", version_of=lambda block: 2)
+    last = max(i for i, row in enumerate(rows) if row.arm == "control")
+    rows[last].assigned_at, rows[last].exposed_at = at(34, 23), at(34, 23.5)
+    return cohort_context(raw_spec, rows, days=35, arms=TWO_ARMS, **more)
+
+
+def _head(arm, weeks):
+    return (
+        f"RES-013: the configuration of arm {arm} changed during the test (weeks of first"
+        f" exposure holding more than one version: {weeks}). "
+    )
+
+
+INSIDE = (
+    "The version change falls in the same weeks as the cohorts compared, so a difference"
+    " between cohorts may be the change itself."
+)
+OUTSIDE = (
+    "In each test the cohorts compared first saw a single version of it, so the version"
+    " change falls outside them."
+)
+
+
+@pytest.mark.parametrize("arm", ["variant_b", "control"])
+def test_a_version_change_is_said_to_fall_among_the_cohorts_only_if_they_were_compared(
+    raw_spec, arm
+) -> None:
+    left_out = _hotfix(raw_spec, arm, exported_at=at(33))
+    counted = _hotfix(raw_spec, arm, exported_at=at(60))
+
+    notes = {
+        name: cohort_report(context, _config_of(context))
+        for name, context in (("left_out", left_out), ("counted", counted))
+    }
+
+    assert notes["left_out"]["plans"]["variant_b"]["usable"] == [0, 1, 2, 3]
+    assert notes["counted"]["plans"]["variant_b"]["usable"] == [0, 1, 2, 3, 4]
+    assert _head(arm, 4) + OUTSIDE in notes["left_out"]["notes"]
+    assert _head(arm, 4) + INSIDE in notes["counted"]["notes"]
+
+
+def test_a_version_change_in_an_arm_whose_test_did_not_run_has_no_cohorts_to_fall_among(
+    raw_spec,
+) -> None:
+    short = cohort_rows("control", _weeks(FLAT[:2]))
+    short += cohort_rows("variant_b", _weeks(FADE[:2]), version_of=lambda block: 1 + block)
+    # variant_b has no sessions before week 4, so its log ratio is missing; variant_c is tested
+    variant = {**{block: [0] * 80 for block in range(4)}, 4: spread(10)}
+    three = cohort_rows("control", _weeks(FLAT)) + cohort_rows("variant_c", _weeks(FLAT))
+    three += cohort_rows("variant_b", variant, version_of=lambda block: 1 + (block >= 4))
+    contexts = {
+        "plan": cohort_context(raw_spec, short, days=14, arms=TWO_ARMS),
+        "scale": cohort_context(raw_spec, three, days=35, arms=THREE_ARMS),
+    }
+
+    said = {
+        "plan": "The cohort test did not run for it, so no cohorts were compared.",
+        # the absolute scale did compare cohorts, and they hold both versions
+        "scale": INSIDE,
+    }
+    for name, context in contexts.items():
+        report = cohort_report(context, _config_of(context))
+
+        assert _by_arm(report)["variant_b"]["status"] == "not_evaluated"
+        assert _head("variant_b", "none") + said[name] in report["notes"]
+    assert _by_arm(cohort_report(contexts["scale"], None))["variant_c"]["status"] != (
+        "not_evaluated"
+    )
+
+
+def test_a_change_of_the_control_falls_among_the_cohorts_if_any_test_compared_them(
+    raw_spec,
+) -> None:
+    flat = _weeks(FLAT)
+    rows = cohort_rows("control", {**flat, 4: flat[4][:40]}, tag="a")
+    rows += cohort_rows("control", {4: flat[4][40:]}, tag="b", version_of=lambda block: 2)
+    rows += cohort_rows("variant_b", _weeks(FADE))
+    rows += cohort_rows("variant_c", {**flat, 4: spread(10, n=5)})
+    last = max(i for i, row in enumerate(rows) if row.arm == "control")
+    rows[last].assigned_at, rows[last].exposed_at = at(34, 23), at(34, 23.5)
+    context = cohort_context(raw_spec, rows, days=35, arms=THREE_ARMS)
+
+    report = cohort_report(context, _config_of(context))
+
+    # week 4 is too small for variant_c's test and large enough for variant_b's
+    assert report["plans"]["variant_b"]["usable"] == [0, 1, 2, 3, 4]
+    assert report["plans"]["variant_c"]["usable"] == [0, 1, 2, 3]
+    assert _head("control", 4) + INSIDE in report["notes"]
+
+
+@pytest.mark.parametrize("first_week_of_version_2", [6, 7])  # the first or second week of block 3
+def test_a_block_of_two_weeks_is_judged_on_both_of_its_weeks(
+    raw_spec, first_week_of_version_2: int
+) -> None:
+    rows = []
+    for arm in ("control", "variant_b"):
+        for week in range(8):
+            version = 2 if arm == "variant_b" and week >= first_week_of_version_2 else 1
+            rows += [
+                Row(
+                    f"{arm}_{week}_{i}",
+                    arm,
+                    assigned_at=at(7 * week),
+                    exposed_at=at(7 * week, 1),
+                    assigned_version=version,
+                    exposure_version=version,
+                    sessions=8 + i % 5,
+                )
+                for i in range(20)
+            ]
+    last = max(i for i, row in enumerate(rows) if row.arm == "control")
+    rows[last].assigned_at, rows[last].exposed_at = at(55, 23), at(55, 23.5)
+    context = cohort_context(raw_spec, rows, days=56, arms=TWO_ARMS)
+
+    report = cohort_report(context, _config_of(context))
+
+    assert report["plans"]["variant_b"]["block_days"] == 14
+    assert _head("variant_b", "none") + INSIDE in report["notes"]
+
+
 def test_the_rule_gives_the_report_the_evidence_of_res_013(raw_spec) -> None:
     finding = RES_007.evaluate(_configuration_change(raw_spec))
 
@@ -919,6 +1074,45 @@ def test_a_share_of_a_control_mean_that_is_not_positive_is_left_out_and_not_divi
     assert _share(0.5, 2.0) == 0.25
     assert _amount({"shift": 1.5, "share_of_control_mean": None}) == "1.5"
     assert _amount({"shift": 1.5, "share_of_control_mean": 0.25}) == "1.5 (25% of the control mean)"
+
+
+def _with_one_value(raw_spec, value: int) -> ResultsContext:
+    """Five quiet weeks whose fourth control cohort holds one player with `value` sessions."""
+    control = _weeks(FLAT)
+    control[3] = [value, *control[3][1:]]
+    return _context(raw_spec, {"variant_b": _weeks(FLAT)}, control=control)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [10**12, 2**63 - 1, 10**100, 10**155],  # the last is too large to square: its cohort is dropped
+    ids=["1e12", "int64_max", "1e100", "1e155"],
+)
+def test_one_absurd_value_does_not_stop_the_test(raw_spec, value: int) -> None:
+    (entry,) = cohort_report(_with_one_value(raw_spec, value), None)["tests"]
+
+    assert entry["status"] == "not_flagged"
+    assert 0 < entry["detectable"]["absolute"]["linear_fade"]["shift"] < 10
+
+
+def test_a_failure_of_the_shifts_is_reported_with_its_message(raw_spec, monkeypatch) -> None:
+    def fail(scale, level):
+        raise StatsError("no change this size could be seen")
+
+    monkeypatch.setattr("referee.rules.cohorts.detectable_shifts", fail)
+
+    report = cohort_report(_context(raw_spec, {"variant_b": _weeks(FADE)}), None)
+
+    (entry,) = report["tests"]
+    assert (entry["status"], entry["reason"], entry["error"]) == (
+        "not_evaluated",
+        "not_estimable",
+        "no change this size could be seen",
+    )
+    assert (
+        "arm variant_b, metric sessions_7d: not evaluated (not_estimable: no change this size "
+        "could be seen)."
+    ) in report["notes"]
 
 
 def test_a_failure_of_q_is_carried_into_the_evidence() -> None:
@@ -1257,6 +1451,20 @@ def test_a_raised_floor_is_not_mentioned_when_it_is_not_what_sets_the_traffic(ra
 
     assert not any("The floor is" in n for n in notes)
     assert any(n.startswith("arm variant_b: 1.5 times the traffic") for n in notes)
+
+
+def test_the_ratio_of_the_arms_in_the_price_is_rounded_up_without_the_error_of_a_float() -> None:
+    """330 and 150 players are exactly 2.2 to 1, which is 220.00000000000003 hundredths."""
+    _, plan = _island_for_text()
+    floor = Binding(kind="floor", block_days=7, block=3, side="arm", have=20, need=60)
+
+    text = _price_text(
+        "a",
+        replace(plan, allocation_ratio=330 / 150, floor=60),
+        Price(factor=2.0, block_days=7, binding=(floor,)),
+    )
+
+    assert "because the two arms differ about 2.2 to 1;" in text
 
 
 def test_the_preferred_minimum_is_explained_when_it_is_named_and_a_first_pass_is_said() -> None:

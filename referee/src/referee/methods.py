@@ -995,6 +995,7 @@ def cohort_heterogeneity(
 
 CohortShape = Literal["linear_fade", "step"]
 _POWER_NODES, _POWER_WEIGHTS = np.polynomial.legendre.leggauss(400)
+_SURE_MARGIN = 40.0  # standard deviations past a cut at which the normal's tail is below 1e-300
 
 
 def _cohort_pattern(positions: Sequence[float], shape: CohortShape) -> list[float]:
@@ -1056,7 +1057,14 @@ def cohort_power(
     z = slope_cut * _POWER_NODES
     # Not flagged: |slope z| below its cut AND z^2 + remainder below Q's cut.
     room = q_cut - z**2
-    quiet = np.where(room > 0, stats.ncx2.cdf(np.maximum(room, 0.0), k - 2, remainder), 0.0)
+    if remainder > (math.sqrt(q_cut) + _SURE_MARGIN) ** 2:
+        # A noncentral chi-squared is at least the square of a normal deviate shifted by
+        # sqrt(remainder), so this far past Q's cut the chance of staying under it is below any
+        # float: Q flags for certain. scipy's cdf turns NaN from a remainder near 1e19, which
+        # `max` below would read as a power of 0.
+        quiet = np.zeros_like(z)
+    else:
+        quiet = np.where(room > 0, stats.ncx2.cdf(np.maximum(room, 0.0), k - 2, remainder), 0.0)
     density = stats.norm.pdf(z - mu)
     not_flagged = slope_cut * float(np.sum(_POWER_WEIGHTS * density * quiet))
     return float(min(1.0, max(0.0, 1.0 - not_flagged)))
@@ -1088,7 +1096,10 @@ def cohort_detectable_shift(
         effects = [shift * value for value in pattern]
         return cohort_power(effects, se, positions=x, level=level) >= power
 
-    high = max(se)
+    # Start from the smallest standard error: a cohort whose error dwarfs the rest has next to no
+    # weight, so the answer is a few ordinary errors, and bisecting down from the largest error
+    # would leave it only as precise as that error is large.
+    high = min(se)
     for _ in range(80):
         if reaches(high):
             break

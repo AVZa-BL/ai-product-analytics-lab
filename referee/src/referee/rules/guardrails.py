@@ -14,8 +14,11 @@ itself: see `referee.guardrails`). Nothing here names a cause.
 
 from __future__ import annotations
 
+from collections import Counter
+from datetime import UTC, datetime
 from typing import Any
 
+from referee.cohorts import units_independent
 from referee.guardrails import (
     CHANCE_LEVEL,
     CONFIDENCE,
@@ -27,6 +30,7 @@ from referee.guardrails import (
     ReferenceResult,
     chance_could_explain,
     guardrail_tests,
+    window_is_open,
 )
 from referee.results import METRIC_FAMILIES, ResultsContext
 from referee.rules.text import join_and, percent_exact, percent_near, sig, sig_up
@@ -137,6 +141,11 @@ def summarise(entries: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _settings(context: ResultsContext) -> dict[str, Any]:
+    """The levels of the code and the export's time, with the analysed players left out of
+    every reading because their outcome window had not closed by then (none where it is None)."""
+    open_windows = Counter(
+        player.arm for player in context.analysed if window_is_open(player, context.exported_at)
+    )
     return {
         "confidence": CONFIDENCE,
         "decision_digits": DIGITS,
@@ -144,6 +153,9 @@ def _settings(context: ResultsContext) -> dict[str, Any]:
         "references": list(REFERENCES),
         "guardrails": [guardrail.name for guardrail in context.spec.guardrails],
         "arms": [arm for arm in context.arm_names if arm != context.control],
+        "units_independent": units_independent(context),
+        "as_of": None if context.exported_at is None else context.exported_at.isoformat(),
+        "left_out": {arm: open_windows[arm] for arm in context.arm_names},
     }
 
 
@@ -296,6 +308,11 @@ def _cap_sentence(entry: dict[str, Any], reference: dict[str, Any], reading: str
             "cannot be trusted to show a breach on its own (it lies wholly below the true mean "
             "more often than it should); the reading against control's mean is not held."
         )
+    if reference["capped_by"] == "moved_baseline":
+        return (
+            " The reading against control's mean is within the tolerance, so the arm may be what "
+            "control is and this reading may owe nothing to it."
+        )
     if reference["no_variation"]:
         return _same_value_sentence(entry, reference, reading)
     return ""
@@ -421,13 +438,34 @@ def _checked_note(settings: dict[str, Any]) -> str:
         "for the harm is beyond the tolerance, and possible when only the point estimate is; an "
         "interval with no width that chance could explain, and the t interval of a revenue-like "
         "guardrail against the registered baseline when a fall is harmful and the group has some "
-        "spread, can only make a breach possible. A point "
+        "spread, and the reading of an arm against the registered baseline when control itself "
+        "is beyond its tolerance while the reading against control's mean is within it, can only "
+        "make a breach possible. A point "
         "estimate within the tolerance is not a finding, even where its interval reaches beyond "
         "the tolerance, in which case the data cannot rule out a breach. The decisions are "
         f"made on the shares rounded to {DIGITS} places."
     )
 
 
+def _left_out_note(settings: dict[str, Any]) -> str:
+    """Which players no reading used, and why: their outcome window was still open."""
+    moment = datetime.fromisoformat(settings["as_of"]).astimezone(UTC)
+    arms = join_and([f"{count} of {arm}" for arm, count in settings["left_out"].items() if count])
+    return (
+        "Players whose seven-day outcome window had not closed by the export "
+        f"({moment:%Y-%m-%d %H:%M:%S} UTC) are left out of every reading here: {arms}. A window "
+        "still open holds only part of a week of sessions, purchases or revenue, and the mean "
+        "over such players falls short of a registered baseline that is a whole week's, "
+        "whatever the arm did. Export again once those windows have closed to read them."
+    )
+
+
+_UNITS_NOTE = (
+    "The intervals take the players to be independent draws. This spec randomises or analyses "
+    "by a unit that is not one class of independent players (a session or a cluster, or a mix "
+    "of units), so the intervals are narrower than 95% suggests, a breach shown here may be a "
+    "false alarm, and Referee has not measured by how much."
+)
 _UNADJUSTED_NOTE = (
     "The intervals are unadjusted 95% intervals, one for each arm, guardrail and reference: "
     "with several arms and guardrails some of them will miss the true value. A breach shown "
@@ -448,22 +486,28 @@ _FALL_HELD_NOTE = (
     "by chance, as said with its reading)."
 )
 _RISE_NOT_HELD_NOTE = (
-    " When a rise is harmful that reading is not held, but it hardly ever shows a rise from "
-    "such data, so a rise is carried by the reading against control's mean."
+    " When a rise is harmful the reading against the registered baseline is not held on this "
+    "account, because it hardly ever shows a rise that is not there in such data. Which of the "
+    "two readings shows a real rise first depends on how large the rise is and on how many "
+    "players there are."
 )
 _COUNT_NOTE = (
     "For a count guardrail (sessions, purchases) whose fall is harmful, the registered-baseline "
     "reading (a t interval for the arm's own mean) can show a fall more often than 95% "
-    "suggests when the counts are small, because counts are right-skewed. It is not held, and "
-    "Referee has not measured by how much."
+    "suggests when the counts are small, because counts are right-skewed. It is not held on "
+    "this account, and Referee has not measured by how much."
 )
 
 
 def _notes(entries: list[dict[str, Any]], settings: dict[str, Any]) -> list[str]:
     notes = [_checked_note(settings)]
+    if entries and any(settings["left_out"].values()):
+        notes.append(_left_out_note(settings))
     notes += [_entry_note(entry) for entry in entries]
     if entries:
         notes.append(_UNADJUSTED_NOTE)
+        if not settings["units_independent"]:
+            notes.append(_UNITS_NOTE)
     revenue = [entry for entry in entries if entry["family"] == "revenue_like"]
     if revenue:
         note = _REVENUE_NOTE

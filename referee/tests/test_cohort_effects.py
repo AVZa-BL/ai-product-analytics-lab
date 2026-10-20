@@ -1,5 +1,6 @@
 """The statistics of the cohort test (design sections 21.1 and 21.5)."""
 
+import itertools
 import math
 from pathlib import Path
 
@@ -762,6 +763,92 @@ def test_the_homogeneity_of_a_binary_control_is_the_chi_squared_test_of_its_coun
     assert baseline.homogeneity_p == pytest.approx(expected, rel=1e-6)
     assert baseline.moves is True
     assert [c.mean for c in baseline.cohorts] == pytest.approx([0.05, 0.10, 0.15, 0.20])
+
+
+def test_the_homogeneity_of_a_rare_event_control_is_the_exact_test_and_not_chi_squared(
+    raw_spec,
+) -> None:
+    # 2, 3, 2 and 9 buyers of 80: the chi-squared test says the control moves (p = 0.030), the
+    # exact test, which small counts call for (design 21.4), that it does not (p = 0.068)
+    events = {0: 2, 1: 3, 2: 2, 3: 9}
+    context = _binary_context(
+        raw_spec,
+        control={b: e / 80 for b, e in events.items()},
+        arm=dict.fromkeys(range(4), 0.10),
+        n=80,
+    )
+
+    baseline = control_baseline(
+        context, plan_cohorts(context, "variant_b"), context.metrics["purchased_7d"]
+    )
+
+    sizes, total = [80] * 4, sum(events.values())
+
+    def chance_of(counts) -> float:
+        ways = math.prod(math.comb(n, e) for n, e in zip(sizes, counts, strict=True))
+        return ways / math.comb(sum(sizes), total)
+
+    observed = chance_of(list(events.values()))
+    every_table = itertools.product(*(range(min(n, total) + 1) for n in sizes))
+    exact = sum(
+        chance_of(counts)
+        for counts in every_table
+        if sum(counts) == total and chance_of(counts) <= observed * (1 + 1e-9)
+    )
+    assert baseline.homogeneity_p == pytest.approx(exact, rel=1e-9)
+    assert baseline.homogeneity_p == pytest.approx(0.0684, abs=5e-5) and baseline.moves is False
+
+
+def test_a_cohort_that_both_scales_left_out_of_the_test_is_not_in_the_control_baseline(
+    raw_spec,
+) -> None:
+    # no buyer in either arm in block 2: nothing to compare there on either scale
+    context = _binary_context(
+        raw_spec,
+        control={0: 0.10, 1: 0.10, 2: 0.0, 3: 0.10},
+        arm={0: 0.10, 1: 0.10, 2: 0.0, 3: 0.10},
+    )
+    plan = plan_cohorts(context, "variant_b")
+    metric = context.metrics["purchased_7d"]
+    test = cohort_test(context, plan, metric)
+
+    baseline = control_baseline(context, plan, metric)
+
+    assert 2 in plan.usable
+    assert [block for block, _ in test.absolute.dropped] == [2]
+    assert [block for block, _ in test.log_ratio.dropped] == [2]
+    assert [c.block for c in baseline.cohorts] == [0, 1, 3]
+    assert baseline.pooled_mean == pytest.approx(0.10)
+
+
+def test_a_cohort_kept_by_one_scale_is_in_the_control_baseline(raw_spec) -> None:
+    # variant_b sells nothing in block 2: the log ratio has no cohort there, the difference has
+    control = cohort_draws(61, dict.fromkeys(range(4), 10))
+    arm = cohort_draws(62, dict.fromkeys(range(4), 10))
+    arm[2] = [0] * 80
+    context = cohort_context(
+        raw_spec, cohort_rows("control", control) + cohort_rows("variant_b", arm)
+    )
+    plan, metric = plan_cohorts(context, "variant_b"), context.metrics["sessions_7d"]
+    test = cohort_test(context, plan, metric)
+
+    baseline = control_baseline(context, plan, metric)
+
+    assert [b for b, _ in test.log_ratio.dropped] == [2] and not test.absolute.dropped
+    assert [c.block for c in baseline.cohorts] == [0, 1, 2, 3]
+
+
+def test_a_baseline_of_a_test_that_compared_no_cohort_is_refused(raw_spec) -> None:
+    control = {b: [7] * 80 for b in range(4)}
+    arm = {b: [9] * 80 for b in range(4)}  # no variation in either arm: both scales drop all
+    context = cohort_context(
+        raw_spec, cohort_rows("control", control) + cohort_rows("variant_b", arm)
+    )
+
+    with pytest.raises(ValueError, match="compared no cohort"):
+        control_baseline(
+            context, plan_cohorts(context, "variant_b"), context.metrics["sessions_7d"]
+        )
 
 
 def test_the_homogeneity_cannot_be_worked_out_when_the_control_does_not_vary(raw_spec) -> None:

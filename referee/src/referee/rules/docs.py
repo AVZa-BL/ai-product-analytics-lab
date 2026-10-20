@@ -82,8 +82,9 @@ does not run these rules.
 _OUTRO = """\
 ## Not yet
 
-The rest of the `RES` family in design section 21 arrives with the results review; no command
-runs the results rules yet.
+RES-005, RES-006, RES-009 and RES-010 are not built: they check how someone else analysed the
+data, and Referee does the analysis itself (design section 21.4). No command runs the results
+rules yet; the report and the `review-results` command arrive with milestone 4c.
 """
 
 

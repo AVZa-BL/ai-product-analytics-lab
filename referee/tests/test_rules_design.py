@@ -444,6 +444,31 @@ def test_des_009_judges_each_arm_against_control_on_its_own_allocation(
     assert finding.evidence["comparisons"][0]["allocation_ratio"] == 5.0
 
 
+def test_des_009_reads_control_as_the_smaller_arm_too(clean_raw_spec: dict) -> None:
+    """Control at 0.2 against 0.8 and 50 units a day: 70 players a week in control, 280 in the
+    arm, 4 to 1, where the floor rises to 97 and control's 70 do not reach it."""
+    clean_raw_spec["arms"] = [
+        {"name": "control", "allocation": 0.2, "is_control": True},
+        {"name": "variant_b", "allocation": 0.8},
+    ]
+
+    finding = evaluate(
+        des.DES_009,
+        clean_raw_spec,
+        design__planned_duration_days=28,
+        population__daily_eligible_units=50,
+    )
+
+    assert finding is not None
+    (comparison,) = finding.evidence["comparisons"]
+    assert comparison == {
+        "arm": "variant_b",
+        "reason": "fewer_than_3_cohorts_reach_minimum",
+        "allocation_ratio": 4.0,
+        "expected_players_per_week": {"arm": 280.0, "control": 70.0},
+    }
+
+
 def test_des_009_does_not_refuse_nine_to_one_which_floats_write_as_a_hair_over(
     clean_raw_spec: dict,
 ) -> None:

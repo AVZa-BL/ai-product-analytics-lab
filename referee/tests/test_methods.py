@@ -1643,6 +1643,13 @@ def test_a_stricter_level_gives_less_power() -> None:
     assert cohort_power(effects, se, level=0.0125) < cohort_power(effects, se, level=0.025)
 
 
+@pytest.mark.parametrize("size", [1e12, 1e19, 1e150])
+def test_a_change_far_beyond_the_standard_errors_is_flagged_for_certain(size: float) -> None:
+    # scipy's noncentral chi-squared is NaN from a non-centrality of about 1e19, and a NaN must
+    # not be read as a power of 0.
+    assert cohort_power([size, size, 0.0, 0.0, 0.0], [1.0] * 5, level=0.0125) == 1.0
+
+
 @pytest.mark.parametrize(
     ("effects", "std_errors", "positions", "fragment"),
     [
@@ -1720,6 +1727,20 @@ def test_a_stricter_level_needs_a_bigger_change() -> None:
     assert cohort_detectable_shift(se, shape="step", level=0.0125) > cohort_detectable_shift(
         se, shape="step", level=0.025
     )
+
+
+@pytest.mark.parametrize("shape", ["linear_fade", "step"])
+def test_a_standard_error_beyond_all_reason_leaves_the_detectable_shift_as_it_was(
+    shape: str,
+) -> None:
+    def shift(huge: float) -> float:
+        return cohort_detectable_shift([0.3, 0.3, 0.3, huge, 0.3], shape=shape, level=0.0125)
+
+    ordinary = shift(3e7)
+
+    assert 0.3 < ordinary < 6 * 0.3
+    for huge in (3e16, 3e30, 3e100):
+        assert shift(huge) == pytest.approx(ordinary, rel=1e-9)
 
 
 def test_the_detectable_shift_refuses_what_it_cannot_work_out() -> None:

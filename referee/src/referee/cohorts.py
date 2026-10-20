@@ -244,7 +244,7 @@ def _select(
         preferred_used=keep_preferred,
         minimum_arm=minimum_arm,
         minimum_control=minimum_control,
-        covers_window=any(b < half for b in usable) and any(b >= half for b in usable),
+        covers_window=any(0 <= b < half for b in usable) and any(b >= half for b in usable),
     )
 
 

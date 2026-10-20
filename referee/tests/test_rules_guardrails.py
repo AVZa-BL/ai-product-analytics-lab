@@ -56,9 +56,11 @@ PRIMARY = {
 BANNED = ("novelty", "decay", "stable", "proves", "found no", "because of")
 
 
-def _context(raw_spec, rows: list[Row], *guardrails: dict, arms=TWO_ARMS) -> ResultsContext:
+def _context(
+    raw_spec, rows: list[Row], *guardrails: dict, arms=TWO_ARMS, exported_at=None
+) -> ResultsContext:
     spec = results_spec(raw_spec, arms=arms, guardrails=list(guardrails), **PRIMARY)
-    return ResultsContext.of(spec, build_data(rows))
+    return ResultsContext.of(spec, build_data(rows, exported_at=exported_at))
 
 
 def _sessions(arm: str, values: list[int]) -> list[Row]:
@@ -263,11 +265,29 @@ def test_a_control_far_from_the_registered_baseline_is_said_to_have_moved_it(raw
 
     finding = RES_004.evaluate(_context(raw_spec, rows, SESSIONS))
 
-    assert finding is not None and finding.severity == "blocker"
+    # a warning, not a blocker: the arm is what control is, and the reading against the baseline
+    # that would be shown is held to possible (decided by the user, design 21.12)
+    assert finding is not None and finding.severity == "warning"
     (entry,) = finding.evidence["tests"]
     assert entry["references"]["control"]["tier"] == "within"
+    baseline = entry["references"]["baseline"]
+    assert (baseline["tier"], baseline["capped_by"], baseline["uncapped_tier"]) == (
+        "possible",
+        "moved_baseline",
+        "shown",
+    )
     assert entry["baseline_has_moved"] is True and entry["decided_by"] == ["baseline"]
+    assert entry["status"] == "breach_possible"
     text = " ".join(finding.evidence["notes"])
+    assert "a breach is possible, not shown." in text
+    assert (
+        "and the whole interval is beyond the tolerance, but this reading is held to possible"
+        in text
+    )
+    assert (
+        "The reading against control's mean is within the tolerance, so the arm may be what "
+        "control is and this reading may owe nothing to it."
+    ) in text
     assert "Control itself is beyond the tolerance of the registered baseline (a harm of" in text
     assert "a breach against the baseline alone does not show that variant_b caused it" in text
 
@@ -437,7 +457,109 @@ def test_the_settings_are_the_levels_of_the_code(raw_spec) -> None:
         "references": ["control", "baseline"],
         "guardrails": ["sessions_7d", "purchased_7d"],
         "arms": ["variant_b"],
+        "units_independent": True,
+        "as_of": None,
+        "left_out": {"control": 0, "variant_b": 0},
     }
+
+
+@pytest.mark.parametrize(
+    ("randomization", "analysis", "independent"),
+    [("player", "player", True), ("session", "session", False), ("cluster", "player", False)],
+)
+def test_a_spec_whose_units_are_not_independent_players_says_the_intervals_are_too_narrow(
+    raw_spec, randomization, analysis, independent
+) -> None:
+    rows = _sessions("control", [3, 4, 2, 3] * 20) + _sessions("variant_b", [3, 4, 2, 3] * 20)
+    spec = results_spec(
+        raw_spec,
+        arms=TWO_ARMS,
+        guardrails=[SESSIONS],
+        population__randomization_unit=randomization,
+        population__analysis_unit=analysis,
+        **PRIMARY,
+    )
+
+    report = guardrail_report(ResultsContext.of(spec, build_data(rows)))
+
+    assert report["settings"]["units_independent"] is independent
+    said = [n for n in report["notes"] if n.startswith("The intervals take the players to be")]
+    assert len(said) == (0 if independent else 1)
+    assert not said or "narrower than 95% suggests" in said[0]
+
+
+def _two_weeks(arm: str) -> list[Row]:
+    """5 players on each of 14 days; the window of those from day 8 on is open at the end of 14."""
+    return [
+        Row(
+            f"{arm}_{i:05d}",
+            arm,
+            assigned_at=at(days=i // 5),
+            exposed_at=at(days=i // 5, hours=1),
+            sessions=[2, 4][i % 2] if i // 5 <= 7 else [0, 2][i % 2],
+        )
+        for i in range(70)
+    ]
+
+
+def test_only_analysed_players_are_counted_as_left_out_and_a_closed_export_adds_no_note(
+    raw_spec,
+) -> None:
+    rows = _two_weeks("control") + _two_weeks("variant_b")
+    # first exposed after the first purchase: not analysed, though its window is open
+    rows.append(
+        Row(
+            "late_open",
+            "variant_b",
+            assigned_at=at(days=13),
+            exposed_at=at(days=13, hours=2),
+            purchases=1,
+            first_purchase_at=at(days=13, hours=1),
+        )
+    )
+
+    open_ = guardrail_report(_context(raw_spec, rows, SESSIONS, exported_at=at(days=14)))
+    closed = guardrail_report(_context(raw_spec, rows, SESSIONS, exported_at=at(days=40)))
+    no_guardrail = guardrail_report(_context(raw_spec, rows, exported_at=at(days=14)))
+
+    assert open_["settings"]["left_out"] == {"control": 30, "variant_b": 30}
+    assert closed["settings"]["as_of"] is not None
+    assert closed["settings"]["left_out"] == {"control": 0, "variant_b": 0}
+    assert not any(n.startswith("Players whose seven-day") for n in closed["notes"])
+    assert len(no_guardrail["notes"]) == 1  # nothing is read, so nothing is left out of it
+
+
+def test_open_windows_are_left_out_and_said_so_and_a_harmless_arm_is_no_finding(raw_spec) -> None:
+    rows = _two_weeks("control") + _two_weeks("variant_b")
+
+    cut = _context(raw_spec, rows, SESSIONS, exported_at=at(days=14))
+    report = guardrail_report(cut)
+
+    assert RES_004.evaluate(cut) is None
+    assert report["summary"]["breach_shown"] == 0 and report["summary"]["within_tolerance"] == 1
+    assert report["settings"]["as_of"] == "2026-04-25T00:00:00+00:00"
+    assert report["settings"]["left_out"] == {"control": 30, "variant_b": 30}
+    assert report["tests"][0]["n"] == {"arm": 40, "control": 40}
+    note = report["notes"][1]
+    assert note.startswith("Players whose seven-day outcome window had not closed by the export")
+    assert "(2026-04-25 00:00:00 UTC) are left out of every reading here: 30 of control" in note
+    assert "and 30 of variant_b." in note and "whatever the arm did" in note
+    assert "caused" not in note and "drift" not in note
+    # the same rows, with no time for the export: every analysed player is read, and no note
+    unknown = guardrail_report(_context(raw_spec, rows, SESSIONS))
+    assert RES_004.evaluate(_context(raw_spec, rows, SESSIONS)) is not None
+    assert unknown["settings"]["left_out"] == {"control": 0, "variant_b": 0}
+    assert not any(n.startswith("Players whose seven-day") for n in unknown["notes"])
+
+
+def test_an_export_with_every_window_open_reads_no_one_and_says_so(raw_spec) -> None:
+    rows = _two_weeks("control") + _two_weeks("variant_b")
+
+    report = guardrail_report(_context(raw_spec, rows, SESSIONS, exported_at=at(days=1)))
+
+    assert report["settings"]["left_out"] == {"control": 70, "variant_b": 70}
+    assert report["summary"]["not_evaluated"] == 1 and report["tests"][0]["n"]["arm"] == 0
+    assert report["notes"][1].endswith("Export again once those windows have closed to read them.")
 
 
 def test_the_first_note_says_what_is_read_and_what_a_breach_is(raw_spec) -> None:
@@ -458,7 +580,9 @@ def test_the_first_note_says_what_is_read_and_what_a_breach_is(raw_spec) -> None
         "in which case the data cannot rule out a breach",
         "an interval with no width that chance could explain, and the t interval of a "
         "revenue-like guardrail against the registered baseline when a fall is harmful and the "
-        "group has some spread, can only make a breach possible",
+        "group has some spread, and the reading of an arm against the registered baseline when "
+        "control itself is beyond its tolerance while the reading against control's mean is "
+        "within it, can only make a breach possible",
         "rounded to 6 places",
     ):
         assert phrase in " ".join(first.split()), phrase
@@ -1055,7 +1179,14 @@ def test_the_note_on_revenue_is_pinned_in_every_part(raw_spec) -> None:
         ):
             assert phrase in note, phrase
         assert ("a breach is shown only by the reading against control's mean" in note) is held
-        assert ("so a rise is carried by the reading against control's mean" in note) is not held
+        rise_note = (
+            "When a rise is harmful the reading against the registered baseline is not held on "
+            "this account, because it hardly ever shows a rise that is not there in such data. "
+            "Which of the two readings shows a real rise first depends on how large the rise is "
+            "and on how many players there are."
+        )
+        assert (rise_note in note) is not held
+        assert "carried by the reading against control's mean" not in note
         assert "RES-008 gives the measured rates" not in note
 
 
