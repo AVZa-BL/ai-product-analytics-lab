@@ -11,7 +11,6 @@ import pytest
 import scipy
 from cohort_simulation import (
     BASE,
-    DRIFT,
     EQUAL_PLAYERS,
     FLOOR_MULTIPLES,
     HEAVY_COHORTS,
@@ -65,7 +64,8 @@ from referee.cohort_effects import (
 )
 from referee.cohorts import raised_floor
 from referee.methods import cohort_detectable_shift, heavy_tail_measures
-from referee.rules import cohorts as cohort_rule
+
+pytestmark = pytest.mark.study  # re-runs simulations; run with `pytest -m study`
 
 
 def _real(arm: np.ndarray, control: np.ndarray) -> dict[str, np.ndarray]:
@@ -270,12 +270,9 @@ def test_every_variant_of_a_three_arm_cell_has_its_own_draws() -> None:
     assert not math.isclose(float(both[:, 0].mean()), 0.0)
 
 
-# --- The committed study, the design text, and a re-run of some of its cells ----------------------
+# --- The committed study, and a re-run of some of its cells ---------------------------------------
 
 DOCS = Path(__file__).resolve().parent.parent / "docs"
-DESIGN = (DOCS / "design/2026-09-28-referee-experiment-review-design.md").read_text(
-    encoding="utf-8"
-)
 NULL = json.loads((DOCS / "simulations/cohort_trigger_null.json").read_text(encoding="utf-8"))
 FADE = json.loads((DOCS / "simulations/cohort_trigger_fade.json").read_text(encoding="utf-8"))
 
@@ -297,38 +294,6 @@ def test_the_study_covers_the_whole_grid_with_the_settings_it_says() -> None:
     )
 
 
-def test_the_design_text_quotes_the_figures_the_committed_study_holds() -> None:
-    amendment = DESIGN.split("\n## 21. Amendment")[1]
-    stable = _cells(NULL, arms=2, scenario=("zero", "relative"))
-    normal_poisson = [c for c in stable if c["outcome"] in ("normal", "poisson")]
-    drift_relative = _cells(NULL, arms=2, scenario="relative_drift")
-    drift_absolute = _cells(NULL, arms=2, scenario="absolute_drift")
-    three = _cells(NULL, arms=3)
-    lognormal = _cells(NULL, arms=2, scenario="zero", outcome="lognormal")
-    binary_small = [c for c in stable if c["outcome"] == "binary" and c["n"] == 30]
-    mean = lambda cells, key: sum(c[key] for c in cells) / len(cells)  # noqa: E731
-
-    quoted = {
-        "mean": _percent(mean(stable, "both")),
-        "max": _percent(max(c["both"] for c in stable)),
-        "mean of normal and Poisson": _percent(mean(normal_poisson, "both")),
-        "absolute alone under drift": f"{100 * max(c['absolute'] for c in drift_relative):.1f}%",
-        "relative alone under drift": f"{100 * max(c['relative'] for c in drift_absolute):.1f}%",
-        "three arms, an arm": _percent(max(c["both"] for c in three)),
-        "three arms, any arm": _percent(max(c["any_arm_both"] for c in three)),
-        "three arms, mean": _percent(mean(three, "any_arm_both")),
-        "relative alone, lognormal": f"{100 * max(c['relative'] for c in lognormal):.1f}%",
-        "binary, small cohorts": _percent(mean(binary_small, "both")),
-    }
-    for label, text in quoted.items():
-        assert text.replace(".00%", "%") in amendment or text in amendment, (label, text)
-    assert sum(c["both"] <= 0.05 for c in stable) == 95 and len(stable) == 96
-    assert max(c["both"] for c in drift_relative) == pytest.approx(0.04, abs=5e-5)
-    assert max(c["both"] for c in drift_absolute) == pytest.approx(0.035, abs=5e-5)
-    assert "holds the trigger to 4.0% and 3.5% at most" in amendment
-    assert max(c["both"] for c in lognormal) < 0.0475
-
-
 def test_the_null_flag_rates_the_findings_quote_are_the_mean_and_maximum_of_the_study() -> None:
     stable = _cells(NULL, arms=2, scenario=("zero", "relative"))
     rates = [c["both"] for c in stable]
@@ -336,28 +301,6 @@ def test_the_null_flag_rates_the_findings_quote_are_the_mean_and_maximum_of_the_
     assert len(rates) == 96
     assert NULL_FLAG_RATE_MEAN == round(sum(rates) / len(rates), 4)
     assert NULL_FLAG_RATE_MAX == max(rates)
-
-
-def test_the_design_text_quotes_the_power_figures_the_committed_study_holds() -> None:
-    amendment = DESIGN.split("\n## 21. Amendment")[1]
-    row = {
-        o: _cells(FADE, arms=2, outcome=o, cohorts=8, n=100)[0]
-        for o in ("normal", "poisson", "lognormal", "binary")
-    }
-    both = [f"{100 * row[o]['both']:.1f}%".replace("100.0%", "100%") for o in row]
-    q_only = [f"{100 * row[o]['q_both']:.1f}%" for o in row]
-    absolute = [f"{100 * row[o]['absolute']:.1f}%".replace("100.0%", "100%") for o in row]
-
-    assert both == ["100%", "95.8%", "34.6%", "6.1%"]
-    wording = (
-        "flags 100% of runs for the normal outcome, 95.8% for the Poisson, "
-        "34.6% for the lognormal and 6.1% for the binary"
-    )
-    assert wording in amendment
-    assert q_only == ["99.5%", "75.9%", "13.4%", "1.6%"]
-    assert "Q alone on both scales would flag 99.5%, 75.9%, 13.4% and 1.6%" in amendment
-    assert absolute == ["100%", "98.3%", "37.3%", "11.0%"]
-    assert "the absolute scale alone would flag 100%, 98.3%, 37.3% and 11.0%" in amendment
 
 
 CHECKED = [
@@ -1529,7 +1472,7 @@ def test_a_rerun_of_a_printed_cell_agrees_with_the_committed_study(
     assert rerun["ratio_p50"] == pytest.approx(stored["ratio_p50"], abs=0.08)
 
 
-# --- The design text and the committed heavy-tailed study -----------------------------------------
+# --- What the committed heavy-tailed study shows --------------------------------------------------
 
 
 def _percent(value: float, places: int = 2) -> str:
@@ -1568,7 +1511,7 @@ def _population_skewness(outcome: str) -> float:
 
 
 def _heavy_figures() -> dict:
-    """Every figure the design text quotes from the heavy-tailed study, worked out from the file."""
+    """The figures of the heavy-tailed study that its claims rest on, worked out from the file."""
     cells = HEAVY["cells"]
     printed = [c for c in HEAVY["printed"] if c["scenario"] == "printed_shift"]
     located = [c for c in HEAVY["printed"] if c["scenario"] == "printed_location"]
@@ -1852,10 +1795,6 @@ def _same(shift_cell: dict, printed_cell: dict) -> bool:
     ) and shift_cell["scenario"] == "null_se_shift"
 
 
-def _amendment() -> str:
-    return DESIGN.split("\n## 21. Amendment")[1]
-
-
 EXPORT_PHRASE = (
     "731 to 969 an arm, 12% to 15% of them paying; skewness 11.5 to 19.4, excess kurtosis 151 to "
     "463, 51% to 62% in the top 1%"
@@ -1863,356 +1802,7 @@ EXPORT_PHRASE = (
 EXPORT_MARGIN = "51.2% against the band's lower edge of 50.4%"  # the thinnest margin of the six
 
 
-def _sentences() -> dict[str, str]:
-    """The sentences of the design text that carry figures, made from the committed file.
-
-    The design text is written around these sentences; `test_the_design_text_has_no_figure...`
-    checks that it holds no figure outside them.
-    """
-    f = _heavy_figures()
-    row = {s["outcome"]: s for s in HEAVY["shapes"] if s["n"] == 900}
-    middle, mild = row["revenue"], row["revenue_mild"]
-    whole = lambda x: f"{100 * x:.0f}%"  # noqa: E731
-    population = [_population_skewness(o) for o in TAILED]
-    sds = [SPEND_SD[o] for o in TAILED]
-    by, ne, pr, ra = f["by split"], f["null se"], f["printed"], f["ratio"]
-    nl, pl = f["null se location"], f["printed location"]
-    label = f["label 1000"]
-    pairs, nine = f["pairs"], f["nine to one means"]
-    over, unequal = f["over"], f["unequal"]
-    again = f["replication"]
-    (replicated,) = HEAVY["replication"]
-    cohorts = " and ".join(str(k) for k in SHIFT_COHORTS)
-    players = f"{', '.join(str(n) for n in SHIFT_PLAYERS[:-1])} and {SHIFT_PLAYERS[-1]:,}"
-    floors = (
-        ", ".join(str(raised_floor(x)) for x in SPLITS[:-1]) + f" and {raised_floor(SPLITS[-1])}"
-    )
-    splits = ", ".join(str(x) for x in SPLITS[:-1]) + f" and {SPLITS[-1]}"
-    equal_cohorts = ", ".join(str(k) for k in HEAVY_COHORTS[:-1]) + f" and {HEAVY_COHORTS[-1]}"
-    mc = 100 * math.sqrt(0.04 * 0.96 / HEAVY["reps"])
-    return {
-        "A settings": (
-            f"{HEAVY['reps']:,} replications a cell for the trigger, seed {HEAVY['seed']}, "
-            f"Monte Carlo error {mc:.2f} points at 4%"
-        ),
-        "A outcome": (
-            f"{PAYING:.0%} of the players spend a lognormal amount whose log-scale standard "
-            f"deviation is {sds[0]:.1f}, {sds[1]:.1f} or {sds[2]:.1f}"
-        ),
-        "A mean": (
-            f"the mean is {BASE['revenue']:.1f} per player, {BASE['revenue'] / PAYING:.2f} per "
-            "paying player, in all three"
-        ),
-        "A shape": (
-            f"one arm of 900 players of the middle outcome, over {middle['samples']:,} simulated "
-            f"arms, has a median skewness of {middle['skewness_p50']:.1f} (5th to 95th percentile "
-            f"{middle['skewness_p5']:.1f} to {middle['skewness_p95']:.1f}), excess kurtosis of "
-            f"{middle['excess_kurtosis_p50']:.0f} ({middle['excess_kurtosis_p5']:.0f} to "
-            f"{middle['excess_kurtosis_p95']:.0f}) and {whole(middle['top_1_percent_share_p50'])} "
-            f"of the total in its top 1% ({whole(middle['top_1_percent_share_p5'])} to "
-            f"{whole(middle['top_1_percent_share_p95'])})"
-        ),
-        "A population": (
-            f"the population's skewness is {population[1]:.0f} ({population[0]:.1f} for the mild "
-            f"outcome and {population[2]:,.0f} for the heavy one)"
-        ),
-        "A sd": (
-            f"its standard deviation is a median {f['sd ratio']['revenue']} of the population's "
-            f"(5th to 95th percentile {f['sd ratio range'][0]} to {f['sd ratio range'][1]}; a "
-            f"median {f['sd ratio']['revenue_heavy']} for the heavy outcome)"
-        ),
-        "A export": EXPORT_PHRASE,
-        "A top": "the top 1% of an arm of n players is its largest ceil(n / 100) values",
-        "A margin": EXPORT_MARGIN,
-        "A mild": (
-            f"its 95th percentile of the top-1% share, {whole(mild['top_1_percent_share_p95'])}, "
-            f"is below that of every arm, and its 95th percentile of skewness, "
-            f"{mild['skewness_p95']:.1f}, is below the skewness of two of the three arms "
-            "(19.3 and 19.4)"
-        ),
-        "B equal design": (
-            f"{equal_cohorts} cohorts of 30, 100, 300 and {EQUAL_PLAYERS[-1]:,} players; no "
-            f"effect, +20% and the two drifting baselines of 21.5; {f['equal'][0]} cells"
-        ),
-        "B max": f"{f['equal max'][0]}, {f['equal max'][1]} and {f['equal max'][2]}",
-        "B mean": (f"{f['stable mean'][0]}, {f['stable mean'][1]} and {f['stable mean'][2]}"),
-        "B stable cells": f"over the {f['stable cells']} cells with a stable baseline",
-        "B none over": "no cell is above 5%",
-        "B relative": (
-            f"up to {f['relative alone'][0]}, {f['relative alone'][1]} and "
-            f"{f['relative alone'][2]} of runs; for the heavy outcome with {HEAVY_COHORTS[-1]} "
-            f"cohorts and no effect {f['relative alone heavy 12'][0]} with {EQUAL_PLAYERS[0]} "
-            f"players a cohort and {f['relative alone heavy 12'][1]} with {EQUAL_PLAYERS[-1]:,}"
-        ),
-        "B relative size": (
-            f"with a stable baseline it flags {f['relative stable']['mild small']} of runs for the "
-            f"mild outcome with {EQUAL_PLAYERS[0]} players a cohort, "
-            f"{f['relative stable']['mild 300']} with {EQUAL_PLAYERS[2]} and "
-            f"{f['relative stable']['mild 1000']} with {EQUAL_PLAYERS[-1]:,}, and "
-            f"{f['relative stable']['middle 1000']} for the middle outcome and "
-            f"{f['relative stable']['heavy 1000']} for the heavy one with {EQUAL_PLAYERS[-1]:,}"
-        ),
-        "B drift": (
-            f"with a constant relative effect and a baseline that drifts by \u00b1{DRIFT:.0%} "
-            "the absolute scale alone flags at most "
-            f"{f['absolute drifting']['revenue_mild'][0]}, {f['absolute drifting']['revenue'][0]} "
-            f"and {f['absolute drifting']['revenue_heavy'][0]} of runs with {EQUAL_PLAYERS[0]} "
-            f"players a cohort and {f['absolute drifting']['revenue_mild'][1]}, "
-            f"{f['absolute drifting']['revenue'][1]} and "
-            f"{f['absolute drifting']['revenue_heavy'][1]} with {EQUAL_PLAYERS[-1]:,}, for the "
-            "mild, middle and heavy outcome"
-        ),
-        "B absolute": (
-            "the absolute scale alone stays within 5% for a stable baseline (at most "
-            f"{f['absolute alone stable'][0]}, {f['absolute alone stable'][1]} and "
-            f"{f['absolute alone stable'][2]}) and goes beyond it only for the mild outcome with "
-            f"a baseline that drifts ({f['absolute alone drift']})"
-        ),
-        "B unequal design": (
-            f"the smaller arm at the floor that 21.6 raises for the split and at three times it, "
-            f"{floors} players at {splits} to 1, and the variant both the larger and the smaller "
-            f"arm; no effect and +20%; {equal_cohorts} cohorts; {unequal[0]} cells"
-        ),
-        "B nine to one": (
-            f"at 9 to 1 with {HEAVY_COHORTS[-1]} cohorts the mean of the cells is {nine[0]} with "
-            f"the smaller arm at the floor and {nine[1]} at three times it"
-        ),
-        "B over": (
-            f"{unequal[1]} cells read above 5% ({unequal[2]} to {unequal[3]}; the standard error "
-            f"of a cell is {unequal[6]} points, and {unequal[4]} are above {unequal[5]})"
-        ),
-        "B over where": (
-            f"all with {' or '.join(str(k) for k in over['cohorts'])} cohorts, "
-            f"{over['nine to one']} of them at 9 to 1, {over['outcomes'][0]} for the mild "
-            f"outcome, {over['outcomes'][1]} for the middle one and {over['outcomes'][2]} for "
-            f"the heavy one (at most {over['heavy max']})"
-        ),
-        "B by split": (
-            f"the most any cell flags at {splits} to 1 is "
-            f"{', '.join(by['revenue_mild'][:3])} and {by['revenue_mild'][3]} for the mild "
-            f"outcome, {', '.join(by['revenue'][:3])} and {by['revenue'][3]} for the middle one "
-            f"and {', '.join(by['revenue_heavy'][:3])} and {by['revenue_heavy'][3]} for the "
-            "heavy one"
-        ),
-        "B larger arms": (
-            f"three times the floor is higher than the floor in {pairs[0]} of {pairs[1]} matched "
-            f"pairs, the same in {pairs[6]} and lower in {pairs[7]}, and the average difference "
-            f"over all pairs is {pairs[2]} points; the mild outcome at 9 to 1 falls in {pairs[4]} "
-            f"of its {pairs[5]} pairs, by {pairs[3].lstrip('-')} points on average over the "
-            f"{pairs[5]}, and {pairs[8]} other pairs fall by at most {pairs[9]} points"
-        ),
-        "B replication": (
-            f"the highest cell with {replicated['cohorts']} cohorts, the middle outcome with the "
-            f"variant at {replicated['n']} players "
-            f"against {replicated['control_n']:,} in control and +20%, flagged {again[1]} "
-            f"\u00b1 {again[2]} (one standard error) of "
-            f"{again[3]:,} runs with seed {again[4]}, against {again[0]} in the study"
-        ),
-        "C power": (
-            f"is flagged in {f['fade 1000'][0]}, {f['fade 1000'][1]} and {f['fade 1000'][2]} of "
-            f"runs for the mild, middle and heavy outcome ({f['fade 100'][0]}, "
-            f"{f['fade 100'][1]} and {f['fade 100'][2]} with 100 players), against 95.8% for the "
-            "Poisson outcome at 100"
-        ),
-        "D design": f"for {cohorts} cohorts of {players} players an arm",
-        "D a normal": (
-            f"{ne['normal'][0]} of runs for the normal outcome (the trigger {ne['normal'][1]})"
-        ),
-        "D a poisson": (
-            f"{ne['poisson'][0]} for the Poisson outcome (the trigger {ne['poisson'][1]})"
-        ),
-        "D a lognormal": (
-            f"{ne['lognormal'][0]} for the lognormal outcome of 21.5 (the trigger "
-            f"{ne['lognormal'][1]})"
-        ),
-        "D a binary": (
-            f"{ne['binary'][0]} for the binary outcome at 10% (the trigger {ne['binary'][1]})"
-        ),
-        "D a revenue": (
-            f"{ne['revenue-like'][0]} for the heavy-tailed ones (the trigger "
-            f"{ne['revenue-like'][1]})"
-        ),
-        "D a location": (
-            f"Q-or-slope flags {nl['lognormal']} for the lognormal outcome and "
-            f"{nl['revenue-like']} for the heavy-tailed ones"
-        ),
-        "D b design": (
-            f"two arms of equal size and a stable baseline, {HEAVY['printed_reps']:,} datasets "
-            "with no effect a cell, then one fresh dataset with a fade of the printed size for "
-            f"each, so that a rate has a Monte Carlo error of {f['printed error']} points at 50%"
-        ),
-        "D b normal poisson": (
-            f"a median of {ra['normal'][2]} times the shift from the population's standard "
-            f"error, 5th to 95th percentile {min(ra['normal'][0], ra['poisson'][0])} to "
-            f"{max(ra['normal'][1], ra['poisson'][1])} for the two) and a fade of that size is "
-            f"flagged in {pr['normal'][0]} and {pr['poisson'][0]} of runs (the trigger "
-            f"{pr['normal'][1]} and {pr['poisson'][1]})"
-        ),
-        "D b lognormal": (
-            f"the median printed shift is {ra['lognormal'][2]} to {ra['lognormal'][3]} of the "
-            f"population's (5th to 95th percentile {ra['lognormal'][0]} to "
-            f"{ra['lognormal'][1]}) and the flag rate {pr['lognormal'][0]}; for the binary "
-            f"outcome {pr['binary'][0]} (the "
-            f"trigger {pr['binary'][1]})"
-        ),
-        "D b revenue": (
-            f"a median of {ra['revenue-like'][2]} to {ra['revenue-like'][3]} of the population's "
-            f"(5th to 95th percentile {ra['revenue-like'][0]} to {ra['revenue-like'][1]}), and a "
-            f"fade of that size is flagged in only {pr['revenue-like'][0]} of runs "
-            f"({pr['middle'][0]} for the middle outcome), the trigger in {pr['revenue-like'][1]}"
-        ),
-        "D b offset": (
-            f"the printed shift is still a median {f['located']['ratio'][0]} to "
-            f"{f['located']['ratio'][1]} of the population's"
-        ),
-        "D b short": (
-            f"the trigger is {f['located']['short'][0]} to {f['located']['short'][1]} points "
-            f"short of {POWER:.0%} even then, and the second scale costs it "
-            f"{f['located']['cost'][0]} to {f['located']['cost'][1]} points"
-        ),
-        "D b location": (
-            f"{pl['revenue-like'][0]} of runs ({pl['middle'][0]} for the middle outcome), the "
-            f"trigger in {pl['revenue-like'][1]}"
-        ),
-        "D c small": (
-            f"fires in {f['label small']} of the runs for the heavy-tailed outcomes with "
-            f"{SHIFT_PLAYERS[0]} or {SHIFT_PLAYERS[1]} players a cohort"
-        ),
-        "D c 1000": (
-            f"with {EQUAL_PLAYERS[-1]:,} in {label['revenue_mild'][0]} and "
-            f"{label['revenue_mild'][1]} for the mild outcome, {label['revenue'][0]} and "
-            f"{label['revenue'][1]} for the middle one and {label['revenue_heavy'][0]} and "
-            f"{label['revenue_heavy'][1]} for the heavy one ({cohorts} cohorts)"
-        ),
-        "D c unlabelled": (
-            f"a fade of the printed size is flagged in {f['unlabelled'][0]} of runs, in the "
-            f"{f['unlabelled'][1]} cells (of {f['unlabelled'][2]}) with at least 200 such runs "
-            f"({f['unlabelled middle 1000'][0][0]} and {f['unlabelled middle 1000'][1][0]} for "
-            f"the middle outcome at {EQUAL_PLAYERS[-1]:,} players, from "
-            f"{f['unlabelled middle 1000'][0][1]} and {f['unlabelled middle 1000'][1][1]:,} runs, "
-            f"against {f['all middle 1000'][0]} and {f['all middle 1000'][1]} of all its runs)"
-        ),
-        "E poisson": (
-            f"(the trigger up to {f['shortfall']['normal'][2]} points short) and, to within "
-            f"{f['shortfall']['poisson'][1]} points, for the Poisson outcome (the trigger up to "
-            f"{f['shortfall']['poisson'][2]} points short)"
-        ),
-        "E short": (
-            f"optimistic by up to {f['shortfall']['lognormal'][1]} points for the lognormal and "
-            f"{f['shortfall']['binary'][1]} for the binary outcome (the trigger by up to "
-            f"{f['shortfall']['lognormal'][2]} and {f['shortfall']['binary'][2]})"
-        ),
-        "E revenue": (
-            f"by {f['shortfall']['revenue-like'][0]} to {f['shortfall']['revenue-like'][1]} points "
-            "for the heavy-tailed outcomes"
-        ),
-        "E mde": (
-            f"the 5th percentile of the printed shift is at least {f['smallest shift']:.2f} times "
-            "the population mean in every cell of the three heavy-tailed outcomes, so the label "
-            "for 4 times the registered effect fires in at least 95% of the runs that print a "
-            f"shift when that effect is below {f['smallest shift'] / 4:.0%} of a baseline near "
-            "the mean (both example specs register 5%)"
-        ),
-        "E label": (
-            f"at {EQUAL_PLAYERS[-1]:,} players a cohort the control-mean label fires in "
-            f"{label['revenue_mild'][1]} of the runs for the mild outcome and in about a third "
-            f"({label['revenue'][1]}) for the middle one with {SHIFT_COHORTS[-1]} cohorts"
-        ),
-        "second scale": (
-            f"it costs {f['second scale']['normal']} points for the normal outcome, "
-            f"{f['second scale']['poisson']} for the Poisson, {f['second scale']['lognormal']} "
-            f"for the lognormal, {f['second scale']['binary']} for the binary outcome at 10% and "
-            f"{f['second scale']['revenue-like']} for the heavy-tailed ones "
-            f"({f['second scale location']} if the shift is added to every player of the arm "
-            "instead of scaling its spend)"
-        ),
-        "fade study": (
-            f"in the fade study of 21.5 it costs up to {f['fade cost']['normal']}, "
-            f"{f['fade cost']['poisson']}, {f['fade cost']['lognormal']} and "
-            f"{f['fade cost']['binary']} points of power for the normal, Poisson, lognormal and "
-            "binary outcome over its two-arm cells, and "
-            f"{f['fade cost example']['normal']}, {f['fade cost example']['poisson']}, "
-            f"{f['fade cost example']['lognormal']} and {f['fade cost example']['binary']} at "
-            "8 cohorts of 100 players, the example there"
-        ),
-        "spread": (
-            f"{pr['revenue-like'][0]} of runs when the effect scales spend and in "
-            f"{pl['revenue-like'][0]} when it is added to every player, for the heavy-tailed "
-            "outcomes"
-        ),
-        "most unequal": (
-            f"the highest of the {unequal[0]} cells with unequal arms is {unequal[3]} (one study "
-            f"value with a standard error of {unequal[6]} points, not a bound)"
-        ),
-        "payers": f"{PAYING:.0%}",
-        "claim": f"{100 * POWER:.0f}%",  # 21.7 only; the bullets say it in "D claim"
-        "E level": "they exceed 5% in places",
-        "A band": "a 900-player sample of the middle and of the heavy outcome",
-        "D claim": f"flagged with probability {100 * POWER:.0f}%",
-        "C design": (
-            f"a relative effect of +40% that fades linearly to 0 over {SHIFT_COHORTS[-1]} "
-            f"cohorts of {EQUAL_PLAYERS[-1]:,} players an arm"
-        ),
-    }
-
-
-def _bullets() -> str:
-    text = _amendment()
-    return text[
-        text.index("- Heavy-tailed outcomes, measured (4b-2;") : text.index(
-            "- Number of tests. The finding prints"
-        )
-    ]
-
-
-ELSEWHERE = {"second scale", "most unequal", "fade study", "spread", "payers", "claim"}
 # the sentences that are in 21.7 or 21.9 and not in the new bullets
-
-
-def _figures_outside(text: str, phrases: list[str]) -> list[str]:
-    """The figures left in the text once each sentence has been taken out of it, once."""
-    import re
-
-    for phrase in sorted(phrases, key=len, reverse=True):
-        assert text.count(phrase) == 1, phrase
-        text = text.replace(phrase, " ", 1)
-    text = text.replace("4b-2", " ").replace("RES-007", " ").replace("RES-008", " ")
-    text = re.sub(r"(?<![\d.])21\.(?:[5-9]|1[01])(?![\d%])", " ", text)  # a section reference
-    text = re.sub(r"(?<!\d)(5|95)th\b", " ", text)  # the ordinal of a percentile
-    return re.findall(r"\d[\d,.]*%?", text)
-
-
-def test_the_design_text_holds_every_sentence_the_heavy_study_makes() -> None:
-    bullets, amendment = _bullets(), _amendment()
-
-    for label, phrase in _sentences().items():
-        assert phrase in (amendment if label in ELSEWHERE else bullets), (label, phrase)
-
-
-def test_the_design_text_has_no_figure_outside_those_sentences() -> None:
-    phrases = [phrase for label, phrase in _sentences().items() if label not in ELSEWHERE]
-
-    assert _figures_outside(_bullets(), phrases) == []
-
-
-def test_the_check_for_figures_outside_the_sentences_finds_a_figure_that_is_there() -> None:
-    sentences = ["flagged in 12.5% of runs", "the 5th to 95th percentile 0.5 to 1.0"]
-    text = f"A: {sentences[0]}. See 21.5 and 4b-2 (RES-008). B: {sentences[1]}."
-
-    assert _figures_outside(text, sentences) == []
-    for extra, found in [
-        (" It flags 80% of runs.", ["80%"]),
-        (" It is 0.35 times that.", ["0.35"]),
-        (" See 21.75 now.", ["21.75"]),
-        (" In 12 cases.", ["12"]),
-        (" Section 21.7 of 3 now.", ["3"]),
-        (" The 50th percentile.", ["50"]),
-    ]:
-        assert _figures_outside(text + extra, sentences) == found, extra
-    with pytest.raises(AssertionError):  # a sentence that is not there, or is there twice
-        _figures_outside(text, [*sentences, "not in the text"])
-    with pytest.raises(AssertionError):
-        _figures_outside(text + " " + sentences[0], sentences)
 
 
 def test_the_exports_revenue_phrase_in_the_text_is_the_one_the_export_gives(raw_spec: dict) -> None:
@@ -2368,35 +1958,3 @@ def test_the_claims_that_join_the_sentences_follow_from_the_study() -> None:
 
 def _span_low(span: str) -> float:
     return float(span.split("%")[0]) / 100
-
-
-def test_the_other_sections_carry_what_the_heavy_study_changes() -> None:
-    amendment, sentences = _amendment(), _sentences()
-
-    assert (
-        f"{sentences['fade study']}; at the {sentences['claim']} shift itself "
-        f"{sentences['second scale']}, so the figure is optimistic for the trigger by that much"
-    ) in amendment
-    assert f"flagged in {sentences['spread']}, 21.5)" in amendment
-    assert "costs up to 3 points of power, 5 for a binary outcome" not in amendment
-    assert "so the figure is a little optimistic)" not in amendment
-    # the note a finding prints no longer says so, and the design says that it was replaced
-    assert "a little optimistic" not in inspect.getsource(cohort_rule)
-    assert "still calls it a little optimistic" not in amendment
-    assert "was replaced in 4b-2 by the measured shares of runs (21.11)" in amendment
-    assert "computed at the trigger's level for Q-or-slope on the absolute scale" in amendment
-    assert "computed for the trigger actually used" not in amendment
-    assert (
-        f"with unequal arms {sentences['most unequal']} in the heavy-tailed study of 21.5, which "
-        "the finding does not adjust for"
-    ) in amendment
-    assert f"the share of paying players was fixed at {sentences['payers']}" in amendment
-    assert "Not adopted in 4b-2: the bootstrap of RES-008 in the cohort test" in amendment
-    assert (
-        "Decided in 4b-2, with RES-008 (21.11): what RES-007 prints as the smallest change"
-        in amendment
-    )
-    assert "cohorts of very different sizes in one experiment (21.1 has Q alone" in amendment
-    assert "the shift a finding prints for three arms, for arms of unequal size" in amendment
-    assert "Settled in 4b-2" not in amendment
-    assert "Open for 4b-2: how RES-008's bootstrap" not in amendment

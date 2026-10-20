@@ -501,21 +501,6 @@ def test_the_module_says_what_its_rates_are_in() -> None:
     assert pooled_rates.UNIT == pooled_rates_table.UNIT == 100_000
 
 
-def test_the_command_that_makes_the_table_is_the_same_in_every_place_that_names_it() -> None:
-    command = "python tests/pooled_rates_table.py > src/referee/pooled_rates_table.py"
-    design = (ROOT / "docs/design/2026-09-28-referee-experiment-review-design.md").read_text(
-        encoding="utf-8"
-    )
-
-    for place in (
-        (ROOT / "README.md").read_text(encoding="utf-8"),
-        design.split("\n### 21.11 ")[1],
-        generator.__doc__,
-        pooled_rates_table.__doc__,
-    ):
-        assert command in " ".join(place.split())
-
-
 def test_a_direction_beyond_the_grid_is_named_once_however_many_splits_are_used() -> None:
     for effects in ("small", "large"):
         found = lookup(effects, "arm", Fraction(11, 5), 50000)

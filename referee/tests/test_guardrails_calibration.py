@@ -18,20 +18,25 @@ import functools
 import math
 
 import numpy as np
+import pytest
 
 from referee.guardrails import baseline_reference, control_reference
+
+pytestmark = pytest.mark.study  # re-runs simulations; run with `pytest -m study`
 
 SPEND, LOG_SD, PLAYERS, DRAWS, TOLERANCE = 0.13, 1.5, 1000, 1500, 0.10
 TRUE_MEAN = SPEND * math.exp(LOG_SD**2 / 2)
 
 
-def _revenue(rng: np.random.Generator, spend: float) -> list[float]:
-    paying = rng.random(PLAYERS) < spend
-    return np.where(paying, rng.lognormal(0.0, LOG_SD, PLAYERS), 0.0).tolist()
+def _revenue(rng: np.random.Generator, spend: float, players: int = PLAYERS) -> list[float]:
+    paying = rng.random(players) < spend
+    return np.where(paying, rng.lognormal(0.0, LOG_SD, players), 0.0).tolist()
 
 
 @functools.cache
-def _rates(harm: float, direction: str = "decrease") -> dict[str, float]:
+def _rates(
+    harm: float, direction: str = "decrease", players: int = PLAYERS, draws: int = DRAWS
+) -> dict[str, float]:
     """The share of draws in which a breach is shown, for an arm whose mean is `harm` worse than
     the registered baseline (a fall for "decrease", a rise for "increase"): by the reading against
     the baseline alone with and without the hold (`baseline_held`, `baseline_unheld`), by the
@@ -46,8 +51,8 @@ def _rates(harm: float, direction: str = "decrease") -> dict[str, float]:
         "tolerance": TOLERANCE,
     }
     factor = 1 - harm if direction == "decrease" else 1 + harm
-    for _ in range(DRAWS):
-        arm, control = _revenue(rng, SPEND * factor), _revenue(rng, SPEND)
+    for _ in range(draws):
+        arm, control = _revenue(rng, SPEND * factor, players), _revenue(rng, SPEND, players)
         unheld = baseline_reference(arm, **options).harm
         held = baseline_reference(arm, right_skewed=True, **options).harm
         versus = control_reference(arm, control, direction=direction, tolerance=TOLERANCE).harm
@@ -57,7 +62,7 @@ def _rates(harm: float, direction: str = "decrease") -> dict[str, float]:
         counts["control"] += versus.tier == "shown"
         counts["rule"] += "shown" in (held.tier, versus.tier)
         counts["unheld"] += "shown" in (unheld.tier, versus.tier)
-    return {name: count / DRAWS for name, count in counts.items()}
+    return {name: count / draws for name, count in counts.items()}
 
 
 # --- A fall, the case the hold is for ---------------------------------------------------------
@@ -110,11 +115,23 @@ def test_the_hold_costs_power_at_a_fall_of_three_times_the_tolerance() -> None:
 
 def test_a_rise_is_hardly_ever_shown_by_the_baseline_reading_so_it_is_not_over_shown() -> None:
     """The same interval almost never lies wholly above the true mean for such data, so there is
-    nothing to hold in a rise; the cost is the other way, a rise that the baseline reading
-    misses, which the reading against control carries."""
-    harmless, rising = _rates(0.0, "increase"), _rates(0.30, "increase")
+    nothing to hold in a rise. It does not follow that a rise is left to the reading against
+    control: that holds for a small rise only (the next test)."""
+    harmless = _rates(0.0, "increase")
 
     assert harmless["baseline_held"] < 0.005 and harmless["baseline_unheld"] < 0.005
     assert harmless["rule"] < 0.035
-    assert rising["baseline_held"] < 0.05  # barely sees a rise of 30%
-    assert rising["control"] > 0.08 and rising["control"] > 2 * rising["baseline_held"]
+
+
+def test_which_reading_shows_a_rise_first_depends_on_how_large_it_is_and_on_the_players() -> None:
+    """What the note on a rise says, in the three cases that it spans: a small rise is seen by
+    the reading against control and barely by the baseline reading; a large one by the baseline
+    reading much more often than by control; and the same rise (30%) that the baseline reading
+    barely sees at 1,000 players an arm it shows more often than control at 10,000."""
+    small, large = _rates(0.30, "increase"), _rates(1.0, "increase")
+    many = _rates(0.30, "increase", players=10_000, draws=300)
+
+    assert small["baseline_held"] < 0.05  # barely sees a rise of 30%
+    assert small["control"] > 0.08 and small["control"] > 2 * small["baseline_held"]
+    assert large["baseline_held"] > 0.8 and large["baseline_held"] > large["control"] + 0.15
+    assert many["baseline_held"] > 0.5 and many["baseline_held"] > many["control"] + 0.15

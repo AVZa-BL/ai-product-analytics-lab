@@ -44,6 +44,8 @@ from referee.methods import (
     welch_difference,
 )
 
+pytestmark = pytest.mark.study  # re-runs simulations; run with `pytest -m study`
+
 
 def _players(sample, r: int) -> np.ndarray:
     """The n values of replication r of a sparse sample (`keep=True`), zeros included."""

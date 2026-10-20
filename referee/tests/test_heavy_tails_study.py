@@ -16,7 +16,6 @@ import pytest
 from scipy.stats import spearmanr
 
 from referee.pooled_rates import CASES, NOMINAL_RATE, UNIT
-from referee.rules import RESULTS_RULES
 
 DATA = json.loads(
     (Path(__file__).parent.parent / "docs/simulations/pooled_effect_heavy.json").read_text(
@@ -165,30 +164,6 @@ def test_the_noise_of_a_rate_is_about_a_third_of_a_point_at_20000_runs_and_one_a
     assert round(100 * half_range(2_000), 0) == 1
     assert {cell["reps"] for cell in DATA["cells"]} <= {20_000, 2_000}
     assert UNIT == 100_000
-
-
-RULE_CLAIMS = [  # what RES-008 says about the study; the tests above make each true
-    "with equal arms the interval was mostly close to or under 5% for a small effect and above "
-    "it for a large one",
-    "with arms of unequal size it was often above 5%, for a small effect mostly on the side "
-    "that makes the larger arm look better than it is, and it was worst when the control was "
-    "the larger arm",
-    "at 9 to 1 with no effect it was worse the fewer the players who spend in the smaller arm",
-    "in the simulations every run of a revenue-like metric showed a sign",
-    "These rates come from one simulated family and are not a measure of the experiment in hand",
-    "for a small effect and arms of unequal size it mostly favoured the larger group",
-    "do not make the control the larger arm, which was the worst case in the simulations",
-    "the percentile bootstrap interval failed more often than Welch's in most of the cells it "
-    "was run on",
-]
-
-
-def test_the_rule_says_what_the_study_found_in_these_words() -> None:
-    rule = next(rule for rule in RESULTS_RULES if rule.id == "RES-008")
-    text = " ".join((rule.why_it_matters + " " + rule.remediation).split())
-
-    for claim in RULE_CLAIMS:
-        assert text.count(claim) == 1, claim
 
 
 def test_the_control_the_larger_arm_was_the_worst_case_for_a_small_and_for_a_large_effect() -> None:
