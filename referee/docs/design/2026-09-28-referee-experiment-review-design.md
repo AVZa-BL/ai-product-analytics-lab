@@ -331,7 +331,7 @@ Pull request #22 moved the analytics lab into `analytics-lab/`, and Referee beca
 
 ### 16.3 Validation rules settled during milestone 1
 
-Section 6.1 stays authoritative. These rules fill the gaps it left, and `referee/tests/test_spec.py` pins each of them.
+Section 6.1 stays authoritative. These rules fill the gaps it left.
 
 - Every string field in the spec (`owner`, `population.eligibility`, every `name`, and the rest) is a non-empty string.
 - `population.analysis_unit` takes the same five values as `randomization_unit`, and defaults to it when omitted.
@@ -439,7 +439,7 @@ One consequence of PyYAML implementing YAML 1.1: a number such as `5e-2` or `1e-
 ### 18.5 Examples and the spec template
 
 - Section 16.2 moved `docs/referee/spec-template.yaml` to milestone 2. It is replaced by two examples in `referee/examples/`: `offer-page-underpowered.yaml` (the section 6 example, which gets `revise` with blockers DES-001 and PRO-001) and `offer-page-powered.yaml` (the same experiment planned for 98 days with every optional field declared, which gets `proceed`). The second serves as the template: it is commented and every optional field is present.
-- Each example's text and JSON output is stored in `referee/tests/golden/` and compared by a test, with checks of what the files must mean so that one regenerated from a broken build still fails. The two examples are checked to differ in exactly nine fields.
+- Each example's text output is stored in `referee/tests/golden/` and compared by a test, as is the JSON output of the powered example.
 
 Delivered in: 2c.
 
@@ -521,7 +521,7 @@ Milestone 4 builds the results review. These are the decisions made before it st
 - RES-012 is new: players first exposed after their first purchase, in the seven-day window the outcomes cover. It is a warning that reports the count, the share of assigned players and of purchasers, and how the estimate changes without them. It is the results-time counterpart of DES-007 (section 8): a purchase made before the player first saw the change cannot be an effect of it.
 - RES-013 is new: an arm's configuration version changes during the test. It is a warning that reports the versions by cohort week and, where one week holds both versions, the difference between them. The exposures table carries the version too, so the rule may use the version in force at first exposure.
 - Section 8's rule list does not change otherwise. The IDs RES-012 and RES-013 are the next two unused.
-- In the planted data the configuration change confounds RES-007 for `variant_b`: the change is at day 12 of the 21-day window, so with weeks counted from the first assignment the first week holds only version 1, the second both, and the third only version 2 (measured at 5,000 players, seed 42; a Referee test pins the counts on the committed export, by week of assignment and by week of first exposure). A fade in that arm cannot be attributed to novelty alone. When RES-013 fires for an arm, a RES-007 finding says whether the change falls among the cohorts it compared (21.7).
+- In the planted data the configuration change confounds RES-007 for `variant_b`: the change is at day 12 of the 21-day window, so with weeks counted from the first assignment the first week holds only version 1, the second both, and the third only version 2 (measured at 5,000 players, seed 42; the RES-013 test on the committed export pins the counts by week of first exposure). A fade in that arm cannot be attributed to novelty alone. When RES-013 fires for an arm, a RES-007 finding says whether the change falls among the cohorts it compared (21.7).
 
 ### 20.5 What stays out, and what stays open
 

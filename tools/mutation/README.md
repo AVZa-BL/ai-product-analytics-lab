@@ -27,10 +27,12 @@ python tools/mutation/run.py analytics-lab --set sql
 python tools/mutation/union.py analytics-lab analytics-lab analytics-lab_sql --hold analytics-lab_hold
 ```
 
-Tests that never fail for any mutant (`never_failed` in `final.json`) check files, not code, so
-mutants cannot judge them. Judge each by hand: keep one only if a realistic fault is caught by it,
-by no kept test, by the build-level check (`dbt parse`, the CI scripts), and silently breaks something.
-`probe.py` runs one such fault against the kept tests.
+Referee's simulation studies carry the `study` marker, which its `pyproject.toml` leaves out of the
+default run, so these tools do not run them. Tests that never fail for any mutant (`never_failed`
+in `final.json`) check files, not code, so mutants cannot judge them. Judge each by hand: keep
+one only if a realistic fault is caught by it, by no kept test, by the build-level check
+(`dbt parse`, the CI scripts), and silently breaks something. `probe.py` runs one such fault
+against the kept tests.
 
 Applying the result: `delete_funcs.py` removes whole functions listed in `final.json`;
 `mk_tasks.py` lists the parametrized rows left to remove; `check_apply.py` compares a file's collected

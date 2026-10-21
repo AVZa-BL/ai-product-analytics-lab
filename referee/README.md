@@ -53,12 +53,12 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
 ruff check src tests
-python -m pytest -q                # the tests (about 90 seconds)
+python -m pytest -q                # the tests (about a minute)
 python -m pytest -q -m study     # the simulation studies the design rests on (about 3 minutes;
                                  # naming a study file without -m study selects nothing)
 ```
 
-The cohort test's false-alarm rate and power were measured by a simulation that is part of the tests: `python tests/cohort_simulation.py --reps 5000 --out docs/simulations/cohort_trigger_null.json` repeats the study of design section 21.5 (about four minutes; add `--power` for the fade study), and the study tests (`-m study`, below) re-run a handful of its cells. `python tests/cohort_simulation.py --heavy --reps 5000 --printed-reps 3000 --workers 4 --out docs/simulations/cohort_trigger_heavy.json` repeats the study of heavy-tailed outcomes, unequal arms and the shift a finding prints as the smallest change it could have seen (about half an hour on four cores; `--workers` spreads the cells over processes and changes no number).
+The cohort test's false-alarm rate and power were measured by a simulation that is part of the tests: `python tests/cohort_simulation.py --reps 5000 --out docs/simulations/cohort_trigger_null.json` repeats the study of design section 21.5 (about four minutes; add `--power` for the fade study), and the study tests (`-m study`) re-run a handful of its cells. `python tests/cohort_simulation.py --heavy --reps 5000 --printed-reps 3000 --workers 4 --out docs/simulations/cohort_trigger_heavy.json` repeats the study of heavy-tailed outcomes, unequal arms and the shift a finding prints as the smallest change it could have seen (about half an hour on four cores; `--workers` spreads the cells over processes and changes no number).
 
 The pooled effect of revenue-like metrics (how often Welch's interval and a percentile bootstrap interval miss the true difference, and what candidate heavy-tail warnings say) was measured by `python tests/pooled_simulation.py --workers 4 --out docs/simulations/pooled_effect_heavy.json` (design section 21.10; about forty minutes on four cores; `--workers` spreads the cells over processes and changes no number), and the study tests (`-m study`) make a handful of its rows again. RES-008 quotes those rates from `src/referee/pooled_rates_table.py`, which `python tests/pooled_rates_table.py > src/referee/pooled_rates_table.py` writes from that file (design section 21.11); a test makes it again and compares it with the committed copy.
 
