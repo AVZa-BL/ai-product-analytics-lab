@@ -53,6 +53,7 @@ def data():
     ("severities", "verdict"),
     [
         ((), "clear"),
+        (("info",), "clear"),
         (("warning",), "caution"),
     ],
 )

@@ -114,6 +114,7 @@ def test_only_version_one_is_accepted(raw_spec: dict, version: object) -> None:
     ("path", "value"),
     [
         ("population.daily_eligible_units", True),
+        ("population.daily_eligible_units", 0),
     ],
 )
 def test_integer_fields_take_real_integers_of_at_least_one(

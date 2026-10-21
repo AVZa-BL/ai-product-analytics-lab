@@ -10,6 +10,7 @@ import pytest
 from referee import data
 from referee.data import (
     DataError,
+    Outcome,
     list_experiment_ids,
     load_export,
 )
@@ -404,6 +405,23 @@ def _outcomes_with_window_ends() -> list[dict[str, str]]:
 
 def _manifest(folder: Path, text: str) -> None:
     (folder / data.MANIFEST_FILE).write_text(text, encoding="utf-8")
+
+
+def test_the_end_of_each_window_is_read_when_the_column_is_there(tmp_path: Path) -> None:
+    loaded = load_export(
+        export(tmp_path, outcomes=_outcomes_with_window_ends(), outcome_columns=WINDOW_COLUMNS),
+        "e1",
+    )
+
+    assert [o.window_end for o in loaded.outcomes] == [
+        _utc(2026, 4, 18, 0, 2, 25),
+        _utc(2026, 4, 18, 0, 8, 33),
+        _utc(2026, 4, 19, 9),
+        _utc(2026, 5, 3, 12, 30),
+    ]
+    assert loaded.outcomes[1] == Outcome(
+        "p2", 5, 1, 4.99, _utc(2026, 4, 12, 10), _utc(2026, 4, 18, 0, 8, 33)
+    )
 
 
 @pytest.mark.parametrize(
