@@ -15,7 +15,52 @@ defaults:
     working-directory: analytics-lab
 
 jobs:
+  # Decides which projects a pull request touches, so an untouched project's jobs are skipped.
+  # A job skipped by an `if:` counts as passing for a branch-protection rule that requires it
+  # (unlike a workflow skipped by `paths:`, which leaves the check pending forever). Pushes to
+  # main and any change to this workflow run everything. referee's documentation tests read
+  # files under analytics-lab/, so a change there runs referee too.
+  changes:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    outputs:
+      lab: ${{ steps.filter.outputs.lab }}
+      referee: ${{ steps.filter.outputs.referee }}
+      tracewright: ${{ steps.filter.outputs.tracewright }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          lab=false; referee=false; tracewright=false
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            lab=true; referee=true; tracewright=true
+          else
+            files=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+            echo "$files"
+            if echo "$files" | grep -q '^\.github/'; then
+              lab=true; referee=true; tracewright=true
+            fi
+            if echo "$files" | grep -q '^analytics-lab/'; then lab=true; referee=true; fi
+            if echo "$files" | grep -q '^referee/'; then referee=true; fi
+            if echo "$files" | grep -q '^tracewright/'; then tracewright=true; fi
+          fi
+          {
+            echo "lab=$lab"
+            echo "referee=$referee"
+            echo "tracewright=$tracewright"
+          } >> "$GITHUB_OUTPUT"
+
   shared-quality-gate:
+    needs: changes
+    if: needs.changes.outputs.lab == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,6 +75,8 @@ jobs:
         run: bash scripts/validation/run_shared_checks.sh
 
   scenario-quality-gate:
+    needs: changes
+    if: needs.changes.outputs.lab == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -48,6 +95,8 @@ jobs:
         run: bash scripts/validation/run_${{ matrix.scenario }}_checks.sh
 
   referee-quality-gate:
+    needs: changes
+    if: needs.changes.outputs.referee == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -71,6 +120,8 @@ jobs:
   # wherever it is made. A separate job, not a matrix on the one above, keeps that job's name,
   # which a branch-protection rule may require.
   referee-quality-gate-macos:
+    needs: changes
+    if: needs.changes.outputs.referee == 'true'
     runs-on: macos-latest
     defaults:
       run:
@@ -90,6 +141,8 @@ jobs:
         run: python -m pytest -q
 
   tracewright-quality-gate:
+    needs: changes
+    if: needs.changes.outputs.tracewright == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:

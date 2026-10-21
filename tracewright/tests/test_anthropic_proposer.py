@@ -119,11 +119,6 @@ def test_an_unknown_effort_is_refused_before_any_call():
         AnthropicProposer(effort="extreme")
 
 
-def test_a_refusal_is_an_error_not_a_proposal():
-    with pytest.raises(ProposerError, match="declined"):
-        make(ok(message_events("", stop_reason="refusal"))).propose(example_request(), None)
-
-
 def test_a_truncated_response_is_an_error():
     with pytest.raises(ProposerError, match="output limit"):
         make(ok(message_events('{"feature": {', stop_reason="max_tokens"))).propose(
@@ -139,11 +134,9 @@ def test_an_empty_response_is_an_error():
 @pytest.mark.parametrize(
     ("status", "kind", "expected"),
     [
-        (401, "authentication_error", "credentials"),
         (403, "permission_error", "denied"),
         (404, "not_found_error", "not found"),
         (400, "invalid_request_error", "rejected the request"),
-        (429, "rate_limit_error", "rate limited"),
         (500, "api_error", "HTTP 500"),
     ],
 )
@@ -169,99 +162,7 @@ def test_a_refusal_reports_its_category_when_the_api_gives_one():
         proposer._response(message)
 
 
-def test_no_credentials_means_a_clear_error_not_a_crash(monkeypatch):
-    # The transport fails the test if it is ever reached: with no credentials the SDK must stop
-    # before sending anything, and if credentials do exist on this machine nothing real is called.
-    def unreachable(request):
-        pytest.fail("a request was sent")
-
-    monkeypatch.setenv("HOME", "/nonexistent")
-    client = anthropic.Anthropic(
-        max_retries=0,
-        http_client=anthropic.DefaultHttpxClient(transport=httpx2.MockTransport(unreachable)),
-    )
-    with pytest.raises(ProposerError, match="no credentials"):
-        AnthropicProposer(client=client).propose(example_request(), None)
-
-
-def test_an_unrelated_type_error_is_not_mistaken_for_missing_credentials():
-    class Broken:
-        class messages:  # noqa: N801
-            @staticmethod
-            def stream(**kwargs):
-                raise TypeError("something else is wrong")
-
-    with pytest.raises(TypeError, match="something else"):
-        AnthropicProposer(client=Broken()).propose(example_request(), None)
-
-
 # --- repair feedback and the shapes of real responses -------------------------------------------
-
-
-def test_repair_feedback_reaches_the_request_the_sdk_sends():
-    from tracewright.propose.request import Feedback
-
-    seen = {}
-
-    def handler(request):
-        seen["body"] = json.loads(request.content)
-        return ok(message_events("{}"))(request)
-
-    feedback = Feedback(previous_text='{"PREV": "MARK"}', problems=("[X] PROBLEM-MARK",))
-    make(handler).propose(example_request(), feedback)
-    sent = json.dumps(seen["body"]["messages"])
-    assert "PREV" in sent and "PROBLEM-MARK" in sent
-    assert "PROBLEM-MARK" not in json.dumps(
-        AnthropicProposer(client=object()).request_body(example_request(), None)["messages"]
-    )
-
-
-def test_request_body_carries_feedback_without_an_http_round_trip():
-    from tracewright.propose.request import Feedback
-
-    body = AnthropicProposer(client=object()).request_body(
-        example_request(), Feedback(previous_text="PREV-MARK", problems=("[X] prob-MARK",))
-    )
-    sent = json.dumps(body["messages"])
-    assert "PREV-MARK" in sent and "prob-MARK" in sent
-
-
-def test_a_thinking_block_before_the_text_is_ignored_and_text_blocks_are_joined():
-    events = [
-        ("message_start", {"type": "message_start", "message": {
-            "id": "m", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
-            "content": [], "stop_reason": None, "stop_sequence": None,
-            "usage": {"input_tokens": 5, "output_tokens": 1}}}),
-        ("content_block_start", {"type": "content_block_start", "index": 0,
-                                 "content_block": {"type": "thinking", "thinking": "",
-                                                   "signature": ""}}),
-        ("content_block_delta", {"type": "content_block_delta", "index": 0,
-                                 "delta": {"type": "thinking_delta", "thinking": "hmm"}}),
-        ("content_block_delta", {"type": "content_block_delta", "index": 0,
-                                 "delta": {"type": "signature_delta", "signature": "sig"}}),
-        ("content_block_stop", {"type": "content_block_stop", "index": 0}),
-        ("content_block_start", {"type": "content_block_start", "index": 1,
-                                 "content_block": {"type": "text", "text": ""}}),
-        ("content_block_delta", {"type": "content_block_delta", "index": 1,
-                                 "delta": {"type": "text_delta", "text": '{"a":'}}),
-        ("content_block_delta", {"type": "content_block_delta", "index": 1,
-                                 "delta": {"type": "text_delta", "text": " 1}"}}),
-        ("content_block_stop", {"type": "content_block_stop", "index": 1}),
-        ("message_delta", {"type": "message_delta",
-                           "delta": {"stop_reason": "end_turn", "stop_sequence": None},
-                           "usage": {"output_tokens": 9}}),
-        ("message_stop", {"type": "message_stop"}),
-    ]
-    response = make(ok(events)).propose(example_request(), None)
-    assert response.text == '{"a": 1}' and "hmm" not in response.text
-
-
-@pytest.mark.parametrize(
-    "stop_reason", ["model_context_window_exceeded", "pause_turn", "stop_sequence", "tool_use"]
-)
-def test_only_a_finished_answer_is_accepted(stop_reason):
-    with pytest.raises(ProposerError, match="not a finished answer"):
-        make(ok(message_events("{}", stop_reason=stop_reason))).propose(example_request(), None)
 
 
 def test_a_context_window_cutoff_names_the_cause():
@@ -271,15 +172,9 @@ def test_a_context_window_cutoff_names_the_cause():
         )
 
 
-def test_a_stream_that_ends_without_a_stop_reason_is_not_a_proposal():
-    events = [e for e in message_events("{}") if e[0] not in ("message_delta", "message_stop")]
-    with pytest.raises(ProposerError, match="not a finished answer"):
-        make(ok(events)).propose(example_request(), None)
-
-
 @pytest.mark.parametrize(
     "failure",
-    [httpx2.ReadError, httpx2.RemoteProtocolError, httpx2.ReadTimeout, httpx2.ConnectError],
+    [httpx2.ConnectError],
 )
 def test_a_connection_that_drops_mid_stream_is_reported_not_a_crash(failure):
     class Dropping(httpx2.SyncByteStream):

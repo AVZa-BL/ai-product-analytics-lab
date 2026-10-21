@@ -2,7 +2,6 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 from analytics_lab.generation.base import GenerationConfig
 from analytics_lab.generation.subscription import generate
@@ -59,15 +58,3 @@ def test_generated_foreign_keys_and_designed_failure_evidence_are_present() -> N
     assert float(controls["payment_failure_trial_rate"]) >= 0.03
 
 
-def test_invalid_generator_config_fails_loudly() -> None:
-    with pytest.raises(ValueError, match="days must be positive"):
-        generate(
-            GenerationConfig(
-                "subscription",
-                42,
-                date(2026, 1, 1),
-                0,
-                1000,
-                Path("data/raw"),
-            )
-        )

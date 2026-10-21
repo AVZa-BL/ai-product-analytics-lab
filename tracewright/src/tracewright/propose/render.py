@@ -38,16 +38,16 @@ _EVIDENCE_LABEL = {
 
 # --- Escaping -----------------------------------------------------------------------------
 
-
 def _line(text: str) -> str:
     """One line of model text, safe in running Markdown.
 
     Line breaks and runs of spaces become one space, `<` is written as an entity (no raw HTML),
     and square brackets are escaped, which is what turns `[text](url)` and `![alt](url)` into
-    plain text instead of a live link or an image that a viewer would fetch.
+    plain text instead of a live link or an image that a viewer would fetch. A backslash is
+    escaped first: left alone, the model's own `\\[` would cancel the escape added to the bracket.
     """
     flat = re.sub(r"\s+", " ", text).strip()
-    return flat.replace("<", "&lt;").replace("[", "\\[").replace("]", "\\]")
+    return flat.replace("\\", "\\\\").replace("<", "&lt;").replace("[", "\\[").replace("]", "\\]")
 
 
 def _cell(text: str) -> str:
@@ -59,7 +59,9 @@ def _code(text: str) -> str:
 
 
 def _code_cell(text: str) -> str:
-    return _code(text).replace("|", "\\|")
+    # A run of backslashes before a pipe is doubled: `\|` in the name would otherwise become `\\|`,
+    # an escaped backslash followed by a pipe that ends the cell and lets the rest act as Markdown.
+    return re.sub(r"(\\*)\|", r"\1\1\\|", _code(text))
 
 
 def _quote(text: str) -> str:

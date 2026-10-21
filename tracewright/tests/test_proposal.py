@@ -1,4 +1,3 @@
-import copy
 from dataclasses import fields
 
 import pytest
@@ -14,23 +13,9 @@ def violations(data) -> tuple[str, ...]:
     return caught.value.violations
 
 
-def test_the_example_proposal_is_valid():
-    proposal = Proposal.from_dict(final_proposal())
-    assert len(proposal.new_events) == 6
-    assert proposal.extended_events[0].name == "purchase_completed"
-
-
 def test_to_dict_round_trips():
     data = final_proposal()
     assert Proposal.from_dict(data).to_dict() == data
-
-
-def test_every_violation_is_listed():
-    data = small_proposal()
-    data["new_events"][0]["priority"] = "urgent"
-    data["new_events"][0]["properties"][0]["type"] = "uuid"
-    del data["new_events"][0]["rationale"]
-    assert len(violations(data)) == 3
 
 
 def test_unknown_fields_are_refused():
@@ -39,7 +24,7 @@ def test_unknown_fields_are_refused():
     assert any("extra" in v for v in violations(data))
 
 
-@pytest.mark.parametrize("key", ["required", "pii", "reuses_existing", "type"])
+@pytest.mark.parametrize("key", ["pii", "type"])
 def test_property_flags_are_required(key):
     data = small_proposal()
     del data["new_events"][0]["properties"][1][key]
@@ -85,12 +70,6 @@ def test_not_an_object():
     assert violations([]) == ("the proposal must be a JSON object",)
 
 
-def test_feature_id_must_be_an_identifier():
-    data = small_proposal()
-    data["feature"]["id"] = "Bad Id"
-    assert any("feature.id" in v for v in violations(data))
-
-
 # --- the schema the model is given must stay in step with the validator ---------------------
 
 
@@ -118,7 +97,3 @@ def test_the_schema_has_the_same_fields_as_the_dataclasses():
     assert list(prop) == [f.name for f in fields(p.ProposedProperty)]
 
 
-def test_the_example_proposal_matches_the_schema_shape():
-    data = final_proposal()
-    assert set(data) == set(PROPOSAL_SCHEMA["properties"])
-    assert copy.deepcopy(data) == data

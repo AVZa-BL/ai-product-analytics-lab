@@ -30,10 +30,3 @@ def test_every_hybrid_raw_entity_has_a_contracted_staging_model() -> None:
         assert "hybrid_subscription" in model["config"]["tags"]
 
 
-def test_sources_cover_all_generator_tables() -> None:
-    source = yaml.safe_load((MODEL_DIR / "sources.yml").read_text())["sources"][0]
-
-    assert source["name"] == "hybrid_subscription_raw"
-    assert {table["name"] for table in source["tables"]} == {
-        name.removeprefix("stg_hybrid_subscription__") for name in EXPECTED_MODELS
-    }

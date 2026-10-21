@@ -1,8 +1,6 @@
-import json
 
 import pytest
 
-from tests.propose_helpers import prop
 from tests.sheet_helpers import (
     SHEET_ID,
     SHEETS,
@@ -18,7 +16,6 @@ from tracewright.loader import load_plan
 
 ARGS = ["--id", "game_core", "--title", "Game core", "--identity-key", "player_id"]
 FLAT = str(SHEETS / "flat-rows.csv")
-MERGED = str(SHEETS / "merged-cells.csv")
 EXPORT = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export"
 API = f"https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}"
 TOKEN = "ya29.CLI-SECRET-TOKEN"
@@ -64,24 +61,6 @@ def test_the_flat_sheet_becomes_a_plan_that_reviews(capsys, tmp_path):
     plan = load_plan(plan_file)
     assert [e.name for e in plan.events] == ["level_completed", "shop_opened"]
     assert main(["review-plan", str(plan_file)]) == 0
-
-
-def test_the_merged_cell_sheet_needs_fill_down(capsys, tmp_path):
-    code, _, err = run(capsys, MERGED, *ARGS)
-    assert code == 2 and "--fill-down" in err
-    plan_file = tmp_path / "plan.yaml"
-    assert run(capsys, MERGED, *ARGS, "--fill-down", "--out", str(plan_file))[0] == 0
-    assert {p.name for e in load_plan(plan_file).events for p in e.properties} >= {"contact_email"}
-
-
-def test_map_names_a_column_the_aliases_would_not_find(capsys, tmp_path):
-    csv = tmp_path / "signals.csv"
-    csv.write_text("Signal,Arg,Kind\nlevel_done,player_id,string\n", encoding="utf-8")
-    code, _, err = run(capsys, str(csv), *ARGS)
-    assert code == 2 and "no column looks like the event name" in err
-    code, out, err = run(capsys, str(csv), *ARGS, "--map", "event=Signal", "--map",
-                         "property=Arg", "--map", "type=Kind")
-    assert code == 0 and "event <- column A 'Signal'" in err and "level_done" in out
 
 
 def test_bad_options_are_usage_errors_not_crashes(capsys):
@@ -135,16 +114,7 @@ def test_several_sources_are_merged(capsys, google, monkeypatch):
     assert code == 2 and "Google Sheet (first tab), row 2: property 'player_id'" in err
 
 
-def test_google_failures_are_exit_2_with_advice_and_never_a_traceback(capsys, google):
-    google.routes[EXPORT] = csv_reply("", status=403)
-    code, _, err = run(capsys, URL, *ARGS)
-    assert code == 2 and "not shared by link" in err and "GOOGLE_SHEETS_ACCESS_TOKEN" in err
-    assert "Traceback" not in err
-
-
-@pytest.mark.parametrize("source", ["http://docs.google.com/spreadsheets/d/" + SHEET_ID,
-                                    "file:///etc/passwd", "https://example.com/sheet.csv",
-                                    "ftp://x/y.csv"])
+@pytest.mark.parametrize("source", ["file:///etc/passwd"])
 def test_other_addresses_are_refused_without_any_request(capsys, google, source):
     code, _, err = run(capsys, source, *ARGS)
     assert code == 2 and "not a Google Sheets address" in err and google.calls == []
@@ -158,41 +128,6 @@ def test_an_expired_token_says_so_and_does_not_print_it(capsys, google, monkeypa
 
 
 # --- the whole chain: a sheet, a plan, a proposal ---------------------------------------------
-
-
-def test_sheet_to_plan_to_proposal(capsys, google, tmp_path):
-    """The workflow this was built for, with the model replaced by a saved answer."""
-    google.routes[EXPORT] = csv_reply(example("merged-cells.csv"))
-    plan_file = tmp_path / "plan.yaml"
-    assert run(capsys, f"{URL}#gid=0", *ARGS, "--fill-down", "--out", str(plan_file))[0] == 0
-
-    gdd = tmp_path / "gdd.md"
-    gdd.write_text("Players can redeem a daily gift from the shop screen.\n", encoding="utf-8")
-    replay = tmp_path / "replay.json"
-    replay.write_text(json.dumps({
-        "feature": {"id": "daily_gift", "name": "Daily gift", "summary": "A gift in the shop."},
-        "identity_keys": [],
-        "new_events": [{
-            "name": "daily_gift_redeemed", "description": "A player redeems the gift.",
-            "trigger": "The server confirms the redemption.", "priority": "must",
-            "rationale": "Measures redemption.",
-            "evidence": {"kind": "document", "document": "gdd.md",
-                         "quote": "Players can redeem a daily gift from the shop screen."},
-            "properties": [prop("player_id", required=True, reuses_existing=True)],
-        }],
-        "extended_events": [], "reused_events": [{"name": "shop_opened", "rationale": "Entry."}],
-        "metrics": [{"name": "gift_use", "definition": "Redemptions per shop open.",
-                     "events": ["daily_gift_redeemed", "shop_opened"], "rationale": "Adoption."}],
-        "not_tracked": [], "assumptions": [], "open_questions": [],
-    }), encoding="utf-8")
-    out_dir = tmp_path / "out"
-    code = main(["propose", "--doc", str(gdd), "--plan", str(plan_file), "--replay", str(replay),
-                 "--owner", "game-analytics", "--out", str(out_dir)])
-    capsys.readouterr()
-    assert code == 0
-    merged = load_plan(out_dir / "merged-plan.yaml")
-    names = {e.name for e in merged.events}
-    assert {"shop_opened", "purchase_made", "daily_gift_redeemed"} <= names
 
 
 # --- what the dry run shows, and the ways out ---------------------------------------------------

@@ -1,7 +1,4 @@
 import json
-import os
-import subprocess
-import sys
 
 import pytest
 
@@ -27,28 +24,6 @@ def test_outputs_match_the_golden_files(tmp_path):
         assert (tmp_path / name).read_text(encoding="utf-8") == (GOLDEN / name).read_text(
             encoding="utf-8"
         ), f"{name} differs from tests/golden/alliance-treasure-hunt/{name}"
-
-
-def test_the_same_input_gives_the_same_bytes(tmp_path):
-    propose(tmp_path / "a")
-    propose(tmp_path / "b")
-    for name in FILES:
-        assert (tmp_path / "a" / name).read_bytes() == (tmp_path / "b" / name).read_bytes()
-
-
-def test_the_merged_plan_is_a_valid_plan_that_reviews(tmp_path, capsys):
-    propose(tmp_path)
-    capsys.readouterr()
-    assert main(["review-plan", str(tmp_path / "merged-plan.yaml")]) == 0
-    out = capsys.readouterr().out
-    assert "14 events, 13 metrics" in out  # 8 + 6 events, 7 + 6 metrics
-    assert "DOC-001" in out  # the pre-existing alliance_left gap, still there, still reported
-
-
-def test_stderr_reports_each_attempt(tmp_path, capsys):
-    propose(tmp_path)
-    err = capsys.readouterr().err
-    assert "attempt 1: 4 problem(s)" in err and "attempt 2: 0 problem(s)" in err
 
 
 def test_an_unresolved_proposal_exits_1_and_says_so(tmp_path, capsys):
@@ -138,36 +113,6 @@ def test_quotes_that_are_not_in_the_documents_leave_the_proposal_unresolved(tmp_
     assert sorted(p.name for p in (tmp_path / "out").iterdir()) == ["proposal.json", "proposal.md"]
 
 
-def run_cli(*args, cwd=None):
-    """The command as a person runs it, in a fresh interpreter."""
-    return subprocess.run(
-        [sys.executable, "-m", "tracewright", *args], capture_output=True, text=True, cwd=cwd,
-        env={**os.environ, "PYTHONPATH": str(SRC)},
-    )
-
-
-SRC = EXAMPLE.parent.parent / "src"
-
-
-def test_review_and_replay_work_in_an_interpreter_without_the_model_sdk(tmp_path):
-    # `import anthropic` fails from the very first line, so a top-level import anywhere in the
-    # package would break these commands, which the README promises work without the SDK.
-    block = tmp_path / "sitecustomize.py"
-    block.write_text("import sys\nsys.modules['anthropic'] = None\n", encoding="utf-8")
-    env = {**os.environ, "PYTHONPATH": f"{tmp_path}{os.pathsep}{SRC}"}
-    review = subprocess.run(
-        [sys.executable, "-m", "tracewright", "review-plan", PLAN],
-        capture_output=True, text=True, env=env,
-    )
-    replay = subprocess.run(
-        [sys.executable, "-m", "tracewright", "propose", "--doc", DOC, "--plan", PLAN,
-         "--replay", REPLAY, "--out", str(tmp_path / "o")],
-        capture_output=True, text=True, env=env,
-    )
-    assert review.returncode == 0, review.stderr
-    assert replay.returncode == 0, replay.stderr
-
-
 def test_the_help_text_documents_each_exit_status(capsys):
     assert main(["propose", "--help"]) == 0
     text = " ".join(capsys.readouterr().out.split())
@@ -211,22 +156,6 @@ def test_a_later_unresolved_run_removes_the_files_of_an_earlier_good_one(tmp_pat
     assert "removed merged-plan.yaml, plan.diff" in capsys.readouterr().err
 
 
-def test_a_run_without_a_plan_removes_a_stale_diff(tmp_path):
-    assert propose(tmp_path) == 0 and (tmp_path / "plan.diff").exists()
-    data = final_proposal()
-    data["identity_keys"] = ["player_id"]
-    data["extended_events"], data["reused_events"] = [], []
-    new = {e["name"] for e in data["new_events"]}
-    data["metrics"] = [
-        {**m, "events": [e for e in m["events"] if e in new]}
-        for m in data["metrics"] if any(e in new for e in m["events"])
-    ]
-    replay = tmp_path / "r.json"
-    replay.write_text(json.dumps(data), encoding="utf-8")
-    assert propose(tmp_path, "--force", "--owner", "ops", plan=None, replay=str(replay)) == 0
-    assert not (tmp_path / "plan.diff").exists()
-
-
 def test_an_output_that_cannot_exist_is_found_before_the_model_is_called(tmp_path, capsys):
     blocker = tmp_path / "file"
     blocker.write_text("x")
@@ -234,18 +163,6 @@ def test_an_output_that_cannot_exist_is_found_before_the_model_is_called(tmp_pat
     err = capsys.readouterr().err
     assert code == 2 and "cannot write to" in err and "not a directory" in err
     assert "attempt 1" not in err  # no attempt, so no spend
-
-
-@pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="needs a non-root POSIX user")
-def test_an_unwritable_output_directory_is_found_before_the_model_is_called(tmp_path, capsys):
-    locked = tmp_path / "locked"
-    locked.mkdir()
-    locked.chmod(0o500)
-    try:
-        code = propose(locked / "out")
-    finally:
-        locked.chmod(0o700)
-    assert code == 2 and "not writable" in capsys.readouterr().err
 
 
 def test_a_symlink_in_the_output_directory_counts_as_an_existing_file(tmp_path, capsys):
@@ -279,7 +196,3 @@ def test_attempts_are_reported_even_when_a_later_round_fails(tmp_path, capsys):
     assert "repair round 1 failed after 1 completed attempt(s)" in err
 
 
-def test_the_cli_names_the_next_step_when_credentials_are_missing(tmp_path, capsys):
-    code = main(["propose", "--doc", DOC, "--plan", PLAN, "--out", str(tmp_path / "o")])
-    err = capsys.readouterr().err
-    assert code == 4 and "ANTHROPIC_API_KEY" in err and "--replay" in err

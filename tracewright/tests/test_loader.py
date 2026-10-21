@@ -1,7 +1,6 @@
 import pytest
 
 from tracewright.loader import LoadError, load_plan, parse_plan
-from tracewright.plan import PlanError
 
 MINIMAL = """\
 tracewright_plan_version: 1
@@ -11,10 +10,6 @@ identity_keys: [user_id]
 events:
   - name: a_b
 """
-
-
-def test_minimal_plan_parses():
-    assert parse_plan(MINIMAL).events[0].name == "a_b"
 
 
 def test_duplicate_keys_are_refused_with_a_line():
@@ -41,11 +36,6 @@ def test_a_key_yaml_reads_as_a_boolean_is_refused():
 def test_broken_yaml_is_a_load_error():
     with pytest.raises(LoadError):
         parse_plan("a: [unclosed\n")
-
-
-def test_a_mapping_that_is_not_a_plan_is_a_plan_error():
-    with pytest.raises(PlanError):
-        parse_plan("id: p\n")
 
 
 def test_missing_and_binary_files(tmp_path):

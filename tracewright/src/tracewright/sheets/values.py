@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import re
 
+from tracewright.reader import escape_text
+
 _NON_WORD = re.compile(r"[\W_]+", re.UNICODE)
 
 
@@ -110,7 +112,8 @@ def property_type(text: str, extra: dict[str, str] | None = None) -> str:
     if _LIST_NOTATION.search(raw):
         raise ValueError(
             f"{text!r} is a list, and a plan has no lists. Describe the items in separate "
-            f"properties, or record it as a string on purpose with --type-map '{raw}=string'"
+            "properties, or record it as a string on purpose with --type-map "
+            f"""'{escape_text(raw).replace("'", "'\\''")}=string'"""
         )
     cleaned = _QUALIFIER.sub("", raw).strip()
     word = key(cleaned)

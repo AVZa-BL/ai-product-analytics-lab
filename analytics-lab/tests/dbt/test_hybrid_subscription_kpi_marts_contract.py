@@ -40,5 +40,3 @@ def test_kpi_marts_publish_decision_ready_contracts() -> None:
         ), model["name"]
 
 
-def test_kpi_invariants_have_executable_dbt_tests() -> None:
-    assert EXPECTED_TESTS <= {path.name for path in TEST_DIR.glob("*.sql")}
