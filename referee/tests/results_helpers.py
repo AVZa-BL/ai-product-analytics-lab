@@ -37,8 +37,14 @@ class Row:
     window_end: datetime | None = None  # None: seven days after the assignment
 
 
-def build_data(rows: list[Row], *, experiment_id: str = "e1", exported_at=None) -> ExperimentData:
-    """The `ExperimentData` the loader would return for these rows (in player order)."""
+def build_data(
+    rows: list[Row], *, experiment_id: str = "e1", exported_at=None, window_column: bool = True
+) -> ExperimentData:
+    """The `ExperimentData` the loader would return for these rows (in player order).
+
+    With `window_column=False` the outcomes carry no window end, as when the export has no
+    `window_end_utc` column: the window is then taken to be seven days from the assignment.
+    """
     assignments, exposures, outcomes = [], [], []
     for row in sorted(rows, key=lambda r: r.player_id):
         assignments.append(
@@ -54,7 +60,9 @@ def build_data(rows: list[Row], *, experiment_id: str = "e1", exported_at=None) 
                 row.purchases,
                 row.revenue,
                 row.first_purchase_at,
-                row.window_end
+                None
+                if not window_column
+                else row.window_end
                 if row.window_end is not None
                 else row.assigned_at + timedelta(days=7),
             )

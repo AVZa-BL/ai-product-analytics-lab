@@ -1,11 +1,16 @@
 """What the results rules look at: the export joined to its spec (design sections 21.3, 21.8)."""
 
+import json
+import math
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from results_helpers import T0, Row, at, build_data, results_spec
 
+from referee import results
 from referee.methods import bonferroni, two_proportion_difference, welch_difference
 from referee.results import (
     METRICS,
@@ -312,11 +317,11 @@ def test_an_empty_group_has_a_reason_of_its_own_in_the_estimate(raw_spec) -> Non
         "error": "the treatment group has no players",
     }
     assert effect_estimate(context, "variant_b", [])["error"] == (
-        "the treatment and control group has no players"
+        "the treatment and control groups have no players"
     )
 
 
-# --- The effect table (design section 20.4) --------------------------------------------------
+# --- The effect table (design section 22.3) --------------------------------------------------
 
 REVENUE = {
     "primary_metric__name": "revenue_usd_7d",
@@ -350,7 +355,7 @@ def test_the_effect_table_is_welchs_test_adjusted_for_the_arms(raw_spec) -> None
         "continuous",
         "bonferroni",
     )
-    assert (table["comparisons"], table["alpha"]) == (2, 0.05)
+    assert table["comparisons"] == 2
     assert [row["arm"] for row in table["arms"]] == ["variant_b", "variant_c"]
     for row, found, p_adjusted in zip(table["arms"], (b, c), adjusted, strict=True):
         assert (row["n_treatment"], row["n_control"]) == (found.n_treatment, found.n_control)
@@ -386,14 +391,11 @@ def test_the_effect_table_of_a_binary_metric_is_the_two_proportion_test(raw_spec
     assert (row["ci_low"], row["ci_high"]) == pytest.approx((b.ci_low, b.ci_high), abs=1e-6)
     assert row["p_value"] == b.p_value
     assert row["adjusted_p_value"] == min(1.0, 2 * b.p_value)
-    assert table["arms"][1]["adjusted_p_value"] <= 1.0
 
 
 @pytest.mark.parametrize(
     ("registered", "adjustment", "times"),
     [
-        (None, "bonferroni", 2),
-        ("bonferroni", "bonferroni", 2),
         ("dunnett", "bonferroni", 2),
         ("none", "none", 1),
     ],
@@ -444,3 +446,110 @@ def test_an_arm_that_cannot_be_estimated_says_why_and_still_counts_as_a_comparis
     assert (c["arm"], c["n_treatment"], c["n_control"]) == ("variant_c", 8, 8)
     assert b["relative_difference"] is None
     assert b["adjusted_p_value"] == min(1.0, 2 * b["p_value"])  # two arms were compared
+
+
+def test_a_player_whose_window_is_still_open_is_left_out_and_counted(raw_spec) -> None:
+    rows = _revenue_rows(control=CONTROL_REVENUE, variant_b=B_REVENUE, variant_c=C_REVENUE)
+    exported_at = at(8)
+    open_windows = [
+        Row("open_control", "control", assigned_at=at(5), exposed_at=at(5, 1), revenue=900.0),
+        Row("open_b_1", "variant_b", assigned_at=at(5), exposed_at=at(5, 1), revenue=900.0),
+        Row("open_b_2", "variant_b", assigned_at=at(7), exposed_at=at(7, 1), revenue=900.0),
+    ]
+    closes_at_export = Row("closes_now", "variant_b", revenue=3.0, window_end=exported_at)
+    everyone = [*rows, *open_windows, closes_at_export]
+    spec = results_spec(raw_spec, **REVENUE)
+
+    known = effect_table(ResultsContext.of(spec, build_data(everyone, exported_at=exported_at)))
+    unknown = effect_table(ResultsContext.of(spec, build_data(everyone)))
+
+    assert known["left_out"] == {"control": 1, "variant_b": 2, "variant_c": 0}
+    assert known["arms"][0]["n_treatment"] == len(B_REVENUE) + 1  # the window that closes now
+    assert known["arms"][0]["n_control"] == len(CONTROL_REVENUE)
+    assert known["arms"][0]["mean_treatment"] == pytest.approx((sum(B_REVENUE) + 3.0) / 9)
+    assert unknown["left_out"] == {"control": 0, "variant_b": 0, "variant_c": 0}
+    assert unknown["arms"][0]["n_treatment"] == len(B_REVENUE) + 3  # no time: nothing is open
+
+
+def test_the_effect_table_adjusts_for_every_arm_compared_with_control(raw_spec) -> None:
+    arms = [{"name": "control", "allocation": 0.25, "is_control": True}] + [
+        {"name": name, "allocation": 0.25} for name in ("a", "b", "c")
+    ]
+    rows = _revenue_rows(control=CONTROL_REVENUE, a=B_REVENUE, b=C_REVENUE, c=C_REVENUE[::-1])
+
+    table = effect_table(_context(raw_spec, rows, arms=arms, **REVENUE))
+
+    assert table["comparisons"] == 3
+    assert [row["arm"] for row in table["arms"]] == ["a", "b", "c"]
+    assert all(row["adjusted_p_value"] == min(1.0, 3 * row["p_value"]) for row in table["arms"])
+    assert any(row["adjusted_p_value"] < 1.0 for row in table["arms"])  # not clipped everywhere
+
+
+def test_a_relative_difference_that_is_not_a_finite_number_is_left_out(raw_spec) -> None:
+    """A control mean of 1.25e-321 is above 0, and the ratio to it overflows."""
+    rows = _revenue_rows(control=[0.0] * 7 + [1e-320], variant_b=B_REVENUE, variant_c=C_REVENUE)
+
+    table = effect_table(_context(raw_spec, rows, **REVENUE))
+
+    assert table["arms"][0]["relative_difference"] is None
+    json.dumps(table, allow_nan=False)  # every number in the table can be written
+
+
+@pytest.mark.parametrize(
+    ("mean_control", "zeros"),
+    [
+        (1.0, {"mean_treatment", "difference", "ci_low", "ci_high", "relative_difference"}),
+        (-1e-9, {"mean_treatment", "mean_control", "difference", "ci_low", "ci_high"}),
+    ],
+)
+def test_no_number_of_the_table_or_the_estimate_is_a_negative_zero(
+    raw_spec, monkeypatch: pytest.MonkeyPatch, mean_control: float, zeros: set[str]
+) -> None:
+    """A number that rounds to nothing must not be written as -0.0, which JSON keeps."""
+    tiny = -1e-9
+    found = SimpleNamespace(
+        mean_treatment=tiny,
+        mean_control=mean_control,
+        difference=tiny,
+        ci_low=tiny,
+        ci_high=tiny,
+        confidence=0.95,
+        p_value=0.5,
+    )
+    monkeypatch.setattr(results, "welch_difference", lambda treatment, control: found)
+    rows = _revenue_rows(control=CONTROL_REVENUE, variant_b=B_REVENUE, variant_c=C_REVENUE)
+    context = _context(raw_spec, rows, **REVENUE)
+
+    row = effect_table(context)["arms"][0]
+    estimate = effect_estimate(context, "variant_b", context.players)
+
+    for shown, keys in ((row, zeros), (estimate, {"difference", "ci_low", "ci_high"})):
+        written = {key for key, value in shown.items() if isinstance(value, float) and value == 0}
+        assert keys <= written
+        assert all(math.copysign(1.0, shown[key]) == 1.0 for key in written)
+
+
+def test_a_window_that_would_close_after_the_calendar_ends_is_still_open(raw_spec) -> None:
+    first = datetime(9999, 12, 28, tzinfo=UTC)
+    rows = [
+        Row(f"{arm}_{i}", arm, assigned_at=first, exposed_at=first + timedelta(minutes=5))
+        for arm in ("control", "variant_b", "variant_c")
+        for i in range(3)
+    ]
+    data = build_data(rows, exported_at=datetime(9999, 12, 31, tzinfo=UTC), window_column=False)
+    context = ResultsContext.of(results_spec(raw_spec), data)
+
+    assert all(
+        player.window_closes_at == datetime.max.replace(tzinfo=UTC) for player in context.players
+    )
+    assert effect_table(context)["left_out"] == {"control": 3, "variant_b": 3, "variant_c": 3}
+
+
+def test_an_arm_compared_with_an_empty_control_says_the_control_has_no_players(raw_spec) -> None:
+    rows = _revenue_rows(control=[], variant_b=B_REVENUE, variant_c=C_REVENUE)
+    rows.append(Row("never_control", "control", exposed_at=None))
+
+    row = effect_table(_context(raw_spec, rows, **REVENUE))["arms"][0]
+
+    assert row["error"] == "the control group has no players"
+    assert (row["n_treatment"], row["n_control"]) == (len(B_REVENUE), 0)

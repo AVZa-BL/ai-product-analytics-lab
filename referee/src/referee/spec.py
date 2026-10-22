@@ -196,8 +196,12 @@ class ExperimentSpec:
         )
 
     def sha256(self) -> str:
-        """The hex SHA-256 of the canonical JSON as UTF-8: this spec's fingerprint."""
-        return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
+        """The hex SHA-256 of the canonical JSON as UTF-8: this spec's fingerprint.
+
+        A lone surrogate, which a YAML escape such as "\\ud800" can put in a string, is
+        written as the three bytes that UTF-8 would give it, so that it has a fingerprint too.
+        """
+        return hashlib.sha256(self.canonical_json().encode("utf-8", "surrogatepass")).hexdigest()
 
 
 def _drop_unset(value: Any) -> Any:

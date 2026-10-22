@@ -25,7 +25,7 @@ from referee.data import (
     load_export,
     parse_utc,
 )
-from referee.display import cap_listing
+from referee.display import cap_listing, for_line
 from referee.loader import LoadError, load_spec
 from referee.report import (
     design_report,
@@ -101,12 +101,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _spec_error(path: str, error: SpecError) -> str:
+def _complain(*lines: str) -> None:
+    """Say on stderr why the input cannot be used, one line for each argument. What a file or a
+    command line puts into a line is written as an escape where it could act on the terminal,
+    and a newline in it cannot start a line of its own."""
+    print("\n".join(for_line(line) for line in lines), file=sys.stderr)
+
+
+def _spec_error(path: str, error: SpecError) -> list[str]:
     count = len(error.violations)
     noun = "violation" if count == 1 else "violations"
     lines = [f"referee: error: {path} is not a valid experiment spec ({count} {noun}):"]
     lines += [f"  - {violation}" for violation in error.violations]
-    return "\n".join(lines)
+    return lines
 
 
 def _read_spec(path: str) -> ExperimentSpec | None:
@@ -114,13 +121,13 @@ def _read_spec(path: str) -> ExperimentSpec | None:
     try:
         return load_spec(path)
     except LoadError as error:
-        print(f"referee: error: {error}", file=sys.stderr)
+        _complain(f"referee: error: {error}")
     except SpecError as error:
-        print(_spec_error(path, error), file=sys.stderr)
+        _complain(*_spec_error(path, error))
     return None
 
 
-def _data_error(error: DataError) -> str:
+def _data_error(error: DataError) -> list[str]:
     """Every problem of an export that cannot be read, as many as a person can read."""
     noun = "problem" if error.total == 1 else "problems"
     listing = cap_listing(error.problems)
@@ -128,7 +135,7 @@ def _data_error(error: DataError) -> str:
     lines += [f"  - {problem}" for problem in listing.shown]
     if error.total > len(listing.shown):
         lines.append(f"  ... and {error.total - len(listing.shown):,} more")
-    return "\n".join(lines)
+    return lines
 
 
 def _review_design(path: str, output_format: str) -> int:
@@ -152,36 +159,39 @@ def _review_results(args: argparse.Namespace) -> int:
         try:
             as_of = parse_utc(args.as_of)
         except ValueError as problem:
-            print(f"referee: error: --as-of {problem}", file=sys.stderr)
+            _complain(f"referee: error: --as-of {problem}")
             return EXIT_UNREADABLE
 
     try:
         if args.experiment_id is None:
             ids = ", ".join(list_experiment_ids(args.data)) or "none"
-            print(
-                f"referee: error: --experiment-id is required; the export holds: {ids}",
-                file=sys.stderr,
-            )
+            _complain(f"referee: error: --experiment-id is required; the export holds: {ids}")
             return EXIT_UNREADABLE
         data = load_export(args.data, args.experiment_id)
+        hashes = export_file_hashes(args.data)  # of the files just read, before the long part
         if as_of is not None:
             data = replace(data, exported_at=as_of)
         context = ResultsContext.of(spec, data)
         review = review_context(context)
         sensitivity = origin_sensitivity(spec, data, review)
     except DataError as error:
-        print(_data_error(error), file=sys.stderr)
+        _complain(*_data_error(error))
         return EXIT_UNREADABLE
     except ResultsError as error:
-        print(f"referee: error: {error}", file=sys.stderr)
+        _complain(
+            f"referee: error: {error.header}", *(f"  - {problem}" for problem in error.problems)
+        )
+        return EXIT_UNREADABLE
+    except OSError as error:  # a file that vanished or cannot be read after the checks
+        _complain(f"referee: error: {error}")
         return EXIT_UNREADABLE
 
     source = "command line" if as_of is not None else "manifest"
     report = results_report(
         review,
         context,
-        file_hashes=export_file_hashes(args.data),
-        as_of_source=None if context.exported_at is None else source,
+        file_hashes=hashes,
+        as_of_source=source,
         sensitivity=sensitivity,
     )
     render = render_json if args.format == "json" else render_results_text

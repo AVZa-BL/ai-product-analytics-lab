@@ -3,7 +3,8 @@
 The text is made from the dict, not from the review objects, so the two outputs cannot say
 different things, and a JSON report saved earlier can be rendered as text later. Nothing in
 the report depends on the clock, the machine or where the spec file was kept: the same spec
-(and data) reviewed by the same Referee gives the same bytes.
+(and data) reviewed by the same Referee on one machine gives the same bytes. Between machines
+a float may differ in its last digits.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from referee import __version__
-from referee.display import DISPLAY_ROW_LIMIT, cap_listing
+from referee.display import DISPLAY_ROW_LIMIT, cap_listing, for_line
 from referee.findings import DesignReview, Finding, ResultsReview
 from referee.results import ResultsContext, effect_table
 from referee.rules.cohorts import cohort_report
@@ -31,6 +32,12 @@ _TEXT_WIDTH = 88
 # A blocker is about the data (the arms, the sample, the exposures) unless it is a harm: a valid
 # experiment that makes a guardrail worse than its tolerance allows (design section 21.12).
 _HARM_RULES = frozenset({"RES-004"})
+# The blockers whose remediation says to settle something before the effect is read: RES-001
+# (find why the counts differ), RES-003 (the minimum duration, "say so and why before reading
+# the effect") and RES-012 (find why players were exposed after they bought). RES-002 (too few
+# players) says to report the interval as underpowered, and RES-004 (a harm) not to decide on
+# the primary metric alone: neither makes the table unfit to read.
+_EFFECT_UNTRUSTED = frozenset({"RES-001", "RES-003", "RES-012"})
 # The rules whose quiet result is still printed, as a line, so that a test that did not run
 # cannot read as a pass (design sections 21.5, 21.11 and 21.12). Each report holds its own line.
 _ALWAYS_SUMMARISED = (
@@ -99,19 +106,44 @@ def _as_of(context: ResultsContext, source: str | None) -> dict[str, Any]:
 
     Judgement: a run is interim when the export was taken before the planned end of the
     experiment, which is the planned accrual window from the origin plus the seven-day outcome
-    window that follows the last assignment (design section 21.8). Without a time nothing is
-    known of either: completeness was not checked.
+    window that follows the last assignment (design sections 21.6 and 22.4). Without a time
+    nothing is known of either: completeness was not checked. An origin so late in the calendar
+    that the planned end does not exist leaves `planned_end` and `interim` null.
     """
     taken = context.exported_at
     if taken is None:
         return {"time": None, "source": None, "planned_end": None, "interim": None}
     days = context.spec.design.planned_duration_days + OUTCOME_WINDOW_DAYS
-    planned_end = context.origin + timedelta(days=days)
+    try:
+        planned_end = context.origin + timedelta(days=days)
+    except OverflowError:  # an origin in the last days of the calendar has no planned end
+        return {"time": _instant(taken), "source": source, "planned_end": None, "interim": None}
     return {
         "time": _instant(taken),
         "source": source,
         "planned_end": _instant(planned_end),
         "interim": taken < planned_end,
+    }
+
+
+def _effect(context: ResultsContext, review: ResultsReview) -> dict[str, Any]:
+    """The effect table with what the blocking rules say about reading it.
+
+    `underpowered` is RES-002 blocking because the arms are smaller than the registered n; a
+    design that cannot be sized has no registered n to fall short of.
+    """
+    unreadable = [rule for rule in review.blocking_rule_ids if rule in _EFFECT_UNTRUSTED]
+    smaller_than_registered = any(
+        finding.rule_id == "RES-002"
+        and finding.severity == "blocker"
+        and not finding.evidence.get("unattainable")
+        for finding in review.findings
+    )
+    return {
+        **effect_table(context),
+        "readable": not unreadable,
+        "unreadable_because": unreadable,
+        "underpowered": smaller_than_registered,
     }
 
 
@@ -126,8 +158,9 @@ def results_report(
     """The report for `review`, which must be the review of `context`.
 
     `file_hashes` are the SHA-256 of the three CSV files (`data.export_file_hashes`),
-    `as_of_source` says where `context.exported_at` came from (`command line` or `manifest`)
-    and `sensitivity` is `review.origin_sensitivity` for the same data.
+    `as_of_source` says where `context.exported_at` came from (`command line` or `manifest`; it
+    is not reported when the export has no time) and `sensitivity` is
+    `review.origin_sensitivity` for the same data.
     """
     spec = context.spec
     assigned = [player.assigned_at for player in context.players]
@@ -158,7 +191,7 @@ def results_report(
         },
         "counts": _counts(review.findings),
         "summary_lines": _summary_lines(review, context),
-        "effect": {**effect_table(context), "readable": review.verdict != "invalid"},
+        "effect": _effect(context, review),
         "rules_run": list(review.rules_run),
         "findings": _finding_dicts(review.findings),
     }
@@ -197,6 +230,7 @@ def _prose_lines(finding: dict[str, Any]) -> list[str]:
 
 def render_text(report: dict[str, Any]) -> str:
     """The design report as plain text for a person to read."""
+    report = _inert(report)
     spec, counts = report["spec"], report["counts"]
     lines = [
         "Referee design review",
@@ -227,6 +261,19 @@ def render_text(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _inert(value: Any) -> Any:
+    """`value` with every text in it, the keys too, written as one line that cannot act on a
+    terminal. What the text report prints of a spec or an export (a title, an arm, a player,
+    an experiment) goes through here first, so that none of it can make lines of its own."""
+    if isinstance(value, str):
+        return for_line(value)
+    if isinstance(value, dict):
+        return {_inert(key): _inert(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_inert(item) for item in value]
+    return value
+
+
 def _plain(value: object) -> str:
     """A value as a person reads it: whole numbers with separators, six significant digits."""
     if value is None:
@@ -241,9 +288,7 @@ def _plain(value: object) -> str:
 
 
 def _wrapped(text: str, pad: str, hang: str = "  ") -> list[str]:
-    return textwrap.wrap(
-        text, width=_TEXT_WIDTH, initial_indent=pad, subsequent_indent=pad + hang
-    ) or [pad.rstrip()]
+    return textwrap.wrap(text, width=_TEXT_WIDTH, initial_indent=pad, subsequent_indent=pad + hang)
 
 
 def _evidence_lines(value: Any, limit: int, indent: int) -> list[str]:
@@ -275,10 +320,8 @@ def _evidence_lines(value: Any, limit: int, indent: int) -> list[str]:
         listing = cap_listing(value, limit=limit)
         for row in listing.shown:
             rows = (
-                _evidence_lines(row, limit, indent + 2)
-                if isinstance(row, dict | list)
-                else ([f"{pad}  {_plain(row)}"])
-            )
+                _evidence_lines(row, limit, indent + 2) if isinstance(row, dict | list) else []
+            ) or [f"{pad}  {_plain(row)}"]  # a scalar, or an empty dict or list
             lines.append(f"{pad}- {rows[0][indent + 2 :]}")
             lines += rows[1:]
         if listing.notice:
@@ -319,35 +362,60 @@ def _sensitivity_lines(sensitivity: dict[str, Any]) -> list[str]:
     changed = [shift for shift in shifts if not shift["same"]]
     if not changed:
         last = shifts[-1]["days_earlier"]
-        return [f"Origin sensitivity: the same findings for origins 1 to {last} days earlier."]
-    lines = ["Origin sensitivity: the findings change with the origin."]
+        return _wrapped(
+            f"Origin sensitivity: the same rules fire at the same severity for origins 1 to "
+            f"{last} days earlier.",
+            "",
+            "  ",
+        )
+    lines = ["Origin sensitivity: the rules that fire change with the origin."]
     for shift in changed:
         said = [f"verdict {shift['verdict']}"]
         for label in ("appear", "disappear"):
             if shift[label]:
                 said.append(f"{label} {', '.join(shift[label])}")
-        lines += _wrapped(f"{shift['days_earlier']} days earlier: {'; '.join(said)}", "  ", "    ")
+        days = shift["days_earlier"]
+        noun = "day" if days == 1 else "days"
+        lines += _wrapped(f"{days} {noun} earlier: {'; '.join(said)}", "  ", "    ")
     return lines
 
 
 def _effect_lines(effect: dict[str, Any]) -> list[str]:
     """The effect table as text: one row an arm, columns aligned, the reading rules above it."""
+    comparisons = effect["comparisons"]
     adjusted = (
-        f"adjusted for {effect['comparisons']} comparisons by Bonferroni"
+        f"adjusted for {comparisons} {'comparison' if comparisons == 1 else 'comparisons'} "
+        f"(the arms against control) by Bonferroni, and for nothing else: not for guardrails, "
+        f"other metrics or repeated looks"
         if effect["adjustment"] == "bonferroni"
         else "not adjusted for the number of arms (the spec registers none)"
     )
     lines = _wrapped(
-        f"Effect on {effect['metric']}, each arm against control ({effect['population']}, "
-        f"95% intervals), {adjusted}; it does not adjust for guardrails, other metrics or "
-        f"repeated looks.",
+        f"Effect on {effect['metric']}, each arm against control, among the "
+        f"{effect['population']}: two-sided tests and 95% intervals. The p values are {adjusted}.",
         "",
         "  ",
     )
+    left_out = {arm: n for arm, n in effect["left_out"].items() if n}
+    if left_out:
+        said = ", ".join(f"{arm} {n:,}" for arm, n in left_out.items())
+        lines += _wrapped(
+            f"Left out, because their seven-day window had not closed at the export time: {said}.",
+            "",
+            "  ",
+        )
     if not effect["readable"]:
         lines += _wrapped(
-            "NOT TO BE READ: the verdict is invalid, so these numbers describe the sample and "
-            "not the effect.",
+            f"NOT TO BE READ: blocked by {', '.join(effect['unreadable_because'])}, whose "
+            f"remediation says to settle this before the effect is read. These numbers describe "
+            f"the sample and not the effect.",
+            "",
+            "  ",
+        )
+    if effect["underpowered"]:
+        lines += _wrapped(
+            "UNDERPOWERED: RES-002 blocks this review, the arms are smaller than registered. "
+            "Read the intervals; a small difference is not evidence of no effect.",
             "",
             "  ",
         )
@@ -393,6 +461,7 @@ def render_results_text(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMI
     A list of more than `limit` rows is cut to its first `limit` and says so. The cut is made
     here, on the finished report, so it can change what is shown and nothing the report holds.
     """
+    report = _inert(report)
     spec, counts, as_of = report["spec"], report["counts"], report["as_of"]
     population = report["population"]
     if as_of["time"] is None:

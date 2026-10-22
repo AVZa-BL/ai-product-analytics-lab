@@ -16,7 +16,8 @@ The results example is read against the committed lab export; regenerate its gol
         --as-of 2026-06-30T00:00:00Z --format json > tests/golden/offer-page-results.json
 
 Its test compares the numbers and the layout. A float may differ in its last digits between
-machines, and the sentences of the rules are not compared: reading them is a person's job.
+machines, and the sentences (titles, explanations, advice, notes, summary lines and the
+description of the effect's population) are not compared: reading them is a person's job.
 """
 
 import json
@@ -47,19 +48,37 @@ def _paths(value: object, prefix: str = "") -> dict[str, object]:
     return {prefix.rstrip("."): value}
 
 
-PROSE = frozenset({"why_it_matters", "remediation", "references", "notes"})
+PROSE = frozenset(
+    {
+        "title",
+        "why_it_matters",
+        "remediation",
+        "references",
+        "notes",
+        "line",
+        "summary_lines",
+        "population",
+    }
+)
 
 
 def _differences(actual: Any, expected: Any, path: str = "$") -> list[str]:
-    """Where two reports differ: floats to nine digits, sentences (`PROSE` keys) not at all."""
+    """Where two reports differ: floats to nine digits, sentences (`PROSE` keys) not at all.
+
+    The layout is compared with the numbers: the keys of every dict and their order, the length
+    of every list outside the sentences. A `PROSE` key holding a dict (the population of the
+    report) is compared like any other.
+    """
     if isinstance(expected, dict):
-        if not isinstance(actual, dict) or actual.keys() != expected.keys():
+        if not isinstance(actual, dict) or list(actual) != list(expected):
             return [f"{path}: the keys differ"]
         return [
             found
             for key in expected
             for found in (
-                [] if key in PROSE else _differences(actual[key], expected[key], f"{path}.{key}")
+                []
+                if key in PROSE and not isinstance(expected[key], dict)
+                else _differences(actual[key], expected[key], f"{path}.{key}")
             )
         ]
     if isinstance(expected, list):
@@ -139,6 +158,23 @@ def test_a_difference_in_a_number_is_found_and_one_in_a_sentence_is_not() -> Non
     assert _differences({**same, "n": 4}, golden) == ["$.n: 4 is not 3"]
     assert _differences({**same, "n": 3.0}, golden) == ["$.n: 3.0 is not 3"]  # a type change
     assert _differences({**same, "extra": 1}, golden) == ["$: the keys differ"]
+    assert _differences({"n": 3, "p": 0.5, "findings": same["findings"]}, golden) == [
+        "$: the keys differ"
+    ]  # the order of the keys is layout
+
+
+@pytest.mark.parametrize(
+    "key", ["title", "line", "population", "summary_lines", "notes", "remediation"]
+)
+def test_what_is_written_in_a_sentence_field_is_not_compared(key: str) -> None:
+    assert _differences({key: "this"}, {key: "that"}) == []
+    assert _differences({key: ["this"]}, {key: ["that", "and more"]}) == []
+
+
+def test_a_field_named_for_a_sentence_that_holds_numbers_is_compared() -> None:
+    assert _differences({"population": {"n": 2}}, {"population": {"n": 1}}) == [
+        "$.population.n: 2 is not 1"
+    ]
 
 
 # --- What the golden files must mean ---------------------------------------------------

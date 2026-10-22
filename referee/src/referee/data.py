@@ -424,7 +424,11 @@ def load_export(directory: str | Path, experiment_id: str) -> ExperimentData:
     assigned, or an assigned player with no outcome.
     """
     folder = Path(directory)
-    if not folder.is_dir():
+    try:
+        is_folder = folder.is_dir()
+    except OSError as error:  # a parent that cannot be searched, a name that is too long
+        raise DataError([f"{folder}: cannot be examined ({error.strerror})"], 1) from error
+    if not is_folder:
         raise DataError([f"{folder}: is not a directory"], 1)
     problems = _Problems()
 

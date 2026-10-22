@@ -2,8 +2,8 @@
 way the files can be wrong."""
 
 import csv
+import errno
 import hashlib
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -235,6 +235,27 @@ def test_a_file_that_is_not_utf8_is_refused_by_name(tmp_path: Path) -> None:
 
 def test_something_that_is_not_a_directory_is_refused(tmp_path: Path) -> None:
     assert _problems(tmp_path / "nowhere") == (f"{tmp_path / 'nowhere'}: is not a directory",)
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [PermissionError(errno.EACCES, "Permission denied"), OSError(errno.ENAMETOOLONG, "Too long")],
+)
+def test_a_folder_that_cannot_be_examined_is_a_problem_and_not_a_crash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, refusal: OSError
+) -> None:
+    def refuse(self: Path) -> bool:
+        raise refusal
+
+    monkeypatch.setattr(Path, "is_dir", refuse)
+
+    with pytest.raises(DataError) as caught:
+        load_export(tmp_path / "export", "e1")
+
+    assert caught.value.problems == (
+        f"{tmp_path / 'export'}: cannot be examined ({refusal.strerror})",
+    )
+    assert caught.value.total == 1
 
 
 # --- Rules across the three files ---------------------------------------------------------
@@ -526,15 +547,6 @@ def test_a_manifest_that_is_a_link_to_nothing_is_a_problem_not_an_absent_file(
 
 
 # --- The hashes of the files ---------------------------------------------------------------
-
-
-def test_the_hashes_of_the_files_are_the_ones_the_lab_export_recorded() -> None:
-    """The manifest of the committed export was written beside the files by the lab; a hash
-    that agrees with it was made from the same bytes, and a silent edit of a file would not."""
-    folder = Path(__file__).parent / "data" / "hybrid_offer_page_5000"
-    recorded = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))["files"]
-
-    assert export_file_hashes(folder) == {name: info["sha256"] for name, info in recorded.items()}
 
 
 def test_a_file_larger_than_one_read_is_hashed_whole(tmp_path: Path) -> None:

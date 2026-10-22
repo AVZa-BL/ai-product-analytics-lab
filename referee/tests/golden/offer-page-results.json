@@ -117,8 +117,12 @@
   "effect": {
     "metric": "revenue_usd_7d",
     "kind": "continuous",
-    "population": "analysed players",
-    "alpha": 0.05,
+    "population": "analysed players with a closed outcome window",
+    "left_out": {
+      "control": 0,
+      "variant_b": 0,
+      "variant_c": 0
+    },
     "adjustment": "bonferroni",
     "comparisons": 2,
     "arms": [
@@ -151,7 +155,11 @@
         "adjusted_p_value": 1.0
       }
     ],
-    "readable": false
+    "readable": false,
+    "unreadable_because": [
+      "RES-001"
+    ],
+    "underpowered": true
   },
   "rules_run": [
     "RES-001",

@@ -49,7 +49,7 @@ def review_results(
     return review_context(ResultsContext.of(spec, data), rules=rules)
 
 
-ORIGIN_SHIFT_DAYS = (1, 2, 3, 4, 5, 6)
+_ORIGIN_SHIFT_DAYS = (1, 2, 3, 4, 5, 6)
 
 
 def _findings_of(review: ResultsReview) -> set[str]:
@@ -79,8 +79,11 @@ def origin_sensitivity(
     actual = _findings_of(review)
     assert review.origin is not None
     shifts = []
-    for days in ORIGIN_SHIFT_DAYS:
-        start = (review.origin - timedelta(days=days)).astimezone(UTC)
+    for days in _ORIGIN_SHIFT_DAYS:
+        try:
+            start = (review.origin - timedelta(days=days)).astimezone(UTC)
+        except OverflowError:  # an origin in the first days of the calendar cannot be moved back
+            return {"ran": False, "reason": "the origin is too early to move back", "shifts": []}
         shifted = replace(
             spec, design=replace(spec.design, start_utc=start.isoformat().replace("+00:00", "Z"))
         )

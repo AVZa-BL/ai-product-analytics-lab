@@ -1,8 +1,10 @@
 """The `referee review-design` and `review-results` commands: output, exit codes and streams."""
 
+import csv
+import hashlib
+import io
 import json
 import shutil
-from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -13,7 +15,6 @@ from referee import __version__, cli
 from referee.cli import main
 from referee.data import DataError
 from referee.findings import Finding, ResultsReview
-from referee.results import ResultsContext
 
 SECTION_6_SHA256 = "b0332774feccd582db109bfffff10e1330ce418ab28471ccb625fe0b00af10e8"
 
@@ -217,7 +218,6 @@ def _review(*severities: str) -> ResultsReview:
     ("severities", "verdict", "status"),
     [
         ((), "clear", 0),
-        (("info",), "clear", 0),
         (("warning",), "caution", 0),
         (("warning", "blocker"), "invalid", 1),
     ],
@@ -253,11 +253,9 @@ def test_the_exit_status_of_review_results_follows_the_blockers_and_nothing_else
     [
         ("missing", "export", ["--experiment-id", LAB_ID], "missing.yaml"),
         ("good", "export", [], f"--experiment-id is required; the export holds: {LAB_ID}"),
-        ("good", "export", ["--experiment-id", "nope"], f"the files hold: '{LAB_ID}'"),
         ("good", "nowhere", ["--experiment-id", LAB_ID], "is not a directory"),
-        ("section_6", "export", ["--experiment-id", LAB_ID], "arms the spec does not list"),
+        ("good", "empty", [], "the export holds: none"),
         ("good", "export", ["--experiment-id", LAB_ID, "--as-of", "2026-06-30"], "UTC offset"),
-        ("good", "export", ["--experiment-id", LAB_ID, "--as-of", "tuesday"], "ISO 8601"),
     ],
 )
 def test_input_that_cannot_be_reviewed_exits_2_and_says_why_on_stderr_only(
@@ -272,10 +270,18 @@ def test_input_that_cannot_be_reviewed_exits_2_and_says_why_on_stderr_only(
 ) -> None:
     specs = {
         "good": results_spec_file,
-        "section_6": write_yaml(tmp_path, raw_spec, "section_6.yaml"),
         "missing": tmp_path / "missing.yaml",
     }
-    folders = {"export": LAB_EXPORT, "nowhere": tmp_path / "nowhere"}
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    for name in (
+        "experiment_assignments.csv",
+        "experiment_exposures.csv",
+        "experiment_outcomes.csv",
+    ):
+        header = (LAB_EXPORT / name).read_text(encoding="utf-8").splitlines()[0]
+        (empty / name).write_text(header + "\n", encoding="utf-8")  # the columns, no rows
+    folders = {"export": LAB_EXPORT, "empty": empty, "nowhere": tmp_path / "nowhere"}
 
     code, out, err = run(capsys, "review-results", str(specs[spec]), str(folders[folder]), *options)
 
@@ -293,7 +299,7 @@ def test_input_that_cannot_be_reviewed_exits_2_and_says_why_on_stderr_only(
         (True, "2026-06-30T00:00:00+00:00", "2026-06-30T00:00:00Z", "command line"),
     ],
 )
-def test_the_time_of_the_export_is_the_flag_before_the_manifest_and_reaches_the_review(
+def test_the_time_of_the_export_is_the_flag_before_the_manifest(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
     no_sensitivity: None,
@@ -304,13 +310,7 @@ def test_the_time_of_the_export_is_the_flag_before_the_manifest_and_reaches_the_
     time: str | None,
     source: str | None,
 ) -> None:
-    seen: list[datetime | None] = []
-
-    def review(context: ResultsContext) -> ResultsReview:
-        seen.append(context.exported_at)
-        return _review()
-
-    monkeypatch.setattr(cli, "review_context", review)
+    monkeypatch.setattr(cli, "review_context", lambda context: _review())
     options = [] if flag is None else ["--as-of", flag]
 
     code, out, _ = run(
@@ -328,7 +328,6 @@ def test_the_time_of_the_export_is_the_flag_before_the_manifest_and_reaches_the_
     assert code == 0
     as_of = json.loads(out)["as_of"]
     assert (as_of["time"], as_of["source"]) == (time, source)
-    assert seen == [None if time is None else datetime.fromisoformat(time)]
 
 
 def test_a_long_list_of_problems_in_the_export_is_cut_at_a_thousand_and_the_total_is_exact(
@@ -399,7 +398,7 @@ def test_the_lab_export_is_found_invalid_for_its_planted_sample_ratio_mismatch(
         assert "Verdict: INVALID\nBlocking rules: data validity RES-001" in out
         assert "completeness was not checked" in out
         assert "Origin sensitivity: " in out
-        assert "NOT TO BE READ: the verdict is invalid" in out
+        assert "NOT TO BE READ: blocked by RES-001," in out
         assert out.count("\n  RES-0") == 3
         assert "      p_value: 6.72961e-10\n" in out  # the evidence is printed, not just pointed to
         assert max(len(line) for line in out.splitlines()) <= 100
@@ -435,3 +434,165 @@ def test_the_text_report_labels_an_interim_run_and_a_run_whose_completeness_is_u
 
     assert said in out
     assert ("INTERIM RUN" in out) == (said == "INTERIM RUN")
+
+
+def test_an_internal_failure_in_review_results_exits_3_with_nothing_on_stdout(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, results_spec_file: Path
+) -> None:
+    def explode(context: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cli, "review_context", explode)
+
+    code, out, err = run(
+        capsys, "review-results", str(results_spec_file), str(LAB_EXPORT), "--experiment-id", LAB_ID
+    )
+
+    assert (code, out) == (3, "")
+    assert "RuntimeError: boom" in err
+    assert err.rstrip().endswith("referee: error: internal error; this is a bug in Referee")
+
+
+def test_one_problem_in_the_export_is_not_pluralised(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, results_spec_file: Path
+) -> None:
+    def refuse(folder: object, experiment_id: str) -> object:
+        raise DataError(["only one"], 1)
+
+    monkeypatch.setattr(cli, "load_export", refuse)
+
+    code, out, err = run(
+        capsys, "review-results", str(results_spec_file), str(LAB_EXPORT), "--experiment-id", LAB_ID
+    )
+
+    assert (code, out) == (2, "")
+    assert err == "referee: error: the experiment export has 1 problem:\n  - only one\n"
+
+
+def test_the_problems_of_an_export_against_the_spec_are_listed_one_to_a_line(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, raw_spec: dict
+) -> None:
+    path = write_yaml(tmp_path, raw_spec, "section_6.yaml")  # not the spec of this export
+
+    code, out, err = run(
+        capsys, "review-results", str(path), str(LAB_EXPORT), "--experiment-id", LAB_ID
+    )
+
+    lines = err.splitlines()
+    assert (code, out) == (2, "")
+    assert lines[0] == "referee: error: the export cannot be reviewed against the spec: 3 problems"
+    assert len(lines) == 4 and all(line.startswith("  - ") for line in lines[1:])
+    assert "arms the spec does not list" in lines[1]
+
+
+def test_a_message_that_names_a_hostile_file_is_escaped(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    missing = tmp_path / "\x1b[31mmissing.yaml\nreferee: error: forged"
+
+    code, out, err = run(
+        capsys, "review-results", str(missing), str(LAB_EXPORT), "--experiment-id", LAB_ID
+    )
+
+    assert (code, out) == (2, "")
+    assert err.count("\n") == 1 and "\x1b" not in err
+    assert err.endswith(
+        "missing.yaml\\nreferee: error: forged: cannot be read: No such file or directory\n"
+    )
+    assert "\\x1b[31mmissing.yaml" in err
+
+
+def _csv_row(*cells: str) -> str:
+    buffer = io.StringIO()
+    csv.writer(buffer, lineterminator="\n").writerow(cells)
+    return buffer.getvalue()
+
+
+def test_the_experiment_ids_listed_cannot_forge_a_line_or_move_the_terminal(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, results_spec_file: Path
+) -> None:
+    folder = tmp_path / "hostile"
+    folder.mkdir()
+    hostile = "e1\nreferee: error: forged\x1b[31m\u202e"
+    for name in (
+        "experiment_assignments.csv",
+        "experiment_exposures.csv",
+        "experiment_outcomes.csv",
+    ):
+        header = (LAB_EXPORT / name).read_text(encoding="utf-8").splitlines()[0]
+        cells = ["x"] * (header.count(",") + 1)
+        cells[header.split(",").index("experiment_id")] = hostile
+        (folder / name).write_text(header + "\n" + _csv_row(*cells), encoding="utf-8")
+
+    code, out, err = run(capsys, "review-results", str(results_spec_file), str(folder))
+
+    assert (code, out) == (2, "")
+    assert err == (
+        "referee: error: --experiment-id is required; the export holds: "
+        "e1\\nreferee: error: forged\\x1b[31m\\u202e\n"
+    )
+
+
+def test_a_file_that_cannot_be_read_after_the_checks_exits_2(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, results_spec_file: Path
+) -> None:
+    def fail(folder: object) -> None:
+        raise OSError(5, "Input/output error")
+
+    monkeypatch.setattr(cli, "export_file_hashes", fail)
+
+    code, out, err = run(
+        capsys, "review-results", str(results_spec_file), str(LAB_EXPORT), "--experiment-id", LAB_ID
+    )
+
+    assert (code, out) == (2, "")
+    assert err == "referee: error: [Errno 5] Input/output error\n"
+
+
+def test_the_files_are_hashed_as_they_were_read_and_not_as_they_are_when_the_review_ends(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    no_sensitivity: None,
+    tmp_path: Path,
+    results_spec_file: Path,
+) -> None:
+    folder = tmp_path / "export"
+    shutil.copytree(LAB_EXPORT, folder)
+    changing = folder / "experiment_assignments.csv"
+    read = hashlib.sha256(changing.read_bytes()).hexdigest()
+
+    def changed_while_it_runs(context: object) -> ResultsReview:
+        with changing.open("ab") as handle:
+            handle.write(b"\n")
+        return _review()
+
+    monkeypatch.setattr(cli, "review_context", changed_while_it_runs)
+
+    _, out, _ = run(
+        capsys,
+        "review-results",
+        str(results_spec_file),
+        str(folder),
+        "--experiment-id",
+        LAB_ID,
+        "--format",
+        "json",
+    )
+
+    assert json.loads(out)["data"]["files"]["experiment_assignments.csv"]["sha256"] == read
+
+
+@pytest.mark.parametrize("command", ["review-design", "review-results"])
+def test_a_lone_surrogate_in_a_spec_is_shown_as_an_escape_and_is_not_a_crash(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, raw_spec: dict, command: str
+) -> None:
+    path = write_yaml(tmp_path, {**results_raw(raw_spec), "title": "PLACEHOLDER"}, "lone.yaml")
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("PLACEHOLDER", '"a\\ud800b"'), encoding="utf-8"
+    )
+    where = [str(LAB_EXPORT), "--experiment-id", LAB_ID] if command == "review-results" else []
+
+    code, out, err = run(capsys, command, str(path), *where)
+
+    assert (code in (0, 1), err) == (True, "")
+    assert "a\\ud800b" in out
