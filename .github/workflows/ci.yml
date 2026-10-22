@@ -18,8 +18,7 @@ jobs:
   # Decides which projects a pull request touches, so an untouched project's jobs are skipped.
   # A job skipped by an `if:` counts as passing for a branch-protection rule that requires it
   # (unlike a workflow skipped by `paths:`, which leaves the check pending forever). Pushes to
-  # main and any change to this workflow run everything. referee's documentation tests read
-  # files under analytics-lab/, so a change there runs referee too.
+  # main and any change to this workflow run everything.
   changes:
     runs-on: ubuntu-latest
     defaults:
@@ -48,7 +47,7 @@ jobs:
             if echo "$files" | grep -q '^\.github/'; then
               lab=true; referee=true; tracewright=true
             fi
-            if echo "$files" | grep -q '^analytics-lab/'; then lab=true; referee=true; fi
+            if echo "$files" | grep -q '^analytics-lab/'; then lab=true; fi
             if echo "$files" | grep -q '^referee/'; then referee=true; fi
             if echo "$files" | grep -q '^tracewright/'; then tracewright=true; fi
           fi
