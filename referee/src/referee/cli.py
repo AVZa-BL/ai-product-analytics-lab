@@ -1,9 +1,11 @@
 """The `referee` command line.
 
-Exit codes of `review-design`: 0 when the review finds no blocker, 1 when it finds one,
-2 when the spec cannot be read or is not valid, and 3 when Referee itself fails. Keeping a
-crash out of 1 matters: an uncaught Python exception exits with 1, which a pipeline would
-read as "the design has a blocker".
+Exit codes of `review-design` and `review-results`: 0 when the review finds no blocker, 1 when
+it finds one, 2 when the spec or the data cannot be read, is not valid or cannot be reviewed
+together (an unknown experiment, a metric the export does not hold, a time that is not a UTC
+instant), and 3 when Referee itself fails. Keeping a crash out of 1 matters: an uncaught Python
+exception exits with 1, which a pipeline would read as "the design has a blocker". A warning
+never changes the exit status; the results verdict `caution` exits 0 and says so in the report.
 """
 
 from __future__ import annotations
@@ -12,12 +14,23 @@ import argparse
 import sys
 import traceback
 from collections.abc import Sequence
+from dataclasses import replace
+from datetime import datetime
 
 from referee import __version__
+from referee.data import DataError, list_experiment_ids, load_export, parse_utc
+from referee.display import cap_listing
 from referee.loader import LoadError, load_spec
-from referee.report import design_report, render_json, render_text
-from referee.review import review_design
-from referee.spec import SpecError
+from referee.report import (
+    design_report,
+    render_json,
+    render_results_text,
+    render_text,
+    results_report,
+)
+from referee.results import ResultsError
+from referee.review import review_design, review_results
+from referee.spec import ExperimentSpec, SpecError
 
 EXIT_OK = 0
 EXIT_BLOCKED = 1
@@ -46,6 +59,39 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument(
         "--format", choices=("text", "json"), default="text", help="output format (default: text)"
     )
+
+    results = commands.add_parser(
+        "review-results",
+        help="review an experiment's exported data against its spec",
+        description=(
+            "Review the data of an experiment against its spec. Exit status: 0 no blocker "
+            "found (the verdict may still be caution), 1 at least one blocker (verdict invalid), "
+            "2 the spec or the data cannot be read or reviewed, 3 internal error."
+        ),
+    )
+    results.add_argument("spec", help="path to the experiment spec (YAML)")
+    results.add_argument(
+        "data",
+        help=(
+            "folder with experiment_assignments.csv, experiment_exposures.csv and "
+            "experiment_outcomes.csv, and optionally manifest.json"
+        ),
+    )
+    results.add_argument(
+        "--experiment-id",
+        help="the experiment to review (when it is left out, the ones in the export are listed)",
+    )
+    results.add_argument(
+        "--as-of",
+        metavar="TIME",
+        help=(
+            "when the export was taken, as an ISO 8601 time in UTC (for example "
+            "2026-06-30T00:00:00Z); it replaces the time in manifest.json"
+        ),
+    )
+    results.add_argument(
+        "--format", choices=("text", "json"), default="text", help="output format (default: text)"
+    )
     return parser
 
 
@@ -57,14 +103,31 @@ def _spec_error(path: str, error: SpecError) -> str:
     return "\n".join(lines)
 
 
-def _review_design(path: str, output_format: str) -> int:
+def _read_spec(path: str) -> ExperimentSpec | None:
+    """The spec at `path`, or None after saying on stderr why it cannot be used."""
     try:
-        spec = load_spec(path)
+        return load_spec(path)
     except LoadError as error:
         print(f"referee: error: {error}", file=sys.stderr)
-        return EXIT_UNREADABLE
     except SpecError as error:
         print(_spec_error(path, error), file=sys.stderr)
+    return None
+
+
+def _data_error(error: DataError) -> str:
+    """Every problem of an export that cannot be read, as many as a person can read."""
+    noun = "problem" if error.total == 1 else "problems"
+    listing = cap_listing(error.problems)
+    lines = [f"referee: error: the experiment export has {error.total:,} {noun}:"]
+    lines += [f"  - {problem}" for problem in listing.shown]
+    if error.total > len(listing.shown):
+        lines.append(f"  ... and {error.total - len(listing.shown):,} more")
+    return "\n".join(lines)
+
+
+def _review_design(path: str, output_format: str) -> int:
+    spec = _read_spec(path)
+    if spec is None:
         return EXIT_UNREADABLE
 
     report = design_report(spec, review_design(spec))
@@ -73,10 +136,56 @@ def _review_design(path: str, output_format: str) -> int:
     return EXIT_BLOCKED if report["blocking_rule_ids"] else EXIT_OK
 
 
+def _review_results(args: argparse.Namespace) -> int:
+    spec = _read_spec(args.spec)
+    if spec is None:
+        return EXIT_UNREADABLE
+
+    as_of: datetime | None = None
+    if args.as_of is not None:
+        try:
+            as_of = parse_utc(args.as_of)
+        except ValueError as problem:
+            print(f"referee: error: --as-of {problem}", file=sys.stderr)
+            return EXIT_UNREADABLE
+
+    try:
+        if args.experiment_id is None:
+            ids = ", ".join(list_experiment_ids(args.data)) or "none"
+            print(
+                f"referee: error: --experiment-id is required; the export holds: {ids}",
+                file=sys.stderr,
+            )
+            return EXIT_UNREADABLE
+        data = load_export(args.data, args.experiment_id)
+        if as_of is not None:
+            data = replace(data, exported_at=as_of)
+        review = review_results(spec, data)
+    except DataError as error:
+        print(_data_error(error), file=sys.stderr)
+        return EXIT_UNREADABLE
+    except ResultsError as error:
+        print(f"referee: error: {error}", file=sys.stderr)
+        return EXIT_UNREADABLE
+
+    source = "command line" if as_of is not None else "manifest"
+    report = results_report(
+        spec,
+        review,
+        as_of=data.exported_at,
+        as_of_source=None if data.exported_at is None else source,
+    )
+    render = render_json if args.format == "json" else render_results_text
+    sys.stdout.write(render(report))
+    return EXIT_BLOCKED if report["blocking_rule_ids"] else EXIT_OK
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command line and return its exit status. Never raises."""
     try:
         args = build_parser().parse_args(argv)
+        if args.command == "review-results":
+            return _review_results(args)
         return _review_design(args.spec, args.format)
     except SystemExit as exit_request:  # argparse: usage errors, --help, --version
         return exit_request.code if isinstance(exit_request.code, int) else EXIT_UNREADABLE

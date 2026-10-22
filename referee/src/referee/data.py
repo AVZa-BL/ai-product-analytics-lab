@@ -222,6 +222,14 @@ def _parse_utc(value: str) -> tuple[datetime | None, str | None]:
     return moment.astimezone(UTC), None
 
 
+def parse_utc(value: str) -> datetime:
+    """The instant in an ISO 8601 text with a zero UTC offset; `ValueError` says why not."""
+    moment, problem = _parse_utc(value)
+    if moment is None:
+        raise ValueError(problem)
+    return moment
+
+
 class _Reader:
     """Parses the cells of one row, recording a problem (and returning None) for a bad one."""
 

@@ -75,8 +75,8 @@ def build_data(rows: list[Row], *, experiment_id: str = "e1", exported_at=None) 
     )
 
 
-def results_spec(raw_spec: dict, **changes: object) -> ExperimentSpec:
-    """The shared test spec turned into one a results review can read.
+def results_raw(raw_spec: dict, **changes: object) -> dict:
+    """The shared test spec turned into one a results review can read, as a plain dict.
 
     Three equal arms, a binary primary metric the export holds (`purchased_7d`) and no
     guardrails. A change is `section__field=value`; a double underscore stands for the dot.
@@ -97,7 +97,12 @@ def results_spec(raw_spec: dict, **changes: object) -> ExperimentSpec:
         for part in parents:
             node = node.setdefault(part, {})
         node[leaf] = value
-    return ExperimentSpec.from_dict(raw)
+    return raw
+
+
+def results_spec(raw_spec: dict, **changes: object) -> ExperimentSpec:
+    """`results_raw` read as a spec."""
+    return ExperimentSpec.from_dict(results_raw(raw_spec, **changes))
 
 
 def crowd(arm: str, count: int, *, prefix: str | None = None, **fields: object) -> list[Row]:

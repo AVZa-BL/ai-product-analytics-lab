@@ -1,13 +1,18 @@
-"""The `referee review-design` command: output, exit codes and what goes to which stream."""
+"""The `referee review-design` and `review-results` commands: output, exit codes and streams."""
 
 import json
+import shutil
+from datetime import datetime
 from pathlib import Path
 
 import pytest
+from results_helpers import results_raw
 from rule_helpers import write_yaml
 
 from referee import __version__, cli
 from referee.cli import main
+from referee.data import DataError
+from referee.findings import Finding, ResultsReview
 
 SECTION_6_SHA256 = "b0332774feccd582db109bfffff10e1330ce418ab28471ccb625fe0b00af10e8"
 
@@ -156,3 +161,211 @@ def test_an_unquoted_impossible_start_time_exits_2_not_3(
 
     assert (code, out) == (2, "")
     assert err.startswith(f"referee: error: {path}: ") and "day is out of range" in err
+
+
+# --- review-results ----------------------------------------------------------------------
+
+LAB_EXPORT = Path(__file__).parent / "data" / "hybrid_offer_page_5000"
+LAB_ID = "hybrid_offer_page"
+
+
+@pytest.fixture
+def results_spec_file(tmp_path: Path, raw_spec: dict) -> Path:
+    return write_yaml(tmp_path, results_raw(raw_spec), "results.yaml")
+
+
+@pytest.fixture(scope="module")
+def export_taken_at_noon(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    folder = tmp_path_factory.mktemp("export") / "export"
+    shutil.copytree(LAB_EXPORT, folder)
+    manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+    manifest["exported_at_utc"] = "2026-05-01T12:00:00Z"
+    (folder / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    return folder
+
+
+def _review(*severities: str) -> ResultsReview:
+    findings = tuple(
+        Finding(
+            rule_id=f"RES-00{i}",
+            severity=severity,
+            title="t",
+            evidence={},
+            why_it_matters="w",
+            remediation="r",
+            references=(),
+        )
+        for i, severity in enumerate(severities, start=1)
+    )
+    return ResultsReview(
+        spec_id="s",
+        experiment_id=LAB_ID,
+        rules_run=tuple(f.rule_id for f in findings),
+        findings=findings,
+    )
+
+
+@pytest.mark.parametrize(
+    ("severities", "verdict", "status"),
+    [
+        ((), "clear", 0),
+        (("info",), "clear", 0),
+        (("warning",), "caution", 0),
+        (("warning", "blocker"), "invalid", 1),
+    ],
+)
+def test_the_exit_status_of_review_results_follows_the_blockers_and_nothing_else(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    results_spec_file: Path,
+    severities: tuple[str, ...],
+    verdict: str,
+    status: int,
+) -> None:
+    monkeypatch.setattr(cli, "review_results", lambda spec, data: _review(*severities))
+
+    code, out, err = run(
+        capsys,
+        "review-results",
+        str(results_spec_file),
+        str(LAB_EXPORT),
+        "--experiment-id",
+        LAB_ID,
+        "--format",
+        "json",
+    )
+
+    assert (code, err) == (status, "")
+    assert json.loads(out)["verdict"] == verdict
+
+
+@pytest.mark.parametrize(
+    ("spec", "folder", "options", "said"),
+    [
+        ("missing", "export", ["--experiment-id", LAB_ID], "missing.yaml"),
+        ("good", "export", [], f"--experiment-id is required; the export holds: {LAB_ID}"),
+        ("good", "export", ["--experiment-id", "nope"], f"the files hold: '{LAB_ID}'"),
+        ("good", "nowhere", ["--experiment-id", LAB_ID], "is not a directory"),
+        ("section_6", "export", ["--experiment-id", LAB_ID], "arms the spec does not list"),
+        ("good", "export", ["--experiment-id", LAB_ID, "--as-of", "2026-06-30"], "UTC offset"),
+        ("good", "export", ["--experiment-id", LAB_ID, "--as-of", "tuesday"], "ISO 8601"),
+    ],
+)
+def test_input_that_cannot_be_reviewed_exits_2_and_says_why_on_stderr_only(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    raw_spec: dict,
+    results_spec_file: Path,
+    spec: str,
+    folder: str,
+    options: list[str],
+    said: str,
+) -> None:
+    specs = {
+        "good": results_spec_file,
+        "section_6": write_yaml(tmp_path, raw_spec, "section_6.yaml"),
+        "missing": tmp_path / "missing.yaml",
+    }
+    folders = {"export": LAB_EXPORT, "nowhere": tmp_path / "nowhere"}
+
+    code, out, err = run(capsys, "review-results", str(specs[spec]), str(folders[folder]), *options)
+
+    assert (code, out) == (2, "")
+    assert err.startswith("referee: error: ")
+    assert said in err
+
+
+@pytest.mark.parametrize(
+    ("in_manifest", "flag", "time", "source"),
+    [
+        (False, None, None, None),
+        (False, "2026-06-30T00:00:00Z", "2026-06-30T00:00:00Z", "command line"),
+        (True, None, "2026-05-01T12:00:00Z", "manifest"),
+        (True, "2026-06-30T00:00:00+00:00", "2026-06-30T00:00:00Z", "command line"),
+    ],
+)
+def test_the_time_of_the_export_is_the_flag_before_the_manifest_and_reaches_the_review(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    results_spec_file: Path,
+    export_taken_at_noon: Path,
+    in_manifest: bool,
+    flag: str | None,
+    time: str | None,
+    source: str | None,
+) -> None:
+    seen: list[datetime | None] = []
+
+    def review(spec: object, data: object) -> ResultsReview:
+        seen.append(data.exported_at)  # type: ignore[attr-defined]
+        return _review()
+
+    monkeypatch.setattr(cli, "review_results", review)
+    options = [] if flag is None else ["--as-of", flag]
+
+    code, out, _ = run(
+        capsys,
+        "review-results",
+        str(results_spec_file),
+        str(export_taken_at_noon if in_manifest else LAB_EXPORT),
+        "--experiment-id",
+        LAB_ID,
+        "--format",
+        "json",
+        *options,
+    )
+
+    assert code == 0
+    assert json.loads(out)["as_of"] == {"time": time, "source": source}
+    assert seen == [None if time is None else datetime.fromisoformat(time)]
+
+
+def test_a_long_list_of_problems_in_the_export_is_cut_at_a_thousand_and_the_total_is_exact(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, results_spec_file: Path
+) -> None:
+    """The loader keeps 10,000 problems and counts them all; the command shows 1,000."""
+
+    def refuse(folder: object, experiment_id: str) -> object:
+        raise DataError([f"problem {i}" for i in range(1, 5_001)], total=12_345)
+
+    monkeypatch.setattr(cli, "load_export", refuse)
+
+    code, out, err = run(
+        capsys,
+        "review-results",
+        str(results_spec_file),
+        str(LAB_EXPORT),
+        "--experiment-id",
+        LAB_ID,
+    )
+
+    lines = err.splitlines()
+    assert (code, out) == (2, "")
+    assert lines[0] == "referee: error: the experiment export has 12,345 problems:"
+    assert lines[1:3] == ["  - problem 1", "  - problem 2"]
+    assert sum(line.startswith("  - ") for line in lines) == 1_000
+    assert lines[-1] == "  ... and 11,345 more"
+
+
+@pytest.mark.parametrize("output_format", ["text", "json"])
+def test_the_lab_export_is_found_invalid_for_its_planted_sample_ratio_mismatch(
+    capsys: pytest.CaptureFixture[str], results_spec_file: Path, output_format: str
+) -> None:
+    code, out, err = run(
+        capsys,
+        "review-results",
+        str(results_spec_file),
+        str(LAB_EXPORT),
+        "--experiment-id",
+        LAB_ID,
+        "--format",
+        output_format,
+    )
+
+    assert (code, err) == (1, "")
+    if output_format == "json":
+        report = json.loads(out)
+        assert (report["kind"], report["verdict"]) == ("results_review", "invalid")
+        assert "RES-001" in report["blocking_rule_ids"]
+    else:
+        assert "Verdict: INVALID\nBlocking rules: RES-001" in out
