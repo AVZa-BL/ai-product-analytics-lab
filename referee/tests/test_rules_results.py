@@ -500,8 +500,29 @@ def test_a_results_review_of_the_committed_export_lists_every_data_fit_rule_that
 
     assert review.verdict == "invalid"
     assert review.blocking_rule_ids == ("RES-001", "RES-002")
-    assert [f.rule_id for f in review.findings if f.severity == "warning"] == ["RES-012", "RES-013"]
-    assert review.rules_run == ("RES-001", "RES-002", "RES-003", "RES-011", "RES-012", "RES-013")
+    assert [f.rule_id for f in review.findings if f.severity == "warning"] == [
+        "RES-007",
+        "RES-012",
+        "RES-013",
+    ]
+    assert review.rules_run == (
+        "RES-001",
+        "RES-002",
+        "RES-003",
+        "RES-004",
+        "RES-007",
+        "RES-008",
+        "RES-011",
+        "RES-012",
+        "RES-013",
+    )
+    # The default spec plans 14 days, too few for 3 weekly cohorts: a test that did not run is
+    # reported, so that it cannot read as a pass (design section 21.7).
+    (cohorts,) = (f for f in review.findings if f.rule_id == "RES-007")
+    assert cohorts.evidence["summary"]["line"] == (
+        "RES-007: 2 tests, 0 flagged, 2 not evaluated, 0 low information"
+    )
+    assert {t["reason"] for t in cohorts.evidence["tests"]} == {"window_holds_fewer_than_3_blocks"}
 
 
 # --- After the independent review of 4b-1 ---------------------------------------------------------

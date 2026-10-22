@@ -107,10 +107,11 @@ class ResultsReview:
     """The outcome of reviewing one experiment's data against its spec.
 
     The verdict follows mechanically from the findings: `invalid` if any finding blocks,
-    `caution` if any is a warning, `clear` otherwise. The words differ from the design
-    review's on purpose: `clear` says that the rules which ran found nothing, not that the
-    effect is real. `rules_run` lists those rules, so that a verdict can always be read
-    together with what was checked; a finding from a rule that did not run is a bug.
+    `caution` if any is a warning, `clear` otherwise (an info finding is listed and does not
+    change it). The words differ from the design review's on purpose: `clear` says that the
+    rules which ran found nothing that blocks or warns, not that the effect is real. `rules_run`
+    lists those rules, so that a verdict can always be read together with what was checked; a
+    finding from a rule that did not run is a bug.
 
     `origin` is the instant weeks were counted from (`design.start_utc`, else the first
     assignment) and `ignored_before_start` the players assigned before it, who are in no

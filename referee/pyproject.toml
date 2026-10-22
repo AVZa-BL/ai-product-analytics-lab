@@ -21,7 +21,8 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra -m 'not study'"
+markers = ["study: re-runs the simulation studies of the design; slow, `pytest -m study` runs only these"]
 
 [tool.ruff]
 target-version = "py312"

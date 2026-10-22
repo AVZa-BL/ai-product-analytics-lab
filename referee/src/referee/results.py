@@ -56,6 +56,14 @@ class PlayerRecord:
         return self.first_exposed_at is not None
 
     @property
+    def window_closes_at(self) -> datetime:
+        """When the player's seven-day outcome window closes: the export's `window_end_utc`,
+        else seven days after the assignment (the length the lab's export uses)."""
+        if self.window_end is not None:
+            return self.window_end
+        return self.assigned_at + timedelta(days=DAYS_PER_BLOCK)
+
+    @property
     def version(self) -> int:
         """The configuration version the player first saw: the exposure's, else the assignment's."""
         if self.first_exposure_version is None:
@@ -114,6 +122,20 @@ METRICS: Mapping[str, ExportMetric] = {
         ExportMetric("revenue_usd_7d", "continuous", _revenue),
         ExportMetric("purchased_7d", "binary", _purchased),
     )
+}
+
+
+MetricFamily = Literal["revenue_like", "count", "binary"]
+
+# What kind of values each export metric holds, which decides what Referee has simulated for it.
+# `revenue_like`: an amount of money that most players leave at zero (the family of the pooled-
+# effect study, design section 21.10); `count`: a whole number of events per player (not
+# simulated for the pooled effect); `binary`: 0 or 1.
+METRIC_FAMILIES: Mapping[str, MetricFamily] = {
+    "sessions_7d": "count",
+    "purchases_7d": "count",
+    "revenue_usd_7d": "revenue_like",
+    "purchased_7d": "binary",
 }
 
 
@@ -233,9 +255,19 @@ class ResultsContext:
         counted = Counter(p.arm for p in players)
         return {name: counted[name] for name in self.arm_names}
 
+    @property
+    def observed_days(self) -> int:
+        """Whole days, rounded up, from the first to the last assignment of `players`."""
+        assigned = [player.assigned_at for player in self.players]
+        return math.ceil((max(assigned) - min(assigned)) / timedelta(days=1))
+
     def week_of(self, moment: datetime) -> int:
         """The 7-day block of `moment`, counted from the origin (negative before it)."""
-        return (moment - self.origin) // timedelta(days=DAYS_PER_BLOCK)
+        return self.block_of(moment, DAYS_PER_BLOCK)
+
+    def block_of(self, moment: datetime, block_days: int) -> int:
+        """The block of `block_days` days that `moment` falls in, counted from the origin."""
+        return (moment - self.origin) // timedelta(days=block_days)
 
     def required_n(self, arm: str) -> int | None:
         """The arm's required sample size from the power plan, found by name."""

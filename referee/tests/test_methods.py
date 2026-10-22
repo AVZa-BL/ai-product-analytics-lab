@@ -9,23 +9,37 @@ import pytest
 from scipy import stats
 from statsmodels.stats.meta_analysis import combine_effects
 from statsmodels.stats.multitest import multipletests
-from statsmodels.stats.proportion import confint_proportions_2indep, proportions_ztest
+from statsmodels.stats.proportion import (
+    confint_proportions_2indep,
+    proportion_confint,
+    proportions_ztest,
+)
 from statsmodels.stats.weightstats import CompareMeans, DescrStatsW
 
 from referee.methods import (
     SRM_ALPHA,
+    NonPositiveMeanError,
+    NoVariationError,
     StatsError,
     benjamini_hochberg,
     benjamini_yekutieli,
     bonferroni,
     bootstrap_difference,
+    cohort_detectable_shift,
     cohort_heterogeneity,
+    cohort_power,
     heavy_tail_measures,
     homogeneity_test,
+    log_mean_ratio,
+    mean_interval,
+    mean_ratio,
+    proportion_interval,
     ratio_difference,
     ratio_estimate,
     srm_test,
     two_proportion_difference,
+    values_are_constant,
+    welch_correction,
     welch_difference,
 )
 
@@ -155,6 +169,71 @@ def test_an_alpha_outside_zero_to_one_is_refused_for_proportions() -> None:
 def _lognormal(seed: int, n: int, sigma: float = 1.7) -> list[float]:
     rng = random.Random(seed)
     return [rng.lognormvariate(0.0, sigma) for _ in range(n)]
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_the_skewness_is_what_scipy_returns_by_default(seed: int) -> None:
+    values = _lognormal(seed, 300 + 100 * seed)
+
+    assert heavy_tail_measures(values).skewness == pytest.approx(stats.skew(values), rel=1e-9)
+
+
+def test_the_skewness_of_a_few_large_values_is_large_and_of_their_mirror_image_is_not() -> None:
+    one_spender = [1.0] + [0.0] * 99  # a Bernoulli sample with p = 1/100
+    expected = (1 - 2 * 0.01) / math.sqrt(0.01 * 0.99)
+
+    assert heavy_tail_measures(one_spender).skewness == pytest.approx(expected, rel=1e-12)
+    assert heavy_tail_measures([1.0] * 99 + [0.0]).skewness == pytest.approx(-expected, rel=1e-12)
+    assert heavy_tail_measures(one_spender).excess_kurtosis == pytest.approx(
+        100**2 / 99 - 6, rel=1e-12
+    )
+
+
+@pytest.mark.parametrize("big", [1e80, 1e154, 1e300])
+def test_values_too_large_for_a_fourth_power_are_refused_as_a_stats_error(big: float) -> None:
+    with pytest.raises(StatsError, match="too large"):
+        heavy_tail_measures([0.0] * 50 + [big, 2 * big])
+
+
+@pytest.mark.parametrize("values", [[1e308] * 3 + [0.0], [1e308, 1e308], [1.7e308, 1.7e308, 0.0]])
+def test_finite_values_whose_sum_is_beyond_any_float_are_a_stats_error_too(
+    values: list[float],
+) -> None:
+    with pytest.raises(StatsError, match="too large"):
+        heavy_tail_measures(values)
+
+
+@pytest.mark.parametrize("values", [[1e-100, 2e-100, 4e-100], [1e-120, 0.0, 3e-120, 9e-120]])
+def test_values_so_small_that_a_power_of_their_spread_underflows_are_a_stats_error(
+    values: list[float],
+) -> None:
+    with pytest.raises(StatsError, match="too large or too small"):
+        heavy_tail_measures(values)
+
+
+@pytest.mark.parametrize("values", [[0.7] * 3, [0.1 + 0.2, 0.3, 0.3], [5.0, 5.0], [1e-200] * 50])
+def test_values_that_do_not_vary_are_a_no_variation_error(values: list[float]) -> None:
+    with pytest.raises(NoVariationError):
+        heavy_tail_measures(values)
+
+
+@pytest.mark.parametrize("values", [[0.0] * 50 + [1e-200, 2e-200, 5e-200], [1e-200, 2e-200]])
+def test_values_that_differ_but_whose_squared_spread_underflows_are_not_said_to_be_the_same(
+    values: list[float],
+) -> None:
+    with pytest.raises(StatsError, match="too large or too small") as raised:
+        heavy_tail_measures(values)
+
+    assert not isinstance(raised.value, NoVariationError)
+
+
+def test_large_values_that_still_fit_are_measured() -> None:
+    values = [0.0] * 50 + [1e70, 2e70]
+
+    result = heavy_tail_measures(values)
+
+    assert result.skewness == pytest.approx(stats.skew(values), rel=1e-9)
+    assert result.excess_kurtosis == pytest.approx(stats.kurtosis(values), rel=1e-9)
 
 
 @pytest.mark.parametrize(
@@ -677,3 +756,470 @@ def test_an_integer_beyond_any_float_is_not_a_finite_number() -> None:
         welch_difference([10**400, 1, 2], [1, 2, 3])
 
 
+# --- The small-sample correction, and the ratio of means on the log scale ----------------------
+
+
+def test_the_correction_is_the_standard_deviation_of_a_t_variable() -> None:
+    for nu in (3.0, 5.0, 29.0, 58.5, 1000.0):
+        assert welch_correction(nu) == pytest.approx(stats.t(nu).std(), rel=1e-12)
+    assert welch_correction(30.0) == pytest.approx(math.sqrt(30 / 28), rel=1e-15)
+    assert welch_correction(1e9) == pytest.approx(1.0, abs=1e-8)
+
+
+def test_the_correction_falls_as_the_degrees_of_freedom_rise() -> None:
+    values = [welch_correction(nu) for nu in (2.5, 4, 10, 30, 100, 1000)]
+
+    assert values == sorted(values, reverse=True) and values[-1] > 1.0
+
+
+@pytest.mark.parametrize("nu", [2.0, 1.0, 0.0, -3.0, float("nan"), float("inf")])
+def test_the_correction_refuses_degrees_of_freedom_where_the_variance_does_not_exist(
+    nu: float,
+) -> None:
+    with pytest.raises(StatsError, match="above 2"):
+        welch_correction(nu)
+
+
+def test_the_log_ratio_matches_a_direct_computation_of_the_delta_method() -> None:
+    rng = np.random.default_rng(20261209)
+    treatment = rng.normal(12.0, 4.0, 80)
+    control = rng.normal(10.0, 3.0, 55)
+    result = log_mean_ratio(list(treatment), list(control))
+
+    var_t = treatment.var(ddof=1) / (80 * treatment.mean() ** 2)
+    var_c = control.var(ddof=1) / (55 * control.mean() ** 2)
+    assert result.log_ratio == pytest.approx(math.log(treatment.mean() / control.mean()), rel=1e-12)
+    assert result.std_error == pytest.approx(math.sqrt(var_t + var_c), rel=1e-12)
+    assert result.degrees_of_freedom == pytest.approx(
+        (var_t + var_c) ** 2 / (var_t**2 / 79 + var_c**2 / 54), rel=1e-10
+    )
+    assert (result.n_treatment, result.n_control) == (80, 55)
+    assert result.mean_treatment == pytest.approx(treatment.mean(), rel=1e-12)
+
+
+def test_the_log_ratio_interval_covers_the_true_ratio_about_as_often_as_it_claims() -> None:
+    rng = np.random.default_rng(20261210)
+    true = math.log(12.0 / 10.0)
+    covered = 0
+    runs = 4000
+    for _ in range(runs):
+        result = log_mean_ratio(list(rng.normal(12.0, 4.0, 60)), list(rng.normal(10.0, 3.0, 60)))
+        margin = float(stats.t.ppf(0.975, result.degrees_of_freedom)) * result.std_error
+        covered += abs(result.log_ratio - true) <= margin
+
+    assert covered / runs == pytest.approx(0.95, abs=0.015)
+
+
+def test_a_constant_relative_effect_is_a_constant_log_ratio_whatever_the_baseline() -> None:
+    base = [3.0, 4.0, 5.0, 7.0, 9.0, 4.0, 6.0]
+    control = [2.0, 5.0, 3.0, 8.0, 4.0, 6.0, 5.0]
+    first = log_mean_ratio(base, control)
+
+    scaled_both = log_mean_ratio([10 * v for v in base], [10 * v for v in control])
+    doubled = log_mean_ratio([2 * v for v in base], control)
+
+    assert scaled_both.log_ratio == pytest.approx(first.log_ratio, rel=1e-12)
+    assert scaled_both.std_error == pytest.approx(first.std_error, rel=1e-12)
+    assert doubled.log_ratio == pytest.approx(first.log_ratio + math.log(2), rel=1e-12)
+    assert doubled.std_error == pytest.approx(first.std_error, rel=1e-12)
+
+
+def test_a_group_that_does_not_vary_still_gives_a_log_ratio_when_the_other_does() -> None:
+    result = log_mean_ratio([5.0, 5.0, 5.0], [4.0, 6.0, 8.0])
+
+    assert result.log_ratio == pytest.approx(math.log(5.0 / 6.0), rel=1e-12)
+    assert result.degrees_of_freedom == pytest.approx(2.0, rel=1e-12)  # only control varies
+
+
+def test_a_ratio_of_means_needs_both_means_above_zero() -> None:
+    for treatment, control in (
+        ([0.0, 0.0, 0.0], [1.0, 2.0, 3.0]),
+        ([1.0, 2.0, 3.0], [0.0, 0.0, 0.0]),
+        ([-1.0, -2.0, 0.5], [1.0, 2.0, 3.0]),
+    ):
+        with pytest.raises(NonPositiveMeanError, match="above 0"):
+            log_mean_ratio(treatment, control)
+
+
+def test_a_log_ratio_between_groups_that_do_not_vary_has_no_standard_error() -> None:
+    with pytest.raises(NoVariationError, match="neither group varies"):
+        log_mean_ratio([5.0, 5.0], [4.0, 4.0])
+    with pytest.raises(NoVariationError, match="neither group varies"):
+        welch_difference([5.0, 5.0], [4.0, 4.0])
+    assert issubclass(NoVariationError, StatsError) and issubclass(NonPositiveMeanError, StatsError)
+
+
+def test_a_log_ratio_refuses_what_it_cannot_estimate() -> None:
+    with pytest.raises(StatsError, match="at least 2 values"):
+        log_mean_ratio([1.0], [1.0, 2.0])
+    with pytest.raises(StatsError, match="finite"):
+        log_mean_ratio([1.0, float("inf")], [1.0, 2.0])
+    with pytest.raises(StatsError, match="too large"):
+        log_mean_ratio([3e154, -3e154, 1e155], [1.0, 2.0])
+
+
+def test_a_huge_spread_around_a_tiny_positive_mean_is_refused() -> None:
+    with pytest.raises(StatsError, match="too large"):
+        log_mean_ratio([-1e153, 1e153, 0.01, 0.01], [1.0, 2.0, 3.0])
+    with pytest.raises(StatsError, match="too large to represent"):
+        log_mean_ratio([1e10, -1e10, 5e-324, 5e-324, 5e-324], [1.0, 2.0, 3.0])
+
+
+def test_a_tiny_mean_with_a_tiny_spread_is_a_finite_answer_not_a_division_by_zero() -> None:
+    result = log_mean_ratio([1e-300, 2e-300, 3e-300], [1e-300, 4e-300, 2e-300])
+
+    assert result.log_ratio == pytest.approx(math.log(2 / (7 / 3)), rel=1e-12)
+    assert math.isfinite(result.std_error) and result.std_error > 0
+
+
+# --- What the cohort test could have seen ------------------------------------------------------
+
+
+def _simulated_power(effects, std_errors, positions, level, runs=60000, seed=20261301):
+    """Q-or-slope flags, by drawing the cohorts' estimates and applying the formulas directly."""
+    rng = np.random.default_rng(seed)
+    d = np.asarray(effects, float) + np.asarray(std_errors) * rng.standard_normal(
+        (runs, len(effects))
+    )
+    w = 1 / np.asarray(std_errors, float) ** 2
+    x = np.asarray(positions, float)
+    pooled = (w * d).sum(axis=1) / w.sum()
+    q = (w * (d - pooled[:, None]) ** 2).sum(axis=1)
+    x_bar = (w * x).sum() / w.sum()
+    spread = (w * (x - x_bar) ** 2).sum()
+    z = (w * (x - x_bar) * d).sum(axis=1) / np.sqrt(spread)
+    flagged = (stats.chi2.sf(q, len(effects) - 1) < level) | (2 * stats.norm.sf(np.abs(z)) < level)
+    return float(flagged.mean())
+
+
+@pytest.mark.parametrize(
+    ("effects", "std_errors", "positions"),
+    [
+        ([0, 0, 0, 0], [1, 1, 1, 1], [0, 1, 2, 3]),
+        ([3, 2, 1, 0], [1, 1, 1, 1], [0, 1, 2, 3]),
+        ([1.5, 1.5, 0, 0], [1, 1, 1, 1], [0, 1, 2, 3]),
+        ([2.0, 1.0, 0.5, 0.0, -0.5], [0.5, 1.0, 2.0, 1.0, 0.7], [0, 1, 3, 4, 6]),
+        ([0, 4, 0], [1, 1, 1], [0, 1, 2]),
+    ],
+)
+def test_the_power_of_q_or_slope_matches_a_simulation_of_the_cohort_estimates(
+    effects, std_errors, positions
+) -> None:
+    exact = cohort_power(effects, std_errors, positions=positions, level=0.025)
+    simulated = _simulated_power(effects, std_errors, positions, 0.025)
+
+    assert exact == pytest.approx(simulated, abs=4.5 * math.sqrt(0.25 / 60000))
+
+
+def test_without_a_change_the_power_is_the_false_alarm_rate_of_q_or_slope() -> None:
+    rates = [cohort_power([0] * k, [1] * k, level=0.025) for k in (3, 4, 8, 12)]
+
+    assert all(0.025 < rate < 0.05 for rate in rates)
+    assert rates[1] == pytest.approx(0.0417, abs=5e-5)  # the 4-cohort figure of section 21.5
+
+
+def test_the_power_is_between_the_power_of_each_statistic_alone_and_their_sum() -> None:
+    effects, se = [3.0, 2.0, 1.0, 0.0], [1.0, 1.0, 1.0, 1.0]
+    level, k = 0.025, 4
+    both = cohort_power(effects, se, level=level)
+    w = np.ones(4)
+    d_bar = np.mean(effects)
+    q_nc = float(((np.array(effects) - d_bar) ** 2).sum())
+    q_alone = float(stats.ncx2.sf(stats.chi2.isf(level, k - 1), k - 1, q_nc))
+    mu = float((w * (np.arange(4) - 1.5) * effects).sum() / math.sqrt(5.0))
+    cut = float(stats.norm.isf(level / 2))
+    slope_alone = float(stats.norm.sf(cut - abs(mu)) + stats.norm.cdf(-cut - abs(mu)))
+
+    assert max(q_alone, slope_alone) <= both + 1e-9
+    assert both <= q_alone + slope_alone
+    assert slope_alone > q_alone  # a straight fade is what the slope is for
+
+
+def test_the_power_rises_with_the_size_of_the_change_and_ignores_its_sign() -> None:
+    se = [1.0, 1.0, 1.0, 1.0]
+    powers = [
+        cohort_power([s * v for v in (1, 2 / 3, 1 / 3, 0)], se, level=0.025) for s in range(9)
+    ]
+
+    assert powers == sorted(powers) and powers[0] < 0.05 and powers[-1] > 0.99
+    assert cohort_power([-3, -2, -1, 0], se, level=0.025) == pytest.approx(
+        cohort_power([3, 2, 1, 0], se, level=0.025), rel=1e-12
+    )
+    assert cohort_power([3, 2, 1, 0], se, level=0.025) == pytest.approx(
+        cohort_power([0, 1, 2, 3], se, level=0.025), rel=1e-9
+    )
+
+
+def test_a_stricter_level_gives_less_power() -> None:
+    effects, se = [3.0, 2.0, 1.0, 0.0], [1.0] * 4
+
+    assert cohort_power(effects, se, level=0.0125) < cohort_power(effects, se, level=0.025)
+
+
+@pytest.mark.parametrize("size", [1e12, 1e19, 1e150])
+def test_a_change_far_beyond_the_standard_errors_is_flagged_for_certain(size: float) -> None:
+    # scipy's noncentral chi-squared is NaN from a non-centrality of about 1e19, and a NaN must
+    # not be read as a power of 0.
+    assert cohort_power([size, size, 0.0, 0.0, 0.0], [1.0] * 5, level=0.0125) == 1.0
+
+
+@pytest.mark.parametrize(
+    ("effects", "std_errors", "positions", "fragment"),
+    [
+        ([0, 0], [1, 1], None, "at least 3 cohorts"),
+        ([0, 0, 0], [1, 1], None, "one standard error per effect"),
+        ([0, 0, 0], [1, 0, 1], None, "above 0"),
+        ([0, 0, 0], [1, 1, 1], [1, 1, 1], "at least 2 different positions"),
+        ([0, 0, 0], [1, 1, 1], [0, 1], "one position per cohort"),
+        ([0, 0, float("nan")], [1, 1, 1], None, "finite"),
+    ],
+)
+def test_the_power_refuses_what_it_cannot_work_out(
+    effects, std_errors, positions, fragment
+) -> None:
+    with pytest.raises(StatsError, match=fragment):
+        cohort_power(effects, std_errors, positions=positions, level=0.025)
+    with pytest.raises(StatsError, match="alpha"):
+        cohort_power([0, 0, 0], [1, 1, 1], level=1.5)
+
+
+@pytest.mark.parametrize("shape", ["linear_fade", "step"])
+def test_the_detectable_shift_is_the_one_that_gives_exactly_the_wanted_power(shape: str) -> None:
+    se = [1.0, 0.8, 1.2, 1.0, 0.9]
+    positions = [0, 1, 2, 3, 4]
+    pattern = {"linear_fade": [1.0, 0.75, 0.5, 0.25, 0.0], "step": [1.0, 1.0, 0.0, 0.0, 0.0]}[shape]
+
+    shift = cohort_detectable_shift(se, positions=positions, shape=shape, level=0.025)
+    at = cohort_power([shift * v for v in pattern], se, positions=positions, level=0.025)
+    below = cohort_power([0.99 * shift * v for v in pattern], se, positions=positions, level=0.025)
+
+    assert at == pytest.approx(0.8, abs=1e-6) and below < 0.8
+
+
+def test_a_linear_fade_needs_no_more_than_the_slope_alone_would() -> None:
+    se, level = [1.0, 1.0, 1.0, 1.0], 0.025
+    # The slope alone has an exact answer: (z for the level + z for the power) standard
+    # errors of the slope, times the span of the cohorts.
+    slope_only = (stats.norm.isf(level / 2) + stats.norm.isf(0.2)) / math.sqrt(5.0) * 3
+
+    shift = cohort_detectable_shift(se, shape="linear_fade", level=level)
+
+    assert shift < slope_only and shift > 0.8 * slope_only
+
+
+def test_more_cohorts_and_smaller_errors_make_a_smaller_change_visible() -> None:
+    def shift(se, **kw):
+        return cohort_detectable_shift(se, shape="linear_fade", level=0.025, **kw)
+
+    assert shift([1.0] * 8) < shift([1.0] * 4) < shift([1.0] * 3)
+    assert shift([0.5] * 4) == pytest.approx(0.5 * shift([1.0] * 4), rel=1e-9)
+    assert shift([3.0] * 4) == pytest.approx(3 * shift([1.0] * 4), rel=1e-9)
+
+
+def test_a_step_is_seen_at_a_smaller_size_than_a_fade_of_the_same_height() -> None:
+    se = [1.0] * 8
+
+    fade = cohort_detectable_shift(se, shape="linear_fade", level=0.025)
+    step = cohort_detectable_shift(se, shape="step", level=0.025)
+
+    assert 0 < step < fade
+
+
+def test_a_gap_between_the_positions_changes_what_a_fade_looks_like() -> None:
+    se = [1.0, 1.0, 1.0, 1.0]
+
+    even = cohort_detectable_shift(se, positions=[0, 1, 2, 3], shape="linear_fade", level=0.025)
+    gap = cohort_detectable_shift(se, positions=[0, 1, 2, 6], shape="linear_fade", level=0.025)
+
+    assert gap != pytest.approx(even, rel=1e-3)
+
+
+def test_a_stricter_level_needs_a_bigger_change() -> None:
+    se = [1.0] * 4
+
+    assert cohort_detectable_shift(se, shape="step", level=0.0125) > cohort_detectable_shift(
+        se, shape="step", level=0.025
+    )
+
+
+@pytest.mark.parametrize("shape", ["linear_fade", "step"])
+def test_a_standard_error_beyond_all_reason_leaves_the_detectable_shift_as_it_was(
+    shape: str,
+) -> None:
+    def shift(huge: float) -> float:
+        return cohort_detectable_shift([0.3, 0.3, 0.3, huge, 0.3], shape=shape, level=0.0125)
+
+    ordinary = shift(3e7)
+
+    assert 0.3 < ordinary < 6 * 0.3
+    for huge in (3e16, 3e30, 3e100):
+        assert shift(huge) == pytest.approx(ordinary, rel=1e-9)
+
+
+def test_the_detectable_shift_refuses_what_it_cannot_work_out() -> None:
+    with pytest.raises(StatsError, match="power"):
+        cohort_detectable_shift([1.0] * 4, shape="step", level=0.025, power=1.0)
+    with pytest.raises(StatsError, match="unknown shape"):
+        cohort_detectable_shift([1.0] * 4, shape="wobble", level=0.025)  # type: ignore[arg-type]
+    with pytest.raises(StatsError, match="at least 3 cohorts"):
+        cohort_detectable_shift([1.0, 1.0], shape="step", level=0.025)
+
+
+def test_the_shapes_of_a_change_across_the_cohorts() -> None:
+    from referee.methods import _cohort_pattern
+
+    assert _cohort_pattern([0, 1, 2, 3], "linear_fade") == pytest.approx([1, 2 / 3, 1 / 3, 0])
+    assert _cohort_pattern([0, 1, 3, 4], "linear_fade") == pytest.approx([1, 0.75, 0.25, 0])
+    assert _cohort_pattern([0, 1, 2, 3], "step") == [1.0, 1.0, 0.0, 0.0]
+    assert _cohort_pattern([0, 1, 2, 3, 4], "step") == [1.0, 1.0, 0.0, 0.0, 0.0]  # the middle is 2
+    assert _cohort_pattern([2, 3, 5, 9], "step") == [1.0, 1.0, 1.0, 0.0]  # the middle is 5.5
+
+
+# --- One group on its own --------------------------------------------------------------------
+
+
+def test_the_interval_for_one_mean_is_worked_out_by_hand() -> None:
+    found = mean_interval([2.0, 4.0, 6.0])  # mean 4, s^2 = 4, se = sqrt(4/3), 2 degrees of freedom
+
+    se = math.sqrt(4 / 3)
+    margin = 4.302652729749462 * se  # the 97.5th percentile of t with 2 degrees of freedom
+    assert (found.n, found.mean, found.degrees_of_freedom) == (3, 4.0, 2.0)
+    assert found.std_error == pytest.approx(se, rel=1e-12)
+    assert (found.ci_low, found.ci_high) == pytest.approx((4 - margin, 4 + margin), rel=1e-12)
+    assert found.confidence == 0.95
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_the_interval_for_one_mean_agrees_with_scipy_and_statsmodels(seed: int) -> None:
+    rng = random.Random(400 + seed)
+    values = [rng.lognormvariate(1.0, rng.choice([0.3, 1.2])) for _ in range(rng.randint(2, 300))]
+
+    found = mean_interval(values, alpha=0.1)
+    low, high = DescrStatsW(values).tconfint_mean(alpha=0.1)
+    scipy_low, scipy_high = stats.t.interval(
+        0.9, len(values) - 1, loc=np.mean(values), scale=stats.sem(values)
+    )
+
+    assert (found.ci_low, found.ci_high) == pytest.approx((low, high), rel=1e-9)
+    assert (found.ci_low, found.ci_high) == pytest.approx((scipy_low, scipy_high), rel=1e-9)
+    assert found.confidence == pytest.approx(0.9)
+
+
+@pytest.mark.parametrize(
+    ("values", "error"),
+    [
+        ([], StatsError),
+        ([1.0], StatsError),
+        ([3.0, 3.0, 3.0], NoVariationError),
+        ([0.0] * 50, NoVariationError),
+        ([1.0, math.nan], StatsError),
+        ([1.0, math.inf], StatsError),
+        ([1e300, -1e300, 0.0], StatsError),  # a square beyond any float
+    ],
+)
+def test_an_interval_for_one_mean_is_refused_where_the_data_cannot_give_one(
+    values: list[float], error: type[Exception]
+) -> None:
+    with pytest.raises(error):
+        mean_interval(values)
+
+
+@pytest.mark.parametrize("alpha", [0.0, 1.0, -0.1, 1.5, math.nan])
+def test_an_interval_for_one_mean_needs_an_alpha_between_zero_and_one(alpha: float) -> None:
+    with pytest.raises(StatsError, match="alpha"):
+        mean_interval([1.0, 2.0, 4.0], alpha=alpha)
+    with pytest.raises(StatsError, match="alpha"):
+        proportion_interval(3, 10, alpha=alpha)
+
+
+@pytest.mark.parametrize("n", [1, 2, 7, 20, 100, 1000, 25000])
+def test_the_wilson_interval_agrees_with_statsmodels_for_every_count(n: int) -> None:
+    for successes in sorted({0, 1, 2, n // 3, n // 2, n - 2, n - 1, n} & set(range(n + 1))):
+        found = proportion_interval(successes, n)
+        low, high = proportion_confint(successes, n, alpha=0.05, method="wilson")
+
+        assert (found.ci_low, found.ci_high) == pytest.approx((low, high), abs=1e-12), (
+            successes,
+            n,
+        )
+        assert found.rate == successes / n and 0 <= found.ci_low <= found.rate <= found.ci_high <= 1
+
+
+def test_the_wilson_interval_has_width_at_a_rate_of_zero_and_of_one() -> None:
+    none, every = proportion_interval(0, 40), proportion_interval(40, 40)
+
+    assert none.ci_low == 0.0 and 0.08 < none.ci_high < 0.10  # the Wald interval would be a point
+    assert every.ci_high == 1.0 and 0.90 < every.ci_low < 0.92
+
+
+@pytest.mark.parametrize(
+    ("successes", "n"), [(1, 0), (-1, 5), (6, 5), (1.5, 5), (1, 5.5), (True, 5), (0, -3)]
+)
+def test_the_wilson_interval_refuses_counts_that_are_not_possible(successes, n) -> None:
+    with pytest.raises(StatsError):
+        proportion_interval(successes, n)
+
+
+# --- The ratio of two means, with its interval ------------------------------------------------
+
+
+def test_the_interval_for_a_ratio_of_means_is_worked_out_from_the_log_scale() -> None:
+    treatment, control = [3.0, 5.0, 7.0, 9.0], [10.0, 12.0, 14.0, 16.0, 18.0]
+
+    found = mean_ratio(treatment, control)
+    log = log_mean_ratio(treatment, control)
+    margin = float(stats.t.ppf(0.975, log.degrees_of_freedom)) * log.std_error
+
+    assert found.ratio == pytest.approx(6.0 / 14.0, rel=1e-12)
+    assert found.ci_low == pytest.approx(math.exp(math.log(6.0 / 14.0) - margin), rel=1e-12)
+    assert found.ci_high == pytest.approx(math.exp(math.log(6.0 / 14.0) + margin), rel=1e-12)
+    assert 0 < found.ci_low < found.ratio < found.ci_high
+    assert found.ci_high / found.ratio == pytest.approx(found.ratio / found.ci_low, rel=1e-12)
+    assert (found.n_treatment, found.n_control, found.confidence) == (4, 5, 0.95)
+
+
+def test_the_ratio_interval_covers_the_true_ratio_about_as_often_as_it_says() -> None:
+    rng = np.random.default_rng(2026)
+    hits, runs = 0, 1500
+    for _ in range(runs):
+        treatment = rng.gamma(4.0, 2.0, 120) * 0.8  # a true ratio of 0.8
+        control = rng.gamma(4.0, 2.0, 150)
+        found = mean_ratio(treatment.tolist(), control.tolist())
+        hits += found.ci_low <= 0.8 <= found.ci_high
+
+    assert 0.93 <= hits / runs <= 0.97
+
+
+@pytest.mark.parametrize(
+    ("treatment", "control", "error"),
+    [
+        ([0.0, 0.0, 0.0], [1.0, 2.0, 3.0], NonPositiveMeanError),
+        ([1.0, 2.0, 3.0], [0.0, 0.0], NonPositiveMeanError),
+        ([2.0, 2.0], [3.0, 3.0], NoVariationError),
+        ([1.0], [1.0, 2.0], StatsError),
+    ],
+)
+def test_a_ratio_of_means_is_refused_where_it_has_no_meaning(treatment, control, error) -> None:
+    with pytest.raises(error):
+        mean_ratio(treatment, control)
+
+
+def test_a_ratio_interval_needs_an_alpha_between_zero_and_one() -> None:
+    with pytest.raises(StatsError, match="alpha"):
+        mean_ratio([1.0, 2.0, 4.0], [2.0, 3.0, 5.0], alpha=1.0)
+
+
+@pytest.mark.parametrize(
+    ("values", "constant"),
+    [
+        ([], False),  # no values are not "the same value"
+        ([3.0], True),
+        ([0.0, 0.0, 0.0], True),
+        ([0.7] * 3, True),
+        ([0.1 + 0.2, 0.3], True),  # equal up to rounding
+        ([1.0, 1.0000001], False),
+        ([1e-170, 2e-170], False),  # tiny, and not the same
+    ],
+)
+def test_values_are_constant_when_equal_up_to_rounding(values, constant) -> None:
+    assert values_are_constant(values) is constant

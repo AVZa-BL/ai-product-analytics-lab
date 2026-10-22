@@ -25,7 +25,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 
 ## Summary
 
-23 rules by default severity: 7 blockers, 14 warnings, 2 info.
+27 rules by default severity: 7 blockers, 16 warnings, 4 info.
 
 | ID | Severity | Title |
 | --- | --- | --- |
@@ -42,6 +42,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 | DES-006 | warning | Interference between units is possible |
 | DES-007 | blocker | Exposure is recorded after the treatment starts acting |
 | DES-008 | warning | No pre-period covariate declared |
+| DES-009 | info | The cohort check of the results review would not run on this plan |
 | PRO-001 | blocker | No stopping rule declared |
 | PRO-002 | warning | No sample-ratio-mismatch check scheduled |
 | PRO-003 | warning | No guardrail metrics declared |
@@ -49,6 +50,9 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 | RES-001 | blocker | Sample ratio mismatch: the arms are not the size the allocation promised |
 | RES-002 | blocker | Fewer players than the registered sample size |
 | RES-003 | blocker | Ran for less than the registered minimum duration |
+| RES-004 | warning | A guardrail is worse than its tolerance allows, or may be |
+| RES-007 | warning | The effect differs between cohorts of first exposure, or the test could not run |
+| RES-008 | info | Skewed or heavy-tailed metric: its 95% interval can be wrong more or less often than 5% of the time |
 | RES-011 | warning | Sample ratio drifts over time although the total passes |
 | RES-012 | warning | Players first exposed after their first purchase |
 | RES-013 | warning | An arm's configuration changed during the test |
@@ -120,7 +124,7 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 ### DES-003: Planned duration is under 14 days
 
 - **Severity:** warning
-- **Fires when:** design.planned_duration_days is below 14.
+- **Fires when:** design.planned_duration_days is below 14. When population.kind is new_users, the evidence adds a note on the accrual window and the 7-day outcome window.
 - **Why it matters:** Effects can be larger or smaller in the first days after a change than later, as users react to novelty or adapt to it. A short test cannot show which, so it may report an effect that does not last.
 - **What to do:** Plan at least 14 days, or record why novelty and primacy effects are not expected for this change.
 - **References:**
@@ -169,6 +173,14 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 - **References:**
   - Deng, Xu, Kohavi, Walker. Improving the Sensitivity of Online Controlled Experiments by Utilizing Pre-Experiment Data. WSDM 2013.
 
+### DES-009: The cohort check of the results review would not run on this plan
+
+- **Severity:** info
+- **Fires when:** For a non-control arm against control, the plan fails a gate of the cohort check of the results review (RES-007) even if players arrive perfectly evenly: the planned window holds fewer than 3 whole weekly blocks (design.planned_duration_days is 20 or less); or the expected players of a week, 7 times population.daily_eligible_units times the arm's allocation, do not reach the floor of 30 players in the arm or in control (a floor that rises when the arms differ by more than 1.5 to 1), or, on weekly blocks, a median of 60 players in the smaller of the two, and a plan of 42 days or more does not pass on blocks of 14 days either; or the arms differ by more than 9 to 1. It also fires when population.randomization_unit and population.analysis_unit are not one class of independent units (player and user, or device for both). The evidence gives the reasons, the arms concerned and what would be enough for even arrivals.
+- **Why it matters:** After the experiment, the cohort check of the results review (RES-007) compares each arm's effect between cohorts of first exposure, to find an effect that differs between the players who joined in different weeks (a launch, a promotion, a change in who is acquired). It does not test for novelty or adaptation: DES-003 is the rule for those. It works in blocks of 7 days, or of 14 days on a plan of 42 days or more, and the gates above are its own, applied to the plan's expected numbers. Real arrivals are less even than expected numbers, so a plan that only just passes still fails in many runs; this rule names the plans that fail even in the best case. When the check cannot run, the results review says so in a RES-007 warning and its verdict is caution, not clear. This is a forecast from the plan, not a finding about the data.
+- **What to do:** If an effect that differs between the weeks players joined could matter for this change, plan at least 21 days (42 days or more allows blocks of 14 days, which need fewer players a week), bring in more eligible units each day or give the smaller arm a larger share, keep the arms within 9 to 1, and randomise and analyse in the same independent unit (player, user or device). The evidence gives the units a day that pass with even arrivals; allow more, because arrivals vary (design section 21.6: spiky arrivals need 1.5 to 3 times as much). Otherwise accept that the cohort check will not run: the other results checks are not affected.
+- **References:** none
+
 ## Procedure rules (PRO)
 
 ### PRO-001: No stopping rule declared
@@ -213,9 +225,10 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 
 A results rule looks at an experiment's exported data together with its spec (design
 section 21), not at the spec alone. A results review ends in a **verdict**, which follows from
-the findings: `invalid` if any is a blocker, `caution` if any is a warning, `clear` otherwise.
-`clear` says that the rules which ran found nothing; it does not say the effect is real. The
-design review does not run these rules.
+the findings: `invalid` if any is a blocker, `caution` if any is a warning, `clear` otherwise
+(an info finding is listed and does not change the verdict). `clear` says that the rules which
+ran found nothing that blocks or warns; it does not say the effect is real. The design review
+does not run these rules.
 
 ### RES-001: Sample ratio mismatch: the arms are not the size the allocation promised
 
@@ -243,6 +256,38 @@ design review does not run these rules.
 - **Why it matters:** The minimum duration is registered so that the run covers the weekly cycle of behaviour and gives effects that take time to settle a chance to show. A shorter run measures a window that may not represent the usual weeks, and cannot show a change over time.
 - **What to do:** Run to at least design.min_duration_days, and to a whole number of weeks where you can. Do not stop on the day the result looked good. If the registered minimum was wrong, say so and why before reading the effect. Register design.start_utc: without it the first and last assignment in the export set the duration, and one mistimed row (a timestamp of zero, a default date) can hide this finding.
 - **References:**
+  - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+### RES-004: A guardrail is worse than its tolerance allows, or may be
+
+- **Severity:** warning
+- **Fires when:** For a non-control arm and a guardrail of the spec, on the analysed players (those whose seven-day outcome window had not closed at the export are left out, where the export's time is known), the harm is measured as a share of a reference value (positive when worse in the guardrail's harmful_direction) against two references: control's observed mean (the arm's mean over control's, with a 95% interval from the log scale and Satterthwaite's degrees of freedom) and the registered baseline (the arm's own mean with a t interval, or its rate with a Wilson interval). The rule fires when, on either reference, the point estimate of the harm is beyond tolerance_relative, strictly. The breach is shown when the whole 95% interval is beyond it, and possible when only the point estimate is. Three kinds of reading can only make a breach possible: an interval with no width (every player of a group has the same value) when that many players alike would arise by chance, at the other group's share of players with that value, in at least 2.5% of samples; and the registered-baseline reading of a revenue-like guardrail whose fall is harmful, for a group with some spread, whose t interval lies wholly below the true mean more often than it should (a guardrail is revenue-like by its metric name); and the registered-baseline reading of an arm when control itself is beyond the tolerance of the registered baseline (the whole interval) while the reading against control's mean is within it, since the arm may be what control is. The harm and its interval are rounded to 6 places and the decision is made on the rounded figures that the evidence shows. A comparison with a point estimate within the tolerance does not fire the rule, even where its interval reaches beyond it; the evidence marks it as one in which the data cannot rule out a breach. A reference that cannot be measured (a group with fewer than 2 players, though one is enough for the rate of a binary guardrail against the registered baseline; no variation in both groups; a mean not above 0 against control's mean; a registered baseline not above 0; numbers too large or too small) is reported with its reason and the other decides.
+- **Escalates to blocker when:** the breach is shown in at least one comparison: the whole 95% interval for the harm is beyond the tolerance on at least one of the two references, not counting an interval with no width that chance could explain, the registered-baseline reading of a revenue-like guardrail whose fall is harmful, for a group with some spread, or the registered-baseline reading when control itself is beyond the baseline's tolerance and the reading against control's mean is within it, which count as possible.
+- **Why it matters:** A guardrail is the registered limit on what a change may cost. A change that improves the primary metric and breaks a guardrail has not won on the primary metric alone, and a harm that is real in the sample may be larger or smaller in the population, so a point estimate beyond the tolerance is not the same as a breach. Referee therefore separates a breach that is shown (the whole interval is beyond the tolerance) from one that is only possible (the interval still reaches inside it), and reads the harm against control's observed mean, which is the change the experiment caused, and against the registered baseline, which is the spec as written. When the two disagree, the stricter decides and the note says which; when control itself is beyond the tolerance of the registered baseline, the baseline may no longer describe the traffic, and a breach against it alone does not show that the arm caused it. The intervals are unadjusted for the number of arms and guardrails, so with several of them some will miss, and they take the players to be independent: with a session or a cluster as the unit they are too narrow, which the note says. A guardrail within its tolerance is not a finding, and where its interval reaches beyond the tolerance the data cannot rule out a breach.
+- **What to do:** Do not decide on the primary metric alone. If a shown breach rests only on the registered baseline (the note says which reference decides), or the note says that control itself is beyond the baseline's tolerance, first check whether the baseline still describes this traffic (season, platform mix, a change since it was registered): read the arm against control, and register a new baseline for the next test, not for this one. If the reading against control's mean also shows the breach, find what the arm does to the guardrail and either fix it or drop the arm; the tolerance was registered before the data, so do not move it now. For a breach that is only possible, the data cannot tell a breach from noise: have the guardrail's owner decide in writing, before the decision, whether the possible harm is acceptable, or run a new registered test of the guardrail with its own sample size, analysed once at its end. Do not keep adding players to this test until the interval clears the tolerance: that is another look at the data, the 95% interval does not cover it, and Referee does not adjust for it. For a binary guardrail with few events or non-events the interval is rough, and for a revenue-like one it is less reliable than 95% suggests: see the note.
+- **References:**
+  - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+### RES-007: The effect differs between cohorts of first exposure, or the test could not run
+
+- **Severity:** warning
+- **Fires when:** For a non-control arm and one of the metrics of the spec (the primary metric or a guardrail), the arm's difference against control is compared between cohorts: the analysed players of the arm whose first exposure falls in one 7-day block (one 14-day block when the weekly cohorts are too small and the plan is at least 42 days), counted from design.start_utc, else from the first assignment. The arm and metric are flagged when, on both the absolute scale (the Welch difference) and the relative scale (the log of the ratio of the means), Cochran's Q or the weighted slope of the difference over the blocks has p below 0.025 divided by the number of non-control arms. The rule fires when any arm and metric is flagged, or could not be evaluated: the evidence then gives a reason code, window_holds_fewer_than_3_blocks (a plan shorter than 21 days), fewer_than_3_cohorts_reach_minimum, cohorts_do_not_cover_the_window, cohorts_too_small_for_weekly_blocks (the median week of the smaller arm has fewer than 60 players), allocation_too_unequal (the arms differ by more than 9 to 1), outcome_window_incomplete (an outcome window had not closed at the export), unit_not_independent (the units are not independent players), ratio_metric_not_validated, or, when the effects of the cohorts could not be estimated on a scale, no_variation, non_positive_mean or not_estimable.
+- **Why it matters:** The pooled effect is an average over players who were first exposed at different times. If the effect differs between those cohorts, the pooled figure describes none of them well, and what a later launch sees can differ from it. The test says that the effect differs, not why: a change tied to the calendar week of a cohort (a launch, a promotion, a build, the mix of players acquired) cannot be told from one tied to each player's own time since first exposure, because the export holds seven-day totals only. A test that could not run is reported too, so that a missing check cannot read as a pass.
+- **What to do:** Read the table of cohorts in the evidence before the pooled effect: each cohort's difference and its standard error on both scales. Find out what differed between the weeks of the cohorts (a launch, a promotion, a build, a change in where players come from; RES-013 shows a change of configuration), and report the pooled effect together with the cohort table, naming no cause the data cannot show. For existing players, check whether the earliest cohorts are the most active. A flag labelled low information is a lead to re-check with more data at the planned end, not a finding. If the test did not run, the reason code says what was missing: more traffic or a longer run, arms closer in size, an export made after every outcome window has closed, randomisation and analysis in the same independent unit (player, user or device), or a metric that is not a ratio; for an effect that could not be estimated, values that vary in both arms with a mean above 0. The evidence prices the traffic that would let the cohorts be used, from the sizes observed (plans, traffic_needed), says when to export again if the outcome windows of some cohorts had not closed, or says why more traffic would not help.
+- **References:**
+  - Cochran. The Combination of Estimates from Different Experiments. Biometrics 10(1), 1954.
+  - Higgins, Thompson. Quantifying Heterogeneity in a Meta-Analysis. Statistics in Medicine 21(11), 2002.
+  - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+### RES-008: Skewed or heavy-tailed metric: its 95% interval can be wrong more or less often than 5% of the time
+
+- **Severity:** info
+- **Fires when:** For a non-control arm and a metric of the spec that is not binary (the primary metric or a guardrail), the analysed players of the arm and of control are compared, and at least one of three signs shows in either group: the rule of thumb of Kohavi, Deng, Longbotham and Xu (2014), a sample skewness above 1 in size in a group of fewer players than 355 times the square of that skewness; an excess kurtosis above 100; or the top 1% of the group's players (at least one) holding more than half of the total of the metric. Every split between the arms is read, equal arms included. The skewness, kurtosis and share are rounded to 6 places and the decision is made on the rounded figures that the evidence shows. A group that cannot be read (fewer than 2 players, every value 0 or the same, a negative value, values that are not finite or are too large or too small to measure) is reported with its reason and the pair is judged on the other group; a pair with no sign and a group that could not be read is reported as not evaluated and does not fire the rule on its own.
+- **Escalates to warning when:** the simulated range for the effects nearer the difference seen (both ranges, when the means cannot be compared) reaches above 7.5%, which is 1.5 times the 5% an interval of this level should fail in, or that comparison lies beyond the simulated cases in a direction in which the simulated rates rose, so that the true rate is probably above the range printed.
+- **Why it matters:** Welch's interval for a difference of means, the one Referee prints, assumes that the mean of each arm is nearly normal. For a metric that most players leave at zero and a few drive up, that takes more players than an experiment often has (by the rule of thumb of Kohavi et al., revenue per user, with a skewness of about 18, needs about 114,000 users), and below that size the interval is wrong more or less often than the 5% it states. Referee measured how often for a revenue-like metric of independent players in two arms (design section 21.10), and the finding quotes the simulated cases on each side of the comparison: with equal arms the interval was mostly close to or under 5% for a small effect and above it for a large one; with arms of unequal size it was often above 5%, for a small effect mostly on the side that makes the larger arm look better than it is, and it was worst when the control was the larger arm (the arm there being the group with the higher mean); and at 9 to 1 with no effect it was worse the fewer the players who spend in the smaller arm. These rates come from one simulated family and are not a measure of the experiment in hand. Which simulated effects are read is decided by the difference seen between the two means, which for a heavy-tailed metric is itself noisy: with arms of about equal size an experiment with no effect can read as a warning and one with a large effect as info, and above the largest number of players who spend that was simulated the range of that case is used, which may be a ceiling there. A quiet RES-008 is not evidence that the interval is reliable: in the simulations every run of a revenue-like metric showed a sign. For a metric that is not revenue-like the finding gives the signs and says that no error rate was measured.
+- **What to do:** Where an entry gives a simulated rate, read it in place of 5%: an interval that failed in 10% of simulated experiments behaved like a 90% interval, and for a small effect and arms of unequal size it mostly favoured the larger group. Where an entry states no error rate (a metric that is not revenue-like, units that are not independent players, a group with no analysed players, or no player who spends in the smaller group), treat its interval as unchecked: the signs show that it may be unreliable, but Referee has not measured how much. Do not call the result significant, or not, on one edge of this interval: if an end of it is close to zero or to a decision threshold, say that the result is uncertain. Where you can choose, do not make the control the larger arm, which was the worst case in the simulations (where the arm has the higher mean; for a metric you expect to fall, avoid the larger arm instead), and plan for more players who spend in the smaller arm. For a decision that rests on this metric, consider a less skewed version of it (a cap on the amount per player, or a transformation): Kohavi et al. report that capping revenue per user cut its skewness from about 18 to about 5. It changes what is estimated, and Referee has not measured how well capping, trimming or a transformation works, so register the choice before the next test and not after seeing the data. Referee shows no bootstrap interval, because in its simulations the percentile bootstrap interval failed more often than Welch's in most of the cells it was run on.
+- **References:**
+  - Kohavi, Deng, Longbotham, Xu. Seven Rules of Thumb for Web Site Experimenters. KDD 2014.
   - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
 
 ### RES-011: Sample ratio drifts over time although the total passes
@@ -295,5 +340,6 @@ design review does not run these rules.
 
 ## Not yet
 
-The rest of the `RES` family in design section 21 arrives with the results review; no command
-runs the results rules yet.
+RES-005, RES-006, RES-009 and RES-010 are not built: they check how someone else analysed the
+data, and Referee does the analysis itself (design section 21.4). No command runs the results
+rules yet; the report and the `review-results` command arrive with milestone 4c.

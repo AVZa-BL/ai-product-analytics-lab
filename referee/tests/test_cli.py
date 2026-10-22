@@ -31,7 +31,7 @@ def clean(tmp_path: Path, clean_raw_spec: dict) -> Path:
 # --- A review that completes -----------------------------------------------------------
 
 
-def test_a_worst_case_spec_reports_seventeen_findings(
+def test_a_worst_case_spec_reports_eighteen_findings(
     capsys: pytest.CaptureFixture[str], tmp_path: Path, worst_raw_spec: dict
 ) -> None:
     path = write_yaml(tmp_path, worst_raw_spec)
@@ -39,7 +39,7 @@ def test_a_worst_case_spec_reports_seventeen_findings(
     code, out, _ = run(capsys, "review-design", str(path), "--format", "json")
 
     assert code == 1
-    assert len(json.loads(out)["findings"]) == 17
+    assert len(json.loads(out)["findings"]) == 18
 
 
 # --- Input that cannot be reviewed: exit 2, nothing on stdout --------------------------
