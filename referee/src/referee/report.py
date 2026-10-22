@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from referee import __version__
+from referee.display import DISPLAY_ROW_LIMIT, cap_listing
 from referee.findings import DesignReview, Finding, ResultsReview
 from referee.results import ResultsContext
 from referee.rules.cohorts import cohort_report
@@ -222,13 +223,101 @@ def render_text(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _plain(value: object) -> str:
+    """A value as a person reads it: whole numbers with separators, six significant digits."""
+    if value is None:
+        return "none"
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, int):
+        return f"{value:,}"
+    if isinstance(value, float):
+        return f"{value:.6g}"
+    return str(value)
+
+
+def _wrapped(text: str, pad: str, hang: str = "  ") -> list[str]:
+    return textwrap.wrap(
+        text, width=_TEXT_WIDTH, initial_indent=pad, subsequent_indent=pad + hang
+    ) or [pad.rstrip()]
+
+
+def _evidence_lines(value: Any, limit: int, indent: int) -> list[str]:
+    """Evidence as indented lines. A list is cut at `limit` rows and says so; the report is not.
+
+    A dict is one `key: value` line per key (a nested one under its key), a list of scalars one
+    wrapped line, and a list of dicts or lists one `- ` item per row.
+    """
+    pad = " " * indent
+    lines: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if (
+                isinstance(item, list)
+                and item
+                and not any(isinstance(x, dict | list) for x in item)
+            ):
+                listing = cap_listing(item, limit=limit)
+                text = ", ".join(_plain(x) for x in listing.shown)
+                if listing.notice:
+                    text += f" ({listing.notice})"
+                lines += _wrapped(f"{key}: {text}", pad)
+            elif isinstance(item, dict | list) and item:
+                lines.append(f"{pad}{key}:")
+                lines += _evidence_lines(item, limit, indent + 2)
+            else:
+                lines += _wrapped(f"{key}: {_plain(item)}", pad)
+    else:
+        listing = cap_listing(value, limit=limit)
+        for row in listing.shown:
+            rows = (
+                _evidence_lines(row, limit, indent + 2)
+                if isinstance(row, dict | list)
+                else ([f"{pad}  {_plain(row)}"])
+            )
+            lines.append(f"{pad}- {rows[0][indent + 2 :]}")
+            lines += rows[1:]
+        if listing.notice:
+            lines.append(f"{pad}({listing.notice})")
+    return lines
+
+
+def _results_evidence_lines(evidence: dict[str, Any], limit: int) -> list[str]:
+    """What a person reads of a finding's evidence.
+
+    The three effect rules hold `tests`, `plans` and `settings` too large to read as text and
+    sentences (`notes`) that say what they show: the sentences are printed and the tables stay
+    in the JSON report. Any other rule's evidence is printed in full, lists cut at `limit`.
+    """
+    if not evidence:
+        return []
+    if isinstance(evidence.get("notes"), list) and "tests" in evidence:
+        lines = ["    Evidence:"]
+        for note in evidence["notes"]:
+            lines += textwrap.wrap(
+                note, width=_TEXT_WIDTH, initial_indent="      - ", subsequent_indent="        "
+            )
+        lines += _wrapped(
+            "The tests, plans and settings behind these sentences are in the JSON report "
+            "(--format json).",
+            "      ",
+            "",
+        )
+        return lines
+    return ["    Evidence:", *_evidence_lines(evidence, limit, 6)]
+
+
 def _blocking_text(groups: dict[str, list[str]]) -> str:
     names = (("data_validity", "data validity"), ("harm", "harm"))
     return "; ".join(f"{label} {', '.join(groups[key])}" for key, label in names if groups[key])
 
 
-def render_results_text(report: dict[str, Any]) -> str:
-    """The results report as plain text for a person to read."""
+def render_results_text(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMIT) -> str:
+    """The results report as plain text for a person to read.
+
+    A list of more than `limit` rows is cut to its first `limit` and says so. The cut is made
+    here, on the finished report, so it can change what is shown and nothing the report holds.
+    """
     spec, counts, as_of = report["spec"], report["counts"], report["as_of"]
     population = report["population"]
     if as_of["time"] is None:
@@ -256,9 +345,10 @@ def render_results_text(report: dict[str, Any]) -> str:
     ]
     for arm, assigned in population["assigned"].items():
         lines.append(f"  {arm}: {assigned:,} assigned, {population['analysed'][arm]:,} analysed")
-    ignored = len(population["ignored_before_start"])
+    ignored = population["ignored_before_start"]
     if ignored:
-        lines.append(f"Ignored:    {ignored:,} assigned before design.start_utc, in no count")
+        lines.append(f"Ignored:    {len(ignored):,} assigned before design.start_utc, in no count")
+        lines += _evidence_lines({"players": ignored}, limit, 4)
     lines += [
         f"Referee:    {report['referee_version']}",
         "",
@@ -278,9 +368,10 @@ def render_results_text(report: dict[str, Any]) -> str:
         lines += _paragraph(line, "  ")
 
     for finding in report["findings"]:
-        lines += ["", f"[{finding['severity'].upper()}] {finding['rule_id']}: {finding['title']}"]
+        heading = f"[{finding['severity'].upper()}] {finding['rule_id']}: {finding['title']}"
+        lines += ["", *_wrapped(heading, "", "    ")]
         lines += _prose_lines(finding)
-        lines.append("    Evidence: in the JSON report (--format json).")
+        lines += _results_evidence_lines(finding["evidence"], limit)
 
     lines.append("")
     lines += _paragraph(

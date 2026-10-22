@@ -380,6 +380,8 @@ def test_the_lab_export_is_found_invalid_for_its_planted_sample_ratio_mismatch(
         assert "Verdict: INVALID\nBlocking rules: data validity RES-001" in out
         assert "completeness was not checked" in out
         assert out.count("\n  RES-0") == 3
+        assert "      p_value: 6.72961e-10\n" in out  # the evidence is printed, not just pointed to
+        assert max(len(line) for line in out.splitlines()) <= 100
 
 
 @pytest.mark.parametrize(

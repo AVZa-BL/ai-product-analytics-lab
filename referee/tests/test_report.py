@@ -191,3 +191,119 @@ def test_blocking_rules_are_grouped_into_data_validity_and_harm(raw_spec: dict) 
     assert "Blocking rules: data validity RES-001, RES-012; harm RES-004\n" in (
         render_results_text(report)
     )
+
+
+def _finding_with(rule_id: str, evidence: dict, **overrides: object) -> Finding:
+    return finding(rule_id, "warning", evidence=evidence, **overrides)
+
+
+def _text_of(raw_spec: dict, *found: Finding, **options: int) -> str:
+    context = _context(raw_spec, [*crowd("control", 4), *crowd("variant_b", 4)])
+    review = ResultsReview(
+        spec_id="s",
+        experiment_id="e1",
+        rules_run=tuple(rule.id for rule in RESULTS_RULES),
+        findings=found,
+    )
+    return render_results_text(_report(context, review), **options)
+
+
+def test_the_evidence_of_a_finding_is_printed_in_full_as_indented_lines(raw_spec: dict) -> None:
+    evidence = {
+        "alpha": 0.001,
+        "p_value": 6.7296123e-10,
+        "assigned": {"control": 997, "variant_b": 12345},
+        "used": True,
+        "missing": None,
+        "ids": ["a", "b"],
+        "weeks": [{"week": 0, "n": 3}, {"week": 1, "n": 4}],
+        "none_yet": [],
+    }
+
+    long_title = "A title that runs on and on " * 5
+    text = _text_of(raw_spec, _finding_with("RES-001", evidence, title=long_title))
+
+    heading = text.split("[WARNING] RES-001: ")[1].split("\n    Why it matters")[0]
+    assert " ".join(heading.split()) == long_title.strip()  # all of it, wrapped
+    assert all(len(line) <= 100 for line in text.splitlines())
+    assert (
+        "    Evidence:\n"
+        + "\n".join(
+            [
+                "      alpha: 0.001",
+                "      p_value: 6.72961e-10",
+                "      assigned:",
+                "        control: 997",
+                "        variant_b: 12,345",
+                "      used: yes",
+                "      missing: none",
+                "      ids: a, b",
+                "      weeks:",
+                "        - week: 0",
+                "          n: 3",
+                "        - week: 1",
+                "          n: 4",
+                "      none_yet: []",
+            ]
+        )
+        + "\n"
+        in text
+    )
+
+
+def test_an_effect_rule_prints_its_sentences_and_leaves_its_tables_to_the_json(
+    raw_spec: dict,
+) -> None:
+    evidence = {
+        "summary": {"line": "RES-007: 1 tests"},
+        "settings": {},
+        "plans": {},
+        "tests": [{"secret": "ONLY-IN-THE-JSON"}],
+        "notes": ["The first sentence.", "The second sentence " + "that goes on " * 12 + "ends."],
+    }
+
+    text = _text_of(raw_spec, _finding_with("RES-007", evidence))
+
+    block = text.split("    Evidence:\n")[1].split("\n\n")[0].splitlines()
+    assert block[0] == "      - The first sentence."
+    assert sum(line.startswith("      - ") for line in block) == 2  # one bullet a sentence
+    assert all(len(line) <= 88 for line in block)  # a long sentence is wrapped under its bullet
+    assert len(block) > 4
+    assert "behind these sentences are in the JSON report" in text
+    assert "ONLY-IN-THE-JSON" not in text
+
+
+def test_a_long_list_is_cut_when_shown_and_nothing_else_changes(raw_spec: dict) -> None:
+    ids = [f"p{i:04d}" for i in range(2_500)]
+    context = _context(raw_spec, [*crowd("control", 4), *crowd("variant_b", 4)])
+    review = ResultsReview(
+        spec_id="s",
+        experiment_id="e1",
+        rules_run=tuple(rule.id for rule in RESULTS_RULES),
+        findings=(
+            _finding_with(
+                "RES-001", {"players": ids[:1_500], "rows": [{"n": i} for i in range(1_200)]}
+            ),
+        ),
+    )
+    report = _report(context, review)
+    report["population"]["ignored_before_start"] = ids
+    saved = json.dumps(report)
+
+    cut = render_results_text(report)
+    whole = render_results_text(report, limit=10_000)
+
+    assert json.dumps(report) == saved  # the report holds every row, whatever is shown
+    assert "p0999" in cut and "p1000" not in cut
+    assert "n: 999\n" in cut and "n: 1000\n" not in cut and "n: 1,000\n" not in cut
+    assert cut.count("(showing 1,000 of 1,200; the full list is in the JSON report)") == 1
+    assert cut.count("(showing 1,000 of 2,500; the full list is in the JSON report)") == 1
+    assert cut.count("(showing 1,000 of 1,500; the full list is in the JSON report)") == 1
+    assert "p2499" in whole and "p1499" in whole and "n: 1,199\n" in whole
+    assert "showing" not in whole
+
+    def facts(text: str) -> list[str]:
+        keys = ("Verdict:", "Blocking rules:", "Findings:", "Ignored:", "Assigned:", "  control:")
+        return [line for line in text.splitlines() if line.startswith(keys)]
+
+    assert facts(cut) == facts(whole)
