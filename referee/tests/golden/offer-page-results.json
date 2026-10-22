@@ -1,0 +1,1743 @@
+{
+  "report_version": 1,
+  "kind": "results_review",
+  "referee_version": "0.1.0",
+  "spec": {
+    "id": "hybrid_offer_page_2026_10_results",
+    "title": "Subscription offer page variants (read from the lab export)",
+    "sha256": "90fb71599fc0142801844991562f23ec0c8668a91ceff1a3295dcff235c0d861"
+  },
+  "experiment_id": "hybrid_offer_page",
+  "data": {
+    "files": {
+      "experiment_assignments.csv": {
+        "sha256": "193cbcb077b20cf851413da04f419230ebb433d1bc057d9cc92eaad510c6cebd"
+      },
+      "experiment_exposures.csv": {
+        "sha256": "2f8e9ea1fb3bf574ff2a0521b24408e44640deca95456b7dfed0e6c93d834757"
+      },
+      "experiment_outcomes.csv": {
+        "sha256": "4f813f3a333841c27262b8764acc02c795c67c25c723ba8e1da568076d8f7259"
+      }
+    }
+  },
+  "as_of": {
+    "time": "2026-06-30T00:00:00Z",
+    "source": "command line",
+    "planned_end": "2026-05-09T00:02:25Z",
+    "interim": false
+  },
+  "population": {
+    "origin": "2026-04-11T00:02:25Z",
+    "origin_source": "first assignment",
+    "first_assignment": "2026-04-11T00:02:25Z",
+    "last_assignment": "2026-05-01T23:37:55Z",
+    "assigned": {
+      "control": 997,
+      "variant_b": 1046,
+      "variant_c": 781
+    },
+    "analysed": {
+      "control": 926,
+      "variant_b": 969,
+      "variant_c": 731
+    },
+    "ignored_before_start": []
+  },
+  "origin_sensitivity": {
+    "ran": true,
+    "reason": null,
+    "shifts": [
+      {
+        "days_earlier": 1,
+        "same": true,
+        "verdict": "invalid",
+        "appear": [],
+        "disappear": []
+      },
+      {
+        "days_earlier": 2,
+        "same": true,
+        "verdict": "invalid",
+        "appear": [],
+        "disappear": []
+      },
+      {
+        "days_earlier": 3,
+        "same": true,
+        "verdict": "invalid",
+        "appear": [],
+        "disappear": []
+      },
+      {
+        "days_earlier": 4,
+        "same": true,
+        "verdict": "invalid",
+        "appear": [],
+        "disappear": []
+      },
+      {
+        "days_earlier": 5,
+        "same": true,
+        "verdict": "invalid",
+        "appear": [],
+        "disappear": []
+      },
+      {
+        "days_earlier": 6,
+        "same": true,
+        "verdict": "invalid",
+        "appear": [],
+        "disappear": []
+      }
+    ]
+  },
+  "verdict": "invalid",
+  "blocking_rule_ids": [
+    "RES-001",
+    "RES-002"
+  ],
+  "blocking_groups": {
+    "data_validity": [
+      "RES-001",
+      "RES-002"
+    ],
+    "harm": []
+  },
+  "counts": {
+    "blocker": 2,
+    "warning": 4,
+    "info": 0
+  },
+  "summary_lines": [
+    "RES-004: 2 comparisons of an arm against control on a guardrail, a breach shown in 0, possible in 0, 2 within the tolerance (0 of them with an interval that reaches beyond it, so the data cannot rule out a breach), 0 not evaluated.",
+    "RES-007: 4 tests, 1 flagged, 0 not evaluated, 2 low information",
+    "RES-008: 4 comparisons (binary metrics are not read), 2 with a sign of a heavy tail, 0 not evaluated. No sign is not a pass: in Referee's simulations every run of a revenue-like metric showed one, so they say nothing about a metric that shows none."
+  ],
+  "rules_run": [
+    "RES-001",
+    "RES-002",
+    "RES-003",
+    "RES-004",
+    "RES-007",
+    "RES-008",
+    "RES-011",
+    "RES-012",
+    "RES-013"
+  ],
+  "findings": [
+    {
+      "rule_id": "RES-001",
+      "severity": "blocker",
+      "title": "Sample ratio mismatch: the arms are not the size the allocation promised",
+      "evidence": {
+        "alpha": 0.001,
+        "allocation": {
+          "control": 0.3333333333333333,
+          "variant_b": 0.3333333333333333,
+          "variant_c": 0.3333333333333333
+        },
+        "assigned": {
+          "control": 997,
+          "variant_b": 1046,
+          "variant_c": 781
+        },
+        "expected": {
+          "control": 941.33,
+          "variant_b": 941.33,
+          "variant_c": 941.33
+        },
+        "chi_square": 42.2387,
+        "degrees_of_freedom": 2,
+        "p_value": 6.729606364817086e-10,
+        "method": "chi_square",
+        "by_week": [
+          {
+            "week": 0,
+            "assigned": {
+              "control": 327,
+              "variant_b": 357,
+              "variant_c": 322
+            },
+            "p_value": 0.3434930263801075,
+            "method": "chi_square"
+          },
+          {
+            "week": 1,
+            "assigned": {
+              "control": 343,
+              "variant_b": 356,
+              "variant_c": 252
+            },
+            "p_value": 3.989188894052644e-05,
+            "method": "chi_square"
+          },
+          {
+            "week": 2,
+            "assigned": {
+              "control": 327,
+              "variant_b": 333,
+              "variant_c": 207
+            },
+            "p_value": 2.5592439576259105e-08,
+            "method": "chi_square"
+          }
+        ]
+      },
+      "why_it_matters": "Random assignment gives arms of the registered sizes, up to chance. A mismatch this large means the arms were not formed as designed (a fault in assignment, in logging or in filtering), so who is in each arm may differ and a difference in the metrics can come from that. No estimate of the effect can be trusted until the cause is known.",
+      "remediation": "Do not read the effect. Find why the counts differ: assignment or bucketing, logging that loses events in one arm, bot or test-account filters, a crash or redirect on one variant, or an exposure rule applied to some arms only. The week-by-week table in the evidence shows whether the mismatch began at a point in time. Fix the cause and rerun the experiment.",
+      "references": [
+        "Fabijan et al. Diagnosing Sample Ratio Mismatch in Online Controlled Experiments. KDD 2019.",
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020."
+      ]
+    },
+    {
+      "rule_id": "RES-002",
+      "severity": "blocker",
+      "title": "Fewer players than the registered sample size",
+      "evidence": {
+        "required": {
+          "control": 2107,
+          "variant_b": 2107,
+          "variant_c": 2107
+        },
+        "analysed": {
+          "control": 926,
+          "variant_b": 969,
+          "variant_c": 731
+        },
+        "assigned": {
+          "control": 997,
+          "variant_b": 1046,
+          "variant_c": 781
+        },
+        "short_arms": [
+          "control",
+          "variant_b",
+          "variant_c"
+        ],
+        "missing": {
+          "control": 1181,
+          "variant_b": 1138,
+          "variant_c": 1376
+        }
+      },
+      "why_it_matters": "The registered sample size is what the experiment needs to detect the registered effect with the registered power. With fewer players the test has less power than was promised, so a result that is not significant says little about whether the effect exists. A design that cannot be sized has no registered sample size at all, so no amount of data meets it.",
+      "remediation": "Keep the experiment running until every arm reaches its registered n (when the evidence gives sizes, it says how many are missing). If it must stop, report the result as underpowered, with the interval of the effect, and not as evidence of no effect. Do not lower the registered n after seeing the data. If the evidence says the design is unattainable, the spec's baseline and mde_relative cannot be turned into a sample size (the evidence gives the reason): more data will not clear this, so correct them and register the experiment again.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020."
+      ]
+    },
+    {
+      "rule_id": "RES-007",
+      "severity": "warning",
+      "title": "The effect differs between cohorts of first exposure, or the test could not run",
+      "evidence": {
+        "summary": {
+          "tests": 4,
+          "evaluated": 4,
+          "flagged": 1,
+          "not_evaluated": 0,
+          "low_information": 2,
+          "flags_by_chance": 0.1384,
+          "flags_by_chance_at_most": 0.2032,
+          "line": "RES-007: 4 tests, 1 flagged, 0 not evaluated, 2 low information"
+        },
+        "settings": {
+          "trigger_level": 0.025,
+          "non_control_arms": 2,
+          "level_per_statistic": 0.0125,
+          "power": 0.8,
+          "planned_duration_days": 21,
+          "observed_days": 21,
+          "interim": false
+        },
+        "plans": {
+          "variant_b": {
+            "block_days": 7,
+            "usable": [
+              0,
+              1,
+              2
+            ],
+            "reason": null,
+            "floor": 30,
+            "allocation_ratio": 1.046436,
+            "as_of": "2026-06-30T00:00:00+00:00",
+            "completeness_checked": true,
+            "attempts": [
+              {
+                "block_days": 7,
+                "window_blocks": 3,
+                "sizes": [
+                  {
+                    "block": 0,
+                    "arm": 313,
+                    "control": 304
+                  },
+                  {
+                    "block": 1,
+                    "arm": 331,
+                    "control": 319
+                  },
+                  {
+                    "block": 2,
+                    "arm": 325,
+                    "control": 303
+                  }
+                ],
+                "usable": [
+                  0,
+                  1,
+                  2
+                ],
+                "usable_at_floor": [
+                  0,
+                  1,
+                  2
+                ],
+                "preferred_used": true,
+                "minimum_arm": {
+                  "registered": 2107,
+                  "achieved": 969,
+                  "preferred": 176,
+                  "used": 176
+                },
+                "minimum_control": {
+                  "registered": 2107,
+                  "achieved": 926,
+                  "preferred": 176,
+                  "used": 176
+                },
+                "median_smaller_arm": 304.0,
+                "covers_window": true,
+                "incomplete": [],
+                "reason": null
+              }
+            ],
+            "traffic_needed": null
+          },
+          "variant_c": {
+            "block_days": 7,
+            "usable": [
+              0,
+              1,
+              2
+            ],
+            "reason": null,
+            "floor": 30,
+            "allocation_ratio": 1.266758,
+            "as_of": "2026-06-30T00:00:00+00:00",
+            "completeness_checked": true,
+            "attempts": [
+              {
+                "block_days": 7,
+                "window_blocks": 3,
+                "sizes": [
+                  {
+                    "block": 0,
+                    "arm": 310,
+                    "control": 304
+                  },
+                  {
+                    "block": 1,
+                    "arm": 232,
+                    "control": 319
+                  },
+                  {
+                    "block": 2,
+                    "arm": 189,
+                    "control": 303
+                  }
+                ],
+                "usable": [
+                  0,
+                  1,
+                  2
+                ],
+                "usable_at_floor": [
+                  0,
+                  1,
+                  2
+                ],
+                "preferred_used": true,
+                "minimum_arm": {
+                  "registered": 2107,
+                  "achieved": 731,
+                  "preferred": 176,
+                  "used": 176
+                },
+                "minimum_control": {
+                  "registered": 2107,
+                  "achieved": 926,
+                  "preferred": 176,
+                  "used": 176
+                },
+                "median_smaller_arm": 232.0,
+                "covers_window": true,
+                "incomplete": [],
+                "reason": null
+              }
+            ],
+            "traffic_needed": null
+          }
+        },
+        "tests": [
+          {
+            "arm": "variant_b",
+            "metric": "revenue_usd_7d",
+            "kind": "continuous",
+            "block_days": 7,
+            "design": {
+              "non_control_arms": 2,
+              "cohorts": 3,
+              "players_an_arm_median": 304,
+              "allocation_ratio": 1.046436
+            },
+            "scales": {
+              "absolute": {
+                "reason": null,
+                "error": null,
+                "cohorts": [
+                  {
+                    "block": 0,
+                    "n_arm": 313,
+                    "n_control": 304,
+                    "mean_arm": 1.405974,
+                    "mean_control": 0.46375,
+                    "estimate": 0.942224,
+                    "std_error": 0.342367,
+                    "corrected_std_error": 0.343236
+                  },
+                  {
+                    "block": 1,
+                    "n_arm": 331,
+                    "n_control": 319,
+                    "mean_arm": 1.165619,
+                    "mean_control": 1.478746,
+                    "estimate": -0.313127,
+                    "std_error": 0.559927,
+                    "corrected_std_error": 0.560979
+                  },
+                  {
+                    "block": 2,
+                    "n_arm": 325,
+                    "n_control": 303,
+                    "mean_arm": 3.009538,
+                    "mean_control": 1.488053,
+                    "estimate": 1.521486,
+                    "std_error": 1.303829,
+                    "corrected_std_error": 1.30682
+                  }
+                ],
+                "dropped": [],
+                "q": {
+                  "statistic": 4.116805,
+                  "degrees_of_freedom": 2,
+                  "p_value": 0.1276577680374432,
+                  "i_squared": 0.514186
+                },
+                "slope": {
+                  "value": -0.506792,
+                  "std_error": 0.501492,
+                  "p_value": 0.31222333172073435
+                }
+              },
+              "log_ratio": {
+                "reason": null,
+                "error": null,
+                "cohorts": [
+                  {
+                    "block": 0,
+                    "n_arm": 313,
+                    "n_control": 304,
+                    "mean_arm": 1.405974,
+                    "mean_control": 0.46375,
+                    "estimate": 1.10914,
+                    "std_error": 0.34298,
+                    "corrected_std_error": 0.343548
+                  },
+                  {
+                    "block": 1,
+                    "n_arm": 331,
+                    "n_control": 319,
+                    "mean_arm": 1.165619,
+                    "mean_control": 1.478746,
+                    "estimate": -0.237942,
+                    "std_error": 0.409447,
+                    "corrected_std_error": 0.410122
+                  },
+                  {
+                    "block": 2,
+                    "n_arm": 325,
+                    "n_control": 303,
+                    "mean_arm": 3.009538,
+                    "mean_control": 1.488053,
+                    "estimate": 0.704318,
+                    "std_error": 0.526485,
+                    "corrected_std_error": 0.527338
+                  }
+                ],
+                "dropped": [],
+                "q": {
+                  "statistic": 6.405196,
+                  "degrees_of_freedom": 2,
+                  "p_value": 0.04065643769168917,
+                  "i_squared": 0.687754
+                },
+                "slope": {
+                  "value": -0.373816,
+                  "std_error": 0.305018,
+                  "p_value": 0.2203660299831497
+                }
+              }
+            },
+            "trigger": {
+              "level": 0.0125,
+              "absolute": false,
+              "log_ratio": false
+            },
+            "status": "not_flagged",
+            "detectable": {
+              "power": 0.8,
+              "control_mean": 1.148575,
+              "absolute": {
+                "linear_fade": {
+                  "shift": 3.319194,
+                  "share_of_control_mean": 2.889838
+                },
+                "step": {
+                  "shift": 2.112616,
+                  "share_of_control_mean": 1.839337
+                }
+              },
+              "log_ratio": {
+                "linear_fade": 2.018801,
+                "step": 1.636987
+              }
+            },
+            "control_baseline": {
+              "cohorts": [
+                {
+                  "block": 0,
+                  "n": 304,
+                  "mean": 0.46375,
+                  "ci_low": 0.230265,
+                  "ci_high": 0.697235
+                },
+                {
+                  "block": 1,
+                  "n": 319,
+                  "mean": 1.478746,
+                  "ci_low": 0.542539,
+                  "ci_high": 2.414953
+                },
+                {
+                  "block": 2,
+                  "n": 303,
+                  "mean": 1.488053,
+                  "ci_low": 0.480219,
+                  "ci_high": 2.495886
+                }
+              ],
+              "homogeneity_p": 0.022229101189893588,
+              "moves": true
+            },
+            "low_information": [
+              "shift_exceeds_control_mean"
+            ]
+          },
+          {
+            "arm": "variant_c",
+            "metric": "revenue_usd_7d",
+            "kind": "continuous",
+            "block_days": 7,
+            "design": {
+              "non_control_arms": 2,
+              "cohorts": 3,
+              "players_an_arm_median": 232,
+              "allocation_ratio": 1.266758
+            },
+            "scales": {
+              "absolute": {
+                "reason": null,
+                "error": null,
+                "cohorts": [
+                  {
+                    "block": 0,
+                    "n_arm": 310,
+                    "n_control": 304,
+                    "mean_arm": 1.506935,
+                    "mean_control": 0.46375,
+                    "estimate": 1.043185,
+                    "std_error": 0.95627,
+                    "corrected_std_error": 0.959285
+                  },
+                  {
+                    "block": 1,
+                    "n_arm": 232,
+                    "n_control": 319,
+                    "mean_arm": 1.297198,
+                    "mean_control": 1.478746,
+                    "estimate": -0.181548,
+                    "std_error": 0.744692,
+                    "corrected_std_error": 0.746216
+                  },
+                  {
+                    "block": 2,
+                    "n_arm": 189,
+                    "n_control": 303,
+                    "mean_arm": 1.377884,
+                    "mean_control": 1.488053,
+                    "estimate": -0.110169,
+                    "std_error": 0.639826,
+                    "corrected_std_error": 0.641139
+                  }
+                ],
+                "dropped": [],
+                "q": {
+                  "statistic": 1.216516,
+                  "degrees_of_freedom": 2,
+                  "p_value": 0.5442981077360287,
+                  "i_squared": 0.0
+                },
+                "slope": {
+                  "value": -0.483954,
+                  "std_error": 0.5609,
+                  "p_value": 0.388238429511519
+                }
+              },
+              "log_ratio": {
+                "reason": null,
+                "error": null,
+                "cohorts": [
+                  {
+                    "block": 0,
+                    "n_arm": 310,
+                    "n_control": 304,
+                    "mean_arm": 1.506935,
+                    "mean_control": 0.46375,
+                    "estimate": 1.178488,
+                    "std_error": 0.67967,
+                    "corrected_std_error": 0.681342
+                  },
+                  {
+                    "block": 1,
+                    "n_arm": 232,
+                    "n_control": 319,
+                    "mean_arm": 1.297198,
+                    "mean_control": 1.478746,
+                    "estimate": -0.130988,
+                    "std_error": 0.546399,
+                    "corrected_std_error": 0.547619
+                  },
+                  {
+                    "block": 2,
+                    "n_arm": 189,
+                    "n_control": 303,
+                    "mean_arm": 1.377884,
+                    "mean_control": 1.488053,
+                    "estimate": -0.07692,
+                    "std_error": 0.442634,
+                    "corrected_std_error": 0.443541
+                  }
+                ],
+                "dropped": [],
+                "q": {
+                  "statistic": 2.802146,
+                  "degrees_of_freedom": 2,
+                  "p_value": 0.24633255004482796,
+                  "i_squared": 0.286261
+                },
+                "slope": {
+                  "value": -0.52968,
+                  "std_error": 0.394492,
+                  "p_value": 0.17937218341281158
+                }
+              }
+            },
+            "trigger": {
+              "level": 0.0125,
+              "absolute": false,
+              "log_ratio": false
+            },
+            "status": "not_flagged",
+            "detectable": {
+              "power": 0.8,
+              "control_mean": 1.148575,
+              "absolute": {
+                "linear_fade": {
+                  "shift": 3.712393,
+                  "share_of_control_mean": 3.232175
+                },
+                "step": {
+                  "shift": 3.796655,
+                  "share_of_control_mean": 3.305536
+                }
+              },
+              "log_ratio": {
+                "linear_fade": 2.610998,
+                "step": 2.691297
+              }
+            },
+            "control_baseline": {
+              "cohorts": [
+                {
+                  "block": 0,
+                  "n": 304,
+                  "mean": 0.46375,
+                  "ci_low": 0.230265,
+                  "ci_high": 0.697235
+                },
+                {
+                  "block": 1,
+                  "n": 319,
+                  "mean": 1.478746,
+                  "ci_low": 0.542539,
+                  "ci_high": 2.414953
+                },
+                {
+                  "block": 2,
+                  "n": 303,
+                  "mean": 1.488053,
+                  "ci_low": 0.480219,
+                  "ci_high": 2.495886
+                }
+              ],
+              "homogeneity_p": 0.022229101189893588,
+              "moves": true
+            },
+            "low_information": [
+              "shift_exceeds_control_mean"
+            ]
+          },
+          {
+            "arm": "variant_b",
+            "metric": "sessions_7d",
+            "kind": "continuous",
+            "block_days": 7,
+            "design": {
+              "non_control_arms": 2,
+              "cohorts": 3,
+              "players_an_arm_median": 304,
+              "allocation_ratio": 1.046436
+            },
+            "scales": {
+              "absolute": {
+                "reason": null,
+                "error": null,
+                "cohorts": [
+                  {
+                    "block": 0,
+                    "n_arm": 313,
+                    "n_control": 304,
+                    "mean_arm": 6.054313,
+                    "mean_control": 4.417763,
+                    "estimate": 1.63655,
+                    "std_error": 0.269484,
+                    "corrected_std_error": 0.26993
+                  },
+                  {
+                    "block": 1,
+                    "n_arm": 331,
+                    "n_control": 319,
+                    "mean_arm": 4.960725,
+                    "mean_control": 4.329154,
+                    "estimate": 0.631571,
+                    "std_error": 0.246294,
+                    "corrected_std_error": 0.246682
+                  },
+                  {
+                    "block": 2,
+                    "n_arm": 325,
+                    "n_control": 303,
+                    "mean_arm": 4.476923,
+                    "mean_control": 4.534653,
+                    "estimate": -0.05773,
+                    "std_error": 0.265891,
+                    "corrected_std_error": 0.266324
+                  }
+                ],
+                "dropped": [],
+                "q": {
+                  "statistic": 20.185231,
+                  "degrees_of_freedom": 2,
+                  "p_value": 4.1384027833091066e-05,
+                  "i_squared": 0.900918
+                },
+                "slope": {
+                  "value": -0.846352,
+                  "std_error": 0.189592,
+                  "p_value": 8.041961703994233e-06
+                }
+              },
+              "log_ratio": {
+                "reason": null,
+                "error": null,
+                "cohorts": [
+                  {
+                    "block": 0,
+                    "n_arm": 313,
+                    "n_control": 304,
+                    "mean_arm": 6.054313,
+                    "mean_control": 4.417763,
+                    "estimate": 0.315137,
+                    "std_error": 0.052277,
+                    "corrected_std_error": 0.052365
+                  },
+                  {
+                    "block": 1,
+                    "n_arm": 331,
+                    "n_control": 319,
+                    "mean_arm": 4.960725,
+                    "mean_control": 4.329154,
+                    "estimate": 0.13618,
+                    "std_error": 0.052821,
+                    "corrected_std_error": 0.052903
+                  },
+                  {
+                    "block": 2,
+                    "n_arm": 325,
+                    "n_control": 303,
+                    "mean_arm": 4.476923,
+                    "mean_control": 4.534653,
+                    "estimate": -0.012813,
+                    "std_error": 0.05898,
+                    "corrected_std_error": 0.059076
+                  }
+                ],
+                "dropped": [],
+                "q": {
+                  "statistic": 17.534892,
+                  "degrees_of_freedom": 2,
+                  "p_value": 0.00015572080238188723,
+                  "i_squared": 0.885942
+                },
+                "slope": {
+                  "value": -0.164618,
+                  "std_error": 0.03937,
+                  "p_value": 2.8983212223031968e-05
+                }
+              }
+            },
+            "trigger": {
+              "level": 0.0125,
+              "absolute": true,
+              "log_ratio": true
+            },
+            "status": "flagged",
+            "detectable": {
+              "power": 0.8,
+              "control_mean": 4.425486,
+              "absolute": {
+                "linear_fade": {
+                  "shift": 1.254842,
+                  "share_of_control_mean": 0.283549
+                },
+                "step": {
+                  "shift": 1.138876,
+                  "share_of_control_mean": 0.257345
+                }
+              },
+              "log_ratio": {
+                "linear_fade": 0.260575,
+                "step": 0.228737
+              }
+            },
+            "control_baseline": {
+              "cohorts": [
+                {
+                  "block": 0,
+                  "n": 304,
+                  "mean": 4.417763,
+                  "ci_low": 4.069207,
+                  "ci_high": 4.766319
+                },
+                {
+                  "block": 1,
+                  "n": 319,
+                  "mean": 4.329154,
+                  "ci_low": 4.014633,
+                  "ci_high": 4.643674
+                },
+                {
+                  "block": 2,
+                  "n": 303,
+                  "mean": 4.534653,
+                  "ci_low": 4.148183,
+                  "ci_high": 4.921124
+                }
+              ],
+              "homogeneity_p": 0.7206368067259309,
+              "moves": false
+            },
+            "low_information": []
+          },
+          {
+            "arm": "variant_c",
+            "metric": "sessions_7d",
+            "kind": "continuous",
+            "block_days": 7,
+            "design": {
+              "non_control_arms": 2,
+              "cohorts": 3,
+              "players_an_arm_median": 232,
+              "allocation_ratio": 1.266758
+            },
+            "scales": {
+              "absolute": {
+                "reason": null,
+                "error": null,
+                "cohorts": [
+                  {
+                    "block": 0,
+                    "n_arm": 310,
+                    "n_control": 304,
+                    "mean_arm": 4.590323,
+                    "mean_control": 4.417763,
+                    "estimate": 0.172559,
+                    "std_error": 0.254581,
+                    "corrected_std_error": 0.254999
+                  },
+                  {
+                    "block": 1,
+                    "n_arm": 232,
+                    "n_control": 319,
+                    "mean_arm": 4.469828,
+                    "mean_control": 4.329154,
+                    "estimate": 0.140674,
+                    "std_error": 0.258364,
+                    "corrected_std_error": 0.258911
+                  },
+                  {
+                    "block": 2,
+                    "n_arm": 189,
+                    "n_control": 303,
+                    "mean_arm": 5.402116,
+                    "mean_control": 4.534653,
+                    "estimate": 0.867463,
+                    "std_error": 0.325296,
+                    "corrected_std_error": 0.326141
+                  }
+                ],
+                "dropped": [],
+                "q": {
+                  "statistic": 3.630704,
+                  "degrees_of_freedom": 2,
+                  "p_value": 0.16278061270702765,
+                  "i_squared": 0.449143
+                },
+                "slope": {
+                  "value": 0.31177,
+                  "std_error": 0.204636,
+                  "p_value": 0.1276248403761647
+                }
+              },
+              "log_ratio": {
+                "reason": null,
+                "error": null,
+                "cohorts": [
+                  {
+                    "block": 0,
+                    "n_arm": 310,
+                    "n_control": 304,
+                    "mean_arm": 4.590323,
+                    "mean_control": 4.417763,
+                    "estimate": 0.038317,
+                    "std_error": 0.056519,
+                    "corrected_std_error": 0.056612
+                  },
+                  {
+                    "block": 1,
+                    "n_arm": 232,
+                    "n_control": 319,
+                    "mean_arm": 4.469828,
+                    "mean_control": 4.329154,
+                    "estimate": 0.031978,
+                    "std_error": 0.058528,
+                    "corrected_std_error": 0.058649
+                  },
+                  {
+                    "block": 2,
+                    "n_arm": 189,
+                    "n_control": 303,
+                    "mean_arm": 5.402116,
+                    "mean_control": 4.534653,
+                    "estimate": 0.175042,
+                    "std_error": 0.064653,
+                    "corrected_std_error": 0.064801
+                  }
+                ],
+                "dropped": [],
+                "q": {
+                  "statistic": 3.341349,
+                  "degrees_of_freedom": 2,
+                  "p_value": 0.18812013368545677,
+                  "i_squared": 0.401439
+                },
+                "slope": {
+                  "value": 0.064853,
+                  "std_error": 0.042888,
+                  "p_value": 0.13049373147477272
+                }
+              }
+            },
+            "trigger": {
+              "level": 0.0125,
+              "absolute": false,
+              "log_ratio": false
+            },
+            "status": "not_flagged",
+            "detectable": {
+              "power": 0.8,
+              "control_mean": 4.425486,
+              "absolute": {
+                "linear_fade": {
+                  "shift": 1.354411,
+                  "share_of_control_mean": 0.306048
+                },
+                "step": {
+                  "shift": 1.13616,
+                  "share_of_control_mean": 0.256731
+                }
+              },
+              "log_ratio": {
+                "linear_fade": 0.283858,
+                "step": 0.248912
+              }
+            },
+            "control_baseline": {
+              "cohorts": [
+                {
+                  "block": 0,
+                  "n": 304,
+                  "mean": 4.417763,
+                  "ci_low": 4.069207,
+                  "ci_high": 4.766319
+                },
+                {
+                  "block": 1,
+                  "n": 319,
+                  "mean": 4.329154,
+                  "ci_low": 4.014633,
+                  "ci_high": 4.643674
+                },
+                {
+                  "block": 2,
+                  "n": 303,
+                  "mean": 4.534653,
+                  "ci_low": 4.148183,
+                  "ci_high": 4.921124
+                }
+              ],
+              "homogeneity_p": 0.7206368067259309,
+              "moves": false
+            },
+            "low_information": []
+          }
+        ],
+        "notes": [
+          "The test says that the effect differs between cohorts of first exposure, not why. A change tied to the calendar week of a cohort (a launch, a promotion, a build, the mix of players acquired) cannot be told from one tied to each player's own time since first exposure, because the export holds seven-day totals only.",
+          "population.kind is existing_users: players who see a change first can be the most active, so the earliest cohorts may differ from the later ones for that reason alone. Referee cannot check this declaration, because the export has no column for how long a player has existed.",
+          "arm variant_b, metric revenue_usd_7d: not flagged. The usual power calculation puts at 80% the chance that the test would have flagged a linear fade (a difference between the arm and control of 3.32 (289% of the control mean) in the first cohort that falls in a straight line to nothing in the last) or a step (a difference of 2.11 (184% of the control mean) in the first half of the cohorts and nothing in the second), in the metric's units. That figure takes the standard errors as known and the effect as leaving the spread of the arm unchanged. Referee simulated the trigger only for two arms of the same size (a test within 1.25 to 1 counts as the same here), a control baseline that does not move, 4 or 8 cohorts and 100, 300 or 1,000 players an arm in a cohort (a count or a size between those counts as inside here). This test has 2 arms against control, 3 cohorts and a control baseline that moves between the cohorts, so what share of runs would flag a fade of this size is not known here; in the cases simulated the trigger flagged a fade of this size in 6.0% to 53.6% of runs for revenue-like metrics. The step was not simulated, and the test could have missed anything smaller. A result that is not flagged does not show that the effect is the same in every cohort. The test has low information here (shift_exceeds_control_mean).",
+          "arm variant_c, metric revenue_usd_7d: not flagged. The usual power calculation puts at 80% the chance that the test would have flagged a linear fade (a difference between the arm and control of 3.71 (323% of the control mean) in the first cohort that falls in a straight line to nothing in the last) or a step (a difference of 3.8 (331% of the control mean) in the first half of the cohorts and nothing in the second), in the metric's units. That figure takes the standard errors as known and the effect as leaving the spread of the arm unchanged. Referee simulated the trigger only for two arms of the same size (a test within 1.25 to 1 counts as the same here), a control baseline that does not move, 4 or 8 cohorts and 100, 300 or 1,000 players an arm in a cohort (a count or a size between those counts as inside here). This test has 2 arms against control, arms that differ in size by about 1.27 to 1, 3 cohorts and a control baseline that moves between the cohorts, so what share of runs would flag a fade of this size is not known here; in the cases simulated the trigger flagged a fade of this size in 6.0% to 53.6% of runs for revenue-like metrics. The step was not simulated, and the test could have missed anything smaller. A result that is not flagged does not show that the effect is the same in every cohort. The test has low information here (shift_exceeds_control_mean).",
+          "arm variant_b, metric sessions_7d: the effect differs between cohorts of first exposure.",
+          "arm variant_c, metric sessions_7d: not flagged. The usual power calculation puts at 80% the chance that the test would have flagged a linear fade (a difference between the arm and control of 1.35 (31% of the control mean) in the first cohort that falls in a straight line to nothing in the last) or a step (a difference of 1.14 (26% of the control mean) in the first half of the cohorts and nothing in the second), in the metric's units. That figure takes the standard errors as known and the effect as leaving the spread of the arm unchanged. Referee simulated the trigger only for two arms of the same size (a test within 1.25 to 1 counts as the same here), a control baseline that does not move, 4 or 8 cohorts and 100, 300 or 1,000 players an arm in a cohort (a count or a size between those counts as inside here). This test has 2 arms against control, arms that differ in size by about 1.27 to 1 and 3 cohorts, so what share of runs would flag a fade of this size is not known here; in the cases simulated the trigger flagged a fade of this size in 70.4% to 77.1% of runs for counts simulated as Poisson. The step was not simulated, and the test could have missed anything smaller. A result that is not flagged does not show that the effect is the same in every cohort.",
+          "arm variant_b, metric revenue_usd_7d: the control's mean differs between the cohorts compared (p = 0.0222).",
+          "arm variant_c, metric revenue_usd_7d: the control's mean differs between the cohorts compared (p = 0.0222).",
+          "A control baseline that changes can raise Cochran's Q on a scale that is not invariant to it, which is why an arm is flagged only when both scales show a difference between cohorts.",
+          "RES-013: the configuration of arm variant_b changed during the test (weeks of first exposure holding more than one version: 1). The version change falls in the same weeks as the cohorts compared, so a difference between cohorts may be the change itself.",
+          "4 tests ran. In the simulations of design section 21.5 (two arms of equal size, no change over time) the trigger flagged 3.5% of tests on average and at most 5.1%, so about 0.14 flags (at most 0.2) would be expected by chance alone."
+        ]
+      },
+      "why_it_matters": "The pooled effect is an average over players who were first exposed at different times. If the effect differs between those cohorts, the pooled figure describes none of them well, and what a later launch sees can differ from it. The test says that the effect differs, not why: a change tied to the calendar week of a cohort (a launch, a promotion, a build, the mix of players acquired) cannot be told from one tied to each player's own time since first exposure, because the export holds seven-day totals only. A test that could not run is reported too, so that a missing check cannot read as a pass.",
+      "remediation": "Read the table of cohorts in the evidence before the pooled effect: each cohort's difference and its standard error on both scales. Find out what differed between the weeks of the cohorts (a launch, a promotion, a build, a change in where players come from; RES-013 shows a change of configuration), and report the pooled effect together with the cohort table, naming no cause the data cannot show. For existing players, check whether the earliest cohorts are the most active. A flag labelled low information is a lead to re-check with more data at the planned end, not a finding. If the test did not run, the reason code says what was missing: more traffic or a longer run, arms closer in size, an export made after every outcome window has closed, randomisation and analysis in the same independent unit (player, user or device), or a metric that is not a ratio; for an effect that could not be estimated, values that vary in both arms with a mean above 0. The evidence prices the traffic that would let the cohorts be used, from the sizes observed (plans, traffic_needed), says when to export again if the outcome windows of some cohorts had not closed, or says why more traffic would not help.",
+      "references": [
+        "Cochran. The Combination of Estimates from Different Experiments. Biometrics 10(1), 1954.",
+        "Higgins, Thompson. Quantifying Heterogeneity in a Meta-Analysis. Statistics in Medicine 21(11), 2002.",
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020."
+      ]
+    },
+    {
+      "rule_id": "RES-008",
+      "severity": "warning",
+      "title": "Skewed or heavy-tailed metric: its 95% interval can be wrong more or less often than 5% of the time",
+      "evidence": {
+        "summary": {
+          "tests": 4,
+          "tripped": 2,
+          "not_tripped": 2,
+          "not_evaluated": 0,
+          "largest_simulated_rate": 0.21655,
+          "largest_printed_rate": 0.28225,
+          "floor_ranges": 0,
+          "line": "RES-008: 4 comparisons (binary metrics are not read), 2 with a sign of a heavy tail, 0 not evaluated. No sign is not a pass: in Referee's simulations every run of a revenue-like metric showed one, so they say nothing about a metric that shows none."
+        },
+        "settings": {
+          "kohavi_multiple": 355,
+          "skewness_over": 1,
+          "kurtosis_over": 100,
+          "top_percent": 1,
+          "top_share_over": 0.5,
+          "confidence": 0.95,
+          "nominal_rate": 0.05,
+          "excess_rate": 0.075,
+          "equal_arms_up_to_split": 1.25,
+          "large_effect_from": 0.35,
+          "far_apart": {
+            "players": 5,
+            "split": 2.5
+          },
+          "metrics_read": [
+            "revenue_usd_7d",
+            "sessions_7d"
+          ],
+          "metrics_not_read_binary": [],
+          "randomization_unit": "player",
+          "analysis_unit": "player",
+          "unit_class": {
+            "randomization": "person",
+            "analysis": "person"
+          }
+        },
+        "tests": [
+          {
+            "arm": "variant_b",
+            "metric": "revenue_usd_7d",
+            "kind": "continuous",
+            "family": "revenue_like",
+            "status": "tripped",
+            "signs": [
+              "kohavi",
+              "kurtosis",
+              "top_share"
+            ],
+            "groups": {
+              "variant_b": {
+                "n": 969,
+                "payers": 147,
+                "mean": 1.8617,
+                "skewness": 19.257263,
+                "excess_kurtosis": 462.604245,
+                "top_count": 10,
+                "top_share": 0.512453,
+                "kohavi_minimum": 131648.973279,
+                "signs": [
+                  "kohavi",
+                  "kurtosis",
+                  "top_share"
+                ],
+                "unread": null
+              },
+              "control": {
+                "n": 926,
+                "payers": 124,
+                "mean": 1.14857,
+                "skewness": 11.538401,
+                "excess_kurtosis": 151.275071,
+                "top_count": 10,
+                "top_share": 0.546137,
+                "kohavi_minimum": 47262.817661,
+                "signs": [
+                  "kohavi",
+                  "kurtosis",
+                  "top_share"
+                ],
+                "unread": null
+              }
+            },
+            "comparison": {
+              "split": 1.046436,
+              "split_numerator": 969,
+              "split_denominator": 926,
+              "larger": "arm",
+              "smaller": "control",
+              "payers_in_smaller": 124,
+              "payers_in_larger": 147,
+              "placed_as_equal": true,
+              "read_as": "equal"
+            },
+            "estimate": {
+              "n_treatment": 969,
+              "n_control": 926,
+              "difference": 0.713128,
+              "ci_low": -0.246964,
+              "ci_high": 1.673221,
+              "confidence": 0.95
+            },
+            "relative_difference": 0.620885,
+            "effect_seen": 0.620885,
+            "nearer_effects": "large",
+            "simulated": {
+              "reason": null,
+              "ranges": {
+                "small": {
+                  "low": 0.02725,
+                  "high": 0.04965,
+                  "cells": 10,
+                  "tail_weights": [
+                    2,
+                    3
+                  ],
+                  "fewest_runs": 20000,
+                  "extrapolated": [],
+                  "rising": [],
+                  "rising_in_one_order": [],
+                  "floor": false,
+                  "cases": [
+                    {
+                      "split": 1.0,
+                      "payers": 90,
+                      "low": 0.02725,
+                      "high": 0.04355
+                    },
+                    {
+                      "split": 1.0,
+                      "payers": 130,
+                      "low": 0.02895,
+                      "high": 0.04965
+                    }
+                  ],
+                  "nearest_cases": [
+                    {
+                      "split": 1.0,
+                      "payers": 130,
+                      "low": 0.02895,
+                      "high": 0.04965
+                    }
+                  ],
+                  "far_apart": false,
+                  "ends_from_further": {
+                    "low": true,
+                    "high": false
+                  },
+                  "nearer": false
+                },
+                "large": {
+                  "low": 0.0562,
+                  "high": 0.21655,
+                  "cells": 8,
+                  "tail_weights": [
+                    2,
+                    2
+                  ],
+                  "fewest_runs": 20000,
+                  "extrapolated": [],
+                  "rising": [],
+                  "rising_in_one_order": [],
+                  "floor": false,
+                  "cases": [
+                    {
+                      "split": 1.0,
+                      "payers": 13,
+                      "low": 0.07515,
+                      "high": 0.21655
+                    },
+                    {
+                      "split": 1.0,
+                      "payers": 130,
+                      "low": 0.0562,
+                      "high": 0.108
+                    }
+                  ],
+                  "nearest_cases": [
+                    {
+                      "split": 1.0,
+                      "payers": 130,
+                      "low": 0.0562,
+                      "high": 0.108
+                    }
+                  ],
+                  "far_apart": true,
+                  "ends_from_further": {
+                    "low": false,
+                    "high": true
+                  },
+                  "nearer": true
+                }
+              }
+            }
+          },
+          {
+            "arm": "variant_c",
+            "metric": "revenue_usd_7d",
+            "kind": "continuous",
+            "family": "revenue_like",
+            "status": "tripped",
+            "signs": [
+              "kohavi",
+              "kurtosis",
+              "top_share"
+            ],
+            "groups": {
+              "variant_c": {
+                "n": 731,
+                "payers": 90,
+                "mean": 1.407,
+                "skewness": 19.448629,
+                "excess_kurtosis": 434.658257,
+                "top_count": 8,
+                "top_share": 0.616779,
+                "kohavi_minimum": 134278.455343,
+                "signs": [
+                  "kohavi",
+                  "kurtosis",
+                  "top_share"
+                ],
+                "unread": null
+              },
+              "control": {
+                "n": 926,
+                "payers": 124,
+                "mean": 1.14857,
+                "skewness": 11.538401,
+                "excess_kurtosis": 151.275071,
+                "top_count": 10,
+                "top_share": 0.546137,
+                "kohavi_minimum": 47262.817661,
+                "signs": [
+                  "kohavi",
+                  "kurtosis",
+                  "top_share"
+                ],
+                "unread": null
+              }
+            },
+            "comparison": {
+              "split": 1.266758,
+              "split_numerator": 926,
+              "split_denominator": 731,
+              "larger": "control",
+              "smaller": "variant_c",
+              "payers_in_smaller": 90,
+              "payers_in_larger": 124,
+              "placed_as_equal": false,
+              "read_as": "both_orders"
+            },
+            "estimate": {
+              "n_treatment": 731,
+              "n_control": 926,
+              "difference": 0.25843,
+              "ci_low": -0.743926,
+              "ci_high": 1.260785,
+              "confidence": 0.95
+            },
+            "relative_difference": 0.225002,
+            "effect_seen": 0.225002,
+            "nearer_effects": "small",
+            "simulated": {
+              "reason": null,
+              "ranges": {
+                "small": {
+                  "low": 0.02535,
+                  "high": 0.0583,
+                  "cells": 22,
+                  "tail_weights": [
+                    2,
+                    3
+                  ],
+                  "fewest_runs": 20000,
+                  "extrapolated": [],
+                  "rising": [],
+                  "rising_in_one_order": [],
+                  "floor": false,
+                  "cases": [
+                    {
+                      "split": 1.0,
+                      "payers": 90,
+                      "low": 0.02725,
+                      "high": 0.04355
+                    },
+                    {
+                      "split": 1.5,
+                      "payers": 39,
+                      "low": 0.02535,
+                      "high": 0.05125
+                    },
+                    {
+                      "split": 1.5,
+                      "payers": 130,
+                      "low": 0.03025,
+                      "high": 0.05005
+                    },
+                    {
+                      "split": 1.5,
+                      "payers": 39,
+                      "low": 0.0302,
+                      "high": 0.0583
+                    },
+                    {
+                      "split": 1.5,
+                      "payers": 130,
+                      "low": 0.0345,
+                      "high": 0.0559
+                    }
+                  ],
+                  "nearest_cases": [
+                    {
+                      "split": 1.0,
+                      "payers": 90,
+                      "low": 0.02725,
+                      "high": 0.04355
+                    }
+                  ],
+                  "far_apart": false,
+                  "ends_from_further": {
+                    "low": true,
+                    "high": true
+                  },
+                  "nearer": true
+                },
+                "large": {
+                  "low": 0.03155,
+                  "high": 0.28225,
+                  "cells": 24,
+                  "tail_weights": [
+                    2,
+                    2
+                  ],
+                  "fewest_runs": 20000,
+                  "extrapolated": [],
+                  "rising": [],
+                  "rising_in_one_order": [],
+                  "floor": false,
+                  "cases": [
+                    {
+                      "split": 1.0,
+                      "payers": 13,
+                      "low": 0.07515,
+                      "high": 0.21655
+                    },
+                    {
+                      "split": 1.0,
+                      "payers": 130,
+                      "low": 0.0562,
+                      "high": 0.108
+                    },
+                    {
+                      "split": 3.0,
+                      "payers": 13,
+                      "low": 0.03155,
+                      "high": 0.0944
+                    },
+                    {
+                      "split": 3.0,
+                      "payers": 130,
+                      "low": 0.03395,
+                      "high": 0.04585
+                    },
+                    {
+                      "split": 3.0,
+                      "payers": 13,
+                      "low": 0.15665,
+                      "high": 0.28225
+                    },
+                    {
+                      "split": 3.0,
+                      "payers": 130,
+                      "low": 0.0867,
+                      "high": 0.1634
+                    }
+                  ],
+                  "nearest_cases": [
+                    {
+                      "split": 1.0,
+                      "payers": 130,
+                      "low": 0.0562,
+                      "high": 0.108
+                    }
+                  ],
+                  "far_apart": true,
+                  "ends_from_further": {
+                    "low": true,
+                    "high": true
+                  },
+                  "nearer": false
+                }
+              }
+            }
+          },
+          {
+            "arm": "variant_b",
+            "metric": "sessions_7d",
+            "kind": "continuous",
+            "family": "count",
+            "status": "not_tripped",
+            "signs": [],
+            "groups": {
+              "variant_b": {
+                "n": 969,
+                "payers": 936,
+                "mean": 5.1517,
+                "skewness": 1.13078,
+                "excess_kurtosis": 1.812623,
+                "top_count": 10,
+                "top_share": 0.03726,
+                "kohavi_minimum": 453.92551,
+                "signs": [],
+                "unread": null
+              },
+              "control": {
+                "n": 926,
+                "payers": 884,
+                "mean": 4.42549,
+                "skewness": 1.287703,
+                "excess_kurtosis": 2.823272,
+                "top_count": 10,
+                "top_share": 0.040752,
+                "kohavi_minimum": 588.653551,
+                "signs": [],
+                "unread": null
+              }
+            },
+            "comparison": {
+              "split": 1.046436,
+              "split_numerator": 969,
+              "split_denominator": 926,
+              "larger": "arm",
+              "smaller": "control",
+              "payers_in_smaller": 884,
+              "payers_in_larger": 936,
+              "placed_as_equal": true,
+              "read_as": "equal"
+            },
+            "estimate": null,
+            "relative_difference": 0.164097,
+            "effect_seen": 0.164097,
+            "nearer_effects": "small",
+            "simulated": null
+          },
+          {
+            "arm": "variant_c",
+            "metric": "sessions_7d",
+            "kind": "continuous",
+            "family": "count",
+            "status": "not_tripped",
+            "signs": [],
+            "groups": {
+              "variant_c": {
+                "n": 731,
+                "payers": 703,
+                "mean": 4.76197,
+                "skewness": 1.219851,
+                "excess_kurtosis": 2.220189,
+                "top_count": 8,
+                "top_share": 0.040506,
+                "kohavi_minimum": 528.252944,
+                "signs": [],
+                "unread": null
+              },
+              "control": {
+                "n": 926,
+                "payers": 884,
+                "mean": 4.42549,
+                "skewness": 1.287703,
+                "excess_kurtosis": 2.823272,
+                "top_count": 10,
+                "top_share": 0.040752,
+                "kohavi_minimum": 588.653551,
+                "signs": [],
+                "unread": null
+              }
+            },
+            "comparison": {
+              "split": 1.266758,
+              "split_numerator": 926,
+              "split_denominator": 731,
+              "larger": "control",
+              "smaller": "variant_c",
+              "payers_in_smaller": 703,
+              "payers_in_larger": 884,
+              "placed_as_equal": false,
+              "read_as": "both_orders"
+            },
+            "estimate": null,
+            "relative_difference": 0.076032,
+            "effect_seen": 0.076032,
+            "nearer_effects": "small",
+            "simulated": null
+          }
+        ],
+        "notes": [
+          "RES-008 reads each non-control arm against control on the analysed players, for every metric of the spec that is not binary: revenue_usd_7d and sessions_7d. It looks for three signs of a skewed or heavy-tailed metric in either group (skewness is how lopsided the values are, and excess kurtosis how heavy their tails are, 0 for a normal distribution). The first, which the notes call the size rule, is the rule of thumb of Kohavi, Deng, Longbotham and Xu (2014): for a sample skewness above 1 in size, a group needs at least 355 times the square of the skewness in players before the interval for its mean can be trusted (the rule is built to keep the total error of a 95% interval for one mean within 4% to 6%). The other two are Referee's own levels: an excess kurtosis above 100, and the top 1% of players holding more than 50% of the total. In Referee's simulations of a revenue-like metric every run showed the first or the second sign, so the simulations cannot say whether the levels of the second and the third are the right ones, though samples that showed them failed less often than the others (see the note on the rates). A setting, in the notes below, is one combination of group sizes, share of players who spend, effect and tail weight that was simulated. The figures shown are rounded to three or four significant figures, with more where that is needed to show that one is over its level; the decisions are made on the figures rounded to six places.",
+          "arm variant_b, metric revenue_usd_7d: signs of a heavy-tailed metric in variant_b and control. The difference seen is +62% of control's mean. Welch's 95% interval for the difference (variant_b less control) is -0.247 to 1.67 USD per player. An interval like it should fail to contain the true difference in 5% of experiments; in Referee's simulations of comparisons like this one it failed in 5.6% to 21.7% of them with an effect of +50% or +100% (nearer the difference seen) and in 2.7% to 5.0% with an effect of none or +20%. Read the interval with those rates in mind. variant_b: 969 analysed players, 147 players who spend; skewness 19.26, for which the size rule asks for about 132,000 players (a sign); excess kurtosis 462.6 (above 100: a sign); the top 10 players (1% of them, rounded up) hold 51.2% of the total (above 50%: a sign). control: 926 analysed players, 124 players who spend; skewness 11.54, for which the size rule asks for about 47,300 players (a sign); excess kurtosis 151.3 (above 100: a sign); the top 10 players (1% of them, rounded up) hold 54.6% of the total (above 50%: a sign). This comparison is 1.05 to 1 (variant_b is the larger group), with 124 players who spend in the smaller group (control). Groups within 1.25 to 1 of each other in size are placed among the simulated cases of groups of the same size. The rate rises with the split, so near that limit it can be higher than those cases show when the larger group is the one with the lower mean. For an effect of +50% or +100% (nearer the difference seen), the simulated cases on each side of it (split 1 to 1 with 13 and 130 players who spend; 8 simulated settings, over two of the three tail weights, at least 20,000 experiments each) failed in 5.6% to 21.7% of experiments. These cases lie far apart, so the high end of that range comes from a case further from this comparison than the nearest one, 1 to 1 with 130 players who spend, which failed in 5.6% to 10.8%. For an effect of none or +20%, the simulated cases on each side of it (split 1 to 1 with 90 and 130 players who spend; 10 simulated settings, over two or three of the three tail weights, at least 20,000 experiments each) failed in 2.7% to 5.0% of experiments. With an effect of +50% or +100% and groups of about equal size, most of the failed intervals in the simulations understated the gap between the groups. Kohavi et al. (2014) note that when the two groups have the same distribution and equal sizes, the difference of the means is nearly symmetric and their size rule gives no useful bound. The simulated rates above, not that rule, are the guide here.",
+          "arm variant_c, metric revenue_usd_7d: signs of a heavy-tailed metric in variant_c and control. The difference seen is +23% of control's mean. Welch's 95% interval for the difference (variant_c less control) is -0.744 to 1.26 USD per player. An interval like it should fail to contain the true difference in 5% of experiments; in Referee's simulations of comparisons like this one it failed in 2.5% to 5.8% of them with an effect of none or +20% (nearer the difference seen) and in 3.2% to 28.2% with an effect of +50% or +100%. Read the interval with those rates in mind. variant_c: 731 analysed players, 90 players who spend; skewness 19.45, for which the size rule asks for about 134,000 players (a sign); excess kurtosis 434.7 (above 100: a sign); the top 8 players (1% of them, rounded up) hold 61.7% of the total (above 50%: a sign). control: 926 analysed players, 124 players who spend; skewness 11.54, for which the size rule asks for about 47,300 players (a sign); excess kurtosis 151.3 (above 100: a sign); the top 10 players (1% of them, rounded up) hold 54.6% of the total (above 50%: a sign). This comparison is 1.27 to 1 (control is the larger group), with 90 players who spend in the smaller group (variant_c). For an effect of none or +20% (nearer the difference seen), the simulated cases on each side of it (splits 1 to 1 (90 players who spend) and 1.5 to 1 (39 and 130 players who spend); 22 simulated settings, over two or three of the three tail weights, at least 20,000 experiments each) failed in 2.5% to 5.8% of experiments. For an effect of +50% or +100%, the simulated cases on each side of it (splits 1 to 1 and 3 to 1 with 13 and 130 players who spend; 24 simulated settings, over two of the three tail weights, at least 20,000 experiments each) failed in 3.2% to 28.2% of experiments. These cases lie far apart, so the ends of that range come from a case further from this comparison than the nearest one, 1 to 1 with 130 players who spend, which failed in 5.6% to 10.8%. In the simulated cases the arm is the group with the higher mean. The sample cannot be relied on to show which group that is (with few players who spend, the group with the higher mean seen can be the one with the lower true mean), so the ranges cover both orders: the arm the larger group, and control the larger group. With many players who spend the sign would be reliable, and the range is then wider than it needs to be. With an effect of none or +20% and groups of unequal size, most of the failed intervals in the simulations made the larger group look better than it is; here the larger group is control.",
+          "arm variant_b, metric sessions_7d: none of the three signs was found. variant_b: 969 analysed players, 936 players with a value other than 0; skewness 1.131; excess kurtosis 1.813; the top 10 players (1% of them, rounded up) hold 3.7% of the total. control: 926 analysed players, 884 players with a value other than 0; skewness 1.288; excess kurtosis 2.823; the top 10 players (1% of them, rounded up) hold 4.1% of the total. This does not show that the interval is reliable.",
+          "arm variant_c, metric sessions_7d: none of the three signs was found. variant_c: 731 analysed players, 703 players with a value other than 0; skewness 1.220; excess kurtosis 2.220; the top 8 players (1% of them, rounded up) hold 4.1% of the total. control: 926 analysed players, 884 players with a value other than 0; skewness 1.288; excess kurtosis 2.823; the top 10 players (1% of them, rounded up) hold 4.1% of the total. This does not show that the interval is reliable.",
+          "The simulated family (design section 21.10): two arms of independent players and one look at a fixed number of players; most players spend nothing, and the rest (13% in most cases, 3% or 30% in some) spend an amount with a lognormal distribution, whose tail is mild, middle or heavy (log standard deviation 1.0, 1.5 or 2.0); an effect multiplies what the players who spend spend, and only positive effects were run, so the arm in a simulated case is the group with the higher mean; the interval is the unadjusted 95% Welch interval that Referee prints. The rates describe this family only: another shape of tail, an effect that works through the share of players who spend, or a metric that is not money may behave differently.",
+          "Which effects are nearer the difference seen is decided on the higher mean over the lower one: 35% or more is nearer +50% and +100% (a lower mean of 0 counts as that), less is nearer none and +20%. That is a judgement at one level, so a difference close to it can switch which range sets the severity. With few players who spend the means seen often differ by that much even when the true effect is none or +20%, so the label is a weak guide to the true effect; both ranges are always printed. The severity follows the label, so with arms of about equal size an experiment with no effect can read as a warning and one with a large effect as info; Referee has not measured how often.",
+          "A rate is a share of simulated experiments and carries noise: it is within about 0.3 points either way (a 95% range) near a rate of 5% and 0.7 points near 35% when a setting has 20,000 experiments, and within about 1 and 2 points when it has 2,000. A range is the lowest and the highest of the rates of several settings, so its ends are more extreme than the rate of any one setting would be; it is not an interval.",
+          "The rates are over all the simulated experiments of a case. In nearly every setting where both kinds of sample were common (at least 200 experiments of each), those whose sample showed an excess kurtosis above 100 failed less often than the others, and so did those whose top share was above 50% (each sign compared alone), so for a sample that shows one of these signs the rate may be lower than the range, and for a sample that looks lighter-tailed it may be higher. Every simulated experiment of a revenue-like metric showed the first or the second sign, so the range is also the rate among the experiments that show a sign.",
+          "Referee places a comparison among the simulated cases by the split between the groups and the number of players who spend in the smaller group, not the number of players: at 9 to 1 with no effect the rate followed that number in the simulations (design section 21.10); at other splits this was not checked. Above the largest number simulated the range of that case is used; where the simulated rate fell as the number grew, the true rate beyond it may be lower, so that range may be a ceiling and not a measure, and the severity it sets can stay a warning however many players spend.",
+          "Referee shows no bootstrap interval. In its simulations the percentile bootstrap interval failed more often than Welch's in most of the cells it was run on, so it is not a repair (design section 21.10)."
+        ]
+      },
+      "why_it_matters": "Welch's interval for a difference of means, the one Referee prints, assumes that the mean of each arm is nearly normal. For a metric that most players leave at zero and a few drive up, that takes more players than an experiment often has (by the rule of thumb of Kohavi et al., revenue per user, with a skewness of about 18, needs about 114,000 users), and below that size the interval is wrong more or less often than the 5% it states. Referee measured how often for a revenue-like metric of independent players in two arms (design section 21.10), and the finding quotes the simulated cases on each side of the comparison: with equal arms the interval was mostly close to or under 5% for a small effect and above it for a large one; with arms of unequal size it was often above 5%, for a small effect mostly on the side that makes the larger arm look better than it is, and it was worst when the control was the larger arm (the arm there being the group with the higher mean); and at 9 to 1 with no effect it was worse the fewer the players who spend in the smaller arm. These rates come from one simulated family and are not a measure of the experiment in hand. Which simulated effects are read is decided by the difference seen between the two means, which for a heavy-tailed metric is itself noisy: with arms of about equal size an experiment with no effect can read as a warning and one with a large effect as info, and above the largest number of players who spend that was simulated the range of that case is used, which may be a ceiling there. A quiet RES-008 is not evidence that the interval is reliable: in the simulations every run of a revenue-like metric showed a sign. For a metric that is not revenue-like the finding gives the signs and says that no error rate was measured.",
+      "remediation": "Where an entry gives a simulated rate, read it in place of 5%: an interval that failed in 10% of simulated experiments behaved like a 90% interval, and for a small effect and arms of unequal size it mostly favoured the larger group. Where an entry states no error rate (a metric that is not revenue-like, units that are not independent players, a group with no analysed players, or no player who spends in the smaller group), treat its interval as unchecked: the signs show that it may be unreliable, but Referee has not measured how much. Do not call the result significant, or not, on one edge of this interval: if an end of it is close to zero or to a decision threshold, say that the result is uncertain. Where you can choose, do not make the control the larger arm, which was the worst case in the simulations (where the arm has the higher mean; for a metric you expect to fall, avoid the larger arm instead), and plan for more players who spend in the smaller arm. For a decision that rests on this metric, consider a less skewed version of it (a cap on the amount per player, or a transformation): Kohavi et al. report that capping revenue per user cut its skewness from about 18 to about 5. It changes what is estimated, and Referee has not measured how well capping, trimming or a transformation works, so register the choice before the next test and not after seeing the data. Referee shows no bootstrap interval, because in its simulations the percentile bootstrap interval failed more often than Welch's in most of the cells it was run on.",
+      "references": [
+        "Kohavi, Deng, Longbotham, Xu. Seven Rules of Thumb for Web Site Experimenters. KDD 2014.",
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020."
+      ]
+    },
+    {
+      "rule_id": "RES-012",
+      "severity": "warning",
+      "title": "Players first exposed after their first purchase",
+      "evidence": {
+        "late": {
+          "control": 71,
+          "variant_b": 77,
+          "variant_c": 50
+        },
+        "exposed": {
+          "control": 997,
+          "variant_b": 1046,
+          "variant_c": 781
+        },
+        "late_share_of_exposed": {
+          "control": 0.0712,
+          "variant_b": 0.0736,
+          "variant_c": 0.064
+        },
+        "late_total": 198,
+        "share_of_assigned": 0.0701,
+        "share_of_purchasers": 0.3542,
+        "homogeneity": {
+          "chi_square": 0.6598,
+          "degrees_of_freedom": 2,
+          "p_value": 0.7215426614114665,
+          "alpha": 0.001,
+          "method": "exact",
+          "smallest_expected": 54.76
+        },
+        "estimate": {
+          "metric": "revenue_usd_7d",
+          "by_arm": {
+            "variant_b": {
+              "with_late_exposed": {
+                "n_treatment": 1046,
+                "n_control": 997,
+                "difference": 0.798901,
+                "ci_low": -0.27844,
+                "ci_high": 1.876241,
+                "confidence": 0.95
+              },
+              "without_late_exposed": {
+                "n_treatment": 969,
+                "n_control": 926,
+                "difference": 0.713128,
+                "ci_low": -0.246964,
+                "ci_high": 1.673221,
+                "confidence": 0.95
+              }
+            },
+            "variant_c": {
+              "with_late_exposed": {
+                "n_treatment": 781,
+                "n_control": 997,
+                "difference": -0.06145,
+                "ci_low": -1.164717,
+                "ci_high": 1.041817,
+                "confidence": 0.95
+              },
+              "without_late_exposed": {
+                "n_treatment": 731,
+                "n_control": 926,
+                "difference": 0.25843,
+                "ci_low": -0.743926,
+                "ci_high": 1.260785,
+                "confidence": 0.95
+              }
+            }
+          }
+        }
+      },
+      "why_it_matters": "A purchase made before the player first saw the change cannot be an effect of it. These players are left out of the effect analysis, but they are in the arms, so a different share of the exposed players being late in different arms means the change reached the arms differently. It is the results-time counterpart of DES-007.",
+      "remediation": "Check how exposure is triggered. If it can follow a purchase, say so in the design and analyse from first exposure. Compare the estimates with and without these players in the evidence, and say which one the conclusion rests on. If the late share differs between arms, find out why before reading the effect.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020."
+      ]
+    },
+    {
+      "rule_id": "RES-013",
+      "severity": "warning",
+      "title": "An arm's configuration changed during the test",
+      "evidence": {
+        "metric": "revenue_usd_7d",
+        "version_from": {
+          "exposure": 2626,
+          "assignment": 0
+        },
+        "arms": {
+          "variant_b": {
+            "versions": [
+              {
+                "version": 1,
+                "players": 540
+              },
+              {
+                "version": 2,
+                "players": 429
+              }
+            ],
+            "by_week": [
+              {
+                "week": 0,
+                "versions": [
+                  {
+                    "version": 1,
+                    "players": 313
+                  }
+                ]
+              },
+              {
+                "week": 1,
+                "versions": [
+                  {
+                    "version": 1,
+                    "players": 227
+                  },
+                  {
+                    "version": 2,
+                    "players": 104
+                  }
+                ]
+              },
+              {
+                "week": 2,
+                "versions": [
+                  {
+                    "version": 2,
+                    "players": 325
+                  }
+                ]
+              }
+            ],
+            "mixed_weeks": [
+              1
+            ],
+            "assigned_differs": 0,
+            "within_week": [
+              {
+                "week": 1,
+                "later_version": 2,
+                "earlier_version": 1,
+                "n_later": 104,
+                "n_earlier": 227,
+                "difference": 0.250488,
+                "ci_low": -0.914726,
+                "ci_high": 1.415701,
+                "confidence": 0.95
+              }
+            ]
+          }
+        }
+      },
+      "why_it_matters": "A change of configuration part-way through is a second treatment inside the arm. Players before and after it saw different things, so the arm's effect is an average of two experiences, and a change of that effect over time (RES-007) cannot be told from the effect of the change itself.",
+      "remediation": "Find out what changed and when. Analyse the versions separately or restart the test on the final configuration; do not pool the versions and read a trend over weeks as novelty. The difference within a week in the evidence is descriptive only: the versions were not randomised.",
+      "references": [
+        "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020."
+      ]
+    }
+  ]
+}
