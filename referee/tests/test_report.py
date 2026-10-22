@@ -1,6 +1,7 @@
 """The design-review and results-review reports and their renderings."""
 
 import json
+import re
 
 import pytest
 from results_helpers import Row, at, build_data, crowd, results_spec
@@ -219,6 +220,7 @@ def _finding_with(rule_id: str, evidence: dict, **overrides: object) -> Finding:
 
 
 def _text_of(raw_spec: dict, *found: Finding, **options: int) -> str:
+    raw_spec = {**raw_spec, "title": "A spec title that is much too long for one line " * 3}
     context = _context(raw_spec, [*crowd("control", 4), *crowd("variant_b", 4)])
     review = ResultsReview(
         spec_id="s",
@@ -354,3 +356,108 @@ def test_the_report_says_whether_the_findings_hold_for_earlier_origins(raw_spec:
     assert "  4 days earlier" not in differs
     assert "Origin sensitivity: not run; design.start_utc is registered.\n" in skipped
     assert _report(context, sensitivity=changed)["origin_sensitivity"] == changed
+
+
+REVENUE = {
+    "primary_metric__name": "revenue_usd_7d",
+    "primary_metric__kind": "continuous",
+    "primary_metric__baseline": 1.0,
+    "primary_metric__baseline_std": 5.0,
+}
+
+
+def _revenue_context(raw_spec: dict, *, variant_c=(0.0, 2.0, 1.0, 3.5, 0.0, 0.5), **changes):
+    values = {
+        "control": (0.0, 0.0, 1.5, 0.0, 4.0, 2.5),
+        "variant_b": (0.0, 3.0, 5.5, 0.0, 6.0, 2.0),
+        "variant_c": variant_c,
+    }
+    rows = [
+        Row(f"{arm}_{i}", arm, revenue=v) for arm, vs in values.items() for i, v in enumerate(vs)
+    ]
+    return _context(raw_spec, rows, **REVENUE, **changes)
+
+
+def _blocked(context: ResultsContext, *blocking: str) -> ResultsReview:
+    found = tuple(
+        Finding(
+            rule_id=rule_id,
+            severity="blocker",
+            title="t",
+            evidence={"summary": {"line": f"{rule_id}: line"}},
+            why_it_matters="w",
+            remediation="r",
+            references=(),
+        )
+        for rule_id in blocking
+    )
+    return ResultsReview(
+        spec_id="s",
+        experiment_id="e1",
+        rules_run=tuple(rule.id for rule in RESULTS_RULES),
+        findings=found,
+    )
+
+
+def test_the_effect_table_is_to_be_read_only_while_the_verdict_is_not_invalid(
+    raw_spec: dict,
+) -> None:
+    context = _revenue_context(raw_spec)
+
+    invalid = _report(context, _blocked(context, "RES-001"))
+    caution = _report(context, _blocked(context))
+
+    assert (invalid["effect"]["readable"], caution["effect"]["readable"]) == (False, True)
+    assert "NOT TO BE READ: the verdict is invalid" in render_results_text(invalid)
+    assert "NOT TO BE READ" not in render_results_text(caution)
+
+
+def test_the_effect_table_prints_each_arm_under_its_columns(raw_spec: dict) -> None:
+    context = _revenue_context(raw_spec)
+    report = _report(context)
+
+    block = render_results_text(report).split("\n  arm ")[1].split("\n\n")[0].splitlines()
+    table = [re.split(r" {2,}", ("arm " + block[0]).strip())]
+    table += [re.split(r" {2,}", line.strip()) for line in block[1:]]
+
+    expected = [["arm", "players", "difference", "95% interval", "relative", "p", "adjusted p"]]
+    for row in report["effect"]["arms"]:
+        expected.append(
+            [
+                row["arm"],
+                f"{row['n_treatment']} vs {row['n_control']}",
+                f"{row['difference']:+.4g}",
+                f"{row['ci_low']:.4g} to {row['ci_high']:.4g}",
+                f"{100 * row['relative_difference']:+.1f}%",
+                f"{row['p_value']:.3g}",
+                f"{row['adjusted_p_value']:.3g}",
+            ]
+        )
+    assert table == expected
+
+
+@pytest.mark.parametrize(
+    ("registered", "said"),
+    [
+        (None, "adjusted for 2 comparisons by Bonferroni"),
+        ("none", "not adjusted for the number of arms (the spec registers none)"),
+    ],
+)
+def test_the_text_says_how_the_p_values_were_adjusted(raw_spec: dict, registered, said) -> None:
+    context = _revenue_context(raw_spec, design__alpha_adjustment=registered)
+
+    text = " ".join(render_results_text(_report(context)).split())
+
+    assert said in text
+    assert "does not adjust for guardrails, other metrics or repeated looks" in text
+
+
+def test_an_arm_without_an_estimate_is_listed_with_its_reason(raw_spec: dict) -> None:
+    report = _report(_revenue_context(raw_spec, variant_c=(1.0,)))
+
+    text = " ".join(render_results_text(report).split())
+
+    b, c = report["effect"]["arms"]
+    assert "error" in c and "error" not in b
+    assert f"variant_c (1 vs 6): not estimated; {' '.join(c['error'].split())}" in text
+    assert "variant_b 6 vs 6" in text  # the arm that could be estimated is in the table

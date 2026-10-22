@@ -6,12 +6,14 @@ from pathlib import Path
 import pytest
 from results_helpers import T0, Row, at, build_data, results_spec
 
+from referee.methods import bonferroni, two_proportion_difference, welch_difference
 from referee.results import (
     METRICS,
     PlayerRecord,
     ResultsContext,
     ResultsError,
     effect_estimate,
+    effect_table,
 )
 
 FIXTURE = Path(__file__).parent / "data" / "hybrid_offer_page_5000"
@@ -314,3 +316,131 @@ def test_an_empty_group_has_a_reason_of_its_own_in_the_estimate(raw_spec) -> Non
     )
 
 
+# --- The effect table (design section 20.4) --------------------------------------------------
+
+REVENUE = {
+    "primary_metric__name": "revenue_usd_7d",
+    "primary_metric__kind": "continuous",
+    "primary_metric__baseline": 1.0,
+    "primary_metric__baseline_std": 5.0,
+}
+CONTROL_REVENUE = [0.0, 0.0, 1.5, 0.0, 4.0, 0.0, 2.5, 0.0]
+B_REVENUE = [0.0, 3.0, 5.5, 0.0, 6.0, 2.0, 0.0, 9.0]
+C_REVENUE = [0.0, 0.0, 2.0, 1.0, 0.0, 3.5, 0.0, 0.5]
+
+
+def _revenue_rows(**by_arm: list[float]) -> list[Row]:
+    return [
+        Row(f"{arm}_{i:02d}", arm, revenue=value)
+        for arm, values in by_arm.items()
+        for i, value in enumerate(values)
+    ]
+
+
+def test_the_effect_table_is_welchs_test_adjusted_for_the_arms(raw_spec) -> None:
+    rows = _revenue_rows(control=CONTROL_REVENUE, variant_b=B_REVENUE, variant_c=C_REVENUE)
+
+    table = effect_table(_context(raw_spec, rows, **REVENUE))
+
+    b = welch_difference(B_REVENUE, CONTROL_REVENUE)
+    c = welch_difference(C_REVENUE, CONTROL_REVENUE)
+    adjusted = bonferroni([b.p_value, c.p_value]).adjusted
+    assert (table["metric"], table["kind"], table["adjustment"]) == (
+        "revenue_usd_7d",
+        "continuous",
+        "bonferroni",
+    )
+    assert (table["comparisons"], table["alpha"]) == (2, 0.05)
+    assert [row["arm"] for row in table["arms"]] == ["variant_b", "variant_c"]
+    for row, found, p_adjusted in zip(table["arms"], (b, c), adjusted, strict=True):
+        assert (row["n_treatment"], row["n_control"]) == (found.n_treatment, found.n_control)
+        assert row["mean_treatment"] == pytest.approx(found.mean_treatment, abs=1e-6)
+        assert row["mean_control"] == pytest.approx(found.mean_control, abs=1e-6)
+        assert row["difference"] == pytest.approx(found.difference, abs=1e-6)
+        assert (row["ci_low"], row["ci_high"]) == pytest.approx(
+            (found.ci_low, found.ci_high), abs=1e-6
+        )
+        assert row["confidence"] == 0.95
+        assert row["relative_difference"] == pytest.approx(
+            found.difference / found.mean_control, abs=1e-6
+        )
+        assert row["p_value"] == found.p_value
+        assert row["adjusted_p_value"] == p_adjusted
+
+
+def test_the_effect_table_of_a_binary_metric_is_the_two_proportion_test(raw_spec) -> None:
+    buys = {"control": 7, "variant_b": 19, "variant_c": 11}
+    rows = [
+        Row(f"{arm}_{i:03d}", arm, purchases=int(i < n_buying))
+        for arm, n_buying in buys.items()
+        for i in range(100)
+    ]
+
+    table = effect_table(_context(raw_spec, rows))
+
+    b = two_proportion_difference(19, 100, 7, 100)
+    assert table["kind"] == "binary"
+    row = table["arms"][0]
+    assert (row["mean_treatment"], row["mean_control"]) == (0.19, 0.07)
+    assert row["difference"] == pytest.approx(b.difference, abs=1e-6)
+    assert (row["ci_low"], row["ci_high"]) == pytest.approx((b.ci_low, b.ci_high), abs=1e-6)
+    assert row["p_value"] == b.p_value
+    assert row["adjusted_p_value"] == min(1.0, 2 * b.p_value)
+    assert table["arms"][1]["adjusted_p_value"] <= 1.0
+
+
+@pytest.mark.parametrize(
+    ("registered", "adjustment", "times"),
+    [
+        (None, "bonferroni", 2),
+        ("bonferroni", "bonferroni", 2),
+        ("dunnett", "bonferroni", 2),
+        ("none", "none", 1),
+    ],
+)
+def test_the_effect_table_adjusts_as_the_power_plan_does(
+    raw_spec, registered, adjustment: str, times: int
+) -> None:
+    rows = _revenue_rows(control=CONTROL_REVENUE, variant_b=B_REVENUE, variant_c=C_REVENUE)
+
+    table = effect_table(_context(raw_spec, rows, design__alpha_adjustment=registered, **REVENUE))
+
+    assert table["adjustment"] == adjustment
+    for row in table["arms"]:
+        assert row["adjusted_p_value"] == min(1.0, times * row["p_value"])
+
+
+def test_the_effect_table_reads_the_analysed_players_only(raw_spec) -> None:
+    rows = _revenue_rows(control=CONTROL_REVENUE, variant_b=B_REVENUE, variant_c=C_REVENUE)
+    rows += [
+        Row("never_exposed", "variant_b", exposed_at=None, revenue=1_000.0),
+        Row(
+            "exposed_after_buying",
+            "variant_b",
+            exposed_at=at(1),
+            purchases=1,
+            revenue=1_000.0,
+            first_purchase_at=at(0, 1),
+        ),
+    ]
+
+    row = effect_table(_context(raw_spec, rows, **REVENUE))["arms"][0]
+
+    assert row["n_treatment"] == len(B_REVENUE)
+    assert row["mean_treatment"] == pytest.approx(sum(B_REVENUE) / len(B_REVENUE))
+
+
+def test_an_arm_that_cannot_be_estimated_says_why_and_still_counts_as_a_comparison(
+    raw_spec,
+) -> None:
+    """Control all zeros: variant_b is estimated, with no relative difference; variant_c, also
+    all zeros, has no variation to test."""
+    rows = _revenue_rows(control=[0.0] * 8, variant_b=B_REVENUE, variant_c=[0.0] * 8)
+
+    table = effect_table(_context(raw_spec, rows, **REVENUE))
+
+    b, c = table["arms"]
+    assert "neither group varies" in c["error"] and "p_value" not in c
+    assert (c["arm"], c["n_treatment"], c["n_control"]) == ("variant_c", 8, 8)
+    assert b["relative_difference"] is None
+    assert b["adjusted_p_value"] == min(1.0, 2 * b["p_value"])  # two arms were compared

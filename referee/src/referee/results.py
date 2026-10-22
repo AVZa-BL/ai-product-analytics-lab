@@ -307,6 +307,118 @@ def effect_estimates(
     }
 
 
+def effect_table(context: ResultsContext) -> dict[str, Any]:
+    """The primary metric's difference against control for every other arm (design section 20.4).
+
+    It is read among the analysed players (section 21.3): each arm's mean, the difference with
+    its 95% interval and p value (Welch's test for a continuous metric, the pooled
+    two-proportion z test for a binary one), the difference relative to control's mean when that
+    is above 0, and the p value adjusted for the number of arms compared with control. The
+    adjustment is the one the power plan uses: Bonferroni, unless the spec registers none
+    (`dunnett` is planned as Bonferroni, which is the more conservative). It adjusts for the
+    arms only, not for the guardrails, other metrics or repeated looks. An arm whose data allow
+    no estimate carries the reason in `error` and still counts as a comparison. The table
+    describes the sample; it is not a test of the effect, and the review's verdict is what says
+    whether the sample can be read at all.
+    """
+    spec = context.spec
+    metric = context.metrics[spec.primary_metric.name]
+    values: dict[str, list[float]] = {name: [] for name in context.arm_names}
+    for player in context.analysed:
+        values[player.arm].append(metric.value(player))
+    adjustment = power_alpha_adjustment(spec)
+    arms = [name for name in context.arm_names if name != context.control]
+    control = values[context.control]
+    rows = []
+    for arm in arms:
+        row: dict[str, Any] = {
+            "arm": arm,
+            "n_treatment": len(values[arm]),
+            "n_control": len(control),
+        }
+        try:
+            found = _compare(metric, values[arm], control)
+        except StatsError as error:
+            rows.append({**row, "error": str(error)})
+            continue
+        mean_treatment, mean_control = found.mean_treatment, found.mean_control
+        adjusted = min(1.0, found.p_value * len(arms)) if adjustment == "bonferroni" else None
+        rows.append(
+            {
+                **row,
+                "mean_treatment": round(mean_treatment, _ESTIMATE_DIGITS),
+                "mean_control": round(mean_control, _ESTIMATE_DIGITS),
+                "difference": round(found.difference, _ESTIMATE_DIGITS),
+                "ci_low": round(found.ci_low, _ESTIMATE_DIGITS),
+                "ci_high": round(found.ci_high, _ESTIMATE_DIGITS),
+                "confidence": found.confidence,
+                "relative_difference": (
+                    round(found.difference / mean_control, _ESTIMATE_DIGITS)
+                    if mean_control > 0
+                    else None
+                ),
+                "p_value": found.p_value,
+                "adjusted_p_value": found.p_value if adjusted is None else adjusted,
+            }
+        )
+    return {
+        "metric": metric.name,
+        "kind": metric.kind,
+        "population": "analysed players",
+        "alpha": spec.design.alpha,
+        "adjustment": adjustment,
+        "comparisons": len(arms),
+        "arms": rows,
+    }
+
+
+@dataclass(frozen=True, slots=True)
+class _Compared:
+    """What `effect_table` reads of a comparison, whichever test made it."""
+
+    mean_treatment: float
+    mean_control: float
+    difference: float
+    ci_low: float
+    ci_high: float
+    confidence: float
+    p_value: float
+
+
+def _compare(
+    metric: ExportMetric, treatment: Sequence[float], control: Sequence[float]
+) -> _Compared:
+    """Treatment against control for one metric, or `StatsError` saying why not."""
+    if not treatment or not control:
+        empty = " and ".join(
+            name for name, group in (("treatment", treatment), ("control", control)) if not group
+        )
+        raise StatsError(f"the {empty} group has no players")
+    if metric.kind == "binary":
+        rates = two_proportion_difference(
+            round(sum(treatment)), len(treatment), round(sum(control)), len(control)
+        )
+        return _Compared(
+            rates.rate_treatment,
+            rates.rate_control,
+            rates.difference,
+            rates.ci_low,
+            rates.ci_high,
+            rates.confidence,
+            rates.p_value,
+        )
+    means = welch_difference(treatment, control)
+    return _Compared(
+        means.mean_treatment,
+        means.mean_control,
+        means.difference,
+        means.ci_low,
+        means.ci_high,
+        means.confidence,
+        means.p_value,
+    )
+
+
 def difference_summary(
     metric: ExportMetric, treatment: Sequence[float], control: Sequence[float]
 ) -> dict[str, Any]:

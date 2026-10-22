@@ -17,7 +17,7 @@ from typing import Any
 from referee import __version__
 from referee.display import DISPLAY_ROW_LIMIT, cap_listing
 from referee.findings import DesignReview, Finding, ResultsReview
-from referee.results import ResultsContext
+from referee.results import ResultsContext, effect_table
 from referee.rules.cohorts import cohort_report
 from referee.rules.design import OUTCOME_WINDOW_DAYS
 from referee.rules.guardrails import guardrail_report
@@ -158,6 +158,7 @@ def results_report(
         },
         "counts": _counts(review.findings),
         "summary_lines": _summary_lines(review, context),
+        "effect": {**effect_table(context), "readable": review.verdict != "invalid"},
         "rules_run": list(review.rules_run),
         "findings": _finding_dicts(review.findings),
     }
@@ -329,6 +330,58 @@ def _sensitivity_lines(sensitivity: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _effect_lines(effect: dict[str, Any]) -> list[str]:
+    """The effect table as text: one row an arm, columns aligned, the reading rules above it."""
+    adjusted = (
+        f"adjusted for {effect['comparisons']} comparisons by Bonferroni"
+        if effect["adjustment"] == "bonferroni"
+        else "not adjusted for the number of arms (the spec registers none)"
+    )
+    lines = _wrapped(
+        f"Effect on {effect['metric']}, each arm against control ({effect['population']}, "
+        f"95% intervals), {adjusted}; it does not adjust for guardrails, other metrics or "
+        f"repeated looks.",
+        "",
+        "  ",
+    )
+    if not effect["readable"]:
+        lines += _wrapped(
+            "NOT TO BE READ: the verdict is invalid, so these numbers describe the sample and "
+            "not the effect.",
+            "",
+            "  ",
+        )
+    rows, failed = [], []
+    for arm in effect["arms"]:
+        players = f"{arm['n_treatment']:,} vs {arm['n_control']:,}"
+        if "error" in arm:
+            failed.append(f"  {arm['arm']} ({players}): not estimated; {arm['error']}")
+            continue
+        relative = arm["relative_difference"]
+        rows.append(
+            (
+                arm["arm"],
+                players,
+                f"{arm['difference']:+.4g}",
+                f"{arm['ci_low']:.4g} to {arm['ci_high']:.4g}",
+                "n/a" if relative is None else f"{relative:+.1%}",
+                f"{arm['p_value']:.3g}",
+                f"{arm['adjusted_p_value']:.3g}",
+            )
+        )
+    if rows:
+        table = [("arm", "players", "difference", "95% interval", "relative", "p", "adjusted p")]
+        widths = [max(len(row[i]) for row in [*table, *rows]) for i in range(7)]
+        lines += [
+            "  "
+            + "  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip()
+            for row in [*table, *rows]
+        ]
+    for text in failed:
+        lines += _wrapped(text.strip(), "  ", "  ")
+    return lines
+
+
 def _blocking_text(groups: dict[str, list[str]]) -> str:
     names = (("data_validity", "data validity"), ("harm", "harm"))
     return "; ".join(f"{label} {', '.join(groups[key])}" for key, label in names if groups[key])
@@ -348,7 +401,7 @@ def render_results_text(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMI
         taken = f"{as_of['time']} ({as_of['source']})"
     lines = [
         "Referee results review",
-        f"Spec:       {spec['id']} - {spec['title']}",
+        *_wrapped(f"Spec:       {spec['id']} - {spec['title']}", "", " " * 12),
         f"Spec hash:  sha256:{spec['sha256']}",
         f"Experiment: {report['experiment_id']}",
         "Data files (SHA-256 of the bytes):",
@@ -389,6 +442,7 @@ def render_results_text(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMI
     lines += ["", "Always checked (a quiet result is not a pass):"]
     for line in report["summary_lines"]:
         lines += _paragraph(line, "  ")
+    lines += ["", *_effect_lines(report["effect"])]
 
     for finding in report["findings"]:
         heading = f"[{finding['severity'].upper()}] {finding['rule_id']}: {finding['title']}"

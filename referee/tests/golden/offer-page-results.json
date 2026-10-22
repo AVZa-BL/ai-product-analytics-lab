@@ -114,6 +114,45 @@
     "RES-007: 4 tests, 1 flagged, 0 not evaluated, 2 low information",
     "RES-008: 4 comparisons (binary metrics are not read), 2 with a sign of a heavy tail, 0 not evaluated. No sign is not a pass: in Referee's simulations every run of a revenue-like metric showed one, so they say nothing about a metric that shows none."
   ],
+  "effect": {
+    "metric": "revenue_usd_7d",
+    "kind": "continuous",
+    "population": "analysed players",
+    "alpha": 0.05,
+    "adjustment": "bonferroni",
+    "comparisons": 2,
+    "arms": [
+      {
+        "arm": "variant_b",
+        "n_treatment": 969,
+        "n_control": 926,
+        "mean_treatment": 1.861703,
+        "mean_control": 1.148575,
+        "difference": 0.713128,
+        "ci_low": -0.246964,
+        "ci_high": 1.673221,
+        "confidence": 0.95,
+        "relative_difference": 0.620881,
+        "p_value": 0.1453321653321419,
+        "adjusted_p_value": 0.2906643306642838
+      },
+      {
+        "arm": "variant_c",
+        "n_treatment": 731,
+        "n_control": 926,
+        "mean_treatment": 1.407004,
+        "mean_control": 1.148575,
+        "difference": 0.25843,
+        "ci_low": -0.743926,
+        "ci_high": 1.260785,
+        "confidence": 0.95,
+        "relative_difference": 0.225,
+        "p_value": 0.6130485758185844,
+        "adjusted_p_value": 1.0
+      }
+    ],
+    "readable": false
+  },
   "rules_run": [
     "RES-001",
     "RES-002",

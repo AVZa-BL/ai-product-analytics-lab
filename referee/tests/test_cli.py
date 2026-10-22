@@ -385,6 +385,13 @@ def test_the_lab_export_is_found_invalid_for_its_planted_sample_ratio_mismatch(
         }
         assert [line[:7] for line in report["summary_lines"]] == ["RES-004", "RES-007", "RES-008"]
         assert report["population"]["origin_source"] == "first assignment"
+        effect = report["effect"]
+        assert (effect["metric"], effect["comparisons"], effect["readable"]) == (
+            "purchased_7d",
+            2,
+            False,
+        )
+        assert [row["arm"] for row in effect["arms"]] == ["variant_b", "variant_c"]
         sensitivity = report["origin_sensitivity"]
         assert sensitivity["ran"] is True
         assert [shift["days_earlier"] for shift in sensitivity["shifts"]] == [1, 2, 3, 4, 5, 6]
@@ -392,6 +399,7 @@ def test_the_lab_export_is_found_invalid_for_its_planted_sample_ratio_mismatch(
         assert "Verdict: INVALID\nBlocking rules: data validity RES-001" in out
         assert "completeness was not checked" in out
         assert "Origin sensitivity: " in out
+        assert "NOT TO BE READ: the verdict is invalid" in out
         assert out.count("\n  RES-0") == 3
         assert "      p_value: 6.72961e-10\n" in out  # the evidence is printed, not just pointed to
         assert max(len(line) for line in out.splitlines()) <= 100
