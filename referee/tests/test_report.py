@@ -69,9 +69,30 @@ def _context(raw_spec: dict, rows: list[Row], *, exported_at=None, **changes: ob
     )
 
 
-def _report(context: ResultsContext, review: ResultsReview | None = None, source=None) -> dict:
+UNCHANGED = {
+    "ran": True,
+    "reason": None,
+    "shifts": [
+        {"days_earlier": d, "same": True, "verdict": "clear", "appear": [], "disappear": []}
+        for d in range(1, 7)
+    ],
+}
+
+
+def _report(
+    context: ResultsContext,
+    review: ResultsReview | None = None,
+    source=None,
+    sensitivity: dict | None = None,
+) -> dict:
     review = review or review_context(context)
-    return results_report(review, context, file_hashes=HASHES, as_of_source=source)
+    return results_report(
+        review,
+        context,
+        file_hashes=HASHES,
+        as_of_source=source,
+        sensitivity=sensitivity or UNCHANGED,
+    )
 
 
 def test_the_report_states_the_origin_the_first_and_last_assignment_and_who_was_left_out(
@@ -307,3 +328,29 @@ def test_a_long_list_is_cut_when_shown_and_nothing_else_changes(raw_spec: dict) 
         return [line for line in text.splitlines() if line.startswith(keys)]
 
     assert facts(cut) == facts(whole)
+
+
+def test_the_report_says_whether_the_findings_hold_for_earlier_origins(raw_spec: dict) -> None:
+    context = _context(raw_spec, [*crowd("control", 4), *crowd("variant_b", 4)])
+    changed = {
+        **UNCHANGED,
+        "shifts": [
+            {**shift, "same": False, "verdict": "caution", "appear": ["RES-007:warning"]}
+            if shift["days_earlier"] in (3, 5)
+            else shift
+            for shift in UNCHANGED["shifts"]
+        ],
+    }
+    not_run = {"ran": False, "reason": "design.start_utc is registered", "shifts": []}
+
+    held = render_results_text(_report(context))
+    differs = render_results_text(_report(context, sensitivity=changed))
+    skipped = render_results_text(_report(context, sensitivity=not_run))
+
+    assert "Origin sensitivity: the same findings for origins 1 to 6 days earlier.\n" in held
+    assert "Origin sensitivity: the findings change with the origin.\n" in differs
+    assert "  3 days earlier: verdict caution; appear RES-007:warning\n" in differs
+    assert "  5 days earlier: verdict caution; appear RES-007:warning\n" in differs
+    assert "  4 days earlier" not in differs
+    assert "Origin sensitivity: not run; design.start_utc is registered.\n" in skipped
+    assert _report(context, sensitivity=changed)["origin_sensitivity"] == changed

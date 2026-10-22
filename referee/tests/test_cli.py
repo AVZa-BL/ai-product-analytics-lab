@@ -185,6 +185,13 @@ def export_taken_at_noon(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return folder
 
 
+@pytest.fixture
+def no_sensitivity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A review that is patched out has no origin to vary; the real one is tested apart."""
+    off = {"ran": False, "reason": "patched out", "shifts": []}
+    monkeypatch.setattr(cli, "origin_sensitivity", lambda spec, data, review: off)
+
+
 def _review(*severities: str) -> ResultsReview:
     findings = tuple(
         Finding(
@@ -218,6 +225,7 @@ def _review(*severities: str) -> ResultsReview:
 def test_the_exit_status_of_review_results_follows_the_blockers_and_nothing_else(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
+    no_sensitivity: None,
     results_spec_file: Path,
     severities: tuple[str, ...],
     verdict: str,
@@ -288,6 +296,7 @@ def test_input_that_cannot_be_reviewed_exits_2_and_says_why_on_stderr_only(
 def test_the_time_of_the_export_is_the_flag_before_the_manifest_and_reaches_the_review(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
+    no_sensitivity: None,
     results_spec_file: Path,
     export_taken_at_noon: Path,
     in_manifest: bool,
@@ -376,9 +385,13 @@ def test_the_lab_export_is_found_invalid_for_its_planted_sample_ratio_mismatch(
         }
         assert [line[:7] for line in report["summary_lines"]] == ["RES-004", "RES-007", "RES-008"]
         assert report["population"]["origin_source"] == "first assignment"
+        sensitivity = report["origin_sensitivity"]
+        assert sensitivity["ran"] is True
+        assert [shift["days_earlier"] for shift in sensitivity["shifts"]] == [1, 2, 3, 4, 5, 6]
     else:
         assert "Verdict: INVALID\nBlocking rules: data validity RES-001" in out
         assert "completeness was not checked" in out
+        assert "Origin sensitivity: " in out
         assert out.count("\n  RES-0") == 3
         assert "      p_value: 6.72961e-10\n" in out  # the evidence is printed, not just pointed to
         assert max(len(line) for line in out.splitlines()) <= 100
@@ -395,6 +408,7 @@ def test_the_lab_export_is_found_invalid_for_its_planted_sample_ratio_mismatch(
 def test_the_text_report_labels_an_interim_run_and_a_run_whose_completeness_is_unknown(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
+    no_sensitivity: None,
     results_spec_file: Path,
     as_of: list[str],
     said: str,

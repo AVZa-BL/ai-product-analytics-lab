@@ -121,11 +121,13 @@ def results_report(
     *,
     file_hashes: dict[str, str],
     as_of_source: str | None,
+    sensitivity: dict[str, Any],
 ) -> dict[str, Any]:
     """The report for `review`, which must be the review of `context`.
 
-    `file_hashes` are the SHA-256 of the three CSV files (`data.export_file_hashes`) and
-    `as_of_source` says where `context.exported_at` came from (`command line` or `manifest`).
+    `file_hashes` are the SHA-256 of the three CSV files (`data.export_file_hashes`),
+    `as_of_source` says where `context.exported_at` came from (`command line` or `manifest`)
+    and `sensitivity` is `review.origin_sensitivity` for the same data.
     """
     spec = context.spec
     assigned = [player.assigned_at for player in context.players]
@@ -147,6 +149,7 @@ def results_report(
             "analysed": context.count_by_arm(context.analysed),
             "ignored_before_start": list(context.ignored_before_start),
         },
+        "origin_sensitivity": sensitivity,
         "verdict": review.verdict,
         "blocking_rule_ids": list(blocking),
         "blocking_groups": {
@@ -307,6 +310,25 @@ def _results_evidence_lines(evidence: dict[str, Any], limit: int) -> list[str]:
     return ["    Evidence:", *_evidence_lines(evidence, limit, 6)]
 
 
+def _sensitivity_lines(sensitivity: dict[str, Any]) -> list[str]:
+    """The sentence on whether the findings hold for origins 1 to 6 days earlier."""
+    if not sensitivity["ran"]:
+        return _wrapped(f"Origin sensitivity: not run; {sensitivity['reason']}.", "", "  ")
+    shifts = sensitivity["shifts"]
+    changed = [shift for shift in shifts if not shift["same"]]
+    if not changed:
+        last = shifts[-1]["days_earlier"]
+        return [f"Origin sensitivity: the same findings for origins 1 to {last} days earlier."]
+    lines = ["Origin sensitivity: the findings change with the origin."]
+    for shift in changed:
+        said = [f"verdict {shift['verdict']}"]
+        for label in ("appear", "disappear"):
+            if shift[label]:
+                said.append(f"{label} {', '.join(shift[label])}")
+        lines += _wrapped(f"{shift['days_earlier']} days earlier: {'; '.join(said)}", "  ", "    ")
+    return lines
+
+
 def _blocking_text(groups: dict[str, list[str]]) -> str:
     names = (("data_validity", "data validity"), ("harm", "harm"))
     return "; ".join(f"{label} {', '.join(groups[key])}" for key, label in names if groups[key])
@@ -349,6 +371,7 @@ def render_results_text(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMI
     if ignored:
         lines.append(f"Ignored:    {len(ignored):,} assigned before design.start_utc, in no count")
         lines += _evidence_lines({"players": ignored}, limit, 4)
+    lines += _sensitivity_lines(report["origin_sensitivity"])
     lines += [
         f"Referee:    {report['referee_version']}",
         "",

@@ -35,7 +35,7 @@ from referee.report import (
     results_report,
 )
 from referee.results import ResultsContext, ResultsError
-from referee.review import review_context, review_design
+from referee.review import origin_sensitivity, review_context, review_design
 from referee.spec import ExperimentSpec, SpecError
 
 EXIT_OK = 0
@@ -168,6 +168,7 @@ def _review_results(args: argparse.Namespace) -> int:
             data = replace(data, exported_at=as_of)
         context = ResultsContext.of(spec, data)
         review = review_context(context)
+        sensitivity = origin_sensitivity(spec, data, review)
     except DataError as error:
         print(_data_error(error), file=sys.stderr)
         return EXIT_UNREADABLE
@@ -181,6 +182,7 @@ def _review_results(args: argparse.Namespace) -> int:
         context,
         file_hashes=export_file_hashes(args.data),
         as_of_source=None if context.exported_at is None else source,
+        sensitivity=sensitivity,
     )
     render = render_json if args.format == "json" else render_results_text
     sys.stdout.write(render(report))
