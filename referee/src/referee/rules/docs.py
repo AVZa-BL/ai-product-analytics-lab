@@ -83,8 +83,8 @@ _OUTRO = """\
 ## Not yet
 
 RES-005, RES-006, RES-009 and RES-010 are not built: they check how someone else analysed the
-data, and Referee does the analysis itself (design section 21.4). No command runs the results
-rules yet; the report and the `review-results` command arrive with milestone 4c.
+data, and Referee does the analysis itself (design section 21.4). The `review-results` command
+runs the results rules and prints their report (README, design section 22).
 """
 
 

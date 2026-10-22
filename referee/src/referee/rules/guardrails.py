@@ -4,7 +4,7 @@
 (`referee.guardrails` does the statistics) and returns what a finding or a report needs: one
 entry for each arm and guardrail, a summary, the settings used, and the sentences a reader
 should get. The rule raises a finding from it when any comparison shows a breach or a possible
-one; the report of milestone 4c prints the summary line even when the rule is quiet.
+one; the results report prints the summary line even when the rule is quiet.
 
 The wording says what was measured, on which reference, and how strong the evidence is: a breach
 is "shown" when the whole interval for the harm is beyond the tolerance, "possible" when only the

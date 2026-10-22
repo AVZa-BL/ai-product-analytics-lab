@@ -13,7 +13,7 @@ Under development, in milestones:
 | 1 | Experiment spec schema and validation | Done |
 | 2 | Design-review rules, power calculations, `review-design` CLI | Done |
 | 3 | Synthetic experiment in the lab's hybrid scenario | Done |
-| 4 | Results review, `review-results` CLI, decision memo | In progress: the export reader and the statistics (4a) are done; the data-fit rules (4b-1) and the effect rules (4b-2: RES-004, RES-007 and RES-008, with the design rule DES-009) are built; the report, the command and the memo (4c) are planned |
+| 4 | Results review, `review-results` CLI, decision memo | In progress: the export reader and the statistics (4a), the data-fit rules (4b-1), the effect rules (4b-2: RES-004, RES-007 and RES-008, with the design rule DES-009) and the report and command (4c-1) are done; the lab's `first_seen_at_utc` column (4c-2) and the memo (4c-3) are planned |
 
 ## Reviewing a design
 
@@ -33,7 +33,7 @@ The first prints a review that recommends **revise**: the design needs 389,060 u
 | 2 | The spec cannot be read or is not valid (every violation is listed) |
 | 3 | A failure inside Referee itself |
 
-Referee is advisory. `proceed` means the design raised none of the objections of the 18 design-review rules in [`docs/rules.md`](docs/rules.md), the catalogue with what triggers each and why it matters. It does not mean the experiment is worth running. The catalogue also lists the nine results rules built so far (RES-001, RES-002, RES-003, RES-004, RES-007, RES-008, RES-011, RES-012, RES-013); they read an experiment's data as well as its spec, and no command runs them yet.
+Referee is advisory. `proceed` means the design raised none of the objections of the 18 design-review rules in [`docs/rules.md`](docs/rules.md), the catalogue with what triggers each and why it matters. It does not mean the experiment is worth running. The catalogue also lists the nine results rules built so far (RES-001, RES-002, RES-003, RES-004, RES-007, RES-008, RES-011, RES-012, RES-013); they read an experiment's data as well as its spec, and `review-results` runs them (below).
 
 Things to know when writing a spec:
 
@@ -43,6 +43,28 @@ Things to know when writing a spec:
 - The report carries the spec's SHA-256 fingerprint, which ignores comments, key order and layout, and the Referee version. The same spec reviewed by the same Referee gives the same output byte for byte.
 
 The design and its amendments are in [`docs/design/`](docs/design/2026-09-28-referee-experiment-review-design.md).
+
+## Reviewing results
+
+`review-results` reads an experiment's exported data against its spec, runs the results rules and reports a verdict. The data is a folder of the lab's three CSV files, `experiment_assignments.csv`, `experiment_exposures.csv` and `experiment_outcomes.csv`, and may hold a `manifest.json`. From this folder:
+
+```bash
+python -m referee review-results examples/offer-page-results.yaml \
+    tests/data/hybrid_offer_page_5000 --experiment-id hybrid_offer_page \
+    --as-of 2026-06-30T00:00:00Z
+```
+
+The example reads the committed lab export and finds its planted problems: the arms are not the size the allocation promised (RES-001), players were first exposed after they had bought (RES-012), an arm's configuration changed (RES-013), and the effect differs between cohorts (RES-007). The verdict is **invalid**.
+
+| Verdict | Meaning | Exit status |
+| --- | --- | --- |
+| `clear` | The rules that ran found nothing that blocks or warns. It does not say the effect is real. | 0 |
+| `caution` | At least one warning, no blocker | 0 |
+| `invalid` | At least one blocker | 1 |
+
+Status 2 means the spec or the data cannot be read or reviewed (the problems are listed on stderr, up to 1,000, with their exact number), and 3 a failure inside Referee. `--experiment-id` is required; when it is left out the experiment ids in the export are listed. `--as-of` says when the export was taken, as an ISO 8601 time in UTC. It replaces the `exported_at_utc` of `manifest.json`, and without either the report says completeness of the outcome windows was not checked.
+
+The report states the spec's fingerprint and the SHA-256 of each CSV file, the origin the weeks were counted from, the first and last assignment, the players assigned, analysed and ignored, whether the run is an interim one, whether the findings hold if the origin is 1 to 6 days earlier, one line for each of RES-004, RES-007 and RES-008 even when it found nothing, the effect of the primary metric (with a warning not to read it while the verdict is `invalid`), and every finding with its evidence. `--format json` holds every row; the text lists at most 1,000 rows of a list and says so. The same spec and data reviewed by the same Referee on one machine give the same bytes. Between machines a float may differ in its last digits.
 
 ## Working on it
 

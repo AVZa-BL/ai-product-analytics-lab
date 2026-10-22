@@ -5,7 +5,7 @@ and every metric the spec names, and returns what a finding or a report needs: t
 of each arm (with the traffic that would let it pass, or when to export again, when it could
 not), one entry per arm and metric with its status, a summary, the settings used, and the
 sentences a reader should get. The rule raises a finding from it when something is flagged or
-could not be evaluated; the report of milestone 4c prints its summary line even when the rule
+could not be evaluated; the results report prints its summary line even when the rule
 is quiet.
 
 The wording follows section 21.7: it says that the effect differs between cohorts, not why; it

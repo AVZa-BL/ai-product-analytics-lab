@@ -549,7 +549,7 @@ Milestone 4b builds the results rules. Before writing them, the cohort rule RES-
 ### 21.2 Delivery
 
 - Section 20.1's single 4b branch is replaced by two changes. 4b-1 `feat/referee-results-data-fit`: the data-fit rules of 21.4, the results context and verdict words of 21.3, and the spec and loader additions of 21.8. 4b-2 `feat/referee-results-effect`: RES-007, RES-008 and RES-004, the new design rule DES-009 and the change to DES-003's text for `new_users` (both 21.8), and the analysis they share. 4c is as in 20.1, plus the lab's CSV writer and the optional columns of 21.8.
-- This amendment is delivered in 4b-1, as its first step. 4b-2 is complete in `feat/referee-results-effect`: RES-007 (21.5 to 21.7), RES-008 (21.10 and 21.11), RES-004 (21.12), DES-009 and the new-users note of DES-003 (21.13). What is left of milestone 4 is 4c: the report, the `review-results` command and the decision memo; no command runs the results rules yet.
+- This amendment is delivered in 4b-1, as its first step. 4b-2 is complete in `feat/referee-results-effect`: RES-007 (21.5 to 21.7), RES-008 (21.10 and 21.11), RES-004 (21.12), DES-009 and the new-users note of DES-003 (21.13). What was left of milestone 4 is 4c: the report, the `review-results` command and the decision memo (delivered from section 22).
 
 ### 21.3 What the results rules analyse
 
@@ -718,3 +718,45 @@ This section records how DES-009 and the new-users text of DES-003 (both in 21.8
 - Tests and counts. The design review has one rule more, and the golden outputs of the underpowered example gained one info finding; the clean spec of the tests plans three whole weeks, so that DES-009 is quiet for it. A plan of two weeks, the least DES-003 accepts, gets DES-009 alone and still proceeds.
 
 Delivered in: 4b-1 (this amendment), 4b-2, 4c.
+
+## 22. Amendment 7: milestone 4c decisions (2026-10-22)
+
+The report and the `review-results` command are built (4c-1). This amendment records what was decided in building them, marks the judgements, and names what is not built.
+
+### 22.1 Delivery
+
+- 4c is delivered in three changes, not the one of 20.1. 4c-1 `feat/referee-results-cli`: the report and the command (this amendment). 4c-2, in `analytics-lab/`: the optional `first_seen_at_utc` column of the assignments (21.8). 4c-3: the decision memo, as `review-results --format memo`, and the loader reading the new column. 4c-2 and 4c-3 are not built.
+- The lab has no CSV writer: it writes Parquet, and the committed export was made by the DuckDB snippet in `tests/data/hybrid_offer_page_5000/PROVENANCE.md`. 4c-2 changes the generator's table and that snippet, not a writer, so "the writer of the three CSV files" of 20.5 and 21.2 is not built.
+
+### 22.2 The command
+
+- `python -m referee review-results SPEC DATA --experiment-id ID [--as-of TIME] [--format text|json]`. Exit status: 0 when no blocker fired (the verdict is `clear` or `caution`; a warning never changes the status), 1 when one did (`invalid`), 2 when the spec or the data cannot be read or reviewed (an export with problems, an unknown experiment, a metric outside the registry, an `--as-of` that is not a UTC instant), 3 for a failure inside Referee. This adds to the statuses of 17.4 and 18.3.
+- `--experiment-id` is required. When it is left out the ids in the export are listed on stderr and the status is 2 (20.2). The problems of an export that cannot be read are listed on stderr, at most 1,000, with their exact number.
+- `--as-of` replaces the `exported_at_utc` of the manifest (21.8). The report records the time and where it came from, `command line` or `manifest`; with neither it says so and that completeness was not checked (21.6).
+
+### 22.3 What the report holds
+
+- One dict, with the JSON and the text made from it (18.3). Its provenance is the fingerprint of the spec, the SHA-256 of the bytes of each of the three CSV files, and the Referee version. It carries no git SHA, package versions or timestamp: they would make the same inputs give different bytes (11, 12 and 18.3 require the same bytes), and a git SHA is not recoverable from an installed package. This supersedes the provenance named in sections 5, 11 and 17.4. The registered spec hash that 11 would refuse a mismatch against is not built: no file carries one. The report prints the hash and a reader compares it.
+- The population: the origin and whether it is `design.start_utc` or the first assignment, the first and last assignment, the players assigned and analysed in each arm, and the players ignored before `design.start_utc`, listed (21.8).
+- Lines that a quiet rule still prints: the summary line of RES-004, RES-007 and RES-008, each taken from the rule's own report (21.7, 21.11, 21.12). The blocking rules are grouped into data validity and harm (RES-004). A shown RES-004 breach keeps the verdict `invalid`, which settles the question 21.12 left to 4c.
+- The effect of the primary metric among the analysed players, for each arm against control: the means, the difference with its 95% interval and p value (Welch's test, or the pooled two-proportion test for a binary metric), the difference relative to control's mean when that is above 0, and the p value adjusted for the number of arms. The adjustment is the power plan's: Bonferroni, unless the spec registers `none`; `dunnett` is planned, and here adjusted, as Bonferroni. It adjusts for the arms only, not for guardrails, other metrics or repeated looks. An arm with no estimate carries the reason and still counts as a comparison. The table is labelled not to be read while the verdict is `invalid` (RES-001 says to do the same). No range of p values is printed (21.8).
+- Origin sensitivity (21.8). Without a registered start the review is run again with the origin 1 to 6 days earlier, with nobody added or left out, and the report says which rules appear or disappear, or that the findings are the same. With a registered start nothing is varied.
+- Text. A list of more than 1,000 rows is cut when shown and says "showing 1,000 of N; the full list is in the JSON report" (20.3). The cut is made on the finished report and changes nothing in it. The three effect rules print their sentences (`notes`); their tables are in the JSON report.
+
+### 22.4 Judgements
+
+- Interim run (21.6). A run is interim when the export was taken before the planned end, which is the origin plus `design.planned_duration_days` plus the seven-day outcome window. Taking it exactly then is not interim. Without a time, nothing is said of it beyond the completeness line.
+- Origin sensitivity compares which rules fire and at which severity, not only the verdict: RES-007 is a warning, and appearing or disappearing would not change a verdict that other warnings already set. A registered start is not varied: players before it were left out on purpose, and an earlier origin would bring them back.
+- The relative difference is a point estimate, with no interval of its own. The table shows no "significant" flag and is shown, labelled, when the verdict is `invalid`.
+
+### 22.5 The example and its golden
+
+- `examples/offer-page-results.yaml` is a spec that the committed lab export can be read against; neither earlier example can, because they name arms and metrics the export does not hold. Its output on the export is `tests/golden/offer-page-results.json`. The golden is compared in numbers and layout: floats to nine digits, since they may differ in the last digits between machines (the macOS job runs the test), and the sentences of the rules not at all (D3 of the review of 4b-2: tests do not pin prose). Same inputs give the same bytes on one machine; between machines the numbers agree, not the bytes.
+
+### 22.6 Not built, and not verified
+
+- The decision memo and the column (22.1). A quiet RES-004 says nothing about players left out for open outcome windows; whether it should is open for the memo.
+- The cost of origin sensitivity is measured only at 2,824 players (about 0.4 s for the six extra reviews). That the golden agrees on macOS is untested until the job runs.
+
+Delivered in: 4c-1 (this amendment); 4c-2 and 4c-3 are not built.
+
