@@ -32,6 +32,8 @@ models:
     hybrid_subscription:
       +schema: hybrid_subscription
       +tags: [hybrid_subscription]
+      # Tables, not views: 377 tests would otherwise each re-evaluate the nested view chain (~8x slower).
+      +materialized: table
 
 seeds:
   game_analytics:
