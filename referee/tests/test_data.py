@@ -2,6 +2,8 @@
 way the files can be wrong."""
 
 import csv
+import hashlib
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -11,6 +13,7 @@ from referee import data
 from referee.data import (
     DataError,
     Outcome,
+    export_file_hashes,
     list_experiment_ids,
     load_export,
 )
@@ -522,3 +525,24 @@ def test_a_manifest_that_is_a_link_to_nothing_is_a_problem_not_an_absent_file(
     assert problem == "manifest.json: is a link to a file that does not exist"
 
 
+# --- The hashes of the files ---------------------------------------------------------------
+
+
+def test_the_hashes_of_the_files_are_the_ones_the_lab_export_recorded() -> None:
+    """The manifest of the committed export was written beside the files by the lab; a hash
+    that agrees with it was made from the same bytes, and a silent edit of a file would not."""
+    folder = Path(__file__).parent / "data" / "hybrid_offer_page_5000"
+    recorded = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))["files"]
+
+    assert export_file_hashes(folder) == {name: info["sha256"] for name, info in recorded.items()}
+
+
+def test_a_file_larger_than_one_read_is_hashed_whole(tmp_path: Path) -> None:
+    names = (data.ASSIGNMENTS_FILE, data.EXPOSURES_FILE, data.OUTCOMES_FILE)
+    contents = {name: bytes(range(256)) * 12_000 + name.encode() for name in names}
+    for name, content in contents.items():
+        (tmp_path / name).write_bytes(content)
+
+    assert export_file_hashes(tmp_path) == {
+        name: hashlib.sha256(content).hexdigest() for name, content in contents.items()
+    }

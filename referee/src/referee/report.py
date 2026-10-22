@@ -11,16 +11,32 @@ from __future__ import annotations
 import json
 import textwrap
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from referee import __version__
 from referee.findings import DesignReview, Finding, ResultsReview
+from referee.results import ResultsContext
+from referee.rules.cohorts import cohort_report
+from referee.rules.design import OUTCOME_WINDOW_DAYS
+from referee.rules.guardrails import guardrail_report
+from referee.rules.heavy_tails import heavy_tail_report
 from referee.spec import ExperimentSpec
 
 REPORT_VERSION = 1
 _SEVERITIES = ("blocker", "warning", "info")
 _TEXT_WIDTH = 88
+
+# A blocker is about the data (the arms, the sample, the exposures) unless it is a harm: a valid
+# experiment that makes a guardrail worse than its tolerance allows (design section 21.12).
+_HARM_RULES = frozenset({"RES-004"})
+# The rules whose quiet result is still printed, as a line, so that a test that did not run
+# cannot read as a pass (design sections 21.5, 21.11 and 21.12). Each report holds its own line.
+_ALWAYS_SUMMARISED = (
+    ("RES-004", guardrail_report),
+    ("RES-007", lambda context: cohort_report(context, None)),
+    ("RES-008", heavy_tail_report),
+)
 
 
 def _counts(findings: Sequence[Finding]) -> dict[str, int]:
@@ -66,28 +82,78 @@ def design_report(spec: ExperimentSpec, review: DesignReview) -> dict[str, Any]:
     }
 
 
+def _summary_lines(review: ResultsReview, context: ResultsContext) -> list[str]:
+    """The line of each always-summarised rule that ran: the finding's own, else a fresh one."""
+    found = {finding.rule_id: finding for finding in review.findings}
+    lines = []
+    for rule_id, report in _ALWAYS_SUMMARISED:
+        if rule_id in review.rules_run:
+            evidence = found[rule_id].evidence if rule_id in found else report(context)
+            lines.append(evidence["summary"]["line"])
+    return lines
+
+
+def _as_of(context: ResultsContext, source: str | None) -> dict[str, Any]:
+    """When the export was taken, where that came from, and whether the run is an interim one.
+
+    Judgement: a run is interim when the export was taken before the planned end of the
+    experiment, which is the planned accrual window from the origin plus the seven-day outcome
+    window that follows the last assignment (design section 21.8). Without a time nothing is
+    known of either: completeness was not checked.
+    """
+    taken = context.exported_at
+    if taken is None:
+        return {"time": None, "source": None, "planned_end": None, "interim": None}
+    days = context.spec.design.planned_duration_days + OUTCOME_WINDOW_DAYS
+    planned_end = context.origin + timedelta(days=days)
+    return {
+        "time": _instant(taken),
+        "source": source,
+        "planned_end": _instant(planned_end),
+        "interim": taken < planned_end,
+    }
+
+
 def results_report(
-    spec: ExperimentSpec,
     review: ResultsReview,
+    context: ResultsContext,
     *,
-    as_of: datetime | None,
+    file_hashes: dict[str, str],
     as_of_source: str | None,
 ) -> dict[str, Any]:
-    """The report for `review`, which must be the review of `spec` against its data.
+    """The report for `review`, which must be the review of `context`.
 
-    `as_of` is when the export was taken and `as_of_source` where that came from (`command
-    line` or `manifest`); both are None when nothing says.
+    `file_hashes` are the SHA-256 of the three CSV files (`data.export_file_hashes`) and
+    `as_of_source` says where `context.exported_at` came from (`command line` or `manifest`).
     """
+    spec = context.spec
+    assigned = [player.assigned_at for player in context.players]
+    blocking = review.blocking_rule_ids
     return {
         "report_version": REPORT_VERSION,
         "kind": "results_review",
         "referee_version": __version__,
         "spec": {"id": spec.id, "title": spec.title, "sha256": spec.sha256()},
         "experiment_id": review.experiment_id,
-        "as_of": {"time": _instant(as_of), "source": as_of_source},
+        "data": {"files": {name: {"sha256": digest} for name, digest in file_hashes.items()}},
+        "as_of": _as_of(context, as_of_source),
+        "population": {
+            "origin": _instant(context.origin),
+            "origin_source": "design.start_utc" if spec.design.start_utc else "first assignment",
+            "first_assignment": _instant(min(assigned)),
+            "last_assignment": _instant(max(assigned)),
+            "assigned": context.count_by_arm(context.players),
+            "analysed": context.count_by_arm(context.analysed),
+            "ignored_before_start": list(context.ignored_before_start),
+        },
         "verdict": review.verdict,
-        "blocking_rule_ids": list(review.blocking_rule_ids),
+        "blocking_rule_ids": list(blocking),
+        "blocking_groups": {
+            "data_validity": [rule for rule in blocking if rule not in _HARM_RULES],
+            "harm": [rule for rule in blocking if rule in _HARM_RULES],
+        },
         "counts": _counts(review.findings),
+        "summary_lines": _summary_lines(review, context),
         "rules_run": list(review.rules_run),
         "findings": _finding_dicts(review.findings),
     }
@@ -156,26 +222,50 @@ def render_text(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _blocking_text(groups: dict[str, list[str]]) -> str:
+    names = (("data_validity", "data validity"), ("harm", "harm"))
+    return "; ".join(f"{label} {', '.join(groups[key])}" for key, label in names if groups[key])
+
+
 def render_results_text(report: dict[str, Any]) -> str:
     """The results report as plain text for a person to read."""
     spec, counts, as_of = report["spec"], report["counts"], report["as_of"]
-    taken = (
-        "not known (no manifest time and no --as-of)"
-        if as_of["time"] is None
-        else f"{as_of['time']} ({as_of['source']})"
-    )
+    population = report["population"]
+    if as_of["time"] is None:
+        taken = "not known (no manifest time and no --as-of); completeness was not checked"
+    else:
+        taken = f"{as_of['time']} ({as_of['source']})"
     lines = [
         "Referee results review",
         f"Spec:       {spec['id']} - {spec['title']}",
         f"Spec hash:  sha256:{spec['sha256']}",
         f"Experiment: {report['experiment_id']}",
-        f"As of:      {taken}",
+        "Data files (SHA-256 of the bytes):",
+    ]
+    lines += [f"  {name}  {file['sha256']}" for name, file in report["data"]["files"].items()]
+    lines.append(f"As of:      {taken}")
+    if as_of["interim"]:
+        lines += _paragraph(
+            f"INTERIM RUN: the export was taken before the planned end of the experiment "
+            f"({as_of['planned_end']}). The cohort test of RES-007 belongs at the planned end.",
+            "            ",
+        )
+    lines += [
+        f"Origin:     {population['origin']} ({population['origin_source']})",
+        f"Assigned:   from {population['first_assignment']} to {population['last_assignment']}",
+    ]
+    for arm, assigned in population["assigned"].items():
+        lines.append(f"  {arm}: {assigned:,} assigned, {population['analysed'][arm]:,} analysed")
+    ignored = len(population["ignored_before_start"])
+    if ignored:
+        lines.append(f"Ignored:    {ignored:,} assigned before design.start_utc, in no count")
+    lines += [
         f"Referee:    {report['referee_version']}",
         "",
         f"Verdict: {report['verdict'].upper()}",
     ]
     if report["blocking_rule_ids"]:
-        lines.append("Blocking rules: " + ", ".join(report["blocking_rule_ids"]))
+        lines.append("Blocking rules: " + _blocking_text(report["blocking_groups"]))
     if report["findings"]:
         lines.append(
             f"Findings: blockers {counts['blocker']}, warnings {counts['warning']}, "
@@ -183,6 +273,9 @@ def render_results_text(report: dict[str, Any]) -> str:
         )
     else:
         lines.append("Findings: none")
+    lines += ["", "Always checked (a quiet result is not a pass):"]
+    for line in report["summary_lines"]:
+        lines += _paragraph(line, "  ")
 
     for finding in report["findings"]:
         lines += ["", f"[{finding['severity'].upper()}] {finding['rule_id']}: {finding['title']}"]

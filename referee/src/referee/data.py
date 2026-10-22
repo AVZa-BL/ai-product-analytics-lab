@@ -28,6 +28,7 @@ the last row, cannot be told from a complete file.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 from collections.abc import Callable, Iterator
@@ -220,6 +221,23 @@ def _parse_utc(value: str) -> tuple[datetime | None, str | None]:
     if moment.utcoffset() != timedelta(0):
         return None, f"must be in UTC (offset 0), got {value!r}"
     return moment.astimezone(UTC), None
+
+
+def export_file_hashes(directory: str | Path) -> dict[str, str]:
+    """The SHA-256 of the bytes of each of the three CSV files, by file name.
+
+    The hash is of the whole file as it lies in the folder, so a reader can check it with
+    `shasum -a 256`; it covers every experiment the file holds, not only the one reviewed.
+    """
+    folder = Path(directory)
+    hashes: dict[str, str] = {}
+    for name in _REQUIRED:
+        digest = hashlib.sha256()
+        with (folder / name).open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+        hashes[name] = digest.hexdigest()
+    return hashes
 
 
 def parse_utc(value: str) -> datetime:

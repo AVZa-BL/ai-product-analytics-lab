@@ -18,7 +18,13 @@ from dataclasses import replace
 from datetime import datetime
 
 from referee import __version__
-from referee.data import DataError, list_experiment_ids, load_export, parse_utc
+from referee.data import (
+    DataError,
+    export_file_hashes,
+    list_experiment_ids,
+    load_export,
+    parse_utc,
+)
 from referee.display import cap_listing
 from referee.loader import LoadError, load_spec
 from referee.report import (
@@ -28,8 +34,8 @@ from referee.report import (
     render_text,
     results_report,
 )
-from referee.results import ResultsError
-from referee.review import review_design, review_results
+from referee.results import ResultsContext, ResultsError
+from referee.review import review_context, review_design
 from referee.spec import ExperimentSpec, SpecError
 
 EXIT_OK = 0
@@ -160,7 +166,8 @@ def _review_results(args: argparse.Namespace) -> int:
         data = load_export(args.data, args.experiment_id)
         if as_of is not None:
             data = replace(data, exported_at=as_of)
-        review = review_results(spec, data)
+        context = ResultsContext.of(spec, data)
+        review = review_context(context)
     except DataError as error:
         print(_data_error(error), file=sys.stderr)
         return EXIT_UNREADABLE
@@ -170,10 +177,10 @@ def _review_results(args: argparse.Namespace) -> int:
 
     source = "command line" if as_of is not None else "manifest"
     report = results_report(
-        spec,
         review,
-        as_of=data.exported_at,
-        as_of_source=None if data.exported_at is None else source,
+        context,
+        file_hashes=export_file_hashes(args.data),
+        as_of_source=None if context.exported_at is None else source,
     )
     render = render_json if args.format == "json" else render_results_text
     sys.stdout.write(render(report))

@@ -13,6 +13,7 @@ from referee import __version__, cli
 from referee.cli import main
 from referee.data import DataError
 from referee.findings import Finding, ResultsReview
+from referee.results import ResultsContext
 
 SECTION_6_SHA256 = "b0332774feccd582db109bfffff10e1330ce418ab28471ccb625fe0b00af10e8"
 
@@ -222,7 +223,7 @@ def test_the_exit_status_of_review_results_follows_the_blockers_and_nothing_else
     verdict: str,
     status: int,
 ) -> None:
-    monkeypatch.setattr(cli, "review_results", lambda spec, data: _review(*severities))
+    monkeypatch.setattr(cli, "review_context", lambda context: _review(*severities))
 
     code, out, err = run(
         capsys,
@@ -296,11 +297,11 @@ def test_the_time_of_the_export_is_the_flag_before_the_manifest_and_reaches_the_
 ) -> None:
     seen: list[datetime | None] = []
 
-    def review(spec: object, data: object) -> ResultsReview:
-        seen.append(data.exported_at)  # type: ignore[attr-defined]
+    def review(context: ResultsContext) -> ResultsReview:
+        seen.append(context.exported_at)
         return _review()
 
-    monkeypatch.setattr(cli, "review_results", review)
+    monkeypatch.setattr(cli, "review_context", review)
     options = [] if flag is None else ["--as-of", flag]
 
     code, out, _ = run(
@@ -316,7 +317,8 @@ def test_the_time_of_the_export_is_the_flag_before_the_manifest_and_reaches_the_
     )
 
     assert code == 0
-    assert json.loads(out)["as_of"] == {"time": time, "source": source}
+    as_of = json.loads(out)["as_of"]
+    assert (as_of["time"], as_of["source"]) == (time, source)
     assert seen == [None if time is None else datetime.fromisoformat(time)]
 
 
@@ -351,6 +353,8 @@ def test_a_long_list_of_problems_in_the_export_is_cut_at_a_thousand_and_the_tota
 def test_the_lab_export_is_found_invalid_for_its_planted_sample_ratio_mismatch(
     capsys: pytest.CaptureFixture[str], results_spec_file: Path, output_format: str
 ) -> None:
+    recorded = json.loads((LAB_EXPORT / "manifest.json").read_text(encoding="utf-8"))["files"]
+
     code, out, err = run(
         capsys,
         "review-results",
@@ -367,5 +371,43 @@ def test_the_lab_export_is_found_invalid_for_its_planted_sample_ratio_mismatch(
         report = json.loads(out)
         assert (report["kind"], report["verdict"]) == ("results_review", "invalid")
         assert "RES-001" in report["blocking_rule_ids"]
+        assert {n: f["sha256"] for n, f in report["data"]["files"].items()} == {
+            name: info["sha256"] for name, info in recorded.items()
+        }
+        assert [line[:7] for line in report["summary_lines"]] == ["RES-004", "RES-007", "RES-008"]
+        assert report["population"]["origin_source"] == "first assignment"
     else:
-        assert "Verdict: INVALID\nBlocking rules: RES-001" in out
+        assert "Verdict: INVALID\nBlocking rules: data validity RES-001" in out
+        assert "completeness was not checked" in out
+        assert out.count("\n  RES-0") == 3
+
+
+@pytest.mark.parametrize(
+    ("as_of", "said"),
+    [
+        (["--as-of", "2026-04-20T00:00:00Z"], "INTERIM RUN"),
+        (["--as-of", "2026-06-30T00:00:00Z"], "2026-06-30T00:00:00Z (command line)"),
+        ([], "completeness was not checked"),
+    ],
+)
+def test_the_text_report_labels_an_interim_run_and_a_run_whose_completeness_is_unknown(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    results_spec_file: Path,
+    as_of: list[str],
+    said: str,
+) -> None:
+    monkeypatch.setattr(cli, "review_context", lambda context: _review())
+
+    _, out, _ = run(
+        capsys,
+        "review-results",
+        str(results_spec_file),
+        str(LAB_EXPORT),
+        "--experiment-id",
+        LAB_ID,
+        *as_of,
+    )
+
+    assert said in out
+    assert ("INTERIM RUN" in out) == (said == "INTERIM RUN")
