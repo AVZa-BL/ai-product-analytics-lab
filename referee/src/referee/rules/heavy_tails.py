@@ -3,7 +3,7 @@
 `heavy_tail_report` reads every non-control arm against control on every metric of the spec
 that is not binary, and returns what a finding or a report needs: one entry per arm and
 metric with its status, a summary, the settings used, and the sentences a reader should get.
-The rule raises a finding from it when any entry shows a sign; the report of milestone 4c
+The rule raises a finding from it when any entry shows a sign; the results report
 prints the summary line even when the rule is quiet.
 
 The wording says what was measured and where. The rates come from one simulated family

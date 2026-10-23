@@ -28,6 +28,7 @@ the last row, cannot be told from a complete file.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 from collections.abc import Callable, Iterator
@@ -222,6 +223,31 @@ def _parse_utc(value: str) -> tuple[datetime | None, str | None]:
     return moment.astimezone(UTC), None
 
 
+def export_file_hashes(directory: str | Path) -> dict[str, str]:
+    """The SHA-256 of the bytes of each of the three CSV files, by file name.
+
+    The hash is of the whole file as it lies in the folder, so a reader can check it with
+    `shasum -a 256`; it covers every experiment the file holds, not only the one reviewed.
+    """
+    folder = Path(directory)
+    hashes: dict[str, str] = {}
+    for name in _REQUIRED:
+        digest = hashlib.sha256()
+        with (folder / name).open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+        hashes[name] = digest.hexdigest()
+    return hashes
+
+
+def parse_utc(value: str) -> datetime:
+    """The instant in an ISO 8601 text with a zero UTC offset; `ValueError` says why not."""
+    moment, problem = _parse_utc(value)
+    if moment is None:
+        raise ValueError(problem)
+    return moment
+
+
 class _Reader:
     """Parses the cells of one row, recording a problem (and returning None) for a bad one."""
 
@@ -398,7 +424,11 @@ def load_export(directory: str | Path, experiment_id: str) -> ExperimentData:
     assigned, or an assigned player with no outcome.
     """
     folder = Path(directory)
-    if not folder.is_dir():
+    try:
+        is_folder = folder.is_dir()
+    except OSError as error:  # a parent that cannot be searched, a name that is too long
+        raise DataError([f"{folder}: cannot be examined ({error.strerror})"], 1) from error
+    if not is_folder:
         raise DataError([f"{folder}: is not a directory"], 1)
     problems = _Problems()
 

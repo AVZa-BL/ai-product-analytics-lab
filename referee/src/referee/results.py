@@ -31,8 +31,8 @@ class ResultsError(ValueError):
     def __init__(self, problems: Iterable[str]) -> None:
         self.problems = tuple(problems)
         noun = "problem" if len(self.problems) == 1 else "problems"
-        header = f"the export cannot be reviewed against the spec: {len(self.problems)} {noun}"
-        super().__init__("\n".join([header, *(f"  - {problem}" for problem in self.problems)]))
+        self.header = f"the export cannot be reviewed against the spec: {len(self.problems)} {noun}"
+        super().__init__("\n".join([self.header, *(f"  - {problem}" for problem in self.problems)]))
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,10 +58,14 @@ class PlayerRecord:
     @property
     def window_closes_at(self) -> datetime:
         """When the player's seven-day outcome window closes: the export's `window_end_utc`,
-        else seven days after the assignment (the length the lab's export uses)."""
+        else seven days after the assignment (the length the lab's export uses). An assignment
+        in the last days of the calendar has a window that closes after any instant that exists."""
         if self.window_end is not None:
             return self.window_end
-        return self.assigned_at + timedelta(days=DAYS_PER_BLOCK)
+        try:
+            return self.assigned_at + timedelta(days=DAYS_PER_BLOCK)
+        except OverflowError:
+            return datetime.max.replace(tzinfo=self.assigned_at.tzinfo)
 
     @property
     def version(self) -> int:
@@ -307,6 +311,146 @@ def effect_estimates(
     }
 
 
+def window_is_open(player: PlayerRecord, as_of: datetime | None) -> bool:
+    """Whether the player's seven-day outcome window closes after `as_of`, the time of the export.
+
+    A window that closes exactly at `as_of` is complete (as in `referee.cohorts`). With no time
+    for the export nothing can be told, and no window is taken to be open.
+    """
+    return as_of is not None and player.window_closes_at > as_of
+
+
+def effect_table(context: ResultsContext) -> dict[str, Any]:
+    """The primary metric's difference against control for every other arm (design section 22.3).
+
+    It is read among the analysed players (section 21.3) whose outcome window had closed at the
+    time of the export, as RES-004 does: a window still open holds a part of the seven days, and
+    the players left out are counted in `left_out`. Each arm's mean, the difference with its
+    95% interval and its two-sided p value (Welch's test for a continuous metric, the pooled
+    two-proportion z test for a binary one, whatever `design.sided` and `design.alpha` say),
+    the difference relative to control's mean when that is above 0, and the p value adjusted
+    for the number of arms compared with control. The adjustment is the one the power plan
+    uses: Bonferroni, unless the spec registers none (`dunnett` is planned as Bonferroni, which
+    is the more conservative). It adjusts for the arms only, not for the guardrails, other
+    metrics or repeated looks. An arm whose data allow no estimate carries the reason in
+    `error` and still counts as a comparison. The table describes the sample; it is not a test
+    of the effect, and the review's verdict is what says whether the sample can be read.
+    """
+    spec = context.spec
+    metric = context.metrics[spec.primary_metric.name]
+    values: dict[str, list[float]] = {name: [] for name in context.arm_names}
+    left_out = dict.fromkeys(context.arm_names, 0)
+    for player in context.analysed:
+        if window_is_open(player, context.exported_at):
+            left_out[player.arm] += 1
+        else:
+            values[player.arm].append(metric.value(player))
+    adjustment = power_alpha_adjustment(spec)
+    arms = [name for name in context.arm_names if name != context.control]
+    control = values[context.control]
+    rows = []
+    for arm in arms:
+        row: dict[str, Any] = {
+            "arm": arm,
+            "n_treatment": len(values[arm]),
+            "n_control": len(control),
+        }
+        try:
+            found = _compare(metric, values[arm], control)
+        except StatsError as error:
+            rows.append({**row, "error": str(error)})
+            continue
+        mean_treatment, mean_control = found.mean_treatment, found.mean_control
+        adjusted = min(1.0, found.p_value * len(arms)) if adjustment == "bonferroni" else None
+        relative = found.difference / mean_control if mean_control > 0 else None
+        rows.append(
+            {
+                **row,
+                "mean_treatment": _shown(mean_treatment),
+                "mean_control": _shown(mean_control),
+                "difference": _shown(found.difference),
+                "ci_low": _shown(found.ci_low),
+                "ci_high": _shown(found.ci_high),
+                "confidence": found.confidence,
+                "relative_difference": (
+                    _shown(relative) if relative is not None and math.isfinite(relative) else None
+                ),
+                "p_value": found.p_value,
+                "adjusted_p_value": found.p_value if adjusted is None else adjusted,
+            }
+        )
+    return {
+        "metric": metric.name,
+        "kind": metric.kind,
+        "population": (
+            "analysed players with a closed outcome window"
+            if context.exported_at is not None
+            else "analysed players (the export has no time, so no outcome window was checked)"
+        ),
+        "left_out": left_out,
+        "adjustment": adjustment,
+        "comparisons": len(arms),
+        "arms": rows,
+    }
+
+
+def _shown(value: float) -> float:
+    """`value` rounded for a report, and never a negative zero."""
+    return round(value, _ESTIMATE_DIGITS) + 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class _Compared:
+    """What `effect_table` reads of a comparison, whichever test made it."""
+
+    mean_treatment: float
+    mean_control: float
+    difference: float
+    ci_low: float
+    ci_high: float
+    confidence: float
+    p_value: float
+
+
+def _compare(
+    metric: ExportMetric, treatment: Sequence[float], control: Sequence[float]
+) -> _Compared:
+    """Treatment against control for one metric, or `StatsError` saying why not."""
+    if not treatment or not control:
+        empty = [
+            name for name, group in (("treatment", treatment), ("control", control)) if not group
+        ]
+        said = (
+            "the treatment and control groups have"
+            if len(empty) == 2
+            else f"the {empty[0]} group has"
+        )
+        raise StatsError(f"{said} no players")
+    if metric.kind == "binary":
+        rates = two_proportion_difference(
+            round(sum(treatment)), len(treatment), round(sum(control)), len(control)
+        )
+        return _Compared(
+            rates.rate_treatment,
+            rates.rate_control,
+            rates.difference,
+            rates.ci_low,
+            rates.ci_high,
+            rates.confidence,
+            rates.p_value,
+        )
+    means = welch_difference(treatment, control)
+    return _Compared(
+        means.mean_treatment,
+        means.mean_control,
+        means.difference,
+        means.ci_low,
+        means.ci_high,
+        means.confidence,
+        means.p_value,
+    )
+
+
 def difference_summary(
     metric: ExportMetric, treatment: Sequence[float], control: Sequence[float]
 ) -> dict[str, Any]:
@@ -317,23 +461,15 @@ def difference_summary(
     estimate the answer carries the reason in "error" in place of the numbers.
     """
     counts = {"n_treatment": len(treatment), "n_control": len(control)}
-    empty = [name for name, group in (("treatment", treatment), ("control", control)) if not group]
-    if empty:
-        return {**counts, "error": f"the {' and '.join(empty)} group has no players"}
     try:
-        if metric.kind == "binary":
-            found = two_proportion_difference(
-                round(sum(treatment)), len(treatment), round(sum(control)), len(control)
-            )
-        else:
-            found = welch_difference(treatment, control)
+        found = _compare(metric, treatment, control)
     except StatsError as error:
         return {**counts, "error": str(error)}
     return {
         **counts,
-        "difference": round(found.difference, _ESTIMATE_DIGITS),
-        "ci_low": round(found.ci_low, _ESTIMATE_DIGITS),
-        "ci_high": round(found.ci_high, _ESTIMATE_DIGITS),
+        "difference": _shown(found.difference),
+        "ci_low": _shown(found.ci_low),
+        "ci_high": _shown(found.ci_high),
         "confidence": found.confidence,
     }
 

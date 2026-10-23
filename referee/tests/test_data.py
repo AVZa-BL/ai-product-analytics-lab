@@ -2,6 +2,8 @@
 way the files can be wrong."""
 
 import csv
+import errno
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -11,6 +13,7 @@ from referee import data
 from referee.data import (
     DataError,
     Outcome,
+    export_file_hashes,
     list_experiment_ids,
     load_export,
 )
@@ -232,6 +235,27 @@ def test_a_file_that_is_not_utf8_is_refused_by_name(tmp_path: Path) -> None:
 
 def test_something_that_is_not_a_directory_is_refused(tmp_path: Path) -> None:
     assert _problems(tmp_path / "nowhere") == (f"{tmp_path / 'nowhere'}: is not a directory",)
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [PermissionError(errno.EACCES, "Permission denied"), OSError(errno.ENAMETOOLONG, "Too long")],
+)
+def test_a_folder_that_cannot_be_examined_is_a_problem_and_not_a_crash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, refusal: OSError
+) -> None:
+    def refuse(self: Path) -> bool:
+        raise refusal
+
+    monkeypatch.setattr(Path, "is_dir", refuse)
+
+    with pytest.raises(DataError) as caught:
+        load_export(tmp_path / "export", "e1")
+
+    assert caught.value.problems == (
+        f"{tmp_path / 'export'}: cannot be examined ({refusal.strerror})",
+    )
+    assert caught.value.total == 1
 
 
 # --- Rules across the three files ---------------------------------------------------------
@@ -522,3 +546,15 @@ def test_a_manifest_that_is_a_link_to_nothing_is_a_problem_not_an_absent_file(
     assert problem == "manifest.json: is a link to a file that does not exist"
 
 
+# --- The hashes of the files ---------------------------------------------------------------
+
+
+def test_a_file_larger_than_one_read_is_hashed_whole(tmp_path: Path) -> None:
+    names = (data.ASSIGNMENTS_FILE, data.EXPOSURES_FILE, data.OUTCOMES_FILE)
+    contents = {name: bytes(range(256)) * 12_000 + name.encode() for name in names}
+    for name, content in contents.items():
+        (tmp_path / name).write_bytes(content)
+
+    assert export_file_hashes(tmp_path) == {
+        name: hashlib.sha256(content).hexdigest() for name, content in contents.items()
+    }

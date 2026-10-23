@@ -49,7 +49,6 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime
 from typing import Literal
 
 from referee.methods import (
@@ -60,7 +59,7 @@ from referee.methods import (
     proportion_interval,
     values_are_constant,
 )
-from referee.results import METRIC_FAMILIES, PlayerRecord, ResultsContext
+from referee.results import METRIC_FAMILIES, ResultsContext, window_is_open
 from referee.spec import Guardrail
 
 ALPHA = 0.05
@@ -451,15 +450,6 @@ def _mean(values: Sequence[float]) -> float | None:
 
 def _events(values: Sequence[float]) -> int:
     return round(math.fsum(values))
-
-
-def window_is_open(player: PlayerRecord, as_of: datetime | None) -> bool:
-    """Whether the player's seven-day outcome window closes after `as_of`, the time of the export.
-
-    A window that closes exactly at `as_of` is complete (as in `referee.cohorts`). With no time
-    for the export nothing can be told, and no window is taken to be open.
-    """
-    return as_of is not None and player.window_closes_at > as_of
 
 
 def hold_for_a_moved_baseline(

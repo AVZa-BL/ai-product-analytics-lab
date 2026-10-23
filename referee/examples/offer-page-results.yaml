@@ -1,0 +1,73 @@
+# A results review: the experiment the lab simulates, read from its exported data.
+#
+# The spec was registered before the test and is read against the committed export in
+# tests/data/hybrid_offer_page_5000 (3 arms, 2,824 players assigned over 21 days). The lab
+# plants problems in that data, and Referee finds them:
+#   - RES-001: the arms are not the size the allocation promised (a sample ratio mismatch);
+#   - RES-012: some players were first exposed after they had already bought;
+#   - RES-013: the configuration of variant_b changed during the test;
+#   - RES-007: the effect differs between weekly cohorts of first exposure.
+# Two more follow from the metric and the plan chosen here: RES-002 (fewer players than the
+# plan asks for at this minimum detectable effect) and RES-008 (revenue is heavy-tailed).
+#
+# The baselines are the registered values, not the data's. `design.start_utc` is left out, so
+# the review also says whether its findings hold if the weeks are counted from an earlier
+# origin. The export carries no time of its own: --as-of says when it was taken.
+#
+# Referee's verdict is "invalid" (exit status 1). That is advice, not a ruling on the effect.
+#
+# Try it, from the referee/ folder:
+#   python -m referee review-results examples/offer-page-results.yaml \
+#       tests/data/hybrid_offer_page_5000 --experiment-id hybrid_offer_page \
+#       --as-of 2026-06-30T00:00:00Z
+referee_spec_version: 1
+id: hybrid_offer_page_2026_10_results
+title: Subscription offer page variants (read from the lab export)
+owner: analytics
+
+hypothesis:
+  "null": The offer page variants do not change 7-day revenue per player.
+  alternative: A variant increases 7-day revenue per player.
+  direction: increase
+
+population:
+  randomization_unit: player
+  analysis_unit: player
+  eligibility: Players who open the offer page and are not subscribed at exposure.
+  daily_eligible_units: 135
+  exposure_trigger: offer_page_view
+  exposure_timing: pre_treatment
+  interference: none_expected
+  kind: existing_users # the lab's players are 131 to 239 days old at assignment
+
+arms:
+  - {name: control, allocation: 0.3333333333333333, is_control: true}
+  - {name: variant_b, allocation: 0.3333333333333333}
+  - {name: variant_c, allocation: 0.3333333333333333}
+
+primary_metric:
+  name: revenue_usd_7d
+  kind: continuous
+  baseline: 1.9
+  baseline_std: 10.0
+
+guardrails:
+  - name: sessions_7d
+    kind: continuous
+    baseline: 4.5
+    baseline_std: 3.2
+    harmful_direction: decrease
+    tolerance_relative: 0.10
+
+design:
+  mde_relative: 0.5
+  alpha: 0.05
+  power: 0.80
+  sided: two_sided
+  planned_duration_days: 21
+  min_duration_days: 14
+
+procedure:
+  stopping_rule: fixed_horizon
+  srm_check_cadence: daily
+  bucketing_salt: hybrid_offer_page_2026_10_results

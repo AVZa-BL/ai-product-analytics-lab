@@ -37,8 +37,14 @@ class Row:
     window_end: datetime | None = None  # None: seven days after the assignment
 
 
-def build_data(rows: list[Row], *, experiment_id: str = "e1", exported_at=None) -> ExperimentData:
-    """The `ExperimentData` the loader would return for these rows (in player order)."""
+def build_data(
+    rows: list[Row], *, experiment_id: str = "e1", exported_at=None, window_column: bool = True
+) -> ExperimentData:
+    """The `ExperimentData` the loader would return for these rows (in player order).
+
+    With `window_column=False` the outcomes carry no window end, as when the export has no
+    `window_end_utc` column: the window is then taken to be seven days from the assignment.
+    """
     assignments, exposures, outcomes = [], [], []
     for row in sorted(rows, key=lambda r: r.player_id):
         assignments.append(
@@ -54,7 +60,9 @@ def build_data(rows: list[Row], *, experiment_id: str = "e1", exported_at=None) 
                 row.purchases,
                 row.revenue,
                 row.first_purchase_at,
-                row.window_end
+                None
+                if not window_column
+                else row.window_end
                 if row.window_end is not None
                 else row.assigned_at + timedelta(days=7),
             )
@@ -75,8 +83,8 @@ def build_data(rows: list[Row], *, experiment_id: str = "e1", exported_at=None) 
     )
 
 
-def results_spec(raw_spec: dict, **changes: object) -> ExperimentSpec:
-    """The shared test spec turned into one a results review can read.
+def results_raw(raw_spec: dict, **changes: object) -> dict:
+    """The shared test spec turned into one a results review can read, as a plain dict.
 
     Three equal arms, a binary primary metric the export holds (`purchased_7d`) and no
     guardrails. A change is `section__field=value`; a double underscore stands for the dot.
@@ -97,7 +105,12 @@ def results_spec(raw_spec: dict, **changes: object) -> ExperimentSpec:
         for part in parents:
             node = node.setdefault(part, {})
         node[leaf] = value
-    return ExperimentSpec.from_dict(raw)
+    return raw
+
+
+def results_spec(raw_spec: dict, **changes: object) -> ExperimentSpec:
+    """`results_raw` read as a spec."""
+    return ExperimentSpec.from_dict(results_raw(raw_spec, **changes))
 
 
 def crowd(arm: str, count: int, *, prefix: str | None = None, **fields: object) -> list[Row]:
