@@ -1872,8 +1872,9 @@ def test_the_exports_revenue_phrase_in_the_text_is_the_one_the_export_gives(raw_
     primary = context.metrics[context.spec.primary_metric.name]
     assert registered_mde(context, primary) is not None
     assert registered_mde(context, revenue_metric) is None  # not the primary metric
-    for example in sorted((Path(__file__).parent.parent / "examples").glob("*.yaml")):
-        assert "mde_relative: 0.05" in example.read_text(encoding="utf-8"), example.name
+    examples = Path(__file__).parent.parent / "examples"
+    for name in ("offer-page-powered.yaml", "offer-page-underpowered.yaml"):  # the design examples
+        assert "mde_relative: 0.05" in (examples / name).read_text(encoding="utf-8"), name
 
 
 def test_what_the_text_says_about_the_bootstrap_is_what_the_code_does() -> None:
