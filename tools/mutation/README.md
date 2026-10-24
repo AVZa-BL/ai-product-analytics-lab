@@ -12,6 +12,8 @@ pip install -e 'referee[dev]' pytest-cov vulture            # per project: refer
 
 python tools/mutation/run.py referee --workers 4            # mutants of src/ (hours); resumable
 python tools/mutation/run.py referee --set hold --sample 700   # independent mutants, other operators
+python tools/mutation/run.py referee --only guardrails --no-all   # one module family; skip import-time mutants (they need the whole suite)
+MUT_PYTEST_ARGS="-o addopts=-ra -m study" python tools/mutation/run.py referee   # tests the project's addopts leave out (use another $MUT_OUT)
 python tools/mutation/analyze.py referee                    # smallest covering set -> analysis.json
 python tools/mutation/hold_eval.py referee                  # hold-out check + tests added back -> final.json
 ```
