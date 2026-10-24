@@ -22,10 +22,14 @@ for table in ("experiment_assignments", "experiment_exposures", "experiment_outc
 PY
 ```
 
-The generator is the one on `main` at the merge of pull request 31 (`15b1aa4`). DuckDB 1.5.6 wrote
-the CSV, in its default format: UTF-8, a header row, timestamps such as `2026-04-26 17:43:48+00`.
-Regenerating gives byte-identical files (checked when the fixture was added), and
-`manifest.json` holds each file's row count and SHA-256 so that a test notices an edit.
+The generator is the one on `main` at the merge of pull request 43 (`e8ccac7`), which writes
+`first_seen_at_utc` into the assignments (design 4c-2); the exposures and the outcomes are
+byte-identical to the files first written at the merge of pull request 31 (`15b1aa4`), and
+every other column of the assignments is unchanged row by row. DuckDB 1.5.6 wrote the CSV, in
+its default format: UTF-8, a header row, timestamps such as `2026-04-26 17:43:48+00`.
+Regenerating gives byte-identical files (checked when the fixture was added and again when the
+column was), and `manifest.json` holds each file's row count and SHA-256 so that a test notices
+an edit.
 
 ## What it is not
 

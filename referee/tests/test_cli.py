@@ -357,7 +357,7 @@ def test_a_long_list_of_problems_in_the_export_is_cut_at_a_thousand_and_the_tota
     assert lines[-1] == "  ... and 11,345 more"
 
 
-@pytest.mark.parametrize("output_format", ["text", "json"])
+@pytest.mark.parametrize("output_format", ["text", "json", "memo"])
 def test_the_lab_export_is_found_invalid_for_its_planted_sample_ratio_mismatch(
     capsys: pytest.CaptureFixture[str], results_spec_file: Path, output_format: str
 ) -> None:
@@ -394,6 +394,16 @@ def test_the_lab_export_is_found_invalid_for_its_planted_sample_ratio_mismatch(
         sensitivity = report["origin_sensitivity"]
         assert sensitivity["ran"] is True
         assert [shift["days_earlier"] for shift in sensitivity["shifts"]] == [1, 2, 3, 4, 5, 6]
+    elif output_format == "memo":
+        assert out.startswith("# Decision memo: ")
+        assert [line for line in out.splitlines() if line.startswith("## ")] == [
+            "## Decision",
+            "## Observed facts",
+            "## Assumptions and uncertainty",
+            "## Data-quality qualification",
+            "## Reproducibility",
+        ]
+        assert "Verdict: INVALID. Blocking rules: data validity RES-001" in out
     else:
         assert "Verdict: INVALID\nBlocking rules: data validity RES-001" in out
         assert "completeness was not checked" in out

@@ -18,7 +18,12 @@ from typing import Any
 from referee import __version__
 from referee.display import DISPLAY_ROW_LIMIT, cap_listing, for_line
 from referee.findings import DesignReview, Finding, ResultsReview
-from referee.results import ResultsContext, effect_table
+from referee.results import (
+    ResultsContext,
+    describe_first_seen,
+    effect_table,
+    first_seen_summary,
+)
 from referee.rules.cohorts import cohort_report
 from referee.rules.design import OUTCOME_WINDOW_DAYS
 from referee.rules.guardrails import guardrail_report
@@ -181,6 +186,8 @@ def results_report(
             "assigned": context.count_by_arm(context.players),
             "analysed": context.count_by_arm(context.analysed),
             "ignored_before_start": list(context.ignored_before_start),
+            "kind_declared": spec.population.kind,
+            "first_seen": first_seen_summary(context),
         },
         "origin_sensitivity": sensitivity,
         "verdict": review.verdict,
@@ -354,21 +361,20 @@ def _results_evidence_lines(evidence: dict[str, Any], limit: int) -> list[str]:
     return ["    Evidence:", *_evidence_lines(evidence, limit, 6)]
 
 
-def _sensitivity_lines(sensitivity: dict[str, Any]) -> list[str]:
-    """The sentence on whether the findings hold for origins 1 to 6 days earlier."""
+def _sensitivity_sentences(sensitivity: dict[str, Any]) -> list[str]:
+    """What the origin sensitivity found: a headline, then one sentence for each origin that
+    changed the findings."""
     if not sensitivity["ran"]:
-        return _wrapped(f"Origin sensitivity: not run; {sensitivity['reason']}.", "", "  ")
+        return [f"Origin sensitivity: not run; {sensitivity['reason']}."]
     shifts = sensitivity["shifts"]
     changed = [shift for shift in shifts if not shift["same"]]
     if not changed:
         last = shifts[-1]["days_earlier"]
-        return _wrapped(
+        return [
             f"Origin sensitivity: the same rules fire at the same severity for origins 1 to "
-            f"{last} days earlier.",
-            "",
-            "  ",
-        )
-    lines = ["Origin sensitivity: the rules that fire change with the origin."]
+            f"{last} days earlier."
+        ]
+    sentences = ["Origin sensitivity: the rules that fire change with the origin."]
     for shift in changed:
         said = [f"verdict {shift['verdict']}"]
         for label in ("appear", "disappear"):
@@ -376,54 +382,64 @@ def _sensitivity_lines(sensitivity: dict[str, Any]) -> list[str]:
                 said.append(f"{label} {', '.join(shift[label])}")
         days = shift["days_earlier"]
         noun = "day" if days == 1 else "days"
-        lines += _wrapped(f"{days} {noun} earlier: {'; '.join(said)}", "  ", "    ")
+        sentences.append(f"{days} {noun} earlier: {'; '.join(said)}")
+    return sentences
+
+
+def _sensitivity_lines(sensitivity: dict[str, Any]) -> list[str]:
+    """The sentence on whether the findings hold for origins 1 to 6 days earlier."""
+    headline, *shifts = _sensitivity_sentences(sensitivity)
+    lines = _wrapped(headline, "", "  ")
+    for sentence in shifts:
+        lines += _wrapped(sentence, "  ", "    ")
     return lines
 
 
-def _effect_lines(effect: dict[str, Any]) -> list[str]:
-    """The effect table as text: one row an arm, columns aligned, the reading rules above it."""
+def _adjustment_text(effect: dict[str, Any]) -> str:
     comparisons = effect["comparisons"]
-    adjusted = (
+    if effect["adjustment"] != "bonferroni":
+        return "not adjusted for the number of arms (the spec registers none)"
+    return (
         f"adjusted for {comparisons} {'comparison' if comparisons == 1 else 'comparisons'} "
         f"(the arms against control) by Bonferroni, and for nothing else: not for guardrails, "
         f"other metrics or repeated looks"
-        if effect["adjustment"] == "bonferroni"
-        else "not adjusted for the number of arms (the spec registers none)"
     )
-    lines = _wrapped(
+
+
+def _effect_sentences(effect: dict[str, Any]) -> list[str]:
+    """The sentences above the effect table: what it holds, who was left out, how to read it."""
+    sentences = [
         f"Effect on {effect['metric']}, each arm against control, among the "
-        f"{effect['population']}: two-sided tests and 95% intervals. The p values are {adjusted}.",
-        "",
-        "  ",
-    )
+        f"{effect['population']}: two-sided tests and 95% intervals. The p values are "
+        f"{_adjustment_text(effect)}."
+    ]
     left_out = {arm: n for arm, n in effect["left_out"].items() if n}
     if left_out:
         said = ", ".join(f"{arm} {n:,}" for arm, n in left_out.items())
-        lines += _wrapped(
-            f"Left out, because their seven-day window had not closed at the export time: {said}.",
-            "",
-            "  ",
+        sentences.append(
+            f"Left out, because their seven-day window had not closed at the export time: {said}."
         )
     if not effect["readable"]:
-        lines += _wrapped(
+        sentences.append(
             f"NOT TO BE READ: blocked by {', '.join(effect['unreadable_because'])}, whose "
             f"remediation says to settle this before the effect is read. These numbers describe "
-            f"the sample and not the effect.",
-            "",
-            "  ",
+            f"the sample and not the effect."
         )
     if effect["underpowered"]:
-        lines += _wrapped(
+        sentences.append(
             "UNDERPOWERED: RES-002 blocks this review, the arms are smaller than registered. "
-            "Read the intervals; a small difference is not evidence of no effect.",
-            "",
-            "  ",
+            "Read the intervals; a small difference is not evidence of no effect."
         )
+    return sentences
+
+
+def _effect_rows(effect: dict[str, Any]) -> tuple[list[tuple[str, ...]], list[str]]:
+    """The table's rows, one an arm, and a sentence for each arm that has no estimate."""
     rows, failed = [], []
     for arm in effect["arms"]:
         players = f"{arm['n_treatment']:,} vs {arm['n_control']:,}"
         if "error" in arm:
-            failed.append(f"  {arm['arm']} ({players}): not estimated; {arm['error']}")
+            failed.append(f"{arm['arm']} ({players}): not estimated; {arm['error']}")
             continue
         relative = arm["relative_difference"]
         rows.append(
@@ -437,8 +453,18 @@ def _effect_lines(effect: dict[str, Any]) -> list[str]:
                 f"{arm['adjusted_p_value']:.3g}",
             )
         )
+    return rows, failed
+
+
+_EFFECT_COLUMNS = ("arm", "players", "difference", "95% interval", "relative", "p", "adjusted p")
+
+
+def _effect_lines(effect: dict[str, Any]) -> list[str]:
+    """The effect table as text: one row an arm, columns aligned, the reading rules above it."""
+    lines = [line for text in _effect_sentences(effect) for line in _wrapped(text, "", "  ")]
+    rows, failed = _effect_rows(effect)
     if rows:
-        table = [("arm", "players", "difference", "95% interval", "relative", "p", "adjusted p")]
+        table = [_EFFECT_COLUMNS]
         widths = [max(len(row[i]) for row in [*table, *rows]) for i in range(7)]
         lines += [
             "  "
@@ -446,7 +472,7 @@ def _effect_lines(effect: dict[str, Any]) -> list[str]:
             for row in [*table, *rows]
         ]
     for text in failed:
-        lines += _wrapped(text.strip(), "  ", "  ")
+        lines += _wrapped(text, "  ", "  ")
     return lines
 
 
@@ -525,4 +551,324 @@ def render_results_text(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMI
         "blocks or warns, not that the effect is real.",
         "",
     )
+    return "\n".join(lines) + "\n"
+
+
+# --- The memo --------------------------------------------------------------------------
+
+# The sections of the analytics lab's decision-memo template, in its order (design section 5):
+# what is decided, what was seen, what it rests on, what is wrong with the data, how to redo it.
+MEMO_HEADINGS = (
+    "Decision",
+    "Observed facts",
+    "Assumptions and uncertainty",
+    "Data-quality qualification",
+    "Reproducibility",
+)
+
+
+def _md_cell(value: object) -> str:
+    return str(value).replace("|", "\\|")
+
+
+def _md_table(header: Sequence[str], rows: Sequence[Sequence[object]]) -> list[str]:
+    lines = ["| " + " | ".join(_md_cell(cell) for cell in header) + " |"]
+    lines.append("|" + " --- |" * len(header))
+    lines += ["| " + " | ".join(_md_cell(cell) for cell in row) + " |" for row in rows]
+    return lines
+
+
+def _paragraphs(*texts: str) -> list[str]:
+    """Each text as one markdown paragraph, wrapped, with a blank line between them."""
+    lines: list[str] = []
+    for text in texts:
+        if lines:
+            lines.append("")
+        lines += _wrapped(text, "", "")
+    return lines
+
+
+def _items(texts: Sequence[str], pad: str = "") -> list[str]:
+    """A markdown list, each item wrapped under its own bullet."""
+    return [line for text in texts for line in _wrapped(f"- {text}", pad, "  ")]
+
+
+def _decision_sentences(report: dict[str, Any]) -> list[str]:
+    """What the blocking rules advise, in the words their remediation uses; then what is and is
+    not decided here. Judgement: the memo recommends what the report's labels say (design
+    section 22.3) and adds no verdict of its own."""
+    verdict, effect, groups = report["verdict"], report["effect"], report["blocking_groups"]
+    said: list[str] = []
+    if verdict == "invalid":
+        if effect["unreadable_because"]:
+            rules = effect["unreadable_because"]
+            said.append(
+                f"Do not read the effect. {', '.join(rules)} "
+                f"{'blocks' if len(rules) == 1 else 'block'} this review, and "
+                f"{'its' if len(rules) == 1 else 'their'} remediation says to settle what "
+                f"{'it' if len(rules) == 1 else 'they'} found before the effect is read."
+            )
+        if groups["harm"]:
+            said.append(
+                f"Do not decide on the primary metric alone: {', '.join(groups['harm'])} found "
+                "a guardrail worse than its tolerance allows."
+            )
+        if effect["underpowered"]:
+            said.append(
+                "Report the result as underpowered: the arms are smaller than the registered "
+                "sample size (RES-002). Read the intervals; a small difference is not evidence "
+                "of no effect."
+            )
+        if any(
+            f["rule_id"] == "RES-002"
+            and f["severity"] == "blocker"
+            and f["evidence"].get("unattainable")
+            for f in report["findings"]
+        ):
+            said.append(
+                "The design cannot be sized (RES-002): correct the spec's baseline and target "
+                "effect and register the experiment again. More data will not clear this."
+            )
+        if not said:
+            rules = report["blocking_rule_ids"]
+            said.append(
+                f"Do not read the effect: {', '.join(rules)} "
+                f"{'blocks' if len(rules) == 1 else 'block'} this review."
+            )
+    elif verdict == "caution":
+        warnings = [f["rule_id"] for f in report["findings"] if f["severity"] == "warning"]
+        noun = "warning" if len(warnings) == 1 else "warnings"
+        said.append(
+            f"The rules that ran found no blocker and {len(warnings)} {noun} "
+            f"({', '.join(warnings)}). Read the effect with them in view; each is qualified "
+            "under Data-quality qualification."
+        )
+    else:
+        said.append(
+            "The rules that ran found nothing that blocks or warns. That does not say the "
+            "effect is real: it says that none of the checks Referee makes objected."
+        )
+    said.append(
+        "Decided here: whether the rules object to reading this experiment's result as it "
+        "stands. Not decided here: whether to ship, stop or continue the experiment. Referee is "
+        "advisory, and that decision rests with the experiment's owner."
+    )
+    return said
+
+
+def _observed_lines(report: dict[str, Any], limit: int) -> list[str]:
+    """The verdict, the population, the time of the export, the always-checked lines and the
+    effect table, every number copied from the report."""
+    population, as_of, effect = report["population"], report["as_of"], report["effect"]
+    counts = report["counts"]
+    verdict = f"Verdict: {report['verdict'].upper()}."
+    if report["blocking_rule_ids"]:
+        verdict += f" Blocking rules: {_blocking_text(report['blocking_groups'])}."
+    if report["findings"]:
+        found = (
+            f"Findings: blockers {counts['blocker']}, warnings {counts['warning']}, "
+            f"info {counts['info']}."
+        )
+    else:
+        found = "Findings: none."
+    lines = _paragraphs(f"{verdict} {found}")
+    lines += [
+        "",
+        *_wrapped(
+            f"Assigned from {population['first_assignment']} to "
+            f"{population['last_assignment']}; weeks are counted from {population['origin']} "
+            f"({population['origin_source']}).",
+            "",
+            "",
+        ),
+        "",
+    ]
+    lines += _md_table(
+        ("arm", "assigned", "analysed", "left out of the effect table"),
+        [
+            (arm, f"{n:,}", f"{population['analysed'][arm]:,}", f"{effect['left_out'][arm]:,}")
+            for arm, n in population["assigned"].items()
+        ],
+    )
+    ignored = population["ignored_before_start"]
+    if ignored:
+        listing = cap_listing(ignored, limit=limit)
+        shown = ", ".join(listing.shown)
+        more = f"; {listing.notice}" if listing.notice else ""
+        lines += [
+            "",
+            *_wrapped(
+                f"Ignored, assigned before design.start_utc and in no count: {len(ignored):,} "
+                f"({shown}{more}).",
+                "",
+                "",
+            ),
+        ]
+    if as_of["time"] is None:
+        taken = (
+            "not known (no manifest time and no --as-of); completeness of the outcome windows "
+            "was not checked"
+        )
+    else:
+        taken = f"{as_of['time']} ({as_of['source']})"
+    interim = (
+        f" INTERIM RUN: before the planned end of the experiment ({as_of['planned_end']})."
+        if as_of["interim"]
+        else ""
+    )
+    lines += ["", *_wrapped(f"Export taken: {taken}.{interim}", "", "")]
+    lines += ["", "Always checked (a quiet result is not a pass):", ""]
+    lines += _items(report["summary_lines"])
+    lines += ["", *_paragraphs(*_effect_sentences(effect))]
+    rows, failed = _effect_rows(effect)
+    if rows:
+        lines += ["", *_md_table(_EFFECT_COLUMNS, rows)]
+    for text in failed:
+        lines += ["", *_wrapped(text, "", "")]
+    return lines
+
+
+def _assumption_sentences(report: dict[str, Any]) -> list[str]:
+    """What the numbers rest on: the registered values, the tests and their adjustment, the
+    time of the export, the origin, the kind of players, and what the verdict words mean."""
+    effect, as_of, population = report["effect"], report["as_of"], report["population"]
+    said = [
+        "The allocation and the baselines are the spec's registered values, not the data's: "
+        "the sample-ratio check is read against the registered allocation, and the sample size "
+        "against the registered baseline and target effect.",
+        f"The effect table is two-sided at 95% whatever design.sided and design.alpha say, and "
+        f"its p values are {_adjustment_text(effect)}. The relative difference is a point "
+        "estimate with no interval of its own. The table describes the sample; the verdict and "
+        "its label say whether it can be read.",
+    ]
+    if as_of["time"] is None:
+        said.append(
+            "No time of the export is known, so no outcome window was checked: the effect "
+            "table reads every analysed player, a window still open included, and whether this "
+            "is an interim run cannot be said."
+        )
+    elif as_of["interim"]:
+        said.append(
+            f"INTERIM RUN: the export was taken before the planned end of the experiment "
+            f"({as_of['planned_end']}). The cohort test of RES-007 belongs at the planned end; "
+            "run repeatedly on accumulating data it flags 11% to 13% of experiments with no "
+            "change (design section 21.6)."
+        )
+    elif as_of["planned_end"] is None:
+        said.append(
+            "The planned end of the experiment falls outside the calendar, so whether this is "
+            "an interim run cannot be said."
+        )
+    else:
+        said.append(
+            f"The export was taken at or after the planned end of the experiment "
+            f"({as_of['planned_end']})."
+        )
+    headline, *shifts = _sensitivity_sentences(report["origin_sensitivity"])
+    said.append(" ".join([headline, *(f"{sentence}." for sentence in shifts)]))
+    said.append(describe_first_seen(population["first_seen"], population["kind_declared"]))
+    said.append(
+        "The verdict words: clear says that the rules which ran found nothing that blocks or "
+        "warns, caution that at least one warned, invalid that at least one blocked. A verdict "
+        "is read together with the rules that ran, listed under Data-quality qualification: a "
+        "rule that did not run found nothing because it did not look."
+    )
+    return said
+
+
+def _quality_lines(report: dict[str, Any], limit: int) -> list[str]:
+    """Every finding with its evidence (the effect rules' sentences; the other rules' values,
+    as a code block that nothing in them can close), then the rules that ran."""
+    lines: list[str] = []
+    if not report["findings"]:
+        lines += _paragraphs("No finding: the rules that ran found nothing that blocks or warns.")
+    for finding in report["findings"]:
+        if lines:
+            lines.append("")
+        heading = f"**[{finding['severity'].upper()}] {finding['rule_id']}: {finding['title']}**"
+        lines += _wrapped(heading, "", "")
+        lines += ["", *_wrapped(f"Why it matters: {finding['why_it_matters']}", "", "")]
+        lines += ["", *_wrapped(f"What to do: {finding['remediation']}", "", "")]
+        evidence = finding["evidence"]
+        if evidence:
+            lines += ["", "Evidence:", ""]
+            if isinstance(evidence.get("notes"), list) and "tests" in evidence:
+                lines += _items(evidence["notes"])
+                lines += [
+                    "",
+                    *_wrapped(
+                        "The tests, plans and settings behind these sentences are in the JSON "
+                        "report (--format json).",
+                        "",
+                        "",
+                    ),
+                ]
+            else:
+                lines += _evidence_lines(evidence, limit, 4)
+        if finding["references"]:
+            lines += ["", "References:", "", *_items(finding["references"])]
+    lines += ["", *_wrapped(f"Rules run: {', '.join(report['rules_run'])}.", "", "")]
+    return lines
+
+
+def _reproducibility_lines(report: dict[str, Any]) -> list[str]:
+    """What identifies the inputs and the reviewer, and the command that gives this memo again."""
+    spec, as_of = report["spec"], report["as_of"]
+    lines = _wrapped(f"- Spec: {spec['id']} - {spec['title']}", "", "  ")
+    lines += [
+        f"- Spec fingerprint: sha256:{spec['sha256']}",
+        f"- Experiment: {report['experiment_id']}",
+        "- Data files (SHA-256 of the bytes):",
+    ]
+    lines += [f"  - {name}: {file['sha256']}" for name, file in report["data"]["files"].items()]
+    taken = "not known" if as_of["time"] is None else f"{as_of['time']} ({as_of['source']})"
+    lines += [
+        f"- Export taken: {taken}",
+        f"- Referee: {report['referee_version']}, report version {report['report_version']}",
+    ]
+    flag = f" --as-of {as_of['time']}" if as_of["source"] == "command line" else ""
+    lines += [
+        "",
+        *_wrapped(
+            f"Reproduce it from the referee/ folder with `python -m referee review-results SPEC "
+            f"DATA --experiment-id {report['experiment_id']}{flag} --format memo`, SPEC being the "
+            "spec with the fingerprint above and DATA the folder whose files carry these hashes. "
+            "The memo holds no timestamp, host or path: the same spec and data reviewed by the "
+            "same Referee on one machine give the same bytes, and between machines a float may "
+            "differ in its last digits.",
+            "",
+            "",
+        ),
+    ]
+    return lines
+
+
+def render_results_memo(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMIT) -> str:
+    """The results report as a decision memo in the analytics lab's template (design section 5).
+
+    Its five sections, in the template's order, are filled from the report dict and from
+    nothing else, so the memo cannot say what the JSON does not. It is advisory like the
+    report, holds no timestamp, and cuts a list of more than `limit` rows when shown. It is
+    markdown: a value from a spec or an export is written as one line, and a pipe in a table
+    cell is escaped, so that none of it can make a heading, a row or a line of its own.
+    """
+    report = _inert(report)
+    spec = report["spec"]
+    lines = [f"# Decision memo: {spec['title']}", ""]
+    lines += _wrapped(
+        f"A Referee results review of experiment {report['experiment_id']} against spec "
+        f"{spec['id']}. Referee is advisory: it recommends, and does not approve or stop an "
+        "experiment.",
+        "",
+        "",
+    )
+    sections = (
+        _paragraphs(*_decision_sentences(report)),
+        _observed_lines(report, limit),
+        _paragraphs(*_assumption_sentences(report)),
+        _quality_lines(report, limit),
+        _reproducibility_lines(report),
+    )
+    for heading, body in zip(MEMO_HEADINGS, sections, strict=True):
+        lines += ["", f"## {heading}", "", *body]
     return "\n".join(lines) + "\n"

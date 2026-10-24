@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-28
 **Status:** Approved design (Alexander Zatey), pending implementation plan
-**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. 2 (2026-09-30): milestone 2 decisions, see section 17. 3 (2026-10-02): milestone 2c decisions, see section 18. 4 (2026-10-04): milestone 3 decisions, see section 19. 5 (2026-10-05): milestone 4 decisions, see section 20. 6 (2026-10-08): milestone 4b decisions, see section 21. Sections 0 to 15 are unchanged.
+**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. 2 (2026-09-30): milestone 2 decisions, see section 17. 3 (2026-10-02): milestone 2c decisions, see section 18. 4 (2026-10-04): milestone 3 decisions, see section 19. 5 (2026-10-05): milestone 4 decisions, see section 20. 6 (2026-10-08): milestone 4b decisions, see section 21. 7 (2026-10-22): milestone 4c decisions, see section 22. 8 (2026-10-24): milestone 4c-3 decisions, see section 23. Sections 0 to 15 are unchanged.
 **Scope:** New module inside `ai-product-analytics-lab`; first milestone is the experiment spec schema
 
 This document is the handoff from the design conversation into Claude Code. It is self-contained: nothing outside this file and the repository is needed to start.
@@ -760,5 +760,33 @@ The report and the `review-results` command are built (4c-1). This amendment rec
 - The decision memo and the loader reading the column (22.1). A quiet RES-004 says nothing about players left out for open outcome windows, and the effect table now leaves the same players out (22.3); whether the quiet line should say how many is open for the memo.
 - The cost of origin sensitivity is measured at 2,824 and 29,746 players (22.4), not beyond. `design.planned_duration_days` has no upper bound and the review takes longer as it grows (an independent run: a value of 3,000,000 days took over 15 s, and 10**9 days did not finish); 4c-1 sets no limit. That the golden agrees on macOS is untested until the job runs. Closing a pipe on stdout while the report is written ends with status 3, not a clean exit.
 
-Delivered in: 4c-1 (this amendment) and 4c-2 (the column); 4c-3 is not built.
+Delivered in: 4c-1 (this amendment) and 4c-2 (the column); 4c-3 in section 23.
 
+
+## 23. Amendment 8: milestone 4c-3 decisions (2026-10-24)
+
+4c-3 builds the decision memo and reads the first-seen column (22.1). Where it disagrees with an earlier section it wins, and it says which it replaces.
+
+### 23.1 The memo
+
+- `review-results --format memo` renders the report dict as a decision memo in markdown, in the analytics lab's template (section 5): a title line, then Decision, Observed facts, Assumptions and uncertainty, Data-quality qualification and Reproducibility, in that order. It is made from the report dict and from nothing else, so it cannot say what the JSON does not. Like the report it carries no timestamp, host or path (22.3): the same spec and data reviewed by the same Referee give the same bytes.
+- Decision. The memo is advisory and adds no verdict of its own (judgement). It repeats what the blocking rules advise, in the words of the effect table's labels (22.3): do not read the effect when RES-001, RES-003 or RES-012 blocks; do not decide on the primary metric alone for a RES-004 breach; report the result as underpowered when RES-002 blocks for size, and correct the spec when it blocks for a plan that cannot be sized. For `caution` it names the warnings and says to read the effect with them in view; for `clear`, that none of the checks objected and that this does not say the effect is real. Every memo then states what is decided here (whether the rules object to reading the result as it stands) and what is not (whether to ship, stop or continue the experiment).
+- Observed facts: the verdict and the blocking groups, the counts of findings, the assignment span and the origin, a table of the players assigned, analysed and left out of the effect table in each arm, the time of the export with the interim line, the always-checked lines, and the effect table with its labels, as a markdown table. Assumptions and uncertainty: the registered allocation and baselines, the two-sided 95% tests and their adjustment, the time of the export (before the planned end, at or after it, or unknown), the origin sensitivity, the kind of players (23.2) and what the verdict words mean. Data-quality qualification: every finding with its why, what to do, evidence (the effect rules' sentences; the other rules' values as an indented code block, lists cut at 1,000 rows as in the text) and references, then the rules that ran. Reproducibility: the spec's id, title and fingerprint, the experiment, the three file hashes, the time of the export and its source, the Referee and report versions, and the command that gives the memo again, with SPEC and DATA as placeholders because the report holds no paths (18.3).
+- Text safety as in 22.3: every value from a spec or an export is written as one line, and a pipe in a table cell is escaped, so that nothing in them can make a heading, a table row or a line of its own. An indented code block is used for evidence rather than a fenced one, because a value cannot close it.
+- Tests do not pin the memo's prose (22.5). They pin the five headings in their order, that the numbers, hashes and arms come from the report, the decision sentence for each verdict and blocking group, and the escaping; the command's test runs `--format memo` on the committed export.
+- 22.6 asked whether the quiet RES-004 line should say how many players were left out for open outcome windows. The line is unchanged; the memo's population table gives that number per arm, next to the assigned and analysed counts.
+
+### 23.2 The first-seen column
+
+- The loader reads `first_seen_at_utc` from the assignments when the column is there (21.8, 22.1), as it reads `window_end_utc`: then every row of the experiment must hold a UTC instant, and one after `assigned_at_utc` is refused as a problem of that row, because a player cannot be first seen after being assigned (the same instant is allowed). Without the column nothing changes.
+- The kind of players is checked against the origin: a player first seen before the origin is an existing user, and one first seen at or after it a new user. Judgement: the origin is the one instant the review has for when the experiment began, so it is the line between the two, and no age threshold is introduced because none is known from a source. The report's population block carries `kind_declared` and `first_seen`: the players before and from the origin, the days from first seen to assignment as minimum, median and maximum to a tenth, the kind observed by that rule, and whether the declared kind agrees (a declared `mixed` agrees with any; an undeclared kind leaves it null). RES-007's population note says the same in words, and adds the sentence about the most active players seeing a change first when the players are existing users by declaration or by the column. Without the column its text is as before.
+- The committed export was regenerated with the column (22.1): the exposures and the outcomes are byte-identical to the snapshot of 4a, every other column of the assignments is unchanged row by row, and the assignments file's hash is now `faaa876d…` (`manifest.json` and `PROVENANCE.md` say so). Measured on it: all 2,824 assigned players were first seen before the origin, 131.1 to 239.4 days before their assignment (median 185.9), where 22.1 had measured 131 to 239 and 185, so the `population.kind: existing_users` of the results example agrees. The golden of 22.5 was regenerated; its changes are the hash, the two population keys and the wording of RES-007's note.
+
+### 23.3 Not built, and not verified
+
+- That the memo's bytes agree between machines is untested, as the JSON's are (22.5); the macOS job runs the same tests.
+- `review-design` has no memo: the template is for a decision on results.
+- The lab's three decision memos are written by hand under its template; Referee's memo is not published under `analytics-lab/reports/`, and nothing beyond the five headings pinned here keeps the two in step.
+- Milestone 5 (the narration layer, section 13) is not started.
+
+Delivered in: 4c-3 (this amendment). Milestone 4 is complete.

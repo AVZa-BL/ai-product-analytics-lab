@@ -10,7 +10,7 @@
   "files": {
     "experiment_assignments.csv": {
       "rows": 2824,
-      "sha256": "193cbcb077b20cf851413da04f419230ebb433d1bc057d9cc92eaad510c6cebd"
+      "sha256": "faaa876d41f79dbc80105f44a7640cc0e826d4aa02b0dbc4a16cf42c9f131d8f"
     },
     "experiment_exposures.csv": {
       "rows": 3974,
