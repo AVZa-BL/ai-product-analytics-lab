@@ -18,8 +18,7 @@ jobs:
   # Decides which projects a pull request touches, so an untouched project's jobs are skipped.
   # A job skipped by an `if:` counts as passing for a branch-protection rule that requires it
   # (unlike a workflow skipped by `paths:`, which leaves the check pending forever). Pushes to
-  # main and any change to this workflow run everything. referee's documentation tests read
-  # files under analytics-lab/, so a change there runs referee too.
+  # main and any change to this workflow run everything.
   changes:
     runs-on: ubuntu-latest
     defaults:
@@ -48,7 +47,7 @@ jobs:
             if echo "$files" | grep -q '^\.github/'; then
               lab=true; referee=true; tracewright=true
             fi
-            if echo "$files" | grep -q '^analytics-lab/'; then lab=true; referee=true; fi
+            if echo "$files" | grep -q '^analytics-lab/'; then lab=true; fi
             if echo "$files" | grep -q '^referee/'; then referee=true; fi
             if echo "$files" | grep -q '^tracewright/'; then tracewright=true; fi
           fi
@@ -114,8 +113,26 @@ jobs:
         run: ruff check src tests
       - name: Test
         run: python -m pytest -q
-      # The simulation studies the design rests on; the default run leaves them out
-      # (pyproject.toml). About three minutes, on this platform only.
+
+  # The simulation studies the design rests on; the default run leaves them out (pyproject.toml).
+  # About three minutes, on this platform only. A job of its own so that it runs beside the tests
+  # instead of after them; the job above keeps its name, which a branch-protection rule may require.
+  referee-studies:
+    needs: changes
+    if: needs.changes.outputs.referee == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: referee
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: referee/pyproject.toml
+      - name: Install project
+        run: python -m pip install -e '.[dev]'
       - name: Studies
         run: python -m pytest -q -m study
 

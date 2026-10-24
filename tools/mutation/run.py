@@ -16,7 +16,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gen  # noqa: E402
-from paths import H, OUT_ROOT, PY, REPO  # noqa: E402
+from paths import H, OUT_ROOT, PY, PYTEST_ARGS, REPO  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("project")
@@ -25,6 +25,8 @@ ap.add_argument("--workers", type=int, default=4)
 ap.add_argument("--fresh", action="store_true")
 ap.add_argument("--set", default="train")
 ap.add_argument("--sample", type=int, default=0)
+ap.add_argument("--only", default="", help="comma-separated substrings; mutate only source files whose path contains one")
+ap.add_argument("--no-all", action="store_true", help="do not run mutants that need the whole suite (import-time lines)")
 a = ap.parse_args()
 P = a.project
 OUT = f"{OUT_ROOT}/{P}" + ("" if a.set == "train" else "_" + a.set)
@@ -55,13 +57,13 @@ if a.fresh or not os.path.exists(ctx_path):
     copy_tree(base)
     proj = f"{base}/{P}"
     env = {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": f"{proj}/src"}
-    r = sh([PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "no:xdist", "--collect-only"], proj, env)
+    r = sh([PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "no:xdist", *PYTEST_ARGS, "--collect-only"], proj, env)
     ids = [l for l in r.stdout.splitlines() if "::" in l]
     json.dump(ids, open(f"{OUT}/ids.json", "w"))
     rc = f"{OUT_ROOT}/cov.rc"
     open(rc, "w").write("[run]\nbranch = False\n[json]\nshow_contexts = True\n")
     t0 = time.time()
-    r = sh([PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "no:xdist", "--cov=src", f"--cov-config={rc}",
+    r = sh([PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "no:xdist", *PYTEST_ARGS, "--cov=src", f"--cov-config={rc}",
             "--cov-context=test", f"--cov-report=json:{ctx_path}", "--tb=short"], proj, env)
     print("baseline+coverage:", round(time.time() - t0), "s;", r.stdout.strip().splitlines()[-1])
     assert r.returncode == 0, r.stdout[-2000:]
@@ -78,6 +80,8 @@ if a.fresh or not os.path.exists(mut_path):
     for f in sorted(glob.glob(f"{REPO}/{P}/src/**/*.py", recursive=True)):
         rel = os.path.relpath(f, f"{REPO}/{P}")
         if os.path.basename(f) == "__main__.py":
+            continue
+        if a.only and not any(x in rel for x in a.only.split(",")):
             continue
         for m in gen.generate(f, a.set):
             m["file"] = rel
@@ -99,7 +103,7 @@ mutants = json.load(open(mut_path))
 from collections import Counter  # noqa: E402
 print("mutants:", len(mutants), dict(Counter("uncovered" if m["tests"] is None else "ALL" if m["tests"] == "ALL" else "sel" for m in mutants)))
 
-todo = [m for m in mutants if m["tests"] is not None]
+todo = [m for m in mutants if m["tests"] is not None and not (a.no_all and m["tests"] == "ALL")]
 res_path = f"{OUT}/results.jsonl"
 done = set()
 if os.path.exists(res_path) and not a.fresh:
@@ -148,7 +152,7 @@ def worker(w):
             if os.path.exists(f"{root}/kill.json"):
                 os.remove(f"{root}/kill.json")
             try:
-                r = sh([PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "no:xdist", "-p", "killrec",
+                r = sh([PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-p", "no:xdist", *PYTEST_ARGS, "-p", "killrec",
                         "--tb=no", *files], proj, e, timeout=tmo)
                 k = json.load(open(f"{root}/kill.json")) if os.path.exists(f"{root}/kill.json") else {"failed": [], "exit": r.returncode}
                 rec = dict(id=m["id"], failed=k["failed"], exit=k["exit"], n=len(sel) if sel else len(ids))

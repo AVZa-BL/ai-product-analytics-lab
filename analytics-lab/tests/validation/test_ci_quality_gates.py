@@ -61,11 +61,10 @@ def test_scenario_script_generates_fixture_then_builds_isolated_selector(
     expected = [
         f"-m analytics_lab.generate --scenario {scenario} --seed 42 "
         "--start-date 2026-01-01 --days 180 --scale 1000 --output-dir data/raw",
-        "deps --profiles-dir .",
-        "parse --profiles-dir . --no-partial-parse",
         # cautious indirect selection is what keeps another scenario's singular
         # tests from entering this build through the shared calendar model.
-        f"build --selector {scenario} --indirect-selection cautious --profiles-dir .",
+        f"build --selector {scenario} --indirect-selection cautious "
+        "--no-partial-parse --profiles-dir .",
     ]
     positions = [
         next(i for i, line in enumerate(commands) if fragment in line)

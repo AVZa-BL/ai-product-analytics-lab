@@ -29,7 +29,5 @@ python -m analytics_lab.generate \
 
 (
   cd game_analytics
-  dbt deps --profiles-dir .
-  dbt parse --profiles-dir . --no-partial-parse
-  dbt build --selector "${SCENARIO}" --indirect-selection cautious --profiles-dir .
+  dbt build --selector "${SCENARIO}" --indirect-selection cautious --no-partial-parse --profiles-dir .
 )

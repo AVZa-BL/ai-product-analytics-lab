@@ -56,7 +56,7 @@ Downstream figures are a weaker guarantee. Re-running a diagnostic on the same p
 
 ## 4. Query the modelled data
 
-**Connect from inside `game_analytics/`.** The models are DuckDB views over Parquet using relative paths; connecting from elsewhere produces confusing catalog errors.
+**Connect from inside `game_analytics/`.** The models are DuckDB views over Parquet using relative paths (the hybrid-subscription models are tables); connecting from elsewhere produces confusing catalog errors.
 
 ```bash
 cd game_analytics
