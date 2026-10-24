@@ -212,12 +212,11 @@ def test_the_control_reference_says_why_it_could_not_be_measured(arm, control, r
     assert unnamed.reason == found.reason.replace("variant_b", "the arm")
 
 
-def test_an_arm_that_collapsed_to_zero_is_not_called_a_control_of_zero() -> None:
+@pytest.mark.parametrize("control", [[3.0, 4.0, 2.0, 3.0] * 20, [0.0, 0.5] * 20])  # 2nd: a rate
+def test_an_arm_that_collapsed_to_zero_is_not_called_a_control_of_zero(control) -> None:
     """Only the log of the ratio fails there; control's mean is positive and a share of it is
-    defined, which the reason must not deny."""
-    found = control_reference(
-        [0.0] * 50, [3.0, 4.0, 2.0, 3.0] * 20, direction="decrease", tolerance=0.10
-    )
+    defined, which the reason must not deny, whether the mean is above 1 or not."""
+    found = control_reference([0.0] * 50, control, direction="decrease", tolerance=0.10)
 
     assert found.harm is None and found.reason is not None
     assert "control's mean" not in found.reason and "undefined" not in found.reason
