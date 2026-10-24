@@ -526,7 +526,7 @@ Milestone 4 builds the results review. These are the decisions made before it st
 ### 20.5 What stays out, and what stays open
 
 - A daily outcomes table is not added. It would allow a curve by days since exposure within a player, but it changes the generator's tables and the lab's raw contract, and the cohort test answers the question the rule asks.
-- Open for 4b: the thresholds. RES-007's significance level, and whether and where RES-012 escalates from a warning to a blocker (no published threshold for the share of late-exposed players is known to the author, so any value is a judgement and is written as one). Open for 4c: the writer of the three CSV files in the lab.
+- Open for 4b: the thresholds. RES-007's significance level, and whether and where RES-012 escalates from a warning to a blocker (no published threshold for the share of late-exposed players is known to the author, so any value is a judgement and is written as one). Open for 4c: the writer of the three CSV files in the lab (not built; 22.1).
 - `scipy` and `numpy` become core dependencies in 4a. `scipy` supplies the distributions (chi-squared for the sample-ratio check and the cohort test, t and normal for the intervals and tests), as section 17.5 anticipated for the sample-ratio check; `numpy` draws the bootstrap resamples. `statsmodels` stays a development dependency, used to validate the statistics.
 - Dunnett's test, which section 9 names, is not implemented (section 9 allows that). The corrections are Bonferroni, Benjamini-Hochberg and, when the dependence between the tests is unknown, Benjamini-Yekutieli, applied to p-values.
 
@@ -548,7 +548,7 @@ Milestone 4b builds the results rules. Before writing them, the cohort rule RES-
 
 ### 21.2 Delivery
 
-- Section 20.1's single 4b branch is replaced by two changes. 4b-1 `feat/referee-results-data-fit`: the data-fit rules of 21.4, the results context and verdict words of 21.3, and the spec and loader additions of 21.8. 4b-2 `feat/referee-results-effect`: RES-007, RES-008 and RES-004, the new design rule DES-009 and the change to DES-003's text for `new_users` (both 21.8), and the analysis they share. 4c is as in 20.1, plus the lab's CSV writer and the optional columns of 21.8.
+- Section 20.1's single 4b branch is replaced by two changes. 4b-1 `feat/referee-results-data-fit`: the data-fit rules of 21.4, the results context and verdict words of 21.3, and the spec and loader additions of 21.8. 4b-2 `feat/referee-results-effect`: RES-007, RES-008 and RES-004, the new design rule DES-009 and the change to DES-003's text for `new_users` (both 21.8), and the analysis they share. 4c is as in 20.1, plus the optional columns of 21.8 and a CSV writer that was not built (22.1).
 - This amendment is delivered in 4b-1, as its first step. 4b-2 is complete in `feat/referee-results-effect`: RES-007 (21.5 to 21.7), RES-008 (21.10 and 21.11), RES-004 (21.12), DES-009 and the new-users note of DES-003 (21.13). What was left of milestone 4 is 4c: the report, the `review-results` command (built, section 22) and the decision memo (not built, 22.1).
 
 ### 21.3 What the results rules analyse
@@ -626,7 +626,7 @@ How much traffic it takes (reported; exact Poisson arithmetic, flat arrivals, fl
 - `design.start_utc`, optional, ISO 8601 with a zero UTC offset. Blocks count from it and assignments before it are ignored and listed. Without it, a stray early row moves every block edge: moving the origin by one day changed the verdict in 5.2% to 5.7% of null experiments and three days in 6.8% to 7.8% (reported). The report (4c) states the origin, the first and last assignment and the players ignored, and whether the verdict is unchanged for origins 0 to 6 days earlier and prints no range of p values, because at least one of 7 origins flags in about 17% of null experiments (reported).
 - Both fields are optional and are dropped from the fingerprint when absent, so the pinned fingerprint of existing specs does not change (18.1). Both are parsed in 4b-1.
 - The loader reads `window_end_utc` from the outcomes file, which the lab already writes and the loader ignores. An as-of time comes from the manifest (`exported_at_utc`) or from `review-results --as-of`; it is never derived from the files' own timestamps.
-- 4c, in the lab's CSV writer: an optional `first_seen_at_utc` in the assignments file, so that `population.kind` can be checked.
+- 4c, in the lab's generator (22.1, not its CSV writer): an optional `first_seen_at_utc` in the assignments file, so that `population.kind` can be checked.
 - DES-009 (info), new in 4b-2: 7 × `daily_eligible_units` × the smallest allocation is below 45 players per arm and week, or the planned window holds fewer than 3 weekly blocks, so RES-007 will probably not be evaluated. Built in 4b-2; 21.13 records how it differs from this line: it applies RES-007's own gates to the expected players, in place of the single figure of 45, which came from the study of 21.6 that counted only the floor of 30.
 
 ### 21.9 Judgement constants, and what stays open
@@ -725,8 +725,8 @@ The report and the `review-results` command are built (4c-1). This amendment rec
 
 ### 22.1 Delivery
 
-- 4c is delivered in three changes, not the one of 20.1. 4c-1 `feat/referee-results-cli`: the report and the command (this amendment). 4c-2, in `analytics-lab/`: the optional `first_seen_at_utc` column of the assignments (21.8). 4c-3: the decision memo, as `review-results --format memo`, and the loader reading the new column. 4c-2 and 4c-3 are not built.
-- The lab has no CSV writer: it writes Parquet, and the committed export was made by the DuckDB snippet in `tests/data/hybrid_offer_page_5000/PROVENANCE.md`. 4c-2 changes the generator's table and that snippet, not a writer, so "the writer of the three CSV files" of 20.5 and 21.2 is not built.
+- 4c is delivered in three changes, not the one of 20.1. 4c-1 `feat/referee-results-cli`: the report and the command (this amendment). 4c-2 `feat/lab-first-seen-column`, in `analytics-lab/`: the optional `first_seen_at_utc` column of the assignments (21.8), built. 4c-3: the decision memo, as `review-results --format memo`, and the loader reading the new column, not built.
+- The lab has no CSV writer: it writes Parquet, and the committed export was made by the DuckDB snippet in `tests/data/hybrid_offer_page_5000/PROVENANCE.md`. 4c-2 changes the generator's table, not a writer, and the snippet copies every column (`select *`), so it did not change; "the writer of the three CSV files" of 20.5 and 21.2 is not built. The column is the player's `acquired_at_utc` (the time the product first saw the player), written for every assigned player; in the committed export of 4c-1 it is absent, because that snapshot was made before the column existed, and 4c-3 regenerates it. Measured on the 5,000-player export regenerated with the column (seed 42; the other columns and the other two files are byte-identical to the committed snapshot, and the current Referee returns the same report except the hash of the assignments file): the players were 131 to 239 days old at assignment, median 185, where 21.1 estimated about 130 to 220 from the first assignment.
 
 ### 22.2 The command
 
@@ -757,8 +757,8 @@ The report and the `review-results` command are built (4c-1). This amendment rec
 
 ### 22.6 Not built, and not verified
 
-- The decision memo and the column (22.1). A quiet RES-004 says nothing about players left out for open outcome windows, and the effect table now leaves the same players out (22.3); whether the quiet line should say how many is open for the memo.
+- The decision memo and the loader reading the column (22.1). A quiet RES-004 says nothing about players left out for open outcome windows, and the effect table now leaves the same players out (22.3); whether the quiet line should say how many is open for the memo.
 - The cost of origin sensitivity is measured at 2,824 and 29,746 players (22.4), not beyond. `design.planned_duration_days` has no upper bound and the review takes longer as it grows (an independent run: a value of 3,000,000 days took over 15 s, and 10**9 days did not finish); 4c-1 sets no limit. That the golden agrees on macOS is untested until the job runs. Closing a pipe on stdout while the report is written ends with status 3, not a clean exit.
 
-Delivered in: 4c-1 (this amendment); 4c-2 and 4c-3 are not built.
+Delivered in: 4c-1 (this amendment) and 4c-2 (the column); 4c-3 is not built.
 
