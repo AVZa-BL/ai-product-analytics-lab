@@ -19,7 +19,7 @@ Event tables also carry `ingested_at_utc`. The matched diagnostic derives source
 | `live_event_participation` | One participation; `participation_id` | `player_id` | `participated_at_{raw,local,timezone,utc}` |
 | `marketing_exposures` | One campaign exposure; `exposure_id` | `player_id` | `exposed_at_{raw,local,timezone,utc}` |
 | `product_catalogue` | One product; `sku` | None | Not applicable |
-| `experiment_assignments` | One logged player; `assignment_id`, one per `player_id` | `player_id` | `assigned_at_utc` only |
+| `experiment_assignments` | One logged player; `assignment_id`, one per `player_id` | `player_id` | `assigned_at_utc`, `first_seen_at_utc` |
 | `experiment_exposures` | One offer-page exposure, possibly several per player; `exposure_id` | `player_id` (an assigned player) | `exposed_at_utc` only |
 | `experiment_outcomes` | One logged player; `player_id` | `player_id` (an assigned player) | `window_{start,end}_utc`, `first_purchase_at_utc` |
 
@@ -54,9 +54,12 @@ content as before, and a test pins their fingerprints.
 
 Players who never subscribe are assigned by hashing the player ID with a salt, over a 21-day
 window that opens ten days after the subscription launch. Outcomes cover the seven days after
-assignment. These tables carry UTC timestamps only, with no raw, local or time-zone evidence and
-no `ingested_at_utc`, because no timestamp-normalisation defect is planted in them. A scenario
-shorter than 90 days cannot hold the experiment and is refused.
+assignment. Each assignment also carries `first_seen_at_utc`, the player's `acquired_at_utc`: when
+the product first saw the player, so that a reviewer can tell how long the assigned players had
+existed (all of them long before the window opens). These tables carry UTC timestamps only, with
+no raw, local or time-zone evidence and no `ingested_at_utc`, because no timestamp-normalisation
+defect is planted in them. A scenario shorter than 90 days cannot hold the experiment and is
+refused.
 
 `experiment_outcomes` is an addition to the two tables the design document names. The planted
 effects need arm-dependent outcomes, and the scenario's existing tables must not change.

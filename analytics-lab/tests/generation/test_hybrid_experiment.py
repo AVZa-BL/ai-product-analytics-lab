@@ -103,6 +103,7 @@ def test_the_columns_are_the_documented_ones(small: ExperimentSimulation) -> Non
         "arm",
         "assigned_at_utc",
         "arm_config_version",
+        "first_seen_at_utc",
         "scenario_run_id",
     ]
     assert list(small.tables["experiment_exposures"].columns) == [
@@ -126,6 +127,14 @@ def test_the_columns_are_the_documented_ones(small: ExperimentSimulation) -> Non
         "first_purchase_at_utc",
         "scenario_run_id",
     ]
+
+
+def test_each_assignment_says_when_its_player_was_first_seen(reference: dict) -> None:
+    frame = assigned(reference["sim"]).set_index("player_id")
+
+    first_seen = reference["players"].acquired_at_utc.loc[frame.index]
+
+    assert (frame.first_seen_at_utc == first_seen).all()
 
 
 # --- Determinism and independence ------------------------------------------------------
