@@ -13,7 +13,7 @@ Under development, in milestones:
 | 1 | Experiment spec schema and validation | Done |
 | 2 | Design-review rules, power calculations, `review-design` CLI | Done |
 | 3 | Synthetic experiment in the lab's hybrid scenario | Done |
-| 4 | Results review, `review-results` CLI, decision memo | In progress: the export reader and the statistics (4a) are done; the data-fit rules (4b-1) are built; the effect rules (4b-2), the report, the command and the memo (4c) are planned |
+| 4 | Results review, `review-results` CLI, decision memo | In progress: the export reader and the statistics (4a), the data-fit rules (4b-1), the effect rules (4b-2: RES-004, RES-007 and RES-008, with the design rule DES-009) and the report and command (4c-1) are done; the lab's `first_seen_at_utc` column (4c-2) and the memo (4c-3) are planned |
 
 ## Reviewing a design
 
@@ -33,7 +33,7 @@ The first prints a review that recommends **revise**: the design needs 389,060 u
 | 2 | The spec cannot be read or is not valid (every violation is listed) |
 | 3 | A failure inside Referee itself |
 
-Referee is advisory. `proceed` means the design raised none of the objections of the 17 design-review rules in [`docs/rules.md`](docs/rules.md), the catalogue with what triggers each and why it matters. It does not mean the experiment is worth running. The catalogue also lists the six results rules built so far (RES-001, RES-002, RES-003, RES-011, RES-012, RES-013); they read an experiment's data as well as its spec, and no command runs them yet.
+Referee is advisory. `proceed` means the design raised none of the objections of the 18 design-review rules in [`docs/rules.md`](docs/rules.md), the catalogue with what triggers each and why it matters. It does not mean the experiment is worth running. The catalogue also lists the nine results rules built so far (RES-001, RES-002, RES-003, RES-004, RES-007, RES-008, RES-011, RES-012, RES-013); they read an experiment's data as well as its spec, and `review-results` runs them (below).
 
 Things to know when writing a spec:
 
@@ -44,6 +44,28 @@ Things to know when writing a spec:
 
 The design and its amendments are in [`docs/design/`](docs/design/2026-09-28-referee-experiment-review-design.md).
 
+## Reviewing results
+
+`review-results` reads an experiment's exported data against its spec, runs the results rules and reports a verdict. The data is a folder of the lab's three CSV files, `experiment_assignments.csv`, `experiment_exposures.csv` and `experiment_outcomes.csv`, and may hold a `manifest.json`. From this folder:
+
+```bash
+python -m referee review-results examples/offer-page-results.yaml \
+    tests/data/hybrid_offer_page_5000 --experiment-id hybrid_offer_page \
+    --as-of 2026-06-30T00:00:00Z
+```
+
+The example reads the committed lab export and finds its planted problems: the arms are not the size the allocation promised (RES-001), players were first exposed after they had bought (RES-012), an arm's configuration changed (RES-013), and the effect differs between cohorts (RES-007). The verdict is **invalid**.
+
+| Verdict | Meaning | Exit status |
+| --- | --- | --- |
+| `clear` | The rules that ran found nothing that blocks or warns. It does not say the effect is real. | 0 |
+| `caution` | At least one warning, no blocker | 0 |
+| `invalid` | At least one blocker | 1 |
+
+Status 2 means the spec or the data cannot be read or reviewed (the problems are listed on stderr, up to 1,000, with their exact number), and 3 a failure inside Referee. `--experiment-id` is required; when it is left out the experiment ids in the export are listed. `--as-of` says when the export was taken, as an ISO 8601 time in UTC. It replaces the `exported_at_utc` of `manifest.json`, and without either the report says completeness of the outcome windows was not checked.
+
+The report states the spec's fingerprint and the SHA-256 of each CSV file, the origin the weeks were counted from, the first and last assignment, the players assigned, analysed and ignored, whether the run is an interim one, whether the same rules fire at the same severity if the origin is 1 to 6 days earlier (not run when `design.start_utc` is registered; it costs six more reviews, about 4 s on the example on the development machine and about twice that on a slower one), one line for each of RES-004, RES-007 and RES-008 even when it found nothing, the effect of the primary metric among the players whose outcome window had closed (labelled not to be read when RES-001, RES-003 or RES-012 blocks, and as underpowered when RES-002 does), and every finding with its evidence. `--format json` holds every row; the text lists at most 1,000 rows of a list and says so. Anything in the text that could move a terminal or forge a line (a control character or a newline in a title, an experiment or a player id) is written as an escape. The same spec and data reviewed by the same Referee on one machine give the same bytes. Between machines a float may differ in its last digits.
+
 ## Working on it
 
 Referee is self-contained. Run everything from this folder (`referee/`), with Python 3.12:
@@ -53,7 +75,13 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
 ruff check src tests
-python -m pytest -q
+python -m pytest -q                # the tests (about a minute)
+python -m pytest -q -m study     # the simulation studies the design rests on (about 3 minutes;
+                                 # naming a study file without -m study selects nothing)
 ```
+
+The cohort test's false-alarm rate and power were measured by a simulation that is part of the tests: `python tests/cohort_simulation.py --reps 5000 --out docs/simulations/cohort_trigger_null.json` repeats the study of design section 21.5 (about four minutes; add `--power` for the fade study), and the study tests (`-m study`) re-run a handful of its cells. `python tests/cohort_simulation.py --heavy --reps 5000 --printed-reps 3000 --workers 4 --out docs/simulations/cohort_trigger_heavy.json` repeats the study of heavy-tailed outcomes, unequal arms and the shift a finding prints as the smallest change it could have seen (about half an hour on four cores; `--workers` spreads the cells over processes and changes no number).
+
+The pooled effect of revenue-like metrics (how often Welch's interval and a percentile bootstrap interval miss the true difference, and what candidate heavy-tail warnings say) was measured by `python tests/pooled_simulation.py --workers 4 --out docs/simulations/pooled_effect_heavy.json` (design section 21.10; about forty minutes on four cores; `--workers` spreads the cells over processes and changes no number), and the study tests (`-m study`) make a handful of its rows again. RES-008 quotes those rates from `src/referee/pooled_rates_table.py`, which `python tests/pooled_rates_table.py > src/referee/pooled_rates_table.py` writes from that file (design section 21.11); a test makes it again and compares it with the committed copy.
 
 The runtime dependencies are PyYAML (to read spec files), NumPy and SciPy (the results statistics: the distributions and the seeded bootstrap); the power calculations and design rules use the standard library. `pytest`, `ruff` and `statsmodels` (which the tests check the power formulas and the statistics against) are development tools.

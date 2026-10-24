@@ -73,16 +73,18 @@ _POWER_NOTES = """\
 _RESULTS_NOTE = """\
 A results rule looks at an experiment's exported data together with its spec (design
 section 21), not at the spec alone. A results review ends in a **verdict**, which follows from
-the findings: `invalid` if any is a blocker, `caution` if any is a warning, `clear` otherwise.
-`clear` says that the rules which ran found nothing; it does not say the effect is real. The
-design review does not run these rules.
+the findings: `invalid` if any is a blocker, `caution` if any is a warning, `clear` otherwise
+(an info finding is listed and does not change the verdict). `clear` says that the rules which
+ran found nothing that blocks or warns; it does not say the effect is real. The design review
+does not run these rules.
 """
 
 _OUTRO = """\
 ## Not yet
 
-The rest of the `RES` family in design section 21 arrives with the results review; no command
-runs the results rules yet.
+RES-005, RES-006, RES-009 and RES-010 are not built: they check how someone else analysed the
+data, and Referee does the analysis itself (design section 21.4). The `review-results` command
+runs the results rules and prints their report (README, design section 22).
 """
 
 

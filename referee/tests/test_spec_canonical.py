@@ -2,6 +2,7 @@
 
 import dataclasses
 import functools
+import hashlib
 
 import pytest
 
@@ -69,6 +70,19 @@ def test_canonical_json_writes_non_ascii_as_it_is(raw_spec: dict) -> None:
     assert '"title":"Café – offer page"' in _spec(raw_spec).canonical_json()
 
 
+def test_a_lone_surrogate_in_a_string_has_a_fingerprint_like_any_other_character(
+    raw_spec: dict,
+) -> None:
+    raw_spec["title"] = "a\ud800b"
+    spec = _spec(raw_spec)
+
+    assert (
+        spec.sha256()
+        == hashlib.sha256(spec.canonical_json().encode("utf-8", "surrogatepass")).hexdigest()
+    )
+    assert spec.sha256() != _spec({**raw_spec, "title": "a\udfffb"}).sha256()
+
+
 def test_canonical_json_refuses_a_non_finite_number(raw_spec: dict) -> None:
     """Only a hand-built spec can hold NaN, because validation rejects it."""
     spec = _spec(raw_spec)
@@ -88,5 +102,3 @@ def test_a_missing_empty_or_null_procedure_have_the_same_fingerprint(
     raw_spec["procedure"] = section
 
     assert _spec(raw_spec).sha256() == SECTION_6_SHA256
-
-

@@ -1,14 +1,13 @@
 """Rules about what the data of a finished experiment shows (RES).
 
-The data-fit rules of design section 21.4 are here; the effect rules follow in milestone 4b-2.
-A rule reads a `ResultsContext` and returns the evidence that triggered it.
+The data-fit rules of design section 21.4 are here, with the guardrail rule RES-004 and the effect
+rules RES-007 and RES-008. A rule reads a `ResultsContext` and returns the evidence that
+triggered it.
 """
 
 from __future__ import annotations
 
-import math
 from collections import Counter, defaultdict
-from datetime import timedelta
 from typing import Any
 
 from referee.methods import (
@@ -19,15 +18,24 @@ from referee.methods import (
     homogeneity_test,
     srm_test,
 )
+from referee.pooled_rates import EXCESS_RATE, NOMINAL_RATE, UNIT, percent
 from referee.results import ResultsContext, difference_summary, effect_estimates
 from referee.rules.base import Escalation, Rule
-from referee.rules.references import FABIJAN_ET_AL_2019, KOHAVI_TANG_XU_2020
+from referee.rules.cohorts import cohort_report
+from referee.rules.guardrails import guardrail_report
+from referee.rules.heavy_tails import heavy_tail_report
+from referee.rules.references import (
+    COCHRAN_1954,
+    FABIJAN_ET_AL_2019,
+    HIGGINS_THOMPSON_2002,
+    KOHAVI_ET_AL_2014,
+    KOHAVI_TANG_XU_2020,
+)
 
 LATE_SHARE_ALPHA = 0.001  # RES-012's escalation; its own judgement, not SRM_ALPHA (section 21.9)
 _SHARE_DIGITS = 4
 _CHI_SQUARE_DIGITS = 4
 _EXPECTED_DIGITS = 2
-_DAY = timedelta(days=1)
 
 
 def _allocation(context: ResultsContext) -> list[float]:
@@ -262,8 +270,8 @@ def _shorter_than_the_registered_minimum(context: ResultsContext) -> dict[str, A
     """The assignments span fewer whole days than design.min_duration_days."""
     first = min(player.assigned_at for player in context.players)
     last = max(player.assigned_at for player in context.players)
-    observed_days = math.ceil((last - first) / _DAY)
     design = context.spec.design
+    observed_days = context.observed_days
     if observed_days >= design.min_duration_days:
         return None
     return {
@@ -274,6 +282,48 @@ def _shorter_than_the_registered_minimum(context: ResultsContext) -> dict[str, A
         "last_assignment": last.isoformat(),
         "ignored_before_start": list(context.ignored_before_start),
     }
+
+
+def _effect_differs_between_cohorts(context: ResultsContext) -> dict[str, Any] | None:
+    """The cohort test of design sections 21.5 to 21.7, when anything is flagged or not run."""
+    report = cohort_report(context, _configuration_changed(context))
+    summary = report["summary"]
+    if not (summary["flagged"] or summary["not_evaluated"]):
+        return None
+    return report
+
+
+def _guardrail_breached(context: ResultsContext) -> dict[str, Any] | None:
+    """A guardrail worse than its tolerance, shown or possible (design section 21.12)."""
+    report = guardrail_report(context)
+    summary = report["summary"]
+    if not (summary["breach_shown"] or summary["breach_possible"]):
+        return None
+    return report
+
+
+def _breach_is_shown(evidence: dict[str, Any]) -> bool:
+    """The whole 95% interval for the harm lies beyond the tolerance in at least one comparison."""
+    return bool(evidence.get("summary", {}).get("breach_shown"))
+
+
+def _heavy_tailed_metric(context: ResultsContext) -> dict[str, Any] | None:
+    """The signs of a heavy tail (design section 21.11), when any arm and metric shows one."""
+    report = heavy_tail_report(context)
+    if not report["summary"]["tripped"]:
+        return None
+    return report
+
+
+def _simulated_rate_is_high(evidence: dict[str, Any]) -> bool:
+    """The largest simulated rate for the effects nearer the difference seen (both ranges, when
+    it cannot be told which are nearer) is above `EXCESS_RATE`, or a comparison lies beyond the
+    simulated cases in a direction in which the rates rose."""
+    summary = evidence.get("summary", {})
+    largest = summary.get("largest_simulated_rate")
+    return (largest is not None and largest > EXCESS_RATE / UNIT) or bool(
+        summary.get("floor_ranges")
+    )
 
 
 RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
@@ -358,6 +408,240 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         ),
         references=(KOHAVI_TANG_XU_2020,),
         check=_shorter_than_the_registered_minimum,
+    ),
+    Rule(
+        id="RES-004",
+        severity="warning",
+        title="A guardrail is worse than its tolerance allows, or may be",
+        fires_when=(
+            "For a non-control arm and a guardrail of the spec, on the analysed players (those "
+            "whose seven-day outcome window had not closed at the export are left out, where "
+            "the export's time is known), the "
+            "harm is measured as a share of a reference value (positive when worse in the "
+            "guardrail's harmful_direction) against two references: control's observed mean "
+            "(the arm's mean over control's, with a 95% interval from the log scale and "
+            "Satterthwaite's degrees of freedom) and the registered baseline (the arm's own "
+            "mean with a t interval, or its rate with a Wilson interval). The rule fires when, "
+            "on either reference, the point estimate of the harm is beyond "
+            "tolerance_relative, strictly. The breach is shown when the whole 95% interval is "
+            "beyond it, and possible when only the point estimate is. Three kinds of reading "
+            "can only make a breach possible: an interval with no width (every player of a "
+            "group has the same value) when that many players alike would arise by chance, at "
+            "the other group's share of players with that value, in at least 2.5% of samples; "
+            "and the registered-baseline reading of a revenue-like guardrail whose fall is "
+            "harmful, for a group with some spread, whose t interval lies wholly below the "
+            "true mean more often than it should (a guardrail is revenue-like by its metric "
+            "name); and the registered-baseline reading of an arm when control itself is "
+            "beyond the tolerance of the registered baseline (the whole interval) while the "
+            "reading against control's mean is within it, since the arm may be what control "
+            "is. The harm and its "
+            "interval are rounded to 6 places and the "
+            "decision is made on the rounded figures that the evidence shows. A comparison "
+            "with a point estimate within the tolerance does not fire the rule, even where "
+            "its interval reaches beyond it; the evidence marks it as one in which the data "
+            "cannot rule out a breach. A reference that cannot be measured (a group with "
+            "fewer than 2 players, though one is enough for the rate of a binary guardrail "
+            "against the registered baseline; no variation in both groups; a mean not above "
+            "0 against control's mean; a registered baseline not above 0; numbers too large "
+            "or too small) is reported with its reason and the other decides."
+        ),
+        why_it_matters=(
+            "A guardrail is the registered limit on what a change may cost. A change that "
+            "improves the primary metric and breaks a guardrail has not won on the primary "
+            "metric alone, and a harm that is real in the sample may be larger or smaller in "
+            "the population, so a point estimate beyond the tolerance is not the same as a "
+            "breach. Referee therefore separates a breach that is shown (the whole interval "
+            "is beyond the tolerance) from one that is only possible (the interval still "
+            "reaches inside it), and reads the harm against control's observed mean, which "
+            "is the change the experiment caused, and against the registered baseline, which "
+            "is the spec as written. When the two disagree, the stricter decides and the note "
+            "says which; when control itself is beyond the tolerance of the registered "
+            "baseline, the baseline may no longer describe the traffic, and a breach against "
+            "it alone does not show that the arm caused it. The intervals are unadjusted for "
+            "the number of arms and guardrails, so with several of them some will miss, and "
+            "they take the players to be independent: with a session or a cluster as the unit "
+            "they are too narrow, which the note says. A "
+            "guardrail within its tolerance is not a finding, and where its interval reaches "
+            "beyond the tolerance the data cannot rule out a breach."
+        ),
+        remediation=(
+            "Do not decide on the primary metric alone. If a shown breach rests only on the "
+            "registered baseline (the note says which reference decides), or the note says "
+            "that control itself is beyond the baseline's tolerance, first check whether the "
+            "baseline still describes this traffic (season, platform mix, a change since it "
+            "was registered): read the arm against control, and register a new baseline for "
+            "the next test, not for this one. If the reading against control's mean also "
+            "shows the breach, find what the arm does to the guardrail and either fix it or "
+            "drop the arm; the tolerance was registered before the data, so do not move it "
+            "now. For a breach that is only possible, the data cannot tell a breach from "
+            "noise: have the guardrail's owner decide in writing, before the decision, "
+            "whether the possible harm is acceptable, or run a new registered test of the "
+            "guardrail with its own sample size, analysed once at its end. Do not keep adding "
+            "players to this test until the interval clears the tolerance: that is another "
+            "look at the data, the 95% interval does not cover it, and Referee does not "
+            "adjust for it. For a binary guardrail with few events or non-events the interval "
+            "is rough, and for a revenue-like one it is less reliable than 95% suggests: see "
+            "the note."
+        ),
+        references=(KOHAVI_TANG_XU_2020,),
+        check=_guardrail_breached,
+        escalation=Escalation(
+            to="blocker",
+            when=(
+                "the breach is shown in at least one comparison: the whole 95% interval for the "
+                "harm is beyond the tolerance on at least one of the two references, not "
+                "counting an interval with no width that chance could explain, the "
+                "registered-baseline reading of a revenue-like guardrail whose fall is "
+                "harmful, for a group with some spread, or the registered-baseline reading "
+                "when control itself is beyond the baseline's tolerance and the reading "
+                "against control's mean is within it, which count as possible."
+            ),
+            applies=_breach_is_shown,
+        ),
+    ),
+    Rule(
+        id="RES-007",
+        severity="warning",
+        title="The effect differs between cohorts of first exposure, or the test could not run",
+        fires_when=(
+            "For a non-control arm and one of the metrics of the spec (the primary metric or a "
+            "guardrail), the arm's difference against control is compared between cohorts: the "
+            "analysed players of the arm whose first exposure falls in one 7-day block (one "
+            "14-day block when the weekly cohorts are too small and the plan is at least 42 "
+            "days), counted from design.start_utc, else from the first assignment. The arm and "
+            "metric are flagged when, on both the absolute scale (the Welch difference) and the "
+            "relative scale (the log of the ratio of the means), Cochran's Q or the weighted "
+            "slope of the difference over the blocks has p below 0.025 divided by the number "
+            "of non-control arms. The rule fires when any arm and metric is flagged, or could "
+            "not be evaluated: the evidence then gives a reason code, "
+            "window_holds_fewer_than_3_blocks (a plan shorter than 21 days), "
+            "fewer_than_3_cohorts_reach_minimum, cohorts_do_not_cover_the_window, "
+            "cohorts_too_small_for_weekly_blocks (the median week of the smaller arm has fewer "
+            "than 60 players), allocation_too_unequal (the arms differ by more than 9 to 1), "
+            "outcome_window_incomplete (an outcome window had not closed at the export), "
+            "unit_not_independent (the units are not independent players), "
+            "ratio_metric_not_validated, or, when the effects of the cohorts could not be "
+            "estimated on a scale, no_variation, non_positive_mean or not_estimable."
+        ),
+        why_it_matters=(
+            "The pooled effect is an average over players who were first exposed at different "
+            "times. If the effect differs between those cohorts, the pooled figure describes "
+            "none of them well, and what a later launch sees can differ from it. The test says "
+            "that the effect differs, not why: a change tied to the calendar week of a cohort "
+            "(a launch, a promotion, a build, the mix of players acquired) cannot be told from "
+            "one tied to each player's own time since first exposure, because the export "
+            "holds seven-day totals only. A test that could not run is reported too, so that a "
+            "missing check cannot read as a pass."
+        ),
+        remediation=(
+            "Read the table of cohorts in the evidence before the pooled effect: each cohort's "
+            "difference and its standard error on both scales. Find out what differed between "
+            "the weeks of the cohorts (a launch, a promotion, a build, a change in where "
+            "players come from; RES-013 shows a change of configuration), and report the "
+            "pooled effect together with the cohort table, naming no cause the data cannot "
+            "show. For existing players, check whether the earliest cohorts are the most "
+            "active. A flag labelled low information is a lead to re-check with more data at "
+            "the planned end, not a finding. If the test did not run, the reason code says what "
+            "was missing: more traffic or a longer run, arms closer in size, an export made "
+            "after every outcome window has closed, randomisation and analysis in the same "
+            "independent unit (player, user or device), or a metric that is not a ratio; for "
+            "an effect that could not be estimated, values that vary in both arms with a mean "
+            "above 0. The evidence prices the traffic that "
+            "would let the cohorts be used, from the sizes observed (plans, traffic_needed), says "
+            "when to export again if the outcome windows of some cohorts had not closed, or "
+            "says why more traffic would not help."
+        ),
+        references=(COCHRAN_1954, HIGGINS_THOMPSON_2002, KOHAVI_TANG_XU_2020),
+        check=_effect_differs_between_cohorts,
+    ),
+    Rule(
+        id="RES-008",
+        severity="info",
+        title=(
+            "Skewed or heavy-tailed metric: its 95% interval can be wrong more or less often "
+            "than 5% of the time"
+        ),
+        fires_when=(
+            "For a non-control arm and a metric of the spec that is not binary (the primary "
+            "metric or a guardrail), the analysed players of the arm and of control are "
+            "compared, and at least one of three signs shows in either group: the rule of "
+            "thumb of Kohavi, Deng, Longbotham and Xu (2014), a sample skewness above 1 in size "
+            "in a group of fewer players than 355 times the square of that skewness; an excess "
+            "kurtosis above 100; or the top 1% of the group's players (at least one) holding "
+            "more than half of the total of the metric. Every split between the arms is read, "
+            "equal arms included. The skewness, kurtosis and share are rounded to 6 places and "
+            "the decision is made on the rounded figures that the evidence shows. A group that "
+            "cannot be read (fewer than 2 players, every value 0 or the same, a negative value, "
+            "values that are not finite or are too large or too small to measure) is reported "
+            "with its reason and the pair is judged on the other group; a pair with no sign "
+            "and a group that could not be read is reported as not evaluated and does not "
+            "fire the rule on its own."
+        ),
+        why_it_matters=(
+            "Welch's interval for a difference of means, the one Referee prints, assumes that "
+            "the mean of each arm is nearly normal. For a metric that most players leave at "
+            "zero and a few drive up, that takes more players than an experiment often has "
+            "(by the rule of thumb of Kohavi et al., revenue per user, with a skewness of about "
+            "18, needs about 114,000 users), and below that size the interval is wrong more or "
+            "less often than the 5% it states. Referee measured how often for a revenue-like "
+            "metric of independent players in two arms (design section 21.10), and the "
+            "finding quotes the simulated cases on each side of the comparison: with equal "
+            "arms the interval "
+            "was mostly close to or under 5% for a small effect and above it for a large one; "
+            "with arms of unequal size it was often above 5%, for a small effect mostly on the "
+            "side that makes the larger arm look better than it is, and it was worst when the "
+            "control was the larger arm (the arm there being the group with the higher mean); "
+            "and at 9 to 1 with no effect it was worse the fewer "
+            "the players who spend in the smaller arm. These rates come from one simulated "
+            "family and are not a measure of the experiment in hand. Which simulated effects "
+            "are read is decided by the difference seen between the two means, which for a "
+            "heavy-tailed metric is itself noisy: with arms of about equal size an experiment "
+            "with no effect can read as a warning and one with a large effect as info, and "
+            "above the largest number of players who spend that was simulated the range of "
+            "that case is used, which may be a ceiling there. A quiet RES-008 is not "
+            "evidence that the interval is reliable: in the simulations every run of a "
+            "revenue-like metric showed a sign. For a metric that is not revenue-like the "
+            "finding gives the signs and says that no error rate was measured."
+        ),
+        remediation=(
+            "Where an entry gives a simulated rate, read it in place of 5%: an interval that "
+            "failed in 10% of simulated experiments behaved like a 90% interval, and for a "
+            "small effect and arms of unequal size it mostly favoured the larger group. Where "
+            "an entry states no error rate (a metric that is not revenue-like, units that are "
+            "not independent players, a group with no analysed players, or no player who "
+            "spends in the smaller group), treat its "
+            "interval as unchecked: the signs show that it may be unreliable, but Referee has "
+            "not measured how much. Do not call the result "
+            "significant, or not, on one edge of this interval: if an end of it is close to "
+            "zero or to a decision threshold, say that the result is uncertain. Where you can "
+            "choose, do not make the control the larger arm, which was the worst case in the "
+            "simulations (where the arm has the higher mean; for a metric you expect to fall, "
+            "avoid the larger arm instead), and plan for more players who spend in the "
+            "smaller arm. For a "
+            "decision that rests on this metric, consider a less skewed version of it (a cap "
+            "on the amount per player, or a transformation): Kohavi et al. report that capping "
+            "revenue per user cut its skewness from about 18 to about 5. It changes what is "
+            "estimated, and Referee has not measured how well capping, trimming or a "
+            "transformation works, so register the choice before the next test and not after "
+            "seeing the data. Referee shows no bootstrap interval, because in its simulations "
+            "the percentile bootstrap interval failed more often than Welch's in most of the "
+            "cells it was run on."
+        ),
+        references=(KOHAVI_ET_AL_2014, KOHAVI_TANG_XU_2020),
+        check=_heavy_tailed_metric,
+        escalation=Escalation(
+            to="warning",
+            when=(
+                "the simulated range for the effects nearer the difference seen (both ranges, "
+                "when the means cannot be compared) reaches above "
+                f"{percent(EXCESS_RATE)}, which is {EXCESS_RATE / NOMINAL_RATE:g} times the "
+                f"{percent(NOMINAL_RATE)[:-3]}% an interval of this level should fail in, or "
+                "that comparison lies beyond the simulated cases in a direction in which the "
+                "simulated rates rose, so that the true rate is probably above the range "
+                "printed."
+            ),
+            applies=_simulated_rate_is_high,
+        ),
     ),
     Rule(
         id="RES-011",

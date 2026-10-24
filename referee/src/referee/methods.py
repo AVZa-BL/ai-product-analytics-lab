@@ -36,6 +36,15 @@ class StatsError(ValueError):
     """The input does not allow a meaningful answer; the message says why."""
 
 
+class NoVariationError(StatsError):
+    """Nothing varies (neither group, or the one group measured), so a standard error or a
+    kurtosis would be 0 or undefined and nothing can be tested."""
+
+
+class NonPositiveMeanError(StatsError):
+    """A group's mean is not above 0, so the log of a ratio of means does not exist."""
+
+
 def _check_alpha(alpha: float) -> None:
     if not 0 < alpha < 1:
         raise StatsError(f"alpha must be between 0 and 1, got {alpha!r}")
@@ -50,6 +59,12 @@ def _is_constant(values: Sequence[float]) -> bool:
     """
     low, high = min(values), max(values)
     return high - low <= 8 * sys.float_info.epsilon * max(abs(low), abs(high))
+
+
+def values_are_constant(values: Sequence[float]) -> bool:
+    """Whether the values are equal up to a few units of floating-point rounding (the test the
+    functions of this module use for "does not vary"); False for no values."""
+    return bool(values) and _is_constant(values)
 
 
 def _is_whole(value: float) -> bool:
@@ -331,7 +346,7 @@ def welch_difference(
     mean_b, var_b = _mean_and_variance(b, "control")
     part_a, part_b = var_a / len(a), var_b / len(b)
     if part_a + part_b == 0:
-        raise StatsError(
+        raise NoVariationError(
             "neither group varies, so the standard error is 0 and nothing can be tested"
         )
     std_error = math.sqrt(part_a + part_b)
@@ -354,6 +369,130 @@ def welch_difference(
         p_value=float(2 * stats.t.sf(abs(t_statistic), degrees)),
         ci_low=difference - margin,
         ci_high=difference + margin,
+        confidence=1 - alpha,
+    )
+
+
+def welch_correction(degrees_of_freedom: float) -> float:
+    """The factor sqrt(nu / (nu - 2)) by which a standard error estimated on nu degrees of
+    freedom is multiplied when it is used as if it were known.
+
+    A standard error estimated from small samples is itself uncertain, and weighting cohorts
+    by its inverse square then makes Cochran's Q too large; the factor is the standard
+    deviation of a t variable on nu degrees of freedom. It is a proposal validated by
+    simulation only (design section 21.1), not a published method. Raises `StatsError` unless
+    nu is finite and above 2, where that variance exists.
+    """
+    if not (math.isfinite(degrees_of_freedom) and degrees_of_freedom > 2):
+        raise StatsError(
+            f"the correction needs degrees of freedom above 2, got {degrees_of_freedom!r}"
+        )
+    return math.sqrt(degrees_of_freedom / (degrees_of_freedom - 2))
+
+
+# --- A ratio of means, on the log scale ----------------------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class LogRatio:
+    """log(mean(treatment) / mean(control)), with the delta-method standard error."""
+
+    n_treatment: int
+    n_control: int
+    mean_treatment: float
+    mean_control: float
+    log_ratio: float
+    std_error: float
+    degrees_of_freedom: float
+
+
+def _relative_variance_of_mean(values: list[float], mean: float, name: str) -> float:
+    """The variance of the mean of `values` divided by the mean squared.
+
+    Worked out on the values divided by their mean, so that a tiny mean with a tiny spread
+    does not underflow to a spread of 0, which would read as "does not vary".
+    """
+    scaled = [value / mean for value in values]
+    if not all(math.isfinite(value) for value in scaled):
+        raise StatsError("the relative variance is too large to represent")
+    _, variance = _mean_and_variance(scaled, name)
+    return variance / len(values)
+
+
+def log_mean_ratio(treatment: Sequence[float], control: Sequence[float]) -> LogRatio:
+    """The log of the ratio of two group means, and its standard error by the delta method.
+
+    The variance of log(mean) is s^2 / (n * mean^2), so for independent groups the variance of
+    the log ratio is the sum of the two, and the degrees of freedom are Satterthwaite's for
+    those two parts, as in `welch_difference`. It is the relative scale of an effect: a constant
+    relative effect is a constant log ratio whatever the baseline. Raises `NonPositiveMeanError`
+    when either mean is not above 0, `NoVariationError` when neither group varies, and
+    `StatsError` for fewer than 2 values in a group or numbers too large to square.
+    """
+    a, b = _finite(treatment, "treatment"), _finite(control, "control")
+    mean_a, var_a = _mean_and_variance(a, "treatment")
+    mean_b, var_b = _mean_and_variance(b, "control")
+    if mean_a <= 0 or mean_b <= 0:
+        raise NonPositiveMeanError("both means must be above 0 for a ratio of means")
+    part_a = _relative_variance_of_mean(a, mean_a, "treatment")
+    part_b = _relative_variance_of_mean(b, mean_b, "control")
+    total = part_a + part_b
+    if total == 0:
+        raise NoVariationError(
+            "neither group varies, so the standard error is 0 and nothing can be tested"
+        )
+    if not math.isfinite(total):
+        raise StatsError("the relative variance is too large to represent")
+    share_a, share_b = part_a / total, part_b / total
+    degrees = 1.0 / (share_a**2 / (len(a) - 1) + share_b**2 / (len(b) - 1))
+    return LogRatio(
+        n_treatment=len(a),
+        n_control=len(b),
+        mean_treatment=mean_a,
+        mean_control=mean_b,
+        log_ratio=math.log(mean_a / mean_b),
+        std_error=math.sqrt(total),
+        degrees_of_freedom=degrees,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class MeanRatio:
+    """mean(treatment) / mean(control), with an interval from the log scale."""
+
+    n_treatment: int
+    n_control: int
+    mean_treatment: float
+    mean_control: float
+    ratio: float
+    ci_low: float
+    ci_high: float
+    degrees_of_freedom: float
+    confidence: float
+
+
+def mean_ratio(
+    treatment: Sequence[float], control: Sequence[float], *, alpha: float = 0.05
+) -> MeanRatio:
+    """The ratio of two group means with its (1 - alpha) interval.
+
+    The interval is exp(log ratio +- t * se) with `log_mean_ratio`'s delta-method standard error
+    and Satterthwaite degrees of freedom, so it is asymmetric on the ratio scale, never reaches
+    below 0, and allows for the uncertainty of the control's mean (a difference divided by the
+    control's observed mean does not). Raises what `log_mean_ratio` raises.
+    """
+    _check_alpha(alpha)
+    found = log_mean_ratio(treatment, control)
+    margin = float(stats.t.ppf(1 - alpha / 2, found.degrees_of_freedom)) * found.std_error
+    return MeanRatio(
+        n_treatment=found.n_treatment,
+        n_control=found.n_control,
+        mean_treatment=found.mean_treatment,
+        mean_control=found.mean_control,
+        ratio=found.mean_treatment / found.mean_control,
+        ci_low=math.exp(found.log_ratio - margin),
+        ci_high=math.exp(found.log_ratio + margin),
+        degrees_of_freedom=found.degrees_of_freedom,
         confidence=1 - alpha,
     )
 
@@ -432,12 +571,103 @@ def two_proportion_difference(
     )
 
 
+# --- One group on its own: the mean and the rate -------------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class MeanInterval:
+    """The mean of one group, from the t distribution."""
+
+    n: int
+    mean: float
+    std_error: float
+    degrees_of_freedom: float
+    ci_low: float
+    ci_high: float
+    confidence: float
+
+
+def mean_interval(values: Sequence[float], *, alpha: float = 0.05) -> MeanInterval:
+    """The (1 - alpha) t interval for the mean of one group: mean +- t * s / sqrt(n).
+
+    It is the one-group form of `welch_difference`. Raises `StatsError` for fewer than 2
+    values and `NoVariationError` when they do not vary, because the standard error is then 0
+    and the interval would claim a certainty the data cannot give (a caller that knows better
+    can take the mean of such a group itself).
+    """
+    _check_alpha(alpha)
+    numbers = _finite(values, "values")
+    mean, variance = _mean_and_variance(numbers, "values")
+    if variance == 0:
+        raise NoVariationError("the values do not vary, so the standard error is 0")
+    std_error = math.sqrt(variance / len(numbers))
+    degrees = float(len(numbers) - 1)
+    margin = float(stats.t.ppf(1 - alpha / 2, degrees)) * std_error
+    return MeanInterval(
+        n=len(numbers),
+        mean=mean,
+        std_error=std_error,
+        degrees_of_freedom=degrees,
+        ci_low=mean - margin,
+        ci_high=mean + margin,
+        confidence=1 - alpha,
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class RateInterval:
+    """The rate of one group, from the Wilson score interval."""
+
+    n: int
+    successes: int
+    rate: float
+    ci_low: float
+    ci_high: float
+    confidence: float
+
+
+def proportion_interval(successes: int, n: int, *, alpha: float = 0.05) -> RateInterval:
+    """The (1 - alpha) Wilson score interval for one rate.
+
+    With z the normal quantile and p = successes / n, the interval is centred on
+    (p + z^2 / 2n) / (1 + z^2 / n) with half-width z / (1 + z^2 / n) * sqrt(p (1 - p) / n +
+    z^2 / 4n^2). Unlike the Wald interval it stays inside [0, 1] and keeps its width for a rate
+    of 0 or 1 or a small group. Reference: Wilson (1927), "Probable inference, the law of
+    succession, and statistical inference"; Brown, Cai and DasGupta (2001), "Interval
+    estimation for a binomial proportion", Statistical Science. Raises `StatsError` for counts
+    that are not whole numbers or not possible.
+    """
+    _check_alpha(alpha)
+    if not (_is_whole(successes) and _is_whole(n)):
+        raise StatsError(f"counts must be whole numbers, got {successes} and {n}")
+    if n < 1 or not 0 <= successes <= n:
+        raise StatsError(f"{successes} successes out of {n} is not possible")
+    z = float(stats.norm.ppf(1 - alpha / 2))
+    rate = successes / n
+    scale = 1 + z * z / n
+    centre = (rate + z * z / (2 * n)) / scale
+    half = z / scale * math.sqrt(rate * (1 - rate) / n + z * z / (4 * n * n))
+    # The closed form gives exactly 0 and 1 at the ends; the float arithmetic can miss by 1e-19.
+    low = 0.0 if successes == 0 else min(rate, max(0.0, centre - half))
+    high = 1.0 if successes == n else max(rate, min(1.0, centre + half))
+    return RateInterval(
+        n=n, successes=successes, rate=rate, ci_low=low, ci_high=high, confidence=1 - alpha
+    )
+
+
 # --- How heavy the tail of a metric is -----------------------------------------------------
+
+
+_TOO_LARGE_FOR_MOMENTS = (
+    "the values hold numbers too large or too small to sum or to take their fourth power, so "
+    "the skewness and kurtosis cannot be computed"
+)
 
 
 @dataclass(frozen=True, kw_only=True)
 class HeavyTail:
     n: int
+    skewness: float
     excess_kurtosis: float
     top_percent: int
     top_count: int
@@ -447,11 +677,15 @@ class HeavyTail:
 def heavy_tail_measures(values: Sequence[float], *, top_percent: int = 1) -> HeavyTail:
     """How concentrated and how heavy-tailed a non-negative metric is. A description, not a test.
 
-    `excess_kurtosis` is m4 / m2^2 - 3 with the moments taken about the mean and divided by n
-    (what `scipy.stats.kurtosis` returns by default), so it is 0 for a normal distribution.
+    `skewness` is m3 / m2^1.5 and `excess_kurtosis` is m4 / m2^2 - 3, with the moments taken about
+    the mean and divided by n (what `scipy.stats.skew` and `scipy.stats.kurtosis` return by
+    default); the kurtosis is 0 for a normal distribution.
     `top_share` is the share of the total held by the largest `ceil(n * top_percent / 100)`
     values, the same rule the lab's readout uses for revenue. Both are noisy for small groups.
-    Raises `StatsError` for fewer than 2 values, no variation, a negative value or a total of 0.
+    Raises `StatsError` for fewer than 2 values, a negative value, a total of 0 or values so
+    large or so small that their sum or a power of their spread overflows or underflows (about
+    1e77 and above, or the spread below about 1e-77), and `NoVariationError` (a `StatsError`)
+    when they do not vary.
     """
     if (
         isinstance(top_percent, bool)
@@ -464,20 +698,32 @@ def heavy_tail_measures(values: Sequence[float], *, top_percent: int = 1) -> Hea
         raise StatsError(f"values needs at least 2 values, got {len(numbers)}")
     if min(numbers) < 0:
         raise StatsError("the top share is defined for non-negative values only")
-    total = math.fsum(numbers)
+    try:
+        total = math.fsum(numbers)
+    except OverflowError:  # the values are finite but their sum is beyond any float
+        raise StatsError(_TOO_LARGE_FOR_MOMENTS) from None
     if total == 0:
         raise StatsError("the values sum to 0, so no value holds a share of the total")
     n = len(numbers)
     mean = total / n
-    second = math.fsum((v - mean) ** 2 for v in numbers) / n
-    if second == 0 or _is_constant(numbers):
-        raise StatsError("the values do not vary, so the kurtosis is undefined")
-    fourth = math.fsum((v - mean) ** 4 for v in numbers) / n
+    if _is_constant(numbers):
+        raise NoVariationError("the values do not vary, so the kurtosis is undefined")
+    try:
+        second = math.fsum((v - mean) ** 2 for v in numbers) / n
+        if second == 0:  # the values differ, but their squared spread is below any float
+            raise StatsError(_TOO_LARGE_FOR_MOMENTS)
+        third = math.fsum((v - mean) ** 3 for v in numbers) / n
+        fourth = math.fsum((v - mean) ** 4 for v in numbers) / n
+        skewness = third / second**1.5
+        excess_kurtosis = fourth / second**2 - 3.0
+    except (OverflowError, ZeroDivisionError):  # a power of the spread is beyond any float
+        raise StatsError(_TOO_LARGE_FOR_MOMENTS) from None
     top_count = (n * top_percent + 99) // 100
     top = sorted(numbers, reverse=True)[:top_count]
     return HeavyTail(
         n=n,
-        excess_kurtosis=fourth / second**2 - 3.0,
+        skewness=skewness,
+        excess_kurtosis=excess_kurtosis,
         top_percent=top_percent,
         top_count=top_count,
         top_share=math.fsum(top) / total,
@@ -743,6 +989,131 @@ def cohort_heterogeneity(
         slope_z_statistic=slope_z,
         slope_p_value=float(2 * stats.norm.sf(abs(slope_z))),
     )
+
+
+# --- What the cohort test could have seen ---------------------------------------------------
+
+CohortShape = Literal["linear_fade", "step"]
+_POWER_NODES, _POWER_WEIGHTS = np.polynomial.legendre.leggauss(400)
+_SURE_MARGIN = 40.0  # standard deviations past a cut at which the normal's tail is below 1e-300
+
+
+def _cohort_pattern(positions: Sequence[float], shape: CohortShape) -> list[float]:
+    """The shape of a change across the cohorts, scaled so that its largest value is 1.
+
+    A linear fade falls in a straight line from 1 in the first cohort to 0 in the last. A step
+    is 1 in the cohorts before the middle of the positions and 0 from there on.
+    """
+    first, last = min(positions), max(positions)
+    if shape == "linear_fade":
+        return [(last - x) / (last - first) for x in positions]
+    if shape == "step":
+        middle = (first + last) / 2
+        return [1.0 if x < middle else 0.0 for x in positions]
+    raise StatsError(f"unknown shape {shape!r}")
+
+
+def cohort_power(
+    effects: Sequence[float],
+    std_errors: Sequence[float],
+    *,
+    positions: Sequence[float] | None = None,
+    level: float,
+) -> float:
+    """The chance that Cochran's Q or the weighted slope flags cohorts whose true effects differ.
+
+    The cohorts' estimates are taken as normal with the given true `effects` and known
+    `std_errors`, the weights `cohort_heterogeneity` uses. Q is then the slope's square plus a
+    remainder on (cohorts - 2) degrees of freedom, and the two are independent: the slope is
+    N(mu, 1) and the remainder noncentral chi-squared, so the chance of not flagging is a single
+    integral over the slope, done here with 400-point Gauss-Legendre quadrature. A statistic
+    flags when its p value is below `level`. With all effects equal this is the false-alarm rate
+    of Q-or-slope at `level`.
+    """
+    d = _finite(effects, "effects")
+    se = _finite(std_errors, "std_errors")
+    k = len(d)
+    if k < 3 or len(se) != k:
+        raise StatsError(f"need one standard error per effect and at least 3 cohorts, got {k}")
+    if any(error <= 0 for error in se):
+        raise StatsError("every standard error must be above 0")
+    x = list(range(k)) if positions is None else _finite(positions, "positions")
+    if len(x) != k or len(set(x)) < 2:
+        raise StatsError("need one position per cohort and at least 2 different positions")
+    _check_alpha(level)
+    weight = [1.0 / error**2 for error in se]
+    total = math.fsum(weight)
+    d_bar = math.fsum(w * v for w, v in zip(weight, d, strict=True)) / total
+    x_bar = math.fsum(w * p for w, p in zip(weight, x, strict=True)) / total
+    spread = math.fsum(w * (p - x_bar) ** 2 for w, p in zip(weight, x, strict=True))
+    q_noncentral = math.fsum(w * (v - d_bar) ** 2 for w, v in zip(weight, d, strict=True))
+    mu = math.fsum(w * (p - x_bar) * v for w, p, v in zip(weight, x, d, strict=True)) / math.sqrt(
+        spread
+    )
+    remainder = max(q_noncentral - mu**2, 0.0)
+
+    slope_cut = float(stats.norm.isf(level / 2))
+    q_cut = float(stats.chi2.isf(level, k - 1))
+    z = slope_cut * _POWER_NODES
+    # Not flagged: |slope z| below its cut AND z^2 + remainder below Q's cut.
+    room = q_cut - z**2
+    if remainder > (math.sqrt(q_cut) + _SURE_MARGIN) ** 2:
+        # A noncentral chi-squared is at least the square of a normal deviate shifted by
+        # sqrt(remainder), so this far past Q's cut the chance of staying under it is below any
+        # float: Q flags for certain. scipy's cdf turns NaN from a remainder near 1e19, which
+        # `max` below would read as a power of 0.
+        quiet = np.zeros_like(z)
+    else:
+        quiet = np.where(room > 0, stats.ncx2.cdf(np.maximum(room, 0.0), k - 2, remainder), 0.0)
+    density = stats.norm.pdf(z - mu)
+    not_flagged = slope_cut * float(np.sum(_POWER_WEIGHTS * density * quiet))
+    return float(min(1.0, max(0.0, 1.0 - not_flagged)))
+
+
+def cohort_detectable_shift(
+    std_errors: Sequence[float],
+    *,
+    positions: Sequence[float] | None = None,
+    shape: CohortShape,
+    level: float,
+    power: float = 0.8,
+) -> float:
+    """The smallest change across the cohorts that Q-or-slope would flag with probability `power`.
+
+    The change has the given `shape` (a linear fade from the shift in the first cohort to 0 in
+    the last, or a step from the shift to 0 at the middle) and is measured on the scale of the
+    standard errors, found by bisection on `cohort_power`. It is what a result that was not
+    flagged could have seen, and so how much a quiet result is worth.
+    """
+    se = _finite(std_errors, "std_errors")
+    k = len(se)
+    x = list(range(k)) if positions is None else _finite(positions, "positions")
+    if not 0 < power < 1:
+        raise StatsError(f"power must be between 0 and 1, got {power!r}")
+    pattern = _cohort_pattern(x, shape)
+
+    def reaches(shift: float) -> bool:
+        effects = [shift * value for value in pattern]
+        return cohort_power(effects, se, positions=x, level=level) >= power
+
+    # Start from the smallest standard error: a cohort whose error dwarfs the rest has next to no
+    # weight, so the answer is a few ordinary errors, and bisecting down from the largest error
+    # would leave it only as precise as that error is large.
+    high = min(se)
+    for _ in range(80):
+        if reaches(high):
+            break
+        high *= 2.0
+    else:
+        raise StatsError("no change this size could be seen: the standard errors are too large")
+    low = 0.0
+    for _ in range(80):
+        middle = (low + high) / 2
+        if reaches(middle):
+            high = middle
+        else:
+            low = middle
+    return high
 
 
 # --- Several comparisons at once -----------------------------------------------------------

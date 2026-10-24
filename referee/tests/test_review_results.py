@@ -1,14 +1,16 @@
 """Running results rules over an export, and the verdict words (design section 21.3)."""
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from results_helpers import Row, build_data, results_spec
+from results_helpers import Row, at, build_data, crowd, results_spec
 
 from referee.findings import Finding, ResultsReview
 from referee.results import ResultsContext
-from referee.review import review_results
+from referee.review import origin_sensitivity, review_context, review_results
 from referee.rules import ALL_RULES, RESULTS_RULES, Rule
+from referee.rules.base import Escalation
 
 
 def _rule(rule_id: str, severity: str, found: dict[str, Any] | None) -> Rule[ResultsContext]:
@@ -53,6 +55,7 @@ def data():
     ("severities", "verdict"),
     [
         ((), "clear"),
+        (("info",), "clear"),
         (("warning",), "caution"),
     ],
 )
@@ -120,3 +123,165 @@ def test_the_default_rules_are_the_results_rules_and_not_the_design_rules(spec, 
 # --- What the review says about the players it left out ---------------------------------------
 
 
+# --- Origin sensitivity (design section 21.8) -----------------------------------------------
+
+
+def _origin_rule(fires: str, calls: list[object]) -> Rule[ResultsContext]:
+    """A rule whose result depends on nothing but the origin: `fires` is when it fires."""
+    when = {
+        "three_days_earlier_or_more": lambda origin: origin <= at(-3),
+        "only_at_the_actual_origin": lambda origin: origin >= at(0),
+        "never": lambda origin: False,
+    }[fires]
+
+    def check(context: ResultsContext) -> dict[str, Any] | None:
+        calls.append(context.origin)
+        return {"origin": context.origin.isoformat()} if when(context.origin) else None
+
+    return Rule(
+        id="RES-901",
+        severity="warning",
+        title="t",
+        fires_when="w",
+        why_it_matters="because",
+        remediation="do something",
+        references=(),
+        check=check,
+    )
+
+
+@pytest.mark.parametrize(
+    ("fires", "same", "appear", "disappear", "verdict"),
+    [
+        ("never", [True] * 6, [[]] * 6, [[]] * 6, ["clear"] * 6),
+        (
+            "three_days_earlier_or_more",
+            [True, True, False, False, False, False],
+            [[], [], *[["RES-901:warning"]] * 4],
+            [[]] * 6,
+            ["clear", "clear", *["caution"] * 4],
+        ),
+        (
+            "only_at_the_actual_origin",
+            [False] * 6,
+            [[]] * 6,
+            [["RES-901:warning"]] * 6,
+            ["clear"] * 6,
+        ),
+    ],
+)
+def test_the_findings_are_compared_at_origins_one_to_six_days_before_the_first_assignment(
+    raw_spec: dict,
+    fires: str,
+    same: list[bool],
+    appear: list[list[str]],
+    disappear: list[list[str]],
+    verdict: list[str],
+) -> None:
+    spec = results_spec(raw_spec)
+    data = build_data([*crowd("control", 3), *crowd("variant_b", 3), *crowd("variant_c", 3)])
+    rules = (_origin_rule(fires, calls := []),)
+    actual = review_context(ResultsContext.of(spec, data), rules=rules)
+    calls.clear()
+
+    found = origin_sensitivity(spec, data, actual, rules=rules)
+
+    assert found["ran"] is True
+    assert [shift["days_earlier"] for shift in found["shifts"]] == [1, 2, 3, 4, 5, 6]
+    assert [shift["same"] for shift in found["shifts"]] == same
+    assert [shift["appear"] for shift in found["shifts"]] == appear
+    assert [shift["disappear"] for shift in found["shifts"]] == disappear
+    assert [shift["verdict"] for shift in found["shifts"]] == verdict
+    assert calls == [at(-d) for d in range(1, 7)]  # no player was added or left out
+
+
+def test_a_registered_origin_is_not_varied(raw_spec: dict) -> None:
+    spec = results_spec(raw_spec, design__start_utc="2026-04-11T00:00:00Z")
+    data = build_data([*crowd("control", 3), *crowd("variant_b", 3), *crowd("variant_c", 3)])
+    rules = (_origin_rule("never", calls := []),)
+    actual = review_context(ResultsContext.of(spec, data), rules=rules)
+    calls.clear()
+
+    found = origin_sensitivity(spec, data, actual, rules=rules)
+
+    assert found == {"ran": False, "reason": "design.start_utc is registered", "shifts": []}
+    assert calls == []
+
+
+def _toy(rule_id: str, severity: str, when, escalation: Escalation | None = None) -> Rule:
+    return Rule(
+        id=rule_id,
+        severity=severity,
+        title="t",
+        fires_when="w",
+        why_it_matters="because",
+        remediation="do something",
+        references=(),
+        check=lambda context: (
+            {"origin": context.origin.isoformat()} if when(context.origin) else None
+        ),
+        escalation=escalation,
+    )
+
+
+def test_what_appears_and_disappears_is_listed_in_order_with_its_severity(raw_spec: dict) -> None:
+    """Seven findings appear and seven disappear in each shift. A set hands them over in an
+    order that changes from one process to the next, so only sorting them gives the same list
+    every time. The one that escalates has the highest id and the severity that sorts first, so
+    sorting by id alone, or by severity alone, gives another list."""
+    appearing = ("907", "903", "911", "905", "909", "913")
+    vanishing = ("908", "902", "912", "906", "910", "914")
+    rules = (
+        *(_toy(f"RES-{n}", "warning", lambda origin: origin <= at(-1)) for n in appearing),
+        _toy(
+            "RES-920",
+            "warning",
+            lambda origin: True,
+            Escalation(
+                to="blocker",
+                when="the origin is two days earlier or more",
+                applies=lambda evidence: (
+                    bool(evidence) and evidence["origin"] <= at(-2).isoformat()
+                ),
+            ),
+        ),
+        *(_toy(f"RES-{n}", "warning", lambda origin: origin >= at(0)) for n in vanishing),
+    )
+    spec = results_spec(raw_spec)
+    data = build_data([*crowd("control", 3), *crowd("variant_b", 3), *crowd("variant_c", 3)])
+    actual = review_context(ResultsContext.of(spec, data), rules=rules)
+
+    shifts = origin_sensitivity(spec, data, actual, rules=rules)["shifts"]
+
+    rising = [f"RES-{n}:warning" for n in sorted(appearing)]
+    falling = [f"RES-{n}:warning" for n in sorted(vanishing)]
+    assert actual.verdict == "caution"
+    assert [shift["same"] for shift in shifts] == [False] * 6
+    assert (shifts[0]["appear"], shifts[0]["disappear"]) == (rising, falling)
+    for shift in shifts[1:]:
+        assert shift["appear"] == [*rising, "RES-920:blocker"]
+        assert shift["disappear"] == [*falling, "RES-920:warning"]
+    assert [shift["verdict"] for shift in shifts] == ["caution"] + ["invalid"] * 5
+
+
+def test_an_origin_too_early_to_move_back_is_not_varied(raw_spec: dict) -> None:
+    first = datetime(1, 1, 3, tzinfo=UTC)
+    moments = {
+        "assigned_at": first,
+        "exposed_at": first + timedelta(minutes=5),
+        "window_end": first + timedelta(days=7),
+    }
+    spec = results_spec(raw_spec)
+    data = build_data(
+        [
+            *crowd("control", 3, **moments),
+            *crowd("variant_b", 3, **moments),
+            *crowd("variant_c", 3, **moments),
+        ]
+    )
+    rules = (_origin_rule("never", []),)
+    actual = review_context(ResultsContext.of(spec, data), rules=rules)
+
+    found = origin_sensitivity(spec, data, actual, rules=rules)
+
+    assert found == {"ran": False, "reason": "the origin is too early to move back", "shifts": []}

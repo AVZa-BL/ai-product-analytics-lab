@@ -113,11 +113,15 @@ jobs:
         run: ruff check src tests
       - name: Test
         run: python -m pytest -q
+      # The simulation studies the design rests on; the default run leaves them out
+      # (pyproject.toml). About three minutes, on this platform only.
+      - name: Studies
+        run: python -m pytest -q -m study
 
-  # The same gate on macOS. Referee's statistics run on numpy and scipy, whose compiled code and
-  # floating-point behaviour differ between platforms, and a report must give the same numbers
-  # wherever it is made. A separate job, not a matrix on the one above, keeps that job's name,
-  # which a branch-protection rule may require.
+  # The same gate on macOS, without the simulation studies. Referee's statistics run on numpy and
+  # scipy, whose compiled code and floating-point behaviour differ between platforms, and a report
+  # must give the same numbers wherever it is made. A separate job, not a matrix on the one above,
+  # keeps that job's name, which a branch-protection rule may require.
   referee-quality-gate-macos:
     needs: changes
     if: needs.changes.outputs.referee == 'true'

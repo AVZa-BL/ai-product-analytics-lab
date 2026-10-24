@@ -2,6 +2,8 @@
 way the files can be wrong."""
 
 import csv
+import errno
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -10,6 +12,8 @@ import pytest
 from referee import data
 from referee.data import (
     DataError,
+    Outcome,
+    export_file_hashes,
     list_experiment_ids,
     load_export,
 )
@@ -233,6 +237,27 @@ def test_something_that_is_not_a_directory_is_refused(tmp_path: Path) -> None:
     assert _problems(tmp_path / "nowhere") == (f"{tmp_path / 'nowhere'}: is not a directory",)
 
 
+@pytest.mark.parametrize(
+    "refusal",
+    [PermissionError(errno.EACCES, "Permission denied"), OSError(errno.ENAMETOOLONG, "Too long")],
+)
+def test_a_folder_that_cannot_be_examined_is_a_problem_and_not_a_crash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, refusal: OSError
+) -> None:
+    def refuse(self: Path) -> bool:
+        raise refusal
+
+    monkeypatch.setattr(Path, "is_dir", refuse)
+
+    with pytest.raises(DataError) as caught:
+        load_export(tmp_path / "export", "e1")
+
+    assert caught.value.problems == (
+        f"{tmp_path / 'export'}: cannot be examined ({refusal.strerror})",
+    )
+    assert caught.value.total == 1
+
+
 # --- Rules across the three files ---------------------------------------------------------
 
 
@@ -406,6 +431,23 @@ def _manifest(folder: Path, text: str) -> None:
     (folder / data.MANIFEST_FILE).write_text(text, encoding="utf-8")
 
 
+def test_the_end_of_each_window_is_read_when_the_column_is_there(tmp_path: Path) -> None:
+    loaded = load_export(
+        export(tmp_path, outcomes=_outcomes_with_window_ends(), outcome_columns=WINDOW_COLUMNS),
+        "e1",
+    )
+
+    assert [o.window_end for o in loaded.outcomes] == [
+        _utc(2026, 4, 18, 0, 2, 25),
+        _utc(2026, 4, 18, 0, 8, 33),
+        _utc(2026, 4, 19, 9),
+        _utc(2026, 5, 3, 12, 30),
+    ]
+    assert loaded.outcomes[1] == Outcome(
+        "p2", 5, 1, 4.99, _utc(2026, 4, 12, 10), _utc(2026, 4, 18, 0, 8, 33)
+    )
+
+
 @pytest.mark.parametrize(
     ("stamp", "fragment"),
     [
@@ -504,3 +546,15 @@ def test_a_manifest_that_is_a_link_to_nothing_is_a_problem_not_an_absent_file(
     assert problem == "manifest.json: is a link to a file that does not exist"
 
 
+# --- The hashes of the files ---------------------------------------------------------------
+
+
+def test_a_file_larger_than_one_read_is_hashed_whole(tmp_path: Path) -> None:
+    names = (data.ASSIGNMENTS_FILE, data.EXPOSURES_FILE, data.OUTCOMES_FILE)
+    contents = {name: bytes(range(256)) * 12_000 + name.encode() for name in names}
+    for name, content in contents.items():
+        (tmp_path / name).write_bytes(content)
+
+    assert export_file_hashes(tmp_path) == {
+        name: hashlib.sha256(content).hexdigest() for name, content in contents.items()
+    }

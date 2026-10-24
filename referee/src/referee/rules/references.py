@@ -3,6 +3,9 @@
 KOHAVI_TANG_XU_2020 = (
     "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020."
 )
+KOHAVI_ET_AL_2014 = (
+    "Kohavi, Deng, Longbotham, Xu. Seven Rules of Thumb for Web Site Experimenters. KDD 2014."
+)
 KOHAVI_ET_AL_2012 = (
     "Kohavi, Deng, Frasca, Longbotham, Walker, Xu. "
     "Trustworthy Online Controlled Experiments: Five Puzzling Outcomes Explained. KDD 2012."
@@ -25,4 +28,11 @@ DUNNETT_1955 = (
 DENG_ET_AL_2013 = (
     "Deng, Xu, Kohavi, Walker. Improving the Sensitivity of Online Controlled Experiments "
     "by Utilizing Pre-Experiment Data. WSDM 2013."
+)
+COCHRAN_1954 = (
+    "Cochran. The Combination of Estimates from Different Experiments. Biometrics 10(1), 1954."
+)
+HIGGINS_THOMPSON_2002 = (
+    "Higgins, Thompson. Quantifying Heterogeneity in a Meta-Analysis. "
+    "Statistics in Medicine 21(11), 2002."
 )

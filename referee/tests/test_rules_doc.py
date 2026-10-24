@@ -62,5 +62,3 @@ def test_a_group_with_no_rules_is_left_out() -> None:
 
     assert "## Hypothesis rules (HYP)" in text
     assert "## Design rules" not in text and "## Procedure rules" not in text
-
-

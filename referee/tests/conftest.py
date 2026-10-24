@@ -68,6 +68,7 @@ def clean_raw_spec(raw_spec: dict) -> dict:
         interference="none_expected",
     )
     raw_spec["design"]["pre_period_covariate"] = "subscription_conversion_7d_pre_exposure"
+    raw_spec["design"]["planned_duration_days"] = 21  # three whole weeks: DES-009 is quiet
     raw_spec["procedure"] = {
         "stopping_rule": "fixed_horizon",
         "srm_check_cadence": "daily",
@@ -78,13 +79,13 @@ def clean_raw_spec(raw_spec: dict) -> dict:
 
 @pytest.fixture
 def worst_raw_spec(raw_spec: dict) -> dict:
-    """A spec every one of the 17 design-review rules objects to."""
+    """A spec every one of the 18 design-review rules objects to."""
     raw_spec["hypothesis"]["alternative"] = raw_spec["hypothesis"]["null"]  # HYP-001
     del raw_spec["primary_metric"]["governed_reference"]  # HYP-002
     raw_spec["population"]["analysis_unit"] = "session"  # HYP-003 (and DES-006: player units)
     raw_spec["design"]["sided"] = "one_sided"  # HYP-004
     raw_spec["primary_metric"].update(kind="ratio", baseline=0.9, baseline_std=5.0)  # HYP-005
-    raw_spec["design"].update(planned_duration_days=10, min_duration_days=7)  # DES-001/2/3
+    raw_spec["design"].update(planned_duration_days=10, min_duration_days=7)  # DES-001/2/3/9
     raw_spec["arms"] = [  # DES-004 (unequal) and DES-005 (three arms, no adjustment)
         {"name": "control", "allocation": 0.5, "is_control": True},
         {"name": "b", "allocation": 0.3},
