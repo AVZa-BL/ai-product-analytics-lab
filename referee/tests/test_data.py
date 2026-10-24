@@ -558,3 +558,63 @@ def test_a_file_larger_than_one_read_is_hashed_whole(tmp_path: Path) -> None:
     assert export_file_hashes(tmp_path) == {
         name: hashlib.sha256(content).hexdigest() for name, content in contents.items()
     }
+
+
+# --- The first-seen column of the assignments ------------------------------------------
+
+FIRST_SEEN_COLUMNS = [*ASSIGNMENT_COLUMNS, "first_seen_at_utc"]
+FIRST_SEEN = [
+    "2025-11-23 14:27:50+00",
+    "2026-04-11 00:08:33+00",  # at the instant of the assignment: not after it
+    "2025-12-01 23:23:02+00",
+    "2026-01-15 08:00:00+00",
+]
+
+
+def _assignments_with_first_seen() -> list[dict[str, str]]:
+    return [
+        dict(row, first_seen_at_utc=seen)
+        for row, seen in zip(_assignments(), FIRST_SEEN, strict=True)
+    ]
+
+
+def test_when_a_player_was_first_seen_is_read_when_the_column_is_there(tmp_path: Path) -> None:
+    with_column = export(
+        tmp_path, assignments=_assignments_with_first_seen(), assignment_columns=FIRST_SEEN_COLUMNS
+    )
+
+    loaded = load_export(with_column, "e1")
+
+    assert [a.first_seen_at for a in loaded.assignments] == [
+        _utc(2025, 11, 23, 14, 27, 50),
+        _utc(2026, 4, 11, 0, 8, 33),
+        _utc(2025, 12, 1, 23, 23, 2),
+        _utc(2026, 1, 15, 8),
+    ]
+    assert load_export(export(tmp_path), "e1").assignments[0].first_seen_at is None
+
+
+@pytest.mark.parametrize(
+    ("stamp", "fragment"),
+    [
+        ("2026-04-12 11:00:00+02:00", "must be in UTC"),
+        ("", "must not be empty"),
+        (
+            "2026-04-12 09:00:01+00",
+            "must not be after assigned_at_utc ('2026-04-12 09:00:00+00'), "
+            "got '2026-04-12 09:00:01+00'",
+        ),
+    ],
+)
+def test_once_the_first_seen_column_is_there_every_row_must_hold_a_good_value(
+    tmp_path: Path, stamp: str, fragment: str
+) -> None:
+    rows = _assignments_with_first_seen()
+    rows[2]["first_seen_at_utc"] = stamp
+
+    (problem,) = _problems(
+        export(tmp_path, assignments=rows, assignment_columns=FIRST_SEEN_COLUMNS)
+    )
+
+    assert problem.startswith("experiment_assignments.csv:4: column 'first_seen_at_utc': ")
+    assert fragment in problem

@@ -4,6 +4,7 @@ import json
 import re
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from results_helpers import TWO_ARMS, Row, at, build_data, crowd, results_spec
@@ -11,8 +12,10 @@ from results_helpers import TWO_ARMS, Row, at, build_data, crowd, results_spec
 from referee import __version__
 from referee.findings import DesignReview, Finding, ResultsReview
 from referee.report import (
+    MEMO_HEADINGS,
     design_report,
     render_json,
+    render_results_memo,
     render_results_text,
     render_text,
     results_report,
@@ -128,6 +131,8 @@ def test_the_report_states_the_origin_the_first_and_last_assignment_and_who_was_
         "assigned": {"control": 2, "variant_b": 2, "variant_c": 1},
         "analysed": {"control": 2, "variant_b": 1, "variant_c": 1},
         "ignored_before_start": ["early_b", "early_c"],
+        "kind_declared": None,
+        "first_seen": None,
     }
     assert registered["data"] == {"files": {"experiment_assignments.csv": {"sha256": "a" * 64}}}
     assert unregistered["population"]["origin"] == "2026-04-09T00:00:00Z"
@@ -793,3 +798,147 @@ def test_a_design_that_cannot_be_sized_is_not_called_underpowered(raw_spec: dict
     report = _report(context, unsized)
     assert report["effect"]["underpowered"] is False
     assert "UNDERPOWERED" not in render_results_text(report)
+
+
+# --- The kind of players, from the first-seen column -----------------------------------
+
+
+def test_the_population_states_what_the_first_seen_column_shows_of_the_declared_kind(
+    raw_spec: dict,
+) -> None:
+    rows = [
+        *crowd("control", 3, first_seen_at=at(-100)),
+        *crowd("variant_b", 2, first_seen_at=at(-100)),
+        Row("newcomer", "variant_b", assigned_at=at(2), first_seen_at=at(1)),
+    ]
+
+    without = _report(_context(raw_spec, [Row("p", "control"), Row("q", "variant_b")]))
+    mostly_existing = _report(_context(raw_spec, rows, population__kind="new_users"))
+
+    assert without["population"]["kind_declared"] is None
+    assert without["population"]["first_seen"] is None
+    assert mostly_existing["population"]["kind_declared"] == "new_users"
+    assert mostly_existing["population"]["first_seen"] == {
+        "before_origin": 5,
+        "from_origin": 1,
+        "days_before_assignment": {"min": 1.0, "median": 100.0, "max": 100.0},
+        "observed": "existing_users",
+        "agrees": False,
+    }
+
+
+# --- The memo --------------------------------------------------------------------------
+
+GOLDEN_RESULTS = Path(__file__).parent / "golden" / "offer-page-results.json"
+
+
+def _memo_headings(memo: str) -> list[str]:
+    return [line[3:] for line in memo.splitlines() if line.startswith("## ")]
+
+
+def _flat(text: str) -> str:
+    """`text` as one line, so a sentence can be looked for across the memo's wrapping."""
+    return " ".join(text.split())
+
+
+def test_the_memo_carries_the_lab_templates_sections_in_order_filled_from_the_report() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+
+    memo = render_results_memo(report)
+
+    assert memo.startswith(f"# Decision memo: `{report['spec']['title']}`\n")
+    assert _memo_headings(memo) == list(MEMO_HEADINGS)
+    assert MEMO_HEADINGS == (
+        "Decision",
+        "Observed facts",
+        "Assumptions and uncertainty",
+        "Data-quality qualification",
+        "Reproducibility",
+    )
+    decision, observed, assumptions, quality, reproducibility = memo.split("\n## ")[1:]
+    assert "Do not read the effect. RES-001 blocks this review" in _flat(decision)
+    assert "Report the result as underpowered" in _flat(decision)
+    assert "Not decided here: whether to ship, stop or continue" in _flat(decision)
+    assert "Verdict: INVALID. Blocking rules: data validity RES-001, RES-002." in _flat(observed)
+    for row in report["effect"]["arms"]:
+        assert f"| {row['arm']} | " in observed and f"| {row['difference']:+.4g} |" in observed
+    assert "NOT TO BE READ: blocked by RES-001," in _flat(observed)
+    assert (
+        "By first_seen_at_utc, 2,824 of the 2,824 assigned players were first seen before the "
+        "origin" in _flat(assumptions)
+    )
+    assert "population.kind is declared as existing_users, and the column agrees." in (
+        _flat(assumptions)
+    )
+    assert quality.count("\n**[") == len(report["findings"])
+    assert "\n    alpha: 0.001\n" in quality  # RES-001's evidence, as an indented code block
+    assert f"Rules run: {', '.join(report['rules_run'])}." in _flat(quality)
+    for name, file in report["data"]["files"].items():
+        assert f"- {name}: {file['sha256']}" in _flat(reproducibility)
+    assert "--experiment-id hybrid_offer_page --as-of 2026-06-30T00:00:00Z --format memo" in (
+        _flat(reproducibility)
+    )
+    assert render_results_memo(report) == memo
+
+
+def test_a_title_an_arm_or_a_player_cannot_make_a_heading_a_row_or_a_line_in_the_memo(
+    raw_spec: dict,
+) -> None:
+    """Values from a spec or an export are written as code spans and never start a line; a
+    pipe or a backslash in a table cell is escaped. The arm `## Decision` has no estimate, so
+    it is named first in a sentence of its own, and the player `## Decision` is listed as
+    ignored: the two places a value would otherwise start a line."""
+    raw_spec["title"] = "Offer\n## Decision\n| x |"
+    arms = [
+        {"name": "control", "allocation": 0.5, "is_control": True},
+        {"name": "b\\|c", "allocation": 0.3},
+        {"name": "## Decision", "allocation": 0.2},
+    ]
+    rows = [
+        *crowd("control", 2),
+        *crowd("b\\|c", 2, prefix="bc"),
+        *crowd("## Decision", 2, prefix="heading"),
+        Row("## Decision", "control", assigned_at=at(-1)),
+    ]
+    context = _context(raw_spec, rows, arms=arms, design__start_utc="2026-04-11T00:00:00Z")
+
+    memo = render_results_memo(_report(context))
+
+    lines = memo.splitlines()
+    assert _memo_headings(memo) == list(MEMO_HEADINGS)
+    assert [line for line in lines if line.startswith("#")] == [
+        "# Decision memo: `Offer\\n## Decision\\n| x |`",
+        *(f"## {heading}" for heading in MEMO_HEADINGS),
+    ]
+    assert "| b\\\\\\|c | 2 | 2 | 0 |" in memo
+    assert "\nArm `## Decision` (2 vs 2): not estimated; " in memo
+    assert "in no count: 1 (`## Decision`)." in memo
+    # Wherever a value appears, the line it is on is one of the memo's own: a sentence, a
+    # bullet, a table row or an indented evidence line, never one the value began.
+    assert all(
+        line.startswith(("| ", "- ", "    ")) or line[0].isalpha()
+        for line in lines
+        if "## Decision" in line and not line.startswith("#")
+    )
+
+
+@pytest.mark.parametrize(
+    ("blocking", "warnings", "said"),
+    [
+        ((), (), "found nothing that blocks or warns"),
+        ((), ("RES-007", "RES-008"), "found no blocker and 2 warnings (RES-007, RES-008)"),
+        (("RES-004",), (), "Do not decide on the primary metric alone: RES-004 found a guardrail"),
+        (("RES-003", "RES-012"), (), "Do not read the effect. RES-003, RES-012 block this review"),
+        (("RES-002",), (), "Report the result as underpowered"),
+    ],
+)
+def test_the_memos_decision_follows_the_verdict_and_what_the_blocking_rules_advise(
+    raw_spec: dict, blocking: tuple[str, ...], warnings: tuple[str, ...], said: str
+) -> None:
+    context = _revenue_context(raw_spec)
+
+    memo = render_results_memo(_report(context, _blocked(context, *blocking, warnings=warnings)))
+
+    decision = _flat(memo.split("\n## ")[1])
+    assert said in decision
+    assert "Not decided here: whether to ship, stop or continue the experiment." in decision

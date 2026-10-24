@@ -35,6 +35,7 @@ class Row:
     revenue: float = 0.0
     first_purchase_at: datetime | None = None
     window_end: datetime | None = None  # None: seven days after the assignment
+    first_seen_at: datetime | None = None  # None: the export has no first_seen_at_utc column
 
 
 def build_data(
@@ -48,7 +49,9 @@ def build_data(
     assignments, exposures, outcomes = [], [], []
     for row in sorted(rows, key=lambda r: r.player_id):
         assignments.append(
-            Assignment(row.player_id, row.arm, row.assigned_at, row.assigned_version)
+            Assignment(
+                row.player_id, row.arm, row.assigned_at, row.assigned_version, row.first_seen_at
+            )
         )
         if row.exposed_at is not None:
             exposures.append(Exposure(row.player_id, row.exposed_at, row.exposure_version))

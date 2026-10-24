@@ -18,7 +18,9 @@ The outcomes file may carry `window_end_utc`, when each player's seven-day windo
 is read when the column is there, and then every row of the experiment must have it. A
 `manifest.json` beside the files may carry `exported_at_utc`, when the export was taken. These
 two are what lets a review tell outcome windows that were complete from ones still open; neither
-is derived from the other columns or from the files' own timestamps.
+is derived from the other columns or from the files' own timestamps. The assignments file may
+carry `first_seen_at_utc`, when the product first saw the player, read the same way: when the
+column is there every row must hold a UTC instant, and one after the assignment is refused.
 
 A file cut short in the middle of its last line is refused, because the last row is then
 missing or incomplete. A cut that lands exactly between two rows, or inside the last cell of
@@ -42,8 +44,9 @@ EXPOSURES_FILE = "experiment_exposures.csv"
 OUTCOMES_FILE = "experiment_outcomes.csv"
 MANIFEST_FILE = "manifest.json"
 
-# Columns Referee reads. Others may be present and are ignored; `arm_config_version` in the
-# exposures file and `window_end_utc` in the outcomes file are read when they are there.
+# Columns Referee reads. Others may be present and are ignored; `first_seen_at_utc` in the
+# assignments file, `arm_config_version` in the exposures file and `window_end_utc` in the
+# outcomes file are read when they are there.
 _REQUIRED: dict[str, tuple[str, ...]] = {
     ASSIGNMENTS_FILE: (
         "experiment_id",
@@ -83,6 +86,7 @@ class Assignment:
     arm: str
     assigned_at: datetime
     config_version: int
+    first_seen_at: datetime | None = None  # None when the assignments file has no such column
 
 
 @dataclass(frozen=True, slots=True)
@@ -437,9 +441,21 @@ def load_export(directory: str | Path, experiment_id: str) -> ExperimentData:
         arm = cells.text("arm")
         moment = cells.timestamp("assigned_at_utc")
         version = cells.integer("arm_config_version", minimum=0)
+        has_first_seen = "first_seen_at_utc" in cells.row
+        first_seen = cells.timestamp("first_seen_at_utc") if has_first_seen else None
         if player is None or arm is None or moment is None or version is None:
             return None
-        return Assignment(player, arm, moment, version)
+        if has_first_seen:
+            if first_seen is None:
+                return None
+            if first_seen > moment:
+                cells.fail(
+                    "first_seen_at_utc",
+                    f"must not be after assigned_at_utc ({cells.row['assigned_at_utc']!r}), "
+                    f"got {cells.row['first_seen_at_utc']!r}",
+                )
+                return None
+        return Assignment(player, arm, moment, version, first_seen)
 
     def exposure(cells: _Reader) -> Exposure | None:
         player = cells.text("player_id")

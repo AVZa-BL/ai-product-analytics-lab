@@ -13,7 +13,7 @@ Under development, in milestones:
 | 1 | Experiment spec schema and validation | Done |
 | 2 | Design-review rules, power calculations, `review-design` CLI | Done |
 | 3 | Synthetic experiment in the lab's hybrid scenario | Done |
-| 4 | Results review, `review-results` CLI, decision memo | In progress: the export reader and the statistics (4a), the data-fit rules (4b-1), the effect rules (4b-2: RES-004, RES-007 and RES-008, with the design rule DES-009) and the report and command (4c-1) are done; the lab's `first_seen_at_utc` column (4c-2) and the memo (4c-3) are planned |
+| 4 | Results review, `review-results` CLI, decision memo | Done: the export reader and the statistics (4a), the data-fit rules (4b-1), the effect rules (4b-2: RES-004, RES-007 and RES-008, with the design rule DES-009), the report and command (4c-1), the lab's `first_seen_at_utc` column (4c-2) and the decision memo, `--format memo` (4c-3) |
 
 ## Reviewing a design
 
@@ -63,6 +63,8 @@ The example reads the committed lab export and finds its planted problems: the a
 | `invalid` | At least one blocker | 1 |
 
 Status 2 means the spec or the data cannot be read or reviewed (the problems are listed on stderr, up to 1,000, with their exact number), and 3 a failure inside Referee. `--experiment-id` is required; when it is left out the experiment ids in the export are listed. `--as-of` says when the export was taken, as an ISO 8601 time in UTC. It replaces the `exported_at_utc` of `manifest.json`, and without either the report says completeness of the outcome windows was not checked.
+
+`--format memo` writes the same review as a decision memo in markdown, in the analytics lab's template: Decision, Observed facts, Assumptions and uncertainty, Data-quality qualification and Reproducibility, in that order. It is advisory like the report (its Decision says what the blocking rules advise and that shipping, stopping or continuing is not decided here), it is built from the report and from nothing else, and the same inputs give the same bytes. When the assignments carry `first_seen_at_utc`, the report and the memo say whether the declared `population.kind` agrees with it: a player first seen before the origin is an existing user, one first seen at or after it a new user, and the population is what more than half of its players are.
 
 The report states the spec's fingerprint and the SHA-256 of each CSV file, the origin the weeks were counted from, the first and last assignment, the players assigned, analysed and ignored, whether the run is an interim one, whether the same rules fire at the same severity if the origin is 1 to 6 days earlier (not run when `design.start_utc` is registered; it costs six more reviews, about 4 s on the example on the development machine and about twice that on a slower one), one line for each of RES-004, RES-007 and RES-008 even when it found nothing, the effect of the primary metric among the players whose outcome window had closed (labelled not to be read when RES-001, RES-003 or RES-012 blocks, and as underpowered when RES-002 does), and every finding with its evidence. `--format json` holds every row; the text lists at most 1,000 rows of a list and says so. Anything in the text that could move a terminal or forge a line (a control character or a newline in a title, an experiment or a player id) is written as an escape. The same spec and data reviewed by the same Referee on one machine give the same bytes. Between machines a float may differ in its last digits.
 

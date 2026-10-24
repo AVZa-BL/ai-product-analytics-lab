@@ -30,6 +30,7 @@ from referee.loader import LoadError, load_spec
 from referee.report import (
     design_report,
     render_json,
+    render_results_memo,
     render_results_text,
     render_text,
     results_report,
@@ -96,7 +97,13 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     results.add_argument(
-        "--format", choices=("text", "json"), default="text", help="output format (default: text)"
+        "--format",
+        choices=("text", "json", "memo"),
+        default="text",
+        help=(
+            "output format (default: text); memo is a decision memo in markdown, in the "
+            "analytics lab's template"
+        ),
     )
     return parser
 
@@ -194,8 +201,8 @@ def _review_results(args: argparse.Namespace) -> int:
         as_of_source=source,
         sensitivity=sensitivity,
     )
-    render = render_json if args.format == "json" else render_results_text
-    sys.stdout.write(render(report))
+    renderers = {"json": render_json, "memo": render_results_memo, "text": render_results_text}
+    sys.stdout.write(renderers[args.format](report))
     return EXIT_BLOCKED if report["blocking_rule_ids"] else EXIT_OK
 
 
