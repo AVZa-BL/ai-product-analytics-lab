@@ -813,16 +813,16 @@ def test_the_population_states_what_the_first_seen_column_shows_of_the_declared_
     ]
 
     without = _report(_context(raw_spec, [Row("p", "control"), Row("q", "variant_b")]))
-    mixed = _report(_context(raw_spec, rows, population__kind="existing_users"))
+    mostly_existing = _report(_context(raw_spec, rows, population__kind="new_users"))
 
     assert without["population"]["kind_declared"] is None
     assert without["population"]["first_seen"] is None
-    assert mixed["population"]["first_seen"] == {
+    assert mostly_existing["population"]["kind_declared"] == "new_users"
+    assert mostly_existing["population"]["first_seen"] == {
         "before_origin": 5,
         "from_origin": 1,
         "days_before_assignment": {"min": 1.0, "median": 100.0, "max": 100.0},
-        "declared": "existing_users",
-        "observed": "mixed",
+        "observed": "existing_users",
         "agrees": False,
     }
 
@@ -846,7 +846,7 @@ def test_the_memo_carries_the_lab_templates_sections_in_order_filled_from_the_re
 
     memo = render_results_memo(report)
 
-    assert memo.startswith(f"# Decision memo: {report['spec']['title']}\n")
+    assert memo.startswith(f"# Decision memo: `{report['spec']['title']}`\n")
     assert _memo_headings(memo) == list(MEMO_HEADINGS)
     assert MEMO_HEADINGS == (
         "Decision",
@@ -881,21 +881,45 @@ def test_the_memo_carries_the_lab_templates_sections_in_order_filled_from_the_re
     assert render_results_memo(report) == memo
 
 
-def test_a_title_or_an_arm_cannot_make_a_heading_a_row_or_a_line_in_the_memo(
+def test_a_title_an_arm_or_a_player_cannot_make_a_heading_a_row_or_a_line_in_the_memo(
     raw_spec: dict,
 ) -> None:
+    """Values from a spec or an export are written as code spans and never start a line; a
+    pipe or a backslash in a table cell is escaped. The arm `## Decision` has no estimate, so
+    it is named first in a sentence of its own, and the player `## Decision` is listed as
+    ignored: the two places a value would otherwise start a line."""
     raw_spec["title"] = "Offer\n## Decision\n| x |"
     arms = [
         {"name": "control", "allocation": 0.5, "is_control": True},
-        {"name": "b|c", "allocation": 0.5},
+        {"name": "b\\|c", "allocation": 0.3},
+        {"name": "## Decision", "allocation": 0.2},
     ]
-    rows = [*crowd("control", 2), *crowd("b|c", 2, prefix="bc")]
+    rows = [
+        *crowd("control", 2),
+        *crowd("b\\|c", 2, prefix="bc"),
+        *crowd("## Decision", 2, prefix="heading"),
+        Row("## Decision", "control", assigned_at=at(-1)),
+    ]
+    context = _context(raw_spec, rows, arms=arms, design__start_utc="2026-04-11T00:00:00Z")
 
-    memo = render_results_memo(_report(_context(raw_spec, rows, arms=arms)))
+    memo = render_results_memo(_report(context))
 
+    lines = memo.splitlines()
     assert _memo_headings(memo) == list(MEMO_HEADINGS)
-    assert memo.startswith("# Decision memo: Offer\\n## Decision\\n| x |\n")
-    assert "| b\\|c | 2 | 2 | 0 |" in memo
+    assert [line for line in lines if line.startswith("#")] == [
+        "# Decision memo: `Offer\\n## Decision\\n| x |`",
+        *(f"## {heading}" for heading in MEMO_HEADINGS),
+    ]
+    assert "| b\\\\\\|c | 2 | 2 | 0 |" in memo
+    assert "\nArm `## Decision` (2 vs 2): not estimated; " in memo
+    assert "in no count: 1 (`## Decision`)." in memo
+    # Wherever a value appears, the line it is on is one of the memo's own: a sentence, a
+    # bullet, a table row or an indented evidence line, never one the value began.
+    assert all(
+        line.startswith(("| ", "- ", "    ")) or line[0].isalpha()
+        for line in lines
+        if "## Decision" in line and not line.startswith("#")
+    )
 
 
 @pytest.mark.parametrize(

@@ -15,6 +15,7 @@ from referee import __version__, cli
 from referee.cli import main
 from referee.data import DataError
 from referee.findings import Finding, ResultsReview
+from referee.report import MEMO_HEADINGS
 
 SECTION_6_SHA256 = "b0332774feccd582db109bfffff10e1330ce418ab28471ccb625fe0b00af10e8"
 
@@ -396,13 +397,8 @@ def test_the_lab_export_is_found_invalid_for_its_planted_sample_ratio_mismatch(
         assert [shift["days_earlier"] for shift in sensitivity["shifts"]] == [1, 2, 3, 4, 5, 6]
     elif output_format == "memo":
         assert out.startswith("# Decision memo: ")
-        assert [line for line in out.splitlines() if line.startswith("## ")] == [
-            "## Decision",
-            "## Observed facts",
-            "## Assumptions and uncertainty",
-            "## Data-quality qualification",
-            "## Reproducibility",
-        ]
+        headings = [line[3:] for line in out.splitlines() if line.startswith("## ")]
+        assert headings == list(MEMO_HEADINGS)
         assert "Verdict: INVALID. Blocking rules: data validity RES-001" in out
     else:
         assert "Verdict: INVALID\nBlocking rules: data validity RES-001" in out

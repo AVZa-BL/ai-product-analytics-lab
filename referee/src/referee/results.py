@@ -493,11 +493,7 @@ def _record(assignment: Assignment, exposure: Exposure | None, outcome: Outcome)
     )
 
 
-_KINDS_OBSERVED = {
-    "existing_users": "existing users",
-    "new_users": "new users",
-    "mixed": "both existing and new users",
-}
+_KINDS_OBSERVED = {"existing_users": "existing users", "new_users": "new users"}
 
 
 def first_seen_summary(context: ResultsContext) -> dict[str, Any] | None:
@@ -505,11 +501,14 @@ def first_seen_summary(context: ResultsContext) -> dict[str, Any] | None:
 
     None when the column is absent (the loader reads it for every row or for none). A player
     first seen before the origin is an existing user and one first seen at or after it a new
-    user: `observed` is what the players are by that rule and `agrees` whether the spec's
-    `population.kind` is consistent with it (a declared `mixed` is consistent with any; an
-    undeclared kind leaves it None). Judgement: the origin is the one instant the review has
-    for when the experiment began, so it is the line between existing and new. The ages are
-    the days from first seen to assignment, rounded to a tenth.
+    user, and the population's kind, `observed`, is the kind of more than half of its players.
+    `agrees` says whether the spec's `population.kind` is consistent with it: a declared
+    `mixed` is consistent with any, and an undeclared kind leaves it None. Judgement: the
+    origin is the one instant the review has for when the experiment began, so it is the line
+    between existing and new; the majority decides because without a registered start the
+    origin is the first assignment, and a player first seen minutes before it must not turn a
+    population of new users into a mixed one. The ages are the days from first seen to
+    assignment, rounded to a tenth.
     """
     players = context.players
     if any(player.first_seen_at is None for player in players):
@@ -519,10 +518,7 @@ def first_seen_summary(context: ResultsContext) -> dict[str, Any] | None:
         (player.assigned_at - player.first_seen_at).total_seconds() / 86_400  # type: ignore[operator]
         for player in players
     )
-    if before == len(players):
-        observed = "existing_users"
-    else:
-        observed = "new_users" if before == 0 else "mixed"
+    observed = "existing_users" if 2 * before > len(players) else "new_users"
     declared = context.spec.population.kind
     return {
         "before_origin": before,
@@ -532,7 +528,6 @@ def first_seen_summary(context: ResultsContext) -> dict[str, Any] | None:
             "median": round(statistics.median(ages), 1),
             "max": round(ages[-1], 1),
         },
-        "declared": declared,
         "observed": observed,
         "agrees": None if declared is None else declared in ("mixed", observed),
     }
@@ -549,21 +544,19 @@ def describe_first_seen(summary: dict[str, Any] | None, declared: str | None) ->
         )
     total = summary["before_origin"] + summary["from_origin"]
     ages = summary["days_before_assignment"]
+    kind = _KINDS_OBSERVED[summary["observed"]]
     facts = (
         f"By first_seen_at_utc, {summary['before_origin']:,} of the {total:,} assigned players "
-        f"were first seen before the origin and {summary['from_origin']:,} at or after it, so "
-        f"they are {_KINDS_OBSERVED[summary['observed']]} (existing before the origin, new from "
-        f"it); at assignment they had existed for {ages['min']:g} to {ages['max']:g} days "
+        f"were first seen before the origin and {summary['from_origin']:,} at or after it "
+        f"(existing before the origin, new from it), so by the greater number they are {kind}; "
+        f"at assignment they had existed for {ages['min']:g} to {ages['max']:g} days "
         f"(median {ages['median']:g})."
     )
     if declared is None:
         return f"{facts} population.kind is not declared."
     if summary["agrees"]:
         return f"{facts} population.kind is declared as {declared}, and the column agrees."
-    return (
-        f"{facts} population.kind is declared as {declared}, but the column says "
-        f"{_KINDS_OBSERVED[summary['observed']]}."
-    )
+    return f"{facts} population.kind is declared as {declared}, but the column says {kind}."
 
 
 def _metrics_of(spec: ExperimentSpec, problems: list[str]) -> dict[str, ExportMetric]:
