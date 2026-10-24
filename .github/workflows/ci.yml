@@ -113,8 +113,26 @@ jobs:
         run: ruff check src tests
       - name: Test
         run: python -m pytest -q
-      # The simulation studies the design rests on; the default run leaves them out
-      # (pyproject.toml). About three minutes, on this platform only.
+
+  # The simulation studies the design rests on; the default run leaves them out (pyproject.toml).
+  # About three minutes, on this platform only. A job of its own so that it runs beside the tests
+  # instead of after them; the job above keeps its name, which a branch-protection rule may require.
+  referee-studies:
+    needs: changes
+    if: needs.changes.outputs.referee == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: referee
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: referee/pyproject.toml
+      - name: Install project
+        run: python -m pip install -e '.[dev]'
       - name: Studies
         run: python -m pytest -q -m study
 
