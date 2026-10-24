@@ -16,7 +16,9 @@ can be judged on finding exactly those and nothing else:
 * a mid-test configuration change in arm B, visible as `arm_config_version`
 
 Three tables are produced, one row per assigned player in assignments and outcomes, and one per
-exposure event in exposures. Nothing here touches the scenario's existing tables: the
+exposure event in exposures. An assignment also says when its player was first seen by the
+product (`first_seen_at_utc`, the scenario's `acquired_at_utc`), so a reviewer can tell how long
+the assigned players had existed. Nothing here touches the scenario's existing tables: the
 experiment draws from its own random stream, so those tables are byte-identical with or
 without it. Only players who never subscribe are eligible, so subscription is not an outcome.
 """
@@ -186,13 +188,16 @@ def simulate_experiment(
 
     window_start, _ = experiment_window(launch_at, planted)
     eligible = (
-        players.loc[~players.player_id.isin(subscriber_ids), ["player_id", "platform"]]
+        players.loc[
+            ~players.player_id.isin(subscriber_ids), ["player_id", "platform", "acquired_at_utc"]
+        ]
         .sort_values("player_id")
         .reset_index(drop=True)
     )
     count = len(eligible)
     player_ids = eligible.player_id.to_numpy()
     platform = eligible.platform.to_numpy()
+    first_seen = pd.DatetimeIndex(eligible.acquired_at_utc)
 
     # Every random quantity is drawn for every eligible player, in a fixed order, and only then
     # are dropped players removed, so changing one planted size cannot shift another's draws.
@@ -289,6 +294,7 @@ def simulate_experiment(
             "arm": arm[kept],
             "assigned_at_utc": assigned_at[kept],
             "arm_config_version": version_at_assignment[kept],
+            "first_seen_at_utc": first_seen[kept],
         }
     ).sort_values(["assigned_at_utc", "player_id"], kind="stable")
     assignments.insert(0, "assignment_id", _ids("assignment", len(assignments)))
