@@ -18,6 +18,8 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, get_args
 
+from referee.display import for_line
+
 SPEC_VERSION = 1
 ALLOCATION_TOLERANCE = 1e-9
 
@@ -381,10 +383,19 @@ def _procedure(node: _Node) -> Procedure:
 def _reject_duplicate_names(
     root: _Node, key: str, nodes: Sequence[_Node], items: Sequence[Arm | Guardrail]
 ) -> None:
+    """Names must differ, and must still differ as a report writes them: the text and memo
+    reports key a table by the written form, so two names written the same would be one entry."""
     names = [item.name for node, item in zip(nodes, items, strict=True) if not node.failed("name")]
     for name, count in Counter(names).items():
         if count > 1:
             root.fail(key, f"duplicate name {name!r} (used {count} times)")
+    written: dict[str, list[str]] = {}
+    for name in dict.fromkeys(names):
+        written.setdefault(for_line(name), []).append(name)
+    for text, group in written.items():
+        if len(group) > 1:
+            listed = ", ".join(map(repr, group))
+            root.fail(key, f"names {listed} are written the same in a report, as {text}")
 
 
 # --- Machinery: typed getters that record violations instead of raising -------------------

@@ -5,6 +5,7 @@ import pickle
 
 import pytest
 
+from referee.display import for_line
 from referee.spec import ExperimentSpec, SpecError
 
 
@@ -203,6 +204,56 @@ def test_guardrails_follow_the_metric_rules_and_have_unique_names(raw_spec: dict
         "guardrails[0].harmful_direction",
         "guardrails[0].tolerance_relative",
     ]
+
+
+# Two names that a report writes the same ("va" and U+0001, and the text va\x01) are two names to
+# the spec and to the JSON report, but the text and memo reports key a table by the written form,
+# so one of them would silently disappear from it (design section 23.1).
+SAME_WRITTEN = [
+    pytest.param("va\x01", "va\\x01", id="control character"),
+    pytest.param("va\n", "va\\n", id="newline"),  # `for_terminal` keeps it; `for_line` writes it
+]
+
+
+@pytest.mark.parametrize(("first", "second"), SAME_WRITTEN)
+def test_arm_names_that_a_report_writes_the_same_are_refused(
+    raw_spec: dict, first: str, second: str
+) -> None:
+    assert first != second and for_line(first) == for_line(second)
+    raw_spec["arms"] = [
+        {"name": "control", "allocation": 0.4, "is_control": True},
+        {"name": first, "allocation": 0.3},
+        {"name": second, "allocation": 0.3},
+    ]
+
+    found = [v for v in violations(raw_spec) if "written the same" in v]
+
+    assert found == [
+        f"arms: names {first!r}, {second!r} are written the same in a report, as {for_line(first)}"
+    ]
+
+
+@pytest.mark.parametrize(("first", "second"), SAME_WRITTEN)
+def test_one_such_name_alone_is_accepted(raw_spec: dict, first: str, second: str) -> None:
+    """Refusing the name itself would reject specs whose reports are right."""
+    _put(raw_spec, "arms.1.name", first)
+
+    assert ExperimentSpec.from_dict(raw_spec).arms[1].name == first
+
+
+def test_guardrail_names_that_a_report_writes_the_same_are_refused(raw_spec: dict) -> None:
+    guardrail = raw_spec["guardrails"][0]
+    raw_spec["guardrails"] = [dict(guardrail, name="va\x01"), dict(guardrail, name="va\\x01")]
+
+    found = [v for v in violations(raw_spec) if "written the same" in v]
+
+    assert len(found) == 1 and found[0].startswith("guardrails: names 'va\\x01', 'va\\\\x01'")
+
+
+def test_a_repeated_name_is_one_violation_and_not_also_a_collision(raw_spec: dict) -> None:
+    _put(raw_spec, "arms.1.name", "control")
+
+    assert not any("written the same" in v for v in violations(raw_spec))
 
 
 def test_guardrails_do_not_take_a_governed_reference(raw_spec: dict) -> None:
