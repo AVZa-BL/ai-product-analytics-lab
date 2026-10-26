@@ -6,7 +6,7 @@ All data used to develop and test Referee is synthetic. The project contains no 
 
 ## Status
 
-Under development, in milestones:
+Under development, in milestones. About 80% by milestone count, give or take 10 points: milestones 1 to 4 of the five in the design are built, and milestone 5 is not started. The figure counts milestones, not effort or quality, and the hardening of milestone 4 that is still going (see the pull requests) is inside milestone 4:
 
 | Milestone | Deliverable | Status |
 | --- | --- | --- |
@@ -14,6 +14,7 @@ Under development, in milestones:
 | 2 | Design-review rules, power calculations, `review-design` CLI | Done |
 | 3 | Synthetic experiment in the lab's hybrid scenario | Done |
 | 4 | Results review, `review-results` CLI, decision memo | Done: the export reader and the statistics (4a), the data-fit rules (4b-1), the effect rules (4b-2: RES-004, RES-007 and RES-008, with the design rule DES-009), the report and command (4c-1), the lab's `first_seen_at_utc` column (4c-2) and the decision memo, `--format memo` (4c-3) |
+| 5 | Narration layer (optional): a language model restates only findings the engine emitted, with an evaluation set of mostly refusals; README case-study section | Not started |
 
 ## Reviewing a design
 
