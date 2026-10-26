@@ -5,6 +5,7 @@ import re
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 from results_helpers import TWO_ARMS, Row, at, build_data, crowd, results_spec
@@ -13,6 +14,8 @@ from referee import __version__
 from referee.findings import DesignReview, Finding, ResultsReview
 from referee.report import (
     MEMO_HEADINGS,
+    _md_code,
+    _md_text,
     design_report,
     render_json,
     render_results_memo,
@@ -920,6 +923,75 @@ def test_a_title_an_arm_or_a_player_cannot_make_a_heading_a_row_or_a_line_in_the
         for line in lines
         if "## Decision" in line and not line.startswith("#")
     )
+
+
+@pytest.mark.parametrize(
+    ("value", "span"),
+    [
+        ("plain", "`plain`"),
+        ("a`b", "``a`b``"),
+        ("`a", "`` `a ``"),
+        ("a`", "`` a` ``"),
+        ("`", "`` ` ``"),
+        (" a ", "`  a  `"),
+        (" a", "` a`"),
+        ("a ", "`a `"),
+        (" ", "` `"),
+        ("a``b```c", "````a``b```c````"),
+    ],
+)
+def test_a_value_in_a_code_span_is_fenced_and_padded_so_that_it_reads_back_as_it_was(
+    value: str, span: str
+) -> None:
+    assert _md_code(value) == span
+
+
+@pytest.mark.parametrize("mark", list("\\`*[]<>|&~"))
+def test_each_inline_mark_in_a_value_has_a_backslash_before_it(mark: str) -> None:
+    assert _md_text(f"a{mark}b") == f"a\\{mark}b"
+
+
+def test_an_underscore_is_marked_at_the_edge_of_a_word_and_not_inside_one() -> None:
+    assert _md_text("variant_b") == "variant_b"
+    assert (_md_text("_x_"), _md_text("x_"), _md_text("_x")) == ("\\_x\\_", "x\\_", "\\_x")
+
+
+HOSTILE_ARM = '[x](http://evil) <img src=x onerror=alert(1) alt="> *em* ~~del~~ _u_ `tick`'
+ESCAPED_ARM = (
+    '\\[x\\](http://evil) \\<img src=x onerror=alert(1) alt="\\> \\*em\\* \\~\\~del\\~\\~ '
+    "\\_u\\_ \\`tick\\`"
+)
+
+
+def _renamed(value: Any, old: str, new: str) -> Any:
+    """`value` with `old` replaced by `new` in every text of it, the keys too."""
+    if isinstance(value, str):
+        return value.replace(old, new)
+    if isinstance(value, dict):
+        return {_renamed(k, old, new): _renamed(v, old, new) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_renamed(item, old, new) for item in value]
+    return value
+
+
+def test_the_name_of_an_arm_cannot_make_a_link_an_image_a_tag_or_emphasis_in_the_memo() -> None:
+    """The arm is named in a table cell, in the sentence on who was left out, and in the notes
+    of the effect rules: three places, three ways of keeping its marks from acting."""
+    golden = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report = _renamed(golden, "variant_b", HOSTILE_ARM)
+    report["effect"]["left_out"][HOSTILE_ARM] = 3
+    notes = [n for f in report["findings"] for n in f["evidence"].get("notes", [])]
+    assert any(HOSTILE_ARM in note for note in notes)
+
+    memo = render_results_memo(report)
+
+    assert f"| {ESCAPED_ARM} | " in memo
+    assert f"closed at the export time: `` {HOSTILE_ARM} `` 3." in memo
+    assert f"- arm {ESCAPED_ARM}, metric " in memo
+    for line in memo.splitlines():
+        if "evil" in line and not line.startswith("    "):  # not the evidence code block
+            outside = re.sub(r"\\.|(`+).+?\1", "", line)  # without escapes and code spans
+            assert not re.search(r"[<\[*~&]", outside), line
 
 
 @pytest.mark.parametrize(

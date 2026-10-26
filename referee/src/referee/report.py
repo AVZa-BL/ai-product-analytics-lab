@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import re
 import textwrap
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -413,8 +413,9 @@ def _adjustment_text(effect: dict[str, Any]) -> str:
     )
 
 
-def _effect_sentences(effect: dict[str, Any]) -> list[str]:
-    """The sentences above the effect table: what it holds, who was left out, how to read it."""
+def _effect_sentences(effect: dict[str, Any], show: Callable[[str], str] = str) -> list[str]:
+    """The sentences above the effect table: what it holds, who was left out, how to read it.
+    `show` writes the name of an arm: as it is in the text, as a code span in the memo."""
     sentences = [
         f"Effect on {effect['metric']}, each arm against control, among the "
         f"{effect['population']}: two-sided tests and 95% intervals. The p values are "
@@ -422,7 +423,7 @@ def _effect_sentences(effect: dict[str, Any]) -> list[str]:
     ]
     left_out = {arm: n for arm, n in effect["left_out"].items() if n}
     if left_out:
-        said = ", ".join(f"{arm} {n:,}" for arm, n in left_out.items())
+        said = ", ".join(f"{show(arm)} {n:,}" for arm, n in left_out.items())
         sentences.append(
             f"Left out, because their seven-day window had not closed at the export time: {said}."
         )
@@ -580,23 +581,33 @@ def _md_code(value: object) -> str:
     """A value from a spec or an export as a markdown code span, so that it is shown as it is
     and can open no heading, list, quote, fence or inline construct. The span is fenced with
     one more backtick than the longest run inside the value, and padded with a space when the
-    value starts or ends with one, as CommonMark asks."""
+    value starts or ends with a backtick or has a space at both ends, as CommonMark asks."""
     text = str(value)
     longest = max((len(run) for run in re.findall(r"`+", text)), default=0)
     fence = "`" * (longest + 1)
-    pad = " " if text.startswith("`") or text.endswith("`") else ""
+    # a span that starts or ends with a backtick, or has a space at both ends, loses a character
+    # when it is read back, unless it is padded
+    framed = text.startswith("`") or text.endswith("`") or (text[:1] == text[-1:] == " ")
+    pad = " " if framed and text.strip(" ") else ""
     return f"{fence}{pad}{text}{pad}{fence}"
 
 
-def _md_cell(value: object) -> str:
-    """A table cell: a backslash and a pipe are escaped, so that a value cannot end the cell."""
-    return str(value).replace("\\", "\\\\").replace("|", "\\|")
+_MD_MARKS = re.compile(r"[\\`*\[\]<>|&~]|(?<![A-Za-z0-9])_|_(?![A-Za-z0-9])")
+
+
+def _md_text(value: object) -> str:
+    """A value from a spec or an export written into a table cell or a sentence: each mark that
+    starts an inline construct (a link, an image, a tag, emphasis, a code span, a cell edge)
+    has a backslash before it, so that the value is shown as it is. An underscore is marked
+    only at the edge of a word, where it can open emphasis; `variant_b` stays as it is."""
+    return _MD_MARKS.sub(lambda mark: "\\" + mark.group(0), str(value))
 
 
 def _md_table(header: Sequence[str], rows: Sequence[Sequence[object]]) -> list[str]:
-    lines = ["| " + " | ".join(_md_cell(cell) for cell in header) + " |"]
+    # a cell is escaped, not put in a code span: a pipe inside a code span still ends the cell
+    lines = ["| " + " | ".join(_md_text(cell) for cell in header) + " |"]
     lines.append("|" + " --- |" * len(header))
-    lines += ["| " + " | ".join(_md_cell(cell) for cell in row) + " |" for row in rows]
+    lines += ["| " + " | ".join(_md_text(cell) for cell in row) + " |" for row in rows]
     return lines
 
 
@@ -734,7 +745,7 @@ def _observed_lines(report: dict[str, Any], limit: int) -> list[str]:
     lines += ["", f"Export taken: {taken}.{interim}"]
     lines += ["", "Always checked (a quiet result is not a pass):", ""]
     lines += _items(report["summary_lines"])
-    lines += ["", *_paragraphs(*_effect_sentences(effect))]
+    lines += ["", *_paragraphs(*_effect_sentences(effect, show=_md_code))]
     rows, failed = _effect_rows(effect)
     if rows:
         lines += ["", *_md_table(_EFFECT_COLUMNS, rows)]
@@ -808,7 +819,7 @@ def _quality_lines(report: dict[str, Any], limit: int) -> list[str]:
         if evidence:
             lines += ["", "Evidence:", ""]
             if _is_effect_evidence(evidence):
-                lines += _items(evidence["notes"])
+                lines += _items([_md_text(note) for note in evidence["notes"]])
                 lines += ["", _TABLES_IN_JSON]
             else:
                 lines += _evidence_lines(evidence, limit, 4)
@@ -855,9 +866,10 @@ def render_results_memo(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMI
     Its five sections, in the template's order, are filled from the report dict and from
     nothing else, so the memo cannot say what the JSON does not. It is advisory like the
     report, holds no timestamp, and cuts a list of more than `limit` rows when shown. It is
-    markdown, and nothing a spec or an export holds can make a heading, a row or a line of
-    its own: every such value is written as a code span, never at the start of a line, and a
-    pipe or a backslash in a table cell is escaped.
+    markdown, and nothing a spec or an export holds can make a heading, a row, a line, a link,
+    an image or a tag: a title, an experiment, a player and the name of an arm in a sentence are
+    code spans and never start a line, and the name of an arm in a table cell or in a note of
+    a rule has each of its marks escaped.
     """
     report = _inert(report)
     spec = report["spec"]
