@@ -1,5 +1,6 @@
 """Milestone 1 contract: a spec is either fully valid or rejected with every violation."""
 
+import json
 import math
 import pickle
 
@@ -239,6 +240,26 @@ def test_one_such_name_alone_is_accepted(raw_spec: dict, first: str, second: str
     _put(raw_spec, "arms.1.name", first)
 
     assert ExperimentSpec.from_dict(raw_spec).arms[1].name == first
+
+
+def test_arm_names_that_the_json_report_writes_the_same_are_refused(raw_spec: dict) -> None:
+    """The JSON report is ASCII, so a character outside the basic plane and the two lone
+    surrogates that a YAML escape gives for it are written the same, as keys of one object.
+    The text and memo reports tell them apart, so a check on their written form alone would not."""
+    character, surrogates = "\U0001f600", chr(0xD83D) + chr(0xDE00)
+    assert for_line(character) != for_line(surrogates)
+    raw_spec["arms"] = [
+        {"name": "control", "allocation": 0.4, "is_control": True},
+        {"name": character, "allocation": 0.3},
+        {"name": surrogates, "allocation": 0.3},
+    ]
+
+    found = [v for v in violations(raw_spec) if "written the same" in v]
+
+    assert found == [
+        f"arms: names {character!r}, {surrogates!r} are written the same in a report, "
+        f"as {json.dumps(character)}"
+    ]
 
 
 def test_guardrail_names_that_a_report_writes_the_same_are_refused(raw_spec: dict) -> None:
