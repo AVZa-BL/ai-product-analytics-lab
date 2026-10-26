@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import textwrap
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
@@ -829,8 +830,12 @@ def _quality_lines(report: dict[str, Any], limit: int) -> list[str]:
     return lines
 
 
-def _reproducibility_lines(report: dict[str, Any]) -> list[str]:
-    """What identifies the inputs and the reviewer, and the command that gives this memo again."""
+def _reproducibility_lines(report: dict[str, Any], experiment_id: str) -> list[str]:
+    """What identifies the inputs and the reviewer, and the command that gives this memo again.
+
+    `experiment_id` is the id as the export holds it: the report's own has its control
+    characters written as escapes, and a command that names it would name another experiment.
+    """
     spec, as_of = report["spec"], report["as_of"]
     lines = [
         f"- Spec: {_md_code(spec['id'])} - {_md_code(spec['title'])}",
@@ -845,17 +850,33 @@ def _reproducibility_lines(report: dict[str, Any]) -> list[str]:
         f"- Referee: {report['referee_version']}, report version {report['report_version']}",
     ]
     flag = f" --as-of {as_of['time']}" if as_of["source"] == "command line" else ""
+    # one word, quoted for a shell: an id with a space or a ";" would be several, and one that
+    # starts with a dash would be read as an option
+    holds_controls = for_line(experiment_id) != experiment_id
+    typed = "ID" if holds_controls else experiment_id
     command = (
-        f"python -m referee review-results SPEC DATA --experiment-id "
-        f"{report['experiment_id']}{flag} --format memo"
+        "python -m referee review-results SPEC DATA "
+        f"--experiment-id={shlex.quote(typed)}{flag} --format memo"
+    )
+    escaped = (
+        " ID is the experiment above, whose name holds control characters (shown there as "
+        "escapes): pass it exactly as the export holds it."
+        if holds_controls
+        else ""
+    )
+    manifest = (
+        " The export time above comes from the manifest.json in DATA (exported_at_utc), which "
+        "is not among the hashed files."
+        if as_of["source"] == "manifest"
+        else ""
     )
     lines += [
         "",
         f"Reproduce it from the referee/ folder with {_md_code(command)}, SPEC being the spec "
-        "with the fingerprint above and DATA the folder whose files carry these hashes. The "
-        "memo holds no timestamp, host or path: the same spec and data reviewed by the same "
-        "Referee on one machine give the same bytes, and between machines a float may differ "
-        "in its last digits.",
+        f"with the fingerprint above and DATA the folder whose files carry these hashes.{escaped}"
+        f"{manifest} The memo holds no timestamp, host or path: the same spec and data reviewed "
+        "by the same Referee on one machine give the same bytes, and between machines a float "
+        "may differ in its last digits.",
     ]
     return lines
 
@@ -871,6 +892,7 @@ def render_results_memo(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMI
     code spans and never start a line, and the name of an arm in a table cell or in a note of
     a rule has each of its marks escaped.
     """
+    experiment_id = report["experiment_id"]
     report = _inert(report)
     spec = report["spec"]
     lines = [
@@ -885,7 +907,7 @@ def render_results_memo(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMI
         _observed_lines(report, limit),
         _paragraphs(*_assumption_sentences(report)),
         _quality_lines(report, limit),
-        _reproducibility_lines(report),
+        _reproducibility_lines(report, experiment_id),
     )
     for heading, body in zip(MEMO_HEADINGS, sections, strict=True):
         lines += ["", f"## {heading}", "", *body]

@@ -2,6 +2,8 @@
 
 import json
 import re
+import shutil
+import subprocess
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -878,7 +880,7 @@ def test_the_memo_carries_the_lab_templates_sections_in_order_filled_from_the_re
     assert f"Rules run: {', '.join(report['rules_run'])}." in _flat(quality)
     for name, file in report["data"]["files"].items():
         assert f"- {name}: {file['sha256']}" in _flat(reproducibility)
-    assert "--experiment-id hybrid_offer_page --as-of 2026-06-30T00:00:00Z --format memo" in (
+    assert "--experiment-id=hybrid_offer_page --as-of 2026-06-30T00:00:00Z --format memo" in (
         _flat(reproducibility)
     )
     assert render_results_memo(report) == memo
@@ -923,6 +925,70 @@ def test_a_title_an_arm_or_a_player_cannot_make_a_heading_a_row_or_a_line_in_the
         for line in lines
         if "## Decision" in line and not line.startswith("#")
     )
+
+
+def _reproduce_line(memo: str) -> str:
+    return next(row for row in memo.splitlines() if row.startswith("Reproduce it from"))
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="needs a POSIX shell")
+@pytest.mark.parametrize(
+    "experiment",
+    ["hybrid_offer_page", "e 1", "it's", "a;b", "$(echo hacked)", 'a"b', "a b'c", "*", "-x"],
+)
+def test_a_shell_reads_the_command_that_gives_the_memo_again_with_the_experiment_as_it_is(
+    experiment: str,
+) -> None:
+    """A real shell, not shlex: the id comes from an export and is the one thing in the command
+    that a reader did not write. It is one word, --experiment-id=ID, so that an id that starts
+    with a dash is not an option and one that holds a space or a ";" is not several words."""
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["experiment_id"] = experiment
+
+    line = _reproduce_line(render_results_memo(report))
+    arguments = line.split("`", 2)[1].removeprefix("python -m referee review-results SPEC DATA ")
+    shown = subprocess.run(
+        ["sh", "-c", 'printf "[%s]" ' + arguments], capture_output=True, text=True, check=True
+    )
+
+    assert shown.stderr == ""
+    assert shown.stdout == "".join(
+        f"[{word}]"
+        for word in (f"--experiment-id={experiment}", "--as-of", "2026-06-30T00:00:00Z")
+        + ("--format", "memo")
+    )
+
+
+def test_an_experiment_with_a_control_character_in_its_name_is_not_named_in_the_command() -> None:
+    """The report writes the control character as an escape, so a command that named the id as
+    shown would name another experiment (one with a backslash and a "u0007" in its name)."""
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    plain = _reproduce_line(render_results_memo(report))
+    report["experiment_id"] = "line\u0007bell"
+
+    line = _reproduce_line(render_results_memo(report))
+
+    command = line.split("`", 2)[1]
+    assert command.startswith(
+        "python -m referee review-results SPEC DATA --experiment-id=ID --as-of "
+    )
+    assert "bell" not in command and "u0007" not in command
+    assert "ID is the experiment above, whose name holds control characters" in line
+    assert "holds control characters" not in plain
+
+
+def test_a_time_from_the_manifest_is_said_to_come_from_a_file_that_is_not_hashed() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["as_of"]["source"] = "manifest"
+
+    typed = _reproduce_line(render_results_memo(json.loads(GOLDEN_RESULTS.read_text("utf-8"))))
+    line = _reproduce_line(render_results_memo(report))
+
+    assert (
+        "--as-of" not in line
+    )  # the manifest in DATA gives the time, and --as-of would replace it
+    assert "comes from the manifest.json in DATA (exported_at_utc), which is not among" in line
+    assert "manifest.json" not in typed
 
 
 @pytest.mark.parametrize(
