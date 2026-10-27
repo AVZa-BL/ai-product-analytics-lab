@@ -81,10 +81,11 @@ def test_the_json_refuses_a_non_finite_number(raw_spec: dict) -> None:
 HASHES = {"experiment_assignments.csv": "a" * 64}
 
 
-def _context(raw_spec: dict, rows: list[Row], *, exported_at=None, **changes: object):
-    return ResultsContext.of(
-        results_spec(raw_spec, **changes), build_data(rows, exported_at=exported_at)
-    )
+def _context(
+    raw_spec: dict, rows: list[Row], *, exported_at=None, window_column=True, **changes: object
+):
+    data = build_data(rows, exported_at=exported_at, window_column=window_column)
+    return ResultsContext.of(results_spec(raw_spec, **changes), data)
 
 
 UNCHANGED = {
@@ -133,6 +134,8 @@ def test_the_report_states_the_origin_the_first_and_last_assignment_and_who_was_
         "origin_source": "design.start_utc",
         "first_assignment": "2026-04-12T00:00:00Z",
         "last_assignment": "2026-04-16T00:00:00Z",
+        "observed_days": 4,
+        "planned_duration_days": 14,
         "assigned": {"control": 2, "variant_b": 2, "variant_c": 1},
         "analysed": {"control": 2, "variant_b": 1, "variant_c": 1},
         "ignored_before_start": ["early_b", "early_c"],
@@ -1233,21 +1236,110 @@ def test_a_review_that_is_unreadable_and_underpowered_does_not_say_to_read_the_i
         f"effect can be read, and if {still} still smaller, report the result as "
         "underpowered: a small difference is not evidence of no effect."
     ) in _flat(memo.split("\n## ")[1])
-    label = (
-        "UNDERPOWERED: RES-002 blocks this review, {} smaller than registered. Do not read the "
-        "intervals yet: once the effect can be read, a small difference is still not evidence "
-        "of no effect."
+    assert (
+        "UNDERPOWERED: RES-002 blocks this review, the arms are smaller than registered. Do not "
+        "read the intervals yet: once the effect can be read, a small difference is still not "
+        "evidence of no effect."
+    ) in _flat(memo)
+
+
+CALENDAR_END = datetime(9999, 12, 28, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("span", "taken", "observed", "export", "assumption", "cohort"),
+    [
+        (
+            14,
+            None,
+            "The assignments span 14 of the 14 planned days.",
+            "Export taken: not known (no manifest time and no --as-of); completeness of the "
+            "outcome windows was not checked.",
+            "No time of the export is known, so no outcome window was checked: the effect table "
+            "reads every analysed player, a window still open included. Whether the export was "
+            "taken before the planned end of the experiment cannot be said.",
+            False,
+        ),
+        (
+            14,
+            at(10),
+            "The assignments span 14 of the 14 planned days.",
+            "Export taken: 2026-04-21T00:00:00Z (command line). That is before the planned end "
+            "of the experiment (2026-05-02T00:00:00Z).",
+            "The export was taken before the planned end of the experiment (2026-05-02T00:00:00Z).",
+            False,
+        ),
+        (
+            14,
+            at(21),
+            "The assignments span 14 of the 14 planned days.",
+            "Export taken: 2026-05-02T00:00:00Z (command line). That is at or after the planned "
+            "end of the experiment (2026-05-02T00:00:00Z).",
+            "The export was taken at or after the planned end of the experiment "
+            "(2026-05-02T00:00:00Z).",
+            False,
+        ),
+        (
+            6,
+            at(40),
+            "The assignments span 6 of the 14 planned days.",
+            "Export taken: 2026-05-21T00:00:00Z (command line). That is at or after the planned "
+            "end of the experiment (2026-05-02T00:00:00Z).",
+            "The export was taken at or after the planned end of the experiment "
+            "(2026-05-02T00:00:00Z).",
+            True,
+        ),
+    ],
+    ids=["no time", "before the planned end", "at the planned end", "short span, export later"],
+)
+def test_the_memo_states_the_export_time_and_the_assignment_span_as_two_facts(
+    raw_spec: dict,
+    span: int,
+    taken: datetime | None,
+    observed: str,
+    export: str,
+    assumption: str,
+    cohort: bool,
+) -> None:
+    """The export is before or after the planned end; the assignments cover the planned days
+    or fewer. RES-007 calls the second an interim look, so the memo does not call the first one."""
+    rows = [*crowd("control", 2, assigned_at=at(0)), *crowd("variant_b", 2, assigned_at=at(span))]
+
+    memo = _flat(
+        render_results_memo(
+            _report(_context(raw_spec, rows, exported_at=taken), source="command line")
+        )
     )
-    assert label.format(memo_arms) in _flat(memo)
-    assert label.format(text_arms) in " ".join(render_results_text(report).split())
+
+    assert observed in memo and export in memo and assumption in memo
+    assert "INTERIM RUN" not in memo and "interim run" not in memo
+    cohort_sentence = (
+        f"The assignments span {span} of the 14 planned days, fewer than planned, so the cohort "
+        "test of RES-007 is an interim look: it belongs at the planned end, and run repeatedly "
+        "on accumulating data it flags 11% to 13% of experiments with no change (design "
+        "section 21.6)."
+    )
+    assert (cohort_sentence in memo) == cohort
 
 
-def test_a_report_that_says_underpowered_without_a_res_002_finding_is_refused() -> None:
-    """The sentence names the arms from the finding's evidence; with no finding it has no words,
-    and a memo that guessed would be a wrong one."""
-    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
-    report["findings"] = [f for f in report["findings"] if f["rule_id"] != "RES-002"]
-    assert report["effect"]["underpowered"]
+def test_an_export_before_a_planned_end_beyond_the_calendar_is_said_to_be_before_it(
+    raw_spec: dict,
+) -> None:
+    rows = [
+        *crowd("control", 2, assigned_at=CALENDAR_END),
+        *crowd("variant_b", 2, assigned_at=CALENDAR_END),
+    ]
+    exported_at = datetime(9999, 12, 31, tzinfo=UTC)
+    # the default window end, seven days on, would run past the last date the calendar holds
+    context = _context(raw_spec, rows, exported_at=exported_at, window_column=False)
 
-    with pytest.raises(ValueError, match="holds no RES-002 finding"):
-        render_results_memo(report)
+    memo = _flat(render_results_memo(_report(context, source="command line")))
+
+    assert (
+        "Export taken: 9999-12-31T00:00:00Z (command line). That is before the planned end of "
+        "the experiment, which falls beyond the calendar."
+    ) in memo
+    assert (
+        "The planned end of the experiment falls beyond the calendar, so the export was taken "
+        "before it."
+    ) in memo

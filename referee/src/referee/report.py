@@ -185,6 +185,8 @@ def results_report(
             "origin_source": "design.start_utc" if spec.design.start_utc else "first assignment",
             "first_assignment": _instant(min(assigned)),
             "last_assignment": _instant(max(assigned)),
+            "observed_days": context.observed_days,
+            "planned_duration_days": spec.design.planned_duration_days,
             "assigned": context.count_by_arm(context.players),
             "analysed": context.count_by_arm(context.analysed),
             "ignored_before_start": list(context.ignored_before_start),
@@ -764,7 +766,9 @@ def _observed_lines(report: dict[str, Any], limit: int) -> list[str]:
     lines = _paragraphs(
         f"{verdict} {found}",
         f"Assigned from {population['first_assignment']} to {population['last_assignment']}; "
-        f"weeks are counted from {population['origin']} ({population['origin_source']}).",
+        f"weeks are counted from {population['origin']} ({population['origin_source']}). "
+        f"The assignments span {population['observed_days']} of the "
+        f"{population['planned_duration_days']} planned days.",
     )
     lines += [
         "",
@@ -789,16 +793,18 @@ def _observed_lines(report: dict[str, Any], limit: int) -> list[str]:
     if as_of["time"] is None:
         taken = (
             "not known (no manifest time and no --as-of); completeness of the outcome windows "
-            "was not checked"
+            "was not checked."
         )
     else:
-        taken = f"{as_of['time']} ({as_of['source']})"
-    interim = (
-        f" INTERIM RUN: before the planned end of the experiment ({as_of['planned_end']})."
-        if as_of["interim"]
-        else ""
-    )
-    lines += ["", f"Export taken: {taken}.{interim}"]
+        when = (
+            "before the planned end of the experiment, which falls beyond the calendar"
+            if as_of["planned_end"] is None
+            else f"before the planned end of the experiment ({as_of['planned_end']})"
+            if as_of["interim"]
+            else f"at or after the planned end of the experiment ({as_of['planned_end']})"
+        )
+        taken = f"{as_of['time']} ({as_of['source']}). That is {when}."
+    lines += ["", f"Export taken: {taken}"]
     lines += ["", "Always checked (a quiet result is not a pass):", ""]
     lines += _items(report["summary_lines"])
     short = _short_arms(report, _md_code)
@@ -827,25 +833,31 @@ def _assumption_sentences(report: dict[str, Any]) -> list[str]:
     if as_of["time"] is None:
         said.append(
             "No time of the export is known, so no outcome window was checked: the effect "
-            "table reads every analysed player, a window still open included, and whether this "
-            "is an interim run cannot be said."
-        )
-    elif as_of["interim"]:
-        said.append(
-            f"INTERIM RUN: the export was taken before the planned end of the experiment "
-            f"({as_of['planned_end']}). The cohort test of RES-007 belongs at the planned end; "
-            "run repeatedly on accumulating data it flags 11% to 13% of experiments with no "
-            "change (design section 21.6)."
+            "table reads every analysed player, a window still open included. Whether the "
+            "export was taken before the planned end of the experiment cannot be said."
         )
     elif as_of["planned_end"] is None:
         said.append(
-            "The planned end of the experiment falls outside the calendar, so whether this is "
-            "an interim run cannot be said."
+            "The planned end of the experiment falls beyond the calendar, so the export was "
+            "taken before it."
+        )
+    elif as_of["interim"]:
+        said.append(
+            f"The export was taken before the planned end of the experiment "
+            f"({as_of['planned_end']})."
         )
     else:
         said.append(
             f"The export was taken at or after the planned end of the experiment "
             f"({as_of['planned_end']})."
+        )
+    if population["observed_days"] < population["planned_duration_days"]:
+        said.append(
+            f"The assignments span {population['observed_days']} of the "
+            f"{population['planned_duration_days']} planned days, fewer than planned, so the "
+            "cohort test of RES-007 is an interim look: it belongs at the planned end, and run "
+            "repeatedly on accumulating data it flags 11% to 13% of experiments with no change "
+            "(design section 21.6)."
         )
     headline, *shifts = _sensitivity_sentences(report["origin_sensitivity"])
     said.append(" ".join([headline, *(f"{sentence}." for sentence in shifts)]))
