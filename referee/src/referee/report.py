@@ -436,9 +436,15 @@ def _effect_sentences(effect: dict[str, Any], show: Callable[[str], str] = str) 
             f"before the effect is read. These numbers describe the sample and not the effect."
         )
     if effect["underpowered"]:
-        sentences.append(
-            "UNDERPOWERED: RES-002 blocks this review, the arms are smaller than registered. "
+        advice = (
             "Read the intervals; a small difference is not evidence of no effect."
+            if effect["readable"]
+            else "Do not read the intervals yet: once the effect can be read, a small "
+            "difference is still not evidence of no effect."
+        )
+        sentences.append(
+            f"UNDERPOWERED: RES-002 blocks this review, the arms are smaller than registered. "
+            f"{advice}"
         )
     return sentences
 
@@ -658,7 +664,14 @@ def _decision_sentences(report: dict[str, Any]) -> list[str]:
                 f"Do not decide on the primary metric alone: {', '.join(groups['harm'])} found "
                 "a guardrail worse than its tolerance allows."
             )
-        if effect["underpowered"]:
+        if effect["underpowered"] and effect["unreadable_because"]:
+            # the effect is not to be read yet, so neither are its intervals
+            said.append(
+                "RES-002 also blocks: the arms are smaller than the registered sample size. "
+                "Once the effect can be read, and if the arms are still smaller, report the "
+                "result as underpowered: a small difference is not evidence of no effect."
+            )
+        elif effect["underpowered"]:
             said.append(
                 "Report the result as underpowered: the arms are smaller than the registered "
                 "sample size (RES-002). Read the intervals; a small difference is not evidence "

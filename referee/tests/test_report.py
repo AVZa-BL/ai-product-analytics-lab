@@ -924,7 +924,10 @@ def test_the_memo_carries_the_lab_templates_sections_in_order_filled_from_the_re
     )
     decision, observed, assumptions, quality, reproducibility = memo.split("\n## ")[1:]
     assert "Do not read the effect. RES-001 blocks this review" in _flat(decision)
-    assert "Report the result as underpowered" in _flat(decision)
+    assert "RES-002 also blocks: the arms are smaller than the registered sample size." in (
+        _flat(decision)
+    )
+    assert "Read the intervals" not in _flat(decision)
     assert "Not decided here: whether to ship, stop or continue" in _flat(decision)
     assert "Verdict: INVALID. Blocking rules: data validity RES-001, RES-002." in _flat(observed)
     for row in report["effect"]["arms"]:
@@ -1146,3 +1149,51 @@ def test_the_memos_decision_follows_the_verdict_and_what_the_blocking_rules_advi
     decision = _flat(memo.split("\n## ")[1])
     assert said in decision
     assert "Not decided here: whether to ship, stop or continue the experiment." in decision
+
+
+UNDERPOWERED_ADVICE = (
+    "Report the result as underpowered: the arms are smaller than the registered sample size "
+    "(RES-002). Read the intervals; a small difference is not evidence of no effect."
+)
+UNDERPOWERED_LABEL = (
+    "UNDERPOWERED: RES-002 blocks this review, the arms are smaller than registered. "
+    "Read the intervals; a small difference is not evidence of no effect."
+)
+
+
+def test_an_underpowered_review_whose_effect_can_be_read_says_to_read_the_intervals(
+    raw_spec: dict,
+) -> None:
+    context = _revenue_context(raw_spec)
+
+    report = _report(context, _blocked(context, "RES-002"))
+
+    memo = render_results_memo(report)
+    assert UNDERPOWERED_ADVICE in _flat(memo.split("\n## ")[1])
+    assert UNDERPOWERED_LABEL in _flat(memo)
+    assert UNDERPOWERED_LABEL in " ".join(render_results_text(report).split())
+
+
+@pytest.mark.parametrize("blocking", [("RES-001", "RES-002"), ("RES-003", "RES-002")])
+def test_a_review_that_is_unreadable_and_underpowered_does_not_say_to_read_the_intervals(
+    raw_spec: dict, blocking: tuple[str, ...]
+) -> None:
+    """The effect must not be read while RES-001, RES-003 or RES-012 blocks, so the advice to
+    read its intervals, for RES-002, waits until it can be."""
+    context = _revenue_context(raw_spec)
+
+    report = _report(context, _blocked(context, *blocking))
+
+    memo = render_results_memo(report)
+    assert "Read the intervals" not in _flat(memo)
+    assert "Read the intervals" not in " ".join(render_results_text(report).split())
+    assert (
+        "RES-002 also blocks: the arms are smaller than the registered sample size. Once the "
+        "effect can be read, and if the arms are still smaller, report the result as "
+        "underpowered: a small difference is not evidence of no effect."
+    ) in _flat(memo.split("\n## ")[1])
+    assert (
+        "UNDERPOWERED: RES-002 blocks this review, the arms are smaller than registered. Do not "
+        "read the intervals yet: once the effect can be read, a small difference is still not "
+        "evidence of no effect."
+    ) in _flat(memo)
