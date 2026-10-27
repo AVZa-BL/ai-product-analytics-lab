@@ -1350,4 +1350,7 @@ def test_a_moved_baseline_with_an_arm_that_cannot_be_read_does_not_describe_cont
     (entry,) = report["tests"]
     assert entry["baseline_has_moved"] and not entry["references"]["baseline"]["evaluated"]
     assert "Control itself is" not in report["notes"][1]
+    assert "Against the registered baseline: not measured (the values of variant_b" in (
+        report["notes"][1]
+    )
     json.dumps(report, allow_nan=False)

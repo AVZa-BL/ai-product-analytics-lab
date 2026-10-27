@@ -314,6 +314,7 @@ def test_the_interval_covers_the_true_difference_about_as_often_as_it_claims() -
         ({"seed": -1}, "seed"),
         ({"seed": 1.5}, "seed"),
         ({"seed": 1, "resamples": 100}, "fewer than 5 resamples"),
+        ({"seed": 1, "resamples": 1000.0}, "fewer than 5 resamples"),  # a count is a whole int
         ({"seed": 1, "alpha": 1.0}, "alpha"),
     ],
 )
@@ -521,11 +522,14 @@ def test_a_constant_sample_has_no_kurtosis_whatever_the_value() -> None:
 
 
 def test_a_ratio_that_is_exactly_proportional_to_its_denominator_has_no_error() -> None:
-    denominators = [0.1 * k for k in (1, 2, 3, 4, 5, 7)]
-    for factor_cents in range(1, 150):
-        factor = factor_cents / 100
-        with pytest.raises(StatsError, match="does not vary"):
-            ratio_estimate([factor * d for d in denominators], denominators)
+    # Negative factors (a loss per unit), zero (an arm with no events), and denominators whose
+    # mean is far above their spread, where rounding in the covariance grows.
+    for offset in (0.0, 100.0):
+        denominators = [offset + 0.1 * k for k in (1, 2, 3, 4, 5, 7)]
+        for factor_cents in range(-1000, 150):
+            factor = factor_cents / 100
+            with pytest.raises(StatsError, match="does not vary"):
+                ratio_estimate([factor * d for d in denominators], denominators)
 
 
 def test_a_ratio_of_two_constants_has_no_error_whatever_the_values() -> None:
@@ -735,6 +739,13 @@ def test_a_homogeneity_test_refuses_what_it_cannot_answer(
         homogeneity_test(successes, totals)
 
 
+def test_a_group_of_one_unit_is_not_refused() -> None:
+    found = homogeneity_test([1, 5], [1, 10])
+
+    reference = stats.chi2_contingency([[1, 0], [5, 5]], correction=False)
+    assert found.p_value == pytest.approx(reference.pvalue, rel=1e-12)
+
+
 # --- Edges found by the independent review of 4b-1 -----------------------------------------------
 
 
@@ -893,20 +904,22 @@ def _simulated_power(effects, std_errors, positions, level, runs=60000, seed=202
 
 
 @pytest.mark.parametrize(
-    ("effects", "std_errors", "positions"),
+    ("effects", "std_errors", "positions", "level"),
     [
-        ([0, 0, 0, 0], [1, 1, 1, 1], [0, 1, 2, 3]),
-        ([3, 2, 1, 0], [1, 1, 1, 1], [0, 1, 2, 3]),
-        ([1.5, 1.5, 0, 0], [1, 1, 1, 1], [0, 1, 2, 3]),
-        ([2.0, 1.0, 0.5, 0.0, -0.5], [0.5, 1.0, 2.0, 1.0, 0.7], [0, 1, 3, 4, 6]),
-        ([0, 4, 0], [1, 1, 1], [0, 1, 2]),
+        ([0, 0, 0, 0], [1, 1, 1, 1], [0, 1, 2, 3], 0.025),
+        ([3, 2, 1, 0], [1, 1, 1, 1], [0, 1, 2, 3], 0.025),
+        ([1.5, 1.5, 0, 0], [1, 1, 1, 1], [0, 1, 2, 3], 0.025),
+        ([2.0, 1.0, 0.5, 0.0, -0.5], [0.5, 1.0, 2.0, 1.0, 0.7], [0, 1, 3, 4, 6], 0.025),
+        ([0, 4, 0], [1, 1, 1], [0, 1, 2], 0.025),
+        ([2.0, 0, 0], [1, 1, 1], [0, 0, 1], 0.025),  # two different positions are enough
+        ([0, 0, 0], [1, 1, 1], [0, 1, 2], 0.7),  # a lenient level leaves little room at the edges
     ],
 )
 def test_the_power_of_q_or_slope_matches_a_simulation_of_the_cohort_estimates(
-    effects, std_errors, positions
+    effects, std_errors, positions, level
 ) -> None:
-    exact = cohort_power(effects, std_errors, positions=positions, level=0.025)
-    simulated = _simulated_power(effects, std_errors, positions, 0.025)
+    exact = cohort_power(effects, std_errors, positions=positions, level=level)
+    simulated = _simulated_power(effects, std_errors, positions, level)
 
     assert exact == pytest.approx(simulated, abs=4.5 * math.sqrt(0.25 / 60000))
 
@@ -1057,8 +1070,11 @@ def test_a_standard_error_beyond_all_reason_leaves_the_detectable_shift_as_it_wa
 
 
 def test_the_detectable_shift_refuses_what_it_cannot_work_out() -> None:
-    with pytest.raises(StatsError, match="power"):
-        cohort_detectable_shift([1.0] * 4, shape="step", level=0.025, power=1.0)
+    for power in (0.0, 1.0):
+        with pytest.raises(StatsError, match="power"):
+            cohort_detectable_shift([1.0] * 4, shape="step", level=0.025, power=power)
+    with pytest.raises(StatsError, match="no change this size"):
+        cohort_detectable_shift([1e30, 1e30, 1.0], shape="linear_fade", level=0.025)
     with pytest.raises(StatsError, match="unknown shape"):
         cohort_detectable_shift([1.0] * 4, shape="wobble", level=0.025)  # type: ignore[arg-type]
     with pytest.raises(StatsError, match="at least 3 cohorts"):
@@ -1070,6 +1086,7 @@ def test_the_shapes_of_a_change_across_the_cohorts() -> None:
 
     assert _cohort_pattern([0, 1, 2, 3], "linear_fade") == pytest.approx([1, 2 / 3, 1 / 3, 0])
     assert _cohort_pattern([0, 1, 3, 4], "linear_fade") == pytest.approx([1, 0.75, 0.25, 0])
+    assert _cohort_pattern([2, 3, 4, 6], "linear_fade") == pytest.approx([1, 0.75, 0.5, 0])
     assert _cohort_pattern([0, 1, 2, 3], "step") == [1.0, 1.0, 0.0, 0.0]
     assert _cohort_pattern([0, 1, 2, 3, 4], "step") == [1.0, 1.0, 0.0, 0.0, 0.0]  # the middle is 2
     assert _cohort_pattern([2, 3, 5, 9], "step") == [1.0, 1.0, 1.0, 0.0]  # the middle is 5.5
