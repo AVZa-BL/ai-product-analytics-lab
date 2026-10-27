@@ -133,11 +133,13 @@ jobs:
 
   # The same gate on macOS, without the simulation studies. Referee's statistics run on numpy and
   # scipy, whose compiled code and floating-point behaviour differ between platforms, and a report
-  # must give the same numbers wherever it is made. A separate job, not a matrix on the one above,
-  # keeps that job's name, which a branch-protection rule may require.
+  # must give the same numbers wherever it is made. It runs on pushes to main only: on pull requests
+  # its runner queued for up to ten minutes, and a difference between platforms shows right after
+  # the merge instead. A separate job, not a matrix on the one above, keeps that job's name, which a
+  # branch-protection rule may require (a job skipped by its `if:` counts as passing).
   referee-quality-gate-macos:
     needs: changes
-    if: needs.changes.outputs.referee == 'true'
+    if: needs.changes.outputs.referee == 'true' && github.event_name == 'push'
     runs-on: macos-latest
     defaults:
       run:
