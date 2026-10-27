@@ -444,10 +444,72 @@ def test_the_effect_table_is_labelled_by_the_rules_that_block_the_review(
         unreadable,
         underpowered,
     )
-    not_to_be_read = "NOT TO BE READ: blocked by " + ", ".join(unreadable)
+    not_to_be_read = "NOT TO BE READ: blocked by " + " and ".join(unreadable)
     assert (not_to_be_read in text) == bool(unreadable)
     assert "NOT TO BE READ" not in text or unreadable
     assert ("UNDERPOWERED: RES-002 blocks this review" in text) == underpowered
+
+
+@pytest.mark.parametrize(
+    ("blocking", "decision", "label"),
+    [
+        (
+            ("RES-001",),
+            "RES-001 blocks this review, and its remediation says to settle what it found",
+            "blocked by RES-001, whose remediation says to settle this",
+        ),
+        (
+            ("RES-003", "RES-012"),
+            "RES-003 and RES-012 block this review, and the remediation of each says to settle "
+            "what it found",
+            "blocked by RES-003 and RES-012, whose remediations say to settle this",
+        ),
+        (
+            ("RES-001", "RES-003", "RES-012"),
+            "RES-001, RES-003 and RES-012 block this review, and the remediation of each says "
+            "to settle what it found",
+            "blocked by RES-001, RES-003 and RES-012, whose remediations say to settle this",
+        ),
+    ],
+)
+def test_the_rules_that_make_the_effect_unreadable_are_named_in_good_grammar(
+    raw_spec: dict, blocking: tuple[str, ...], decision: str, label: str
+) -> None:
+    context = _revenue_context(raw_spec)
+
+    report = _report(context, _blocked(context, *blocking))
+
+    memo = render_results_memo(report)
+    assert f"Do not read the effect. {decision} before the effect is read." in _flat(
+        memo.split("\n## ")[1]
+    )
+    for shown in (_flat(memo), " ".join(render_results_text(report).split())):
+        assert f"NOT TO BE READ: {label} before the effect is read." in shown
+
+
+@pytest.mark.parametrize(
+    ("warnings", "said"),
+    [
+        (
+            ("RES-012",),
+            "found no blocker and 1 warning (RES-012). Read the effect with it in view; it is "
+            "qualified under Data-quality qualification.",
+        ),
+        (
+            ("RES-007", "RES-008"),
+            "found no blocker and 2 warnings (RES-007, RES-008). Read the effect with them in "
+            "view; each is qualified under Data-quality qualification.",
+        ),
+    ],
+)
+def test_a_caution_counts_its_warnings_in_good_grammar(
+    raw_spec: dict, warnings: tuple[str, ...], said: str
+) -> None:
+    context = _revenue_context(raw_spec)
+
+    memo = render_results_memo(_report(context, _blocked(context, warnings=warnings)))
+
+    assert f"The rules that ran {said}" in _flat(memo.split("\n## ")[1])
 
 
 def test_the_effect_table_prints_each_arm_under_its_columns(raw_spec: dict) -> None:
@@ -1069,7 +1131,11 @@ def test_the_name_of_an_arm_cannot_make_a_link_an_image_a_tag_or_emphasis_in_the
         ((), (), "found nothing that blocks or warns"),
         ((), ("RES-007", "RES-008"), "found no blocker and 2 warnings (RES-007, RES-008)"),
         (("RES-004",), (), "Do not decide on the primary metric alone: RES-004 found a guardrail"),
-        (("RES-003", "RES-012"), (), "Do not read the effect. RES-003, RES-012 block this review"),
+        (
+            ("RES-003", "RES-012"),
+            (),
+            "Do not read the effect. RES-003 and RES-012 block this review",
+        ),
         (("RES-002",), (), "Report the result as underpowered"),
     ],
 )

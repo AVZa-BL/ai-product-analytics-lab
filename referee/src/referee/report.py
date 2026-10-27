@@ -429,10 +429,11 @@ def _effect_sentences(effect: dict[str, Any], show: Callable[[str], str] = str) 
             f"Left out, because their seven-day window had not closed at the export time: {said}."
         )
     if not effect["readable"]:
+        rules = effect["unreadable_because"]
         sentences.append(
-            f"NOT TO BE READ: blocked by {', '.join(effect['unreadable_because'])}, whose "
-            f"remediation says to settle this before the effect is read. These numbers describe "
-            f"the sample and not the effect."
+            f"NOT TO BE READ: blocked by {_and(rules)}, whose "
+            f"{'remediation says' if len(rules) == 1 else 'remediations say'} to settle this "
+            f"before the effect is read. These numbers describe the sample and not the effect."
         )
     if effect["underpowered"]:
         advice = (
@@ -491,6 +492,13 @@ def _effect_lines(effect: dict[str, Any]) -> list[str]:
     for arm, players, error in failed:
         lines += _wrapped(f"{arm} ({players}): not estimated; {error}", "  ", "  ")
     return lines
+
+
+def _and(items: Sequence[str]) -> str:
+    """A list as a sentence writes it: `A`, `A and B`, `A, B and C`."""
+    if len(items) < 2:
+        return "".join(items)
+    return f"{', '.join(items[:-1])} and {items[-1]}"
 
 
 def _blocking_text(groups: dict[str, list[str]]) -> str:
@@ -647,9 +655,9 @@ def _decision_sentences(report: dict[str, Any]) -> list[str]:
             rules = effect["unreadable_because"]
             one = len(rules) == 1
             said.append(
-                f"Do not read the effect. {', '.join(rules)} {'blocks' if one else 'block'} "
-                f"this review, and {'its' if one else 'their'} remediation says to settle what "
-                f"{'it' if one else 'they'} found before the effect is read."
+                f"Do not read the effect. {_and(rules)} {'blocks' if one else 'block'} this "
+                f"review, and {'its remediation' if one else 'the remediation of each'} says to "
+                "settle what it found before the effect is read."
             )
         if groups["harm"]:
             said.append(
@@ -685,10 +693,11 @@ def _decision_sentences(report: dict[str, Any]) -> list[str]:
             )
     elif verdict == "caution":
         warnings = [f["rule_id"] for f in report["findings"] if f["severity"] == "warning"]
-        noun = "warning" if len(warnings) == 1 else "warnings"
+        one = len(warnings) == 1
         said.append(
-            f"The rules that ran found no blocker and {len(warnings)} {noun} "
-            f"({', '.join(warnings)}). Read the effect with them in view; each is qualified "
+            f"The rules that ran found no blocker and {len(warnings)} "
+            f"{'warning' if one else 'warnings'} ({', '.join(warnings)}). Read the effect with "
+            f"{'it' if one else 'them'} in view; {'it is' if one else 'each is'} qualified "
             "under Data-quality qualification."
         )
     else:
