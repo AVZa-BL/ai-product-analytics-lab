@@ -414,9 +414,37 @@ def _adjustment_text(effect: dict[str, Any]) -> str:
     )
 
 
-def _effect_sentences(effect: dict[str, Any], show: Callable[[str], str] = str) -> list[str]:
+def _short_arms(report: dict[str, Any], show: Callable[[str], str]) -> tuple[str, bool] | None:
+    """The arms RES-002 found smaller than the registered n, each with its numbers, as one
+    phrase ("a (6 analysed, 10 required) and b (...)"), and whether it is only one arm; None
+    when the effect is not underpowered. The numbers are the finding's own evidence."""
+    if not report["effect"]["underpowered"]:
+        return None
+    for finding in report["findings"]:
+        if finding["rule_id"] == "RES-002":  # a review holds a rule once
+            evidence = finding["evidence"]
+            arms = evidence["short_arms"]
+            return (
+                _and(
+                    [
+                        f"{show(arm)} ({evidence['analysed'][arm]:,} analysed, "
+                        f"{evidence['required'][arm]:,} required)"
+                        for arm in arms
+                    ]
+                ),
+                len(arms) == 1,
+            )
+    raise ValueError("the effect is underpowered but the report holds no RES-002 finding")
+
+
+def _effect_sentences(
+    effect: dict[str, Any],
+    show: Callable[[str], str] = str,
+    short: tuple[str, bool] | None = None,
+) -> list[str]:
     """The sentences above the effect table: what it holds, who was left out, how to read it.
-    `show` writes the name of an arm: as it is in the text, as a code span in the memo."""
+    `show` writes the name of an arm: as it is in the text, as a code span in the memo; `short`
+    is `_short_arms` of the report, None unless the effect is underpowered."""
     sentences = [
         f"Effect on {effect['metric']}, each arm against control, among the "
         f"{effect['population']}: two-sided tests and 95% intervals. The p values are "
@@ -435,7 +463,8 @@ def _effect_sentences(effect: dict[str, Any], show: Callable[[str], str] = str) 
             f"{'remediation says' if len(rules) == 1 else 'remediations say'} to settle this "
             f"before the effect is read. These numbers describe the sample and not the effect."
         )
-    if effect["underpowered"]:
+    if short is not None:
+        arms, one = short
         advice = (
             "Read the intervals; a small difference is not evidence of no effect."
             if effect["readable"]
@@ -443,8 +472,8 @@ def _effect_sentences(effect: dict[str, Any], show: Callable[[str], str] = str) 
             "difference is still not evidence of no effect."
         )
         sentences.append(
-            f"UNDERPOWERED: RES-002 blocks this review, the arms are smaller than registered. "
-            f"{advice}"
+            f"UNDERPOWERED: RES-002 blocks this review, {arms} {'is' if one else 'are'} smaller "
+            f"than registered. {advice}"
         )
     return sentences
 
@@ -477,9 +506,10 @@ def _effect_rows(
 _EFFECT_COLUMNS = ("arm", "players", "difference", "95% interval", "relative", "p", "adjusted p")
 
 
-def _effect_lines(effect: dict[str, Any]) -> list[str]:
+def _effect_lines(effect: dict[str, Any], short: tuple[str, bool] | None) -> list[str]:
     """The effect table as text: one row an arm, columns aligned, the reading rules above it."""
-    lines = [line for text in _effect_sentences(effect) for line in _wrapped(text, "", "  ")]
+    sentences = _effect_sentences(effect, short=short)
+    lines = [line for text in sentences for line in _wrapped(text, "", "  ")]
     rows, failed = _effect_rows(effect)
     if rows:
         table = [_EFFECT_COLUMNS]
@@ -562,7 +592,7 @@ def render_results_text(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMI
     lines += ["", "Always checked (a quiet result is not a pass):"]
     for line in report["summary_lines"]:
         lines += _paragraph(line, "  ")
-    lines += ["", *_effect_lines(report["effect"])]
+    lines += ["", *_effect_lines(report["effect"], _short_arms(report, str))]
 
     for finding in report["findings"]:
         heading = f"[{finding['severity'].upper()}] {finding['rule_id']}: {finding['title']}"
@@ -664,19 +694,22 @@ def _decision_sentences(report: dict[str, Any]) -> list[str]:
                 f"Do not decide on the primary metric alone: {', '.join(groups['harm'])} found "
                 "a guardrail worse than its tolerance allows."
             )
-        if effect["underpowered"] and effect["unreadable_because"]:
-            # the effect is not to be read yet, so neither are its intervals
-            said.append(
-                "RES-002 also blocks: the arms are smaller than the registered sample size. "
-                "Once the effect can be read, and if the arms are still smaller, report the "
-                "result as underpowered: a small difference is not evidence of no effect."
-            )
-        elif effect["underpowered"]:
-            said.append(
-                "Report the result as underpowered: the arms are smaller than the registered "
-                "sample size (RES-002). Read the intervals; a small difference is not evidence "
-                "of no effect."
-            )
+        short = _short_arms(report, _md_code)
+        if short is not None:
+            arms, one = short
+            smaller = f"{arms} {'is' if one else 'are'} smaller than the registered sample size"
+            if effect["unreadable_because"]:
+                # the effect is not to be read yet, so neither are its intervals
+                said.append(
+                    f"RES-002 also blocks: {smaller}. Once the effect can be read, and if "
+                    f"{'it is' if one else 'they are'} still smaller, report the result as "
+                    "underpowered: a small difference is not evidence of no effect."
+                )
+            else:
+                said.append(
+                    f"Report the result as underpowered: {smaller} (RES-002). Read the "
+                    "intervals; a small difference is not evidence of no effect."
+                )
         if any(
             f["rule_id"] == "RES-002"
             and f["severity"] == "blocker"
@@ -768,7 +801,8 @@ def _observed_lines(report: dict[str, Any], limit: int) -> list[str]:
     lines += ["", f"Export taken: {taken}.{interim}"]
     lines += ["", "Always checked (a quiet result is not a pass):", ""]
     lines += _items(report["summary_lines"])
-    lines += ["", *_paragraphs(*_effect_sentences(effect, show=_md_code))]
+    short = _short_arms(report, _md_code)
+    lines += ["", *_paragraphs(*_effect_sentences(effect, show=_md_code, short=short))]
     rows, failed = _effect_rows(effect)
     if rows:
         lines += ["", *_md_table(_EFFECT_COLUMNS, rows)]
