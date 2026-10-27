@@ -497,7 +497,7 @@ def test_a_test_that_could_not_run_is_reported_with_its_reason_and_the_cohort_si
     assert plan["reason"] == "window_holds_fewer_than_3_blocks" and plan["usable"] == []
     assert plan["attempts"][0]["sizes"][0] == {"block": 0, "arm": 80, "control": 80}
     assert finding.evidence["summary"]["line"] == (
-        "RES-007: 1 tests, 0 flagged, 1 not evaluated, 0 low information"
+        "RES-007: 1 test, 0 flagged, 1 not evaluated, 0 low information"
     )
     assert (
         "arm variant_b, metric sessions_7d: not evaluated (window_holds_fewer_than_3_blocks)."
@@ -869,6 +869,7 @@ def test_the_summary_counts_the_entries_by_status_and_prints_the_report_line() -
     assert (
         summarise([])["line"] == "RES-007: 0 tests, 0 flagged, 0 not evaluated, 0 low information"
     )
+    assert summarise(entries[:1])["line"].startswith("RES-007: 1 test, ")
 
 
 def test_the_assignments_span_is_counted_in_whole_days_rounded_up(raw_spec) -> None:
