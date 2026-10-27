@@ -308,7 +308,7 @@ def summarise(entries: list[dict[str, Any]]) -> dict[str, Any]:
     low = sum(bool(e.get("low_information")) for e in entries)
     ran = len(entries) - not_evaluated
     line = (
-        f"RES-007: {len(entries)} tests, {flagged} flagged, "
+        f"RES-007: {len(entries)} {'test' if len(entries) == 1 else 'tests'}, {flagged} flagged, "
         f"{not_evaluated} not evaluated, {low} low information"
     )
     return {
