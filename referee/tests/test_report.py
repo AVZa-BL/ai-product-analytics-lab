@@ -203,17 +203,34 @@ def test_the_report_always_carries_the_line_of_each_effect_rule_that_ran(raw_spe
     assert _report(context, only_sample_ratio)["summary_lines"] == []
 
 
+def _short(*arms: str, required: int = 10, analysed: int = 6) -> dict:
+    """The evidence of a sized RES-002: the arms that fall short, with their numbers."""
+    every = ("control", "variant_b", "variant_c")
+    return {
+        "required": {arm: required for arm in every},
+        "analysed": {arm: analysed if arm in arms else required for arm in every},
+        "assigned": {arm: required for arm in every},
+        "short_arms": list(arms),
+        "missing": {arm: required - analysed for arm in arms},
+    }
+
+
 def _blocked(
-    context: ResultsContext, *blocking: str, warnings: tuple[str, ...] = ()
+    context: ResultsContext,
+    *blocking: str,
+    warnings: tuple[str, ...] = (),
+    evidence: dict[str, dict] | None = None,
 ) -> ResultsReview:
     """A review of `context` whose findings are blockers for `blocking` and warnings for
-    `warnings`, each with a one-line summary of its own."""
+    `warnings`, each with a one-line summary of its own (RES-002 has the evidence of a sized
+    one, with `variant_b` short); `evidence` replaces the evidence of the rules it names."""
+    own = {"RES-002": _short("variant_b"), **(evidence or {})}
     found = tuple(
         Finding(
             rule_id=rule_id,
             severity=severity,
             title="t",
-            evidence={"summary": {"line": f"{rule_id}: line"}},
+            evidence={**own.get(rule_id, {}), "summary": {"line": f"{rule_id}: line"}},
             why_it_matters="w",
             remediation="r",
             references=(),
@@ -927,9 +944,11 @@ def test_the_memo_carries_the_lab_templates_sections_in_order_filled_from_the_re
     )
     decision, observed, assumptions, quality, reproducibility = memo.split("\n## ")[1:]
     assert "Do not read the effect. RES-001 blocks this review" in _flat(decision)
-    assert "RES-002 also blocks: the arms are smaller than the registered sample size." in (
-        _flat(decision)
-    )
+    assert (
+        "RES-002 also blocks: `control` (926 analysed, 2,107 required), `variant_b` (969 "
+        "analysed, 2,107 required) and `variant_c` (731 analysed, 2,107 required) are smaller "
+        "than the registered sample size."
+    ) in _flat(decision)
     assert "Read the intervals" not in _flat(decision)
     assert "Not decided here: whether to ship, stop or continue" in _flat(decision)
     assert "Verdict: INVALID. Blocking rules: data validity RES-001, RES-002." in _flat(observed)
@@ -1154,45 +1173,67 @@ def test_the_memos_decision_follows_the_verdict_and_what_the_blocking_rules_advi
     assert "Not decided here: whether to ship, stop or continue the experiment." in decision
 
 
-UNDERPOWERED_ADVICE = (
-    "Report the result as underpowered: the arms are smaller than the registered sample size "
-    "(RES-002). Read the intervals; a small difference is not evidence of no effect."
+ONE_SHORT = (
+    ("variant_b",),
+    "`variant_b` (6 analysed, 10 required) is",
+    "variant_b (6 analysed, 10 required) is",
+    "it is",
 )
-UNDERPOWERED_LABEL = (
-    "UNDERPOWERED: RES-002 blocks this review, the arms are smaller than registered. "
-    "Read the intervals; a small difference is not evidence of no effect."
+TWO_SHORT = (
+    ("variant_b", "variant_c"),
+    "`variant_b` (6 analysed, 10 required) and `variant_c` (6 analysed, 10 required) are",
+    "variant_b (6 analysed, 10 required) and variant_c (6 analysed, 10 required) are",
+    "they are",
 )
+SHORT_ARMS = [pytest.param(*ONE_SHORT, id="one arm"), pytest.param(*TWO_SHORT, id="two arms")]
 
 
-def test_an_underpowered_review_whose_effect_can_be_read_says_to_read_the_intervals(
-    raw_spec: dict,
+@pytest.mark.parametrize(("short", "memo_arms", "text_arms", "still"), SHORT_ARMS)
+def test_an_underpowered_review_whose_effect_can_be_read_names_the_short_arms(
+    raw_spec: dict, short: tuple[str, ...], memo_arms: str, text_arms: str, still: str
 ) -> None:
     context = _revenue_context(raw_spec)
 
-    report = _report(context, _blocked(context, "RES-002"))
+    report = _report(context, _blocked(context, "RES-002", evidence={"RES-002": _short(*short)}))
 
     memo = render_results_memo(report)
-    assert UNDERPOWERED_ADVICE in _flat(memo.split("\n## ")[1])
-    assert UNDERPOWERED_LABEL in _flat(memo)
-    assert UNDERPOWERED_LABEL in " ".join(render_results_text(report).split())
+    advice = "Read the intervals; a small difference is not evidence of no effect."
+    assert (
+        f"Report the result as underpowered: {memo_arms} smaller than the registered sample size "
+        f"(RES-002). {advice}"
+    ) in _flat(memo.split("\n## ")[1])
+    label = "UNDERPOWERED: RES-002 blocks this review, {} smaller than registered. " + advice
+    assert label.format(memo_arms) in _flat(memo)
+    assert label.format(text_arms) in " ".join(render_results_text(report).split())
 
 
-@pytest.mark.parametrize("blocking", [("RES-001", "RES-002"), ("RES-003", "RES-002")])
+@pytest.mark.parametrize(
+    ("blocking", "short", "memo_arms", "text_arms", "still"),
+    [
+        pytest.param(("RES-001", "RES-002"), *ONE_SHORT, id="RES-001, one arm"),
+        pytest.param(("RES-003", "RES-002"), *TWO_SHORT, id="RES-003, two arms"),
+    ],
+)
 def test_a_review_that_is_unreadable_and_underpowered_does_not_say_to_read_the_intervals(
-    raw_spec: dict, blocking: tuple[str, ...]
+    raw_spec: dict,
+    blocking: tuple[str, ...],
+    short: tuple[str, ...],
+    memo_arms: str,
+    text_arms: str,
+    still: str,
 ) -> None:
     """The effect must not be read while RES-001, RES-003 or RES-012 blocks, so the advice to
     read its intervals, for RES-002, waits until it can be."""
     context = _revenue_context(raw_spec)
 
-    report = _report(context, _blocked(context, *blocking))
+    report = _report(context, _blocked(context, *blocking, evidence={"RES-002": _short(*short)}))
 
     memo = render_results_memo(report)
     assert "Read the intervals" not in _flat(memo)
     assert "Read the intervals" not in " ".join(render_results_text(report).split())
     assert (
-        "RES-002 also blocks: the arms are smaller than the registered sample size. Once the "
-        "effect can be read, and if the arms are still smaller, report the result as "
+        f"RES-002 also blocks: {memo_arms} smaller than the registered sample size. Once the "
+        f"effect can be read, and if {still} still smaller, report the result as "
         "underpowered: a small difference is not evidence of no effect."
     ) in _flat(memo.split("\n## ")[1])
     assert (
