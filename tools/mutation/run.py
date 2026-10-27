@@ -27,6 +27,7 @@ ap.add_argument("--set", default="train")
 ap.add_argument("--sample", type=int, default=0)
 ap.add_argument("--only", default="", help="comma-separated substrings; mutate only source files whose path contains one")
 ap.add_argument("--no-all", action="store_true", help="do not run mutants that need the whole suite (import-time lines)")
+ap.add_argument("--timeout", type=int, default=180, help="seconds a mutant's tests may run before it counts as a timeout; slow tests (the studies) need far more")
 a = ap.parse_args()
 P = a.project
 OUT = f"{OUT_ROOT}/{P}" + ("" if a.set == "train" else "_" + a.set)
@@ -140,11 +141,11 @@ def worker(w):
         t0 = time.time()
         try:
             if m["tests"] == "ALL":
-                sel, files, tmo = None, ["tests"], 600
+                sel, files, tmo = None, ["tests"], max(600, a.timeout)
             else:
                 files_set = sorted({t.split("::")[0] for t in m["tests"]})
                 sel = sorted({i for f in files_set for i in by_file.get(f, [])})
-                files, tmo = files_set, 180
+                files, tmo = files_set, a.timeout
             e = dict(env, KILL_OUT=f"{root}/kill.json")
             if sel is not None:
                 json.dump(sel, open(f"{root}/sel.json", "w"))

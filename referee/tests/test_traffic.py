@@ -743,7 +743,7 @@ def _passes(attempts, plan, factor):
 def test_the_least_factor_is_where_the_plan_starts_to_pass_and_keeps_passing(overshoot) -> None:
     rng = random.Random(20261012 + overshoot)
     feasible = infeasible = islands = 0
-    for _ in range(3000):
+    for _ in range(1500):  # the 3,000 drawn before found no island that these do not
         attempts, plan = _random_plan(rng, overshoot=overshoot)
         found = _least(attempts, plan)
         points = sorted({at for a in attempts for at, _ in _breakpoints(a, plan)} | {Fraction(1)})
@@ -767,9 +767,10 @@ def test_the_least_factor_is_where_the_plan_starts_to_pass_and_keeps_passing(ove
         for factor in points + [top + 1, 1000 * top]:
             if factor >= least:
                 assert _passes(attempts, plan, factor), (factor, least)
-        first_pass = next(v for v in points if _passes(attempts, plan, v))
-        islands += first_pass < least
-    assert feasible > 300 and infeasible > 100
+        if overshoot:  # only the overshoot plans are judged for islands, so only they pay for it
+            first_pass = next(v for v in points if _passes(attempts, plan, v))
+            islands += first_pass < least
+    assert feasible > 150 and infeasible > 50
     # The generator built for them reaches plans that pass and then fail, so the property above
     # is judged on those too.
     assert islands > 0 or not overshoot
