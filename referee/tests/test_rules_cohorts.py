@@ -1976,6 +1976,11 @@ def test_a_window_that_closes_exactly_at_the_export_is_closed_and_names_no_time(
             "population.kind is declared as new_users, but the column says existing users.",
         ),
         ("new_users", 0, "population.kind is declared as new_users, and the column agrees."),
+        (
+            "existing_users",
+            0,
+            "population.kind is declared as existing_users, but the column says new users.",
+        ),
         (None, 200, "population.kind is not declared."),
     ],
 )
@@ -1993,5 +1998,5 @@ def test_with_a_first_seen_column_the_declared_kind_is_checked_against_the_origi
 
     assert expected in note
     assert "By first_seen_at_utc, " in note and "assigned players were first seen" in note
-    existing = days_before_assignment > 0
+    existing = days_before_assignment > 0 or kind == "existing_users"  # declared or observed
     assert ("Existing users: players who see a change first" in note) is existing

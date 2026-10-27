@@ -382,8 +382,10 @@ def test_the_players_an_arm_are_the_median_over_the_cohorts_of_the_smaller_arm(r
 
     inside = note_for([50, 120, 130, 900])  # median 125, mean 300: inside
     outside = note_for([50, 60, 130, 900])  # median 95, mean 285: outside by the median
+    halved = note_for([50, 120, 125, 900])  # median 122.5: a half is shown to one decimal
 
     assert "and about 125 players an arm)" in inside
+    assert "and about 122.5 players an arm)" in halved
     assert "In Referee's simulations (design" in inside
     assert "cohorts of about 95 players an arm" in outside
 
