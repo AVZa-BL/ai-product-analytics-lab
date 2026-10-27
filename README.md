@@ -6,9 +6,11 @@ A home for portfolio projects in product analytics. Each project lives in its ow
 
 | Project | What it is | Status |
 | --- | --- | --- |
-| [`analytics-lab/`](analytics-lab/) | AI Product Analytics Lab: governed, reproducible product analytics across three synthetic business scenarios, with metric contracts, decision memos and trusted evaluation cases for AI-assisted analysis | Complete |
-| [`referee/`](referee/) | Referee: a deterministic, rule-based reviewer for A/B/n experiment designs and readouts ("ruff for experiments") | In development |
-| [`tracewright/`](tracewright/) | Tracewright: proposes the tracking a new feature needs (events, properties, data types and the reasons) from its design documents and the current tracking plan, and reviews tracking plans with deterministic rules | Proposer, reviewer and Google Sheets input built and tested offline; not yet run against a live model or a real sheet. Next: a trial on a real document and a real sheet |
+| [`analytics-lab/`](analytics-lab/) | AI Product Analytics Lab: governed, reproducible product analytics across three synthetic business scenarios, with metric contracts, decision memos and trusted evaluation cases for AI-assisted analysis | Complete (100%) |
+| [`referee/`](referee/) | Referee: a deterministic, rule-based reviewer for A/B/n experiment designs and readouts ("ruff for experiments") | In development, about 80%: milestones 1 to 4 of 5 built; milestone 5, the optional narration layer, not started |
+| [`tracewright/`](tracewright/) | Tracewright: proposes the tracking a new feature needs (events, properties, data types and the reasons) from its design documents and the current tracking plan, and reviews tracking plans with deterministic rules | About 50%. Proposer, reviewer and Google Sheets input built and tested offline; not yet run against a live model or a real sheet. Next: a trial on a real document and a real sheet |
+
+The percentages are approximate, give or take 10 points: the share of each project's own milestones that are built, counting a milestone that is built but not yet verified (Tracewright's Google Sheets input) as half. They say nothing about effort or quality, and they move when a project's plan changes.
 
 Start with the lab's [README](analytics-lab/README.md), or go straight to its [getting-started guide](analytics-lab/docs/getting_started.md). The [Referee](referee/README.md) and [Tracewright](tracewright/README.md) READMEs show their status and how to run them.
 

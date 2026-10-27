@@ -1960,3 +1960,38 @@ def test_a_window_that_closes_exactly_at_the_export_is_closed_and_names_no_time(
     assert traffic["windows_close_at"] is None and traffic["after_windows_close"] is None
     assert traffic["now"]["factor"] == 3.0
     assert all(a["left_out"] == [] for a in traffic["attempts"])
+
+
+@pytest.mark.parametrize(
+    ("kind", "days_before_assignment", "expected"),
+    [
+        (
+            "existing_users",
+            200,
+            "population.kind is declared as existing_users, and the column agrees.",
+        ),
+        (
+            "new_users",
+            200,
+            "population.kind is declared as new_users, but the column says existing users.",
+        ),
+        ("new_users", 0, "population.kind is declared as new_users, and the column agrees."),
+        (None, 200, "population.kind is not declared."),
+    ],
+)
+def test_with_a_first_seen_column_the_declared_kind_is_checked_against_the_origin(
+    raw_spec, kind, days_before_assignment, expected
+) -> None:
+    """A player first seen before the origin is an existing user and one first seen at or
+    after it a new user: the note says what the column shows and whether the spec agrees."""
+    rows = cohort_rows("control", _weeks(FLAT)) + cohort_rows("variant_b", _weeks(FADE))
+    for row in rows:
+        row.first_seen_at = row.assigned_at - timedelta(days=days_before_assignment)
+    more = {} if kind is None else {"population__kind": kind}
+
+    note = cohort_report(cohort_context(raw_spec, rows, days=35, **more), None)["notes"][1]
+
+    assert expected in note
+    assert "By first_seen_at_utc, " in note and "assigned players were first seen" in note
+    existing = days_before_assignment > 0
+    assert ("Existing users: players who see a change first" in note) is existing

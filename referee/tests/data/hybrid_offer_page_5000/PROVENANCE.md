@@ -16,19 +16,29 @@ python - <<'PY'
 import duckdb
 raw, out = "/tmp/raw5000/hybrid_subscription", "../referee/tests/data/hybrid_offer_page_5000"
 con = duckdb.connect()
+con.sql("set TimeZone = 'UTC'")
 for table in ("experiment_assignments", "experiment_exposures", "experiment_outcomes"):
     con.sql(f"copy (select * from read_parquet('{raw}/{table}.parquet') order by 1, 2) "
             f"to '{out}/{table}.csv' (header)")
 PY
 ```
 
-The generator is the one on `main` at the merge of pull request 31 (`15b1aa4`). DuckDB 1.5.6 wrote
-the CSV, in its default format: UTF-8, a header row, timestamps such as `2026-04-26 17:43:48+00`.
-Regenerating gives byte-identical files (checked when the fixture was added), and
-`manifest.json` holds each file's row count and SHA-256 so that a test notices an edit.
+The generator is the one on `main` at the merge of pull request 43 (`e8ccac7`), which writes
+`first_seen_at_utc` into the assignments (design 4c-2); the exposures and the outcomes are
+byte-identical to the files first written at the merge of pull request 31 (`15b1aa4`), and
+every other column of the assignments is unchanged row by row. DuckDB 1.5.6 wrote the CSV, in
+its default format: UTF-8, a header row, timestamps such as `2026-04-26 17:43:48+00`. DuckDB
+writes a timestamp in the session's time zone, so the snippet sets it to UTC: without that line a
+machine in another zone writes other offsets (`+05:30`, `-07`), other bytes, and files that
+Referee's own loader refuses. With the line regenerating gives byte-identical files (checked when
+the fixture was added and again when the column was, with the time zone of the machine set to UTC,
+Asia/Kolkata and America/Los_Angeles). `manifest.json` holds each file's row count and SHA-256; the
+tests compare the SHA-256 values, and the row counts and the generator block are documentation.
 
 ## What it is not
 
 A snapshot, not a mirror. If the lab's generator changes, this directory does not change with
 it; regenerate it with the commands above and update `manifest.json` and the figures the tests
-pin. The lab's own tests pin the generator, so a change there is noticed on that side.
+pin. The lab's tests check properties of the generator (the columns, the first-seen time being the
+player's `acquired_at_utc`, the planted effects, the ids), not the bytes of these tables, so a
+change in the lab does not by itself change or flag this snapshot.

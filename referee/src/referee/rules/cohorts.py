@@ -57,7 +57,13 @@ from referee.cohorts import (
 )
 from referee.methods import CohortShape, StatsError
 from referee.pooled_rates import UNIT, percent
-from referee.results import DAYS_PER_BLOCK, ExportMetric, ResultsContext
+from referee.results import (
+    DAYS_PER_BLOCK,
+    ExportMetric,
+    ResultsContext,
+    describe_first_seen,
+    first_seen_summary,
+)
 from referee.rules.text import join_and
 
 _DIGITS = 6
@@ -338,19 +344,25 @@ def _amount(found: dict[str, Any]) -> str:
 
 def _population_note(context: ResultsContext) -> str:
     kind = context.spec.population.kind
-    unchecked = (
-        "Referee cannot check this declaration, because the export has no column for how long "
-        "a player has existed."
+    seen = first_seen_summary(context)
+    early = (
+        "players who see a change first can be the most active, so the earliest cohorts may "
+        "differ from the later ones for that reason alone."
     )
-    if kind is None:
-        return "population.kind is not declared, so the kind of players is unknown."
-    if kind == "existing_users":
-        return (
-            "population.kind is existing_users: players who see a change first can be the most "
-            "active, so the earliest cohorts may differ from the later ones for that reason "
-            f"alone. {unchecked}"
+    if seen is None:
+        unchecked = (
+            "Referee cannot check this declaration, because the export has no column for how "
+            "long a player has existed."
         )
-    return f"population.kind is declared as {kind}. {unchecked}"
+        if kind is None:
+            return "population.kind is not declared, so the kind of players is unknown."
+        if kind == "existing_users":
+            return f"population.kind is existing_users: {early} {unchecked}"
+        return f"population.kind is declared as {kind}. {unchecked}"
+    note = describe_first_seen(seen, kind)
+    if kind == "existing_users" or seen["observed"] == "existing_users":
+        note += f" Existing users: {early}"
+    return note
 
 
 def _thousands(number: float) -> str:

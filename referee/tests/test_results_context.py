@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from results_helpers import T0, Row, at, build_data, results_spec
+from results_helpers import T0, Row, at, build_data, crowd, results_spec
 
 from referee import results
 from referee.methods import bonferroni, two_proportion_difference, welch_difference
@@ -553,3 +553,60 @@ def test_an_arm_compared_with_an_empty_control_says_the_control_has_no_players(r
 
     assert row["error"] == "the control group has no players"
     assert (row["n_treatment"], row["n_control"]) == (len(B_REVENUE), 0)
+
+
+# --- The kind of players, from the first-seen column ------------------------------------------
+
+
+def _first_seen(raw_spec, before: int, after: int, declared: str | None = None):
+    """The context of `before` players first seen a day before the origin and `after` first seen
+    at the origin itself (it is the first assignment, and everyone is assigned at once)."""
+    rows = [
+        *crowd("control", before, prefix="old", first_seen_at=at(-1)),
+        *crowd("variant_b", after, prefix="new", first_seen_at=at(0)),
+    ]
+    return _context(raw_spec, rows, **({} if declared is None else {"population__kind": declared}))
+
+
+@pytest.mark.parametrize(
+    ("declared", "before", "after", "observed", "agrees"),
+    [
+        (None, 4, 3, "existing_users", None),
+        (None, 3, 4, "new_users", None),
+        (None, 3, 3, None, None),
+        ("existing_users", 4, 3, "existing_users", True),
+        ("existing_users", 3, 4, "new_users", False),
+        ("new_users", 3, 4, "new_users", True),
+        ("new_users", 4, 3, "existing_users", False),
+        ("mixed", 4, 3, "existing_users", True),
+        ("mixed", 3, 4, "new_users", True),
+        ("existing_users", 3, 3, None, None),
+        ("new_users", 3, 3, None, None),
+        ("mixed", 3, 3, None, None),
+    ],
+)
+def test_the_kind_of_players_is_that_of_more_than_half_and_none_at_exactly_half(
+    raw_spec, declared, before, after, observed, agrees
+) -> None:
+    """A player first seen before the origin is an existing user, one first seen at it or after
+    it a new user (the new ones here are first seen at the origin: the boundary is theirs). At
+    exactly half there is no greater number, so no kind and nothing to agree with."""
+    summary = results.first_seen_summary(_first_seen(raw_spec, before, after, declared))
+
+    assert (summary["before_origin"], summary["from_origin"]) == (before, after)
+    assert (summary["observed"], summary["agrees"]) == (observed, agrees)
+
+
+def test_at_exactly_half_the_sentence_says_there_is_no_greater_number(raw_spec) -> None:
+    summary = results.first_seen_summary(_first_seen(raw_spec, 3, 3, "new_users"))
+
+    said = results.describe_first_seen(summary, "new_users")
+
+    assert said == (
+        "By first_seen_at_utc, 3 of the 6 assigned players were first seen before the origin and "
+        "3 at or after it (existing before the origin, new from it), exactly half each, so "
+        "neither kind is the greater number; at assignment they had existed for 0 to 1 days "
+        "(median 0.5). population.kind is declared as new_users, and the column neither "
+        "confirms nor contradicts it."
+    )
+    assert results.describe_first_seen(summary, None).endswith(" population.kind is not declared.")
