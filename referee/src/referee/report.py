@@ -420,7 +420,7 @@ def _effect_sentences(effect: dict[str, Any], show: Callable[[str], str] = str) 
     sentences = [
         f"Effect on {effect['metric']}, each arm against control, among the "
         f"{effect['population']}: two-sided tests and 95% intervals. The p values are "
-        f"{_adjustment_text(effect)}."
+        f"{_adjustment_text(effect)}. The 95% intervals are not adjusted for the number of arms."
     ]
     left_out = {arm: n for arm, n in effect["left_out"].items() if n}
     if left_out:
@@ -831,6 +831,15 @@ def _quality_lines(report: dict[str, Any], limit: int) -> list[str]:
     lines: list[str] = []
     if not report["findings"]:
         lines += _paragraphs("No finding: the rules that ran found nothing that blocks or warns.")
+    if not report["effect"]["readable"]:
+        # the rules' advice below is written for a reader who may read the effect
+        rules = report["effect"]["unreadable_because"]
+        one = len(rules) == 1
+        lines += _paragraphs(
+            f"The effect is not to be read while {_and(rules)} {'blocks' if one else 'block'} "
+            "(see the Decision), so a What to do line below that tells you to read, compare or "
+            f"report the effect applies once {'it is' if one else 'they are'} settled."
+        )
     for finding in report["findings"]:
         if lines:
             lines.append("")

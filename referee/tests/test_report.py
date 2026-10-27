@@ -908,6 +908,59 @@ def _flat(text: str) -> str:
     return " ".join(text.split())
 
 
+def test_the_effect_sentences_say_the_intervals_are_not_adjusted_for_the_number_of_arms() -> None:
+    """The p values are adjusted for the arms and the intervals are not, so an interval can
+    exclude 0 beside an adjusted p value above 0.05."""
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    sentence = "The 95% intervals are not adjusted for the number of arms."
+
+    for adjustment in ("bonferroni", "none"):
+        report["effect"]["adjustment"] = adjustment
+        assert sentence in _flat(render_results_memo(report))
+        assert sentence in _flat(render_results_text(report))
+
+
+@pytest.mark.parametrize(
+    ("rules", "said"),
+    [
+        (["RES-001"], "while RES-001 blocks (see the Decision)"),
+        (["RES-001", "RES-003"], "while RES-001 and RES-003 block (see the Decision)"),
+        ([], None),
+    ],
+)
+def test_the_quality_section_says_that_its_advice_waits_for_the_blocking_rules(
+    rules: list[str], said: str | None
+) -> None:
+    """The rules' What to do lines are written for a reader who may read the effect."""
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["effect"].update(readable=not rules, unreadable_because=rules)
+
+    quality = render_results_memo(report).split("\n## ")[4]
+
+    if said is None:
+        assert "The effect is not to be read" not in quality
+        return
+    settled = "it is" if len(rules) == 1 else "they are"
+    assert quality.startswith(
+        f"Data-quality qualification\n\nThe effect is not to be read {said}, so a What to do "
+        "line below that tells you to read, compare or report the effect applies once "
+        f"{settled} settled.\n\n**["
+    )
+
+
+def test_the_memo_does_not_say_one_kind_of_players_confirms_a_declared_mixed_population() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["population"]["kind_declared"] = "mixed"
+
+    assumptions = _flat(render_results_memo(report).split("\n## ")[3])
+
+    assert (
+        "population.kind is declared as mixed, and the column shows only existing users: that "
+        "does not contradict a mixed population, and does not confirm one."
+    ) in assumptions
+    assert "and the column agrees" not in assumptions
+
+
 def test_the_memo_carries_the_lab_templates_sections_in_order_filled_from_the_report() -> None:
     report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
 

@@ -597,6 +597,38 @@ def test_the_kind_of_players_is_that_of_more_than_half_and_none_at_exactly_half(
     assert (summary["observed"], summary["agrees"]) == (observed, agrees)
 
 
+@pytest.mark.parametrize(
+    ("declared", "before", "after", "ending"),
+    [
+        (
+            "mixed",
+            4,
+            0,
+            "declared as mixed, and the column shows only existing users: that does not "
+            "contradict a mixed population, and does not confirm one.",
+        ),
+        (
+            "mixed",
+            0,
+            4,
+            "declared as mixed, and the column shows only new users: that does not "
+            "contradict a mixed population, and does not confirm one.",
+        ),
+        ("mixed", 4, 1, "declared as mixed, and the column agrees."),
+        ("existing_users", 4, 0, "declared as existing_users, and the column agrees."),
+    ],
+)
+def test_a_declared_mixed_population_is_not_confirmed_by_a_column_of_one_kind(
+    raw_spec, declared, before, after, ending
+) -> None:
+    """A declared `mixed` agrees with any kind observed (23.2), and the sentence does not say it
+    was confirmed when every player is of one kind."""
+    summary = results.first_seen_summary(_first_seen(raw_spec, before, after, declared))
+
+    assert summary["agrees"] is True
+    assert results.describe_first_seen(summary, declared).endswith(f"population.kind is {ending}")
+
+
 def test_at_exactly_half_the_sentence_says_there_is_no_greater_number(raw_spec) -> None:
     summary = results.first_seen_summary(_first_seen(raw_spec, 3, 3, "new_users"))
 

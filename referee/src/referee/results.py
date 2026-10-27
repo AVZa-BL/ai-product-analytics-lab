@@ -571,6 +571,11 @@ def describe_first_seen(summary: dict[str, Any] | None, declared: str | None) ->
             f"{facts} population.kind is declared as {declared}, and the column neither "
             "confirms nor contradicts it."
         )
+    if declared == "mixed" and 0 in (summary["before_origin"], summary["from_origin"]):
+        return (  # it agrees with any kind (23.2), but a column of one kind confirms nothing
+            f"{facts} population.kind is declared as mixed, and the column shows only {kind}: "
+            "that does not contradict a mixed population, and does not confirm one."
+        )
     if summary["agrees"]:
         return f"{facts} population.kind is declared as {declared}, and the column agrees."
     return f"{facts} population.kind is declared as {declared}, but the column says {kind}."
