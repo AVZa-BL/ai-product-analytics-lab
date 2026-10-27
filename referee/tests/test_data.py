@@ -618,3 +618,24 @@ def test_once_the_first_seen_column_is_there_every_row_must_hold_a_good_value(
 
     assert problem.startswith("experiment_assignments.csv:4: column 'first_seen_at_utc': ")
     assert fragment in problem
+
+
+def test_a_row_cut_short_at_the_first_seen_cell_is_a_problem_not_a_missing_column(
+    tmp_path: Path,
+) -> None:
+    """The column is the header's, so a row without its cell is a bad row. Reading it as an
+    export without the column would switch the check of the kind of players off, unseen."""
+    export(
+        tmp_path, assignments=_assignments_with_first_seen(), assignment_columns=FIRST_SEEN_COLUMNS
+    )
+    path = tmp_path / data.ASSIGNMENTS_FILE
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    lines[3] = lines[3].rsplit(",", 1)[0] + "\n"  # the third player, without the last cell
+    path.write_text("".join(lines), encoding="utf-8")
+
+    (problem,) = _problems(tmp_path)
+
+    assert problem == (
+        "experiment_assignments.csv:4: column 'first_seen_at_utc': "
+        "the row has no value (fewer fields than the header)"
+    )
