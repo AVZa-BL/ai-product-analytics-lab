@@ -951,6 +951,58 @@ def test_the_memo_carries_the_lab_templates_sections_in_order_filled_from_the_re
     assert render_results_memo(report) == memo
 
 
+def test_the_players_table_says_what_its_columns_count_and_what_analysed_means() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["effect"]["left_out"]["control"] = 3
+
+    observed = render_results_memo(report).split("\n## ")[2]
+
+    assert "| arm | assigned | analysed | window still open (left out of the effect table) |" in (
+        observed
+    )
+    assert "| control | 997 | 926 | 3 |" in observed
+    assert "| variant_b | 1,046 | 969 | 0 |" in observed
+    assert (
+        "Analysed players are the assigned players who were exposed and were not first exposed "
+        "after their first purchase; assigned players who were never exposed, or were first "
+        "exposed after buying, are not analysed."
+    ) in _flat(observed)
+
+
+def test_the_players_table_does_not_say_no_window_is_open_when_none_was_checked() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["as_of"]["time"] = None
+
+    observed = render_results_memo(report).split("\n## ")[2]
+
+    assert "| control | 997 | 926 | not checked |" in observed
+    assert "| control | 997 | 926 | 0 |" not in observed
+
+
+@pytest.mark.parametrize(("weeks", "shown"), [([0], "week 0"), ([0, 1], "weeks 0, 1")])
+def test_a_list_of_week_numbers_is_not_printed_as_a_bare_number(weeks, shown: str) -> None:
+    """RES-011 holds `failing_weeks` and RES-013 `mixed_weeks`: `failing_weeks: 0` reads as none."""
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    mixed = next(f for f in report["findings"] if f["rule_id"] == "RES-013")
+    mixed["evidence"]["arms"]["variant_b"]["mixed_weeks"] = weeks
+    report["findings"].append({**mixed, "rule_id": "RES-011", "evidence": {"failing_weeks": weeks}})
+
+    for rendering in (render_results_memo(report), render_results_text(report)):
+        assert f"failing_weeks: {shown}\n" in rendering
+        assert f"mixed_weeks: {shown}\n" in rendering
+
+
+def test_the_pointer_to_the_json_report_names_only_the_tables_the_rule_holds() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    held = {f["rule_id"]: f["evidence"] for f in report["findings"]}
+    assert "plans" in held["RES-007"] and "plans" not in held["RES-008"]
+
+    for rendering in (render_results_memo(report), render_results_text(report)):
+        flat = _flat(rendering)
+        assert "The tests, plans and settings behind these sentences are in the JSON report" in flat
+        assert "The tests and settings behind these sentences are in the JSON report" in flat
+
+
 def test_a_title_an_arm_or_a_player_cannot_make_a_heading_a_row_or_a_line_in_the_memo(
     raw_spec: dict,
 ) -> None:
@@ -980,7 +1032,7 @@ def test_a_title_an_arm_or_a_player_cannot_make_a_heading_a_row_or_a_line_in_the
         "# Decision memo: `Offer\\n## Decision\\n| x |`",
         *(f"## {heading}" for heading in MEMO_HEADINGS),
     ]
-    assert "| b\\\\\\|c | 2 | 2 | 0 |" in memo
+    assert "| b\\\\\\|c | 2 | 2 | not checked |" in memo
     assert "\nArm `## Decision` (2 vs 2): not estimated; " in memo
     assert "in no count: 1 (`## Decision`)." in memo
     # Wherever a value appears, the line it is on is one of the memo's own: a sentence, a

@@ -317,6 +317,8 @@ def _evidence_lines(value: Any, limit: int, indent: int) -> list[str]:
             ):
                 listing = cap_listing(item, limit=limit)
                 text = ", ".join(_plain(x) for x in listing.shown)
+                if key.endswith("_weeks"):  # week numbers: a lone 0 would read as a count of 0
+                    text = f"{'week' if len(item) == 1 else 'weeks'} {text}"
                 if listing.notice:
                     text += f" ({listing.notice})"
                 lines += _wrapped(f"{key}: {text}", pad)
@@ -344,9 +346,11 @@ def _is_effect_evidence(evidence: dict[str, Any]) -> bool:
     return isinstance(evidence.get("notes"), list) and "tests" in evidence
 
 
-_TABLES_IN_JSON = (
-    "The tests, plans and settings behind these sentences are in the JSON report (--format json)."
-)
+def _tables_in_json(evidence: dict[str, Any]) -> str:
+    """The sentence that says where the tables behind an effect rule's sentences are. It names
+    the ones this rule holds: RES-007 has plans, RES-004 and RES-008 have none."""
+    held = [name for name in ("tests", "plans", "settings") if name in evidence]
+    return f"The {_and(held)} behind these sentences are in the JSON report (--format json)."
 
 
 def _results_evidence_lines(evidence: dict[str, Any], limit: int) -> list[str]:
@@ -364,7 +368,7 @@ def _results_evidence_lines(evidence: dict[str, Any], limit: int) -> list[str]:
             lines += textwrap.wrap(
                 note, width=_TEXT_WIDTH, initial_indent="      - ", subsequent_indent="        "
             )
-        lines += _wrapped(_TABLES_IN_JSON, "      ", "")
+        lines += _wrapped(_tables_in_json(evidence), "      ", "")
         return lines
     return ["    Evidence:", *_evidence_lines(evidence, limit, 6)]
 
@@ -736,12 +740,21 @@ def _observed_lines(report: dict[str, Any], limit: int) -> list[str]:
     lines += [
         "",
         *_md_table(
-            ("arm", "assigned", "analysed", "left out of the effect table"),
+            ("arm", "assigned", "analysed", "window still open (left out of the effect table)"),
             [
-                (arm, f"{n:,}", f"{population['analysed'][arm]:,}", f"{effect['left_out'][arm]:,}")
+                (
+                    arm,
+                    f"{n:,}",
+                    f"{population['analysed'][arm]:,}",
+                    "not checked" if as_of["time"] is None else f"{effect['left_out'][arm]:,}",
+                )
                 for arm, n in population["assigned"].items()
             ],
         ),
+        "",
+        "Analysed players are the assigned players who were exposed and were not first exposed "
+        "after their first purchase; assigned players who were never exposed, or were first "
+        "exposed after buying, are not analysed.",
     ]
     ignored = population["ignored_before_start"]
     if ignored:
@@ -843,7 +856,7 @@ def _quality_lines(report: dict[str, Any], limit: int) -> list[str]:
             lines += ["", "Evidence:", ""]
             if _is_effect_evidence(evidence):
                 lines += _items([_md_text(note) for note in evidence["notes"]])
-                lines += ["", _TABLES_IN_JSON]
+                lines += ["", _tables_in_json(evidence)]
             else:
                 lines += _evidence_lines(evidence, limit, 4)
         if finding["references"]:
