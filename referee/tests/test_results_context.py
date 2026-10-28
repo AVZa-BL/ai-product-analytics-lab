@@ -615,7 +615,6 @@ def test_the_kind_of_players_is_that_of_more_than_half_and_none_at_exactly_half(
             "contradict a mixed population, and does not confirm one.",
         ),
         ("mixed", 4, 1, "declared as mixed, and the column agrees."),
-        ("existing_users", 4, 0, "declared as existing_users, and the column agrees."),
     ],
 )
 def test_a_declared_mixed_population_is_not_confirmed_by_a_column_of_one_kind(

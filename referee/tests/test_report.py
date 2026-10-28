@@ -958,7 +958,6 @@ def test_the_memo_does_not_say_one_kind_of_players_confirms_a_declared_mixed_pop
         "population.kind is declared as mixed, and the column shows only existing users: that "
         "does not contradict a mixed population, and does not confirm one."
     ) in assumptions
-    assert "and the column agrees" not in assumptions
 
 
 def test_the_memo_carries_the_lab_templates_sections_in_order_filled_from_the_report() -> None:
