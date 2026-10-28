@@ -1236,11 +1236,24 @@ def test_a_review_that_is_unreadable_and_underpowered_does_not_say_to_read_the_i
         f"effect can be read, and if {still} still smaller, report the result as "
         "underpowered: a small difference is not evidence of no effect."
     ) in _flat(memo.split("\n## ")[1])
-    assert (
-        "UNDERPOWERED: RES-002 blocks this review, the arms are smaller than registered. Do not "
-        "read the intervals yet: once the effect can be read, a small difference is still not "
-        "evidence of no effect."
-    ) in _flat(memo)
+    label = (
+        "UNDERPOWERED: RES-002 blocks this review, {} smaller than registered. Do not read the "
+        "intervals yet: once the effect can be read, a small difference is still not evidence "
+        "of no effect."
+    )
+    assert label.format(memo_arms) in _flat(memo)
+    assert label.format(text_arms) in " ".join(render_results_text(report).split())
+
+
+def test_a_report_that_says_underpowered_without_a_res_002_finding_is_refused() -> None:
+    """The sentence names the arms from the finding's evidence; with no finding it has no words,
+    and a memo that guessed would be a wrong one."""
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["findings"] = [f for f in report["findings"] if f["rule_id"] != "RES-002"]
+    assert report["effect"]["underpowered"]
+
+    with pytest.raises(ValueError, match="holds no RES-002 finding"):
+        render_results_memo(report)
 
 
 CALENDAR_END = datetime(9999, 12, 28, tzinfo=UTC)
