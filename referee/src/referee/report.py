@@ -752,9 +752,9 @@ def _observed_lines(report: dict[str, Any], limit: int) -> list[str]:
             ],
         ),
         "",
-        "Analysed players are the assigned players who were exposed and were not first exposed "
-        "after their first purchase; assigned players who were never exposed, or were first "
-        "exposed after buying, are not analysed.",
+        "Analysed players are those of the assigned players above who were exposed and were not "
+        "first exposed after their first purchase; assigned players who were never exposed, or "
+        "were first exposed after buying, are not analysed.",
     ]
     ignored = population["ignored_before_start"]
     if ignored:
