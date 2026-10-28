@@ -81,10 +81,11 @@ def test_the_json_refuses_a_non_finite_number(raw_spec: dict) -> None:
 HASHES = {"experiment_assignments.csv": "a" * 64}
 
 
-def _context(raw_spec: dict, rows: list[Row], *, exported_at=None, **changes: object):
-    return ResultsContext.of(
-        results_spec(raw_spec, **changes), build_data(rows, exported_at=exported_at)
-    )
+def _context(
+    raw_spec: dict, rows: list[Row], *, exported_at=None, window_column=True, **changes: object
+):
+    data = build_data(rows, exported_at=exported_at, window_column=window_column)
+    return ResultsContext.of(results_spec(raw_spec, **changes), data)
 
 
 UNCHANGED = {
@@ -133,6 +134,8 @@ def test_the_report_states_the_origin_the_first_and_last_assignment_and_who_was_
         "origin_source": "design.start_utc",
         "first_assignment": "2026-04-12T00:00:00Z",
         "last_assignment": "2026-04-16T00:00:00Z",
+        "observed_days": 4,
+        "planned_duration_days": 14,
         "assigned": {"control": 2, "variant_b": 2, "variant_c": 1},
         "analysed": {"control": 2, "variant_b": 1, "variant_c": 1},
         "ignored_before_start": ["early_b", "early_c"],
@@ -200,17 +203,34 @@ def test_the_report_always_carries_the_line_of_each_effect_rule_that_ran(raw_spe
     assert _report(context, only_sample_ratio)["summary_lines"] == []
 
 
+def _short(*arms: str, required: int = 2_000, analysed: int = 1_234) -> dict:
+    """The evidence of a sized RES-002: the arms that fall short, with their numbers."""
+    every = ("control", "variant_b", "variant_c")
+    return {
+        "required": {arm: required for arm in every},
+        "analysed": {arm: analysed if arm in arms else required for arm in every},
+        "assigned": {arm: 2 * required for arm in every},
+        "short_arms": list(arms),
+        "missing": {arm: required - analysed for arm in arms},
+    }
+
+
 def _blocked(
-    context: ResultsContext, *blocking: str, warnings: tuple[str, ...] = ()
+    context: ResultsContext,
+    *blocking: str,
+    warnings: tuple[str, ...] = (),
+    evidence: dict[str, dict] | None = None,
 ) -> ResultsReview:
     """A review of `context` whose findings are blockers for `blocking` and warnings for
-    `warnings`, each with a one-line summary of its own."""
+    `warnings`, each with a one-line summary of its own (RES-002 has the evidence of a sized
+    one, with `variant_b` short); `evidence` replaces the evidence of the rules it names."""
+    own = {"RES-002": _short("variant_b"), **(evidence or {})}
     found = tuple(
         Finding(
             rule_id=rule_id,
             severity=severity,
             title="t",
-            evidence={"summary": {"line": f"{rule_id}: line"}},
+            evidence={**own.get(rule_id, {}), "summary": {"line": f"{rule_id}: line"}},
             why_it_matters="w",
             remediation="r",
             references=(),
@@ -976,9 +996,11 @@ def test_the_memo_carries_the_lab_templates_sections_in_order_filled_from_the_re
     )
     decision, observed, assumptions, quality, reproducibility = memo.split("\n## ")[1:]
     assert "Do not read the effect. RES-001 blocks this review" in _flat(decision)
-    assert "RES-002 also blocks: the arms are smaller than the registered sample size." in (
-        _flat(decision)
-    )
+    assert (
+        "RES-002 also blocks: `control` (926 analysed, 2,107 required), `variant_b` (969 "
+        "analysed, 2,107 required) and `variant_c` (731 analysed, 2,107 required) are smaller "
+        "than the registered sample size."
+    ) in _flat(decision)
     assert "Read the intervals" not in _flat(decision)
     assert "Not decided here: whether to ship, stop or continue" in _flat(decision)
     assert "Verdict: INVALID. Blocking rules: data validity RES-001, RES-002." in _flat(observed)
@@ -1001,6 +1023,55 @@ def test_the_memo_carries_the_lab_templates_sections_in_order_filled_from_the_re
         _flat(reproducibility)
     )
     assert render_results_memo(report) == memo
+
+
+def test_the_players_table_says_what_its_columns_count_and_what_analysed_means() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["effect"]["left_out"]["control"] = 3
+
+    observed = render_results_memo(report).split("\n## ")[2]
+
+    assert "| arm | assigned | analysed | window still open (left out of the effect table) |" in (
+        observed
+    )
+    assert "| control | 997 | 926 | 3 |" in observed
+    assert "| variant_b | 1,046 | 969 | 0 |" in observed
+    assert (
+        "Analysed players are those of the assigned players above who were exposed and were not "
+        "first exposed after their first purchase; assigned players who were never exposed, or "
+        "were first exposed after buying, are not analysed."
+    ) in _flat(observed)
+
+
+def test_the_players_table_does_not_say_no_window_is_open_when_none_was_checked() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["as_of"]["time"] = None
+
+    observed = render_results_memo(report).split("\n## ")[2]
+
+    assert "| control | 997 | 926 | not checked |" in observed
+
+
+@pytest.mark.parametrize(("weeks", "shown"), [([0], "week 0"), ([0, 1], "weeks 0, 1")])
+def test_a_list_of_week_numbers_is_not_printed_as_a_bare_number(weeks, shown: str) -> None:
+    """RES-011 holds `failing_weeks` and RES-013 `mixed_weeks`: `failing_weeks: 0` reads as none."""
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    mixed = next(f for f in report["findings"] if f["rule_id"] == "RES-013")
+    mixed["evidence"]["arms"]["variant_b"]["mixed_weeks"] = weeks
+    report["findings"].append({**mixed, "rule_id": "RES-011", "evidence": {"failing_weeks": weeks}})
+
+    for rendering in (render_results_memo(report), render_results_text(report)):
+        assert f"failing_weeks: {shown}\n" in rendering
+        assert f"mixed_weeks: {shown}\n" in rendering
+
+
+def test_the_pointer_to_the_json_report_names_only_the_tables_the_rule_holds() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+
+    for rendering in (render_results_memo(report), render_results_text(report)):
+        flat = _flat(rendering)
+        assert "The tests, plans and settings behind these sentences are in the JSON report" in flat
+        assert "The tests and settings behind these sentences are in the JSON report" in flat
 
 
 def test_a_title_an_arm_or_a_player_cannot_make_a_heading_a_row_or_a_line_in_the_memo(
@@ -1032,7 +1103,7 @@ def test_a_title_an_arm_or_a_player_cannot_make_a_heading_a_row_or_a_line_in_the
         "# Decision memo: `Offer\\n## Decision\\n| x |`",
         *(f"## {heading}" for heading in MEMO_HEADINGS),
     ]
-    assert "| b\\\\\\|c | 2 | 2 | 0 |" in memo
+    assert "| b\\\\\\|c | 2 | 2 | not checked |" in memo
     assert "\nArm `## Decision` (2 vs 2): not estimated; " in memo
     assert "in no count: 1 (`## Decision`)." in memo
     # Wherever a value appears, the line it is on is one of the memo's own: a sentence, a
@@ -1159,7 +1230,8 @@ def _renamed(value: Any, old: str, new: str) -> Any:
 
 def test_the_name_of_an_arm_cannot_make_a_link_an_image_a_tag_or_emphasis_in_the_memo() -> None:
     """The arm is named in a table cell, in the sentence on who was left out, and in the notes
-    of the effect rules: three places, three ways of keeping its marks from acting."""
+    of the effect rules: three places, three ways of keeping its marks from acting (the
+    sentences that name the short arms and write them as code spans are pinned beside them)."""
     golden = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
     report = _renamed(golden, "variant_b", HOSTILE_ARM)
     report["effect"]["left_out"][HOSTILE_ARM] = 3
@@ -1203,49 +1275,202 @@ def test_the_memos_decision_follows_the_verdict_and_what_the_blocking_rules_advi
     assert "Not decided here: whether to ship, stop or continue the experiment." in decision
 
 
-UNDERPOWERED_ADVICE = (
-    "Report the result as underpowered: the arms are smaller than the registered sample size "
-    "(RES-002). Read the intervals; a small difference is not evidence of no effect."
+ONE_SHORT = (
+    ("variant_b",),
+    "`variant_b` (1,234 analysed, 2,000 required) is",
+    "variant_b (1,234 analysed, 2,000 required) is",
+    "it is",
 )
-UNDERPOWERED_LABEL = (
-    "UNDERPOWERED: RES-002 blocks this review, the arms are smaller than registered. "
-    "Read the intervals; a small difference is not evidence of no effect."
+TWO_SHORT = (
+    ("variant_b", "variant_c"),
+    "`variant_b` (1,234 analysed, 2,000 required) and `variant_c` (1,234 analysed, 2,000 "
+    "required) are",
+    "variant_b (1,234 analysed, 2,000 required) and variant_c (1,234 analysed, 2,000 required) are",
+    "they are",
 )
+SHORT_ARMS = [pytest.param(*ONE_SHORT, id="one arm"), pytest.param(*TWO_SHORT, id="two arms")]
 
 
-def test_an_underpowered_review_whose_effect_can_be_read_says_to_read_the_intervals(
-    raw_spec: dict,
+@pytest.mark.parametrize(("short", "memo_arms", "text_arms", "still"), SHORT_ARMS)
+def test_an_underpowered_review_whose_effect_can_be_read_names_the_short_arms(
+    raw_spec: dict, short: tuple[str, ...], memo_arms: str, text_arms: str, still: str
 ) -> None:
     context = _revenue_context(raw_spec)
 
-    report = _report(context, _blocked(context, "RES-002"))
+    report = _report(context, _blocked(context, "RES-002", evidence={"RES-002": _short(*short)}))
 
     memo = render_results_memo(report)
-    assert UNDERPOWERED_ADVICE in _flat(memo.split("\n## ")[1])
-    assert UNDERPOWERED_LABEL in _flat(memo)
-    assert UNDERPOWERED_LABEL in " ".join(render_results_text(report).split())
+    advice = "Read the intervals; a small difference is not evidence of no effect."
+    assert (
+        f"Report the result as underpowered: {memo_arms} smaller than the registered sample size "
+        f"(RES-002). {advice}"
+    ) in _flat(memo.split("\n## ")[1])
+    label = "UNDERPOWERED: RES-002 blocks this review, {} smaller than registered. " + advice
+    assert label.format(memo_arms) in _flat(memo)
+    assert label.format(text_arms) in " ".join(render_results_text(report).split())
 
 
-@pytest.mark.parametrize("blocking", [("RES-001", "RES-002"), ("RES-003", "RES-002")])
+@pytest.mark.parametrize(
+    ("blocking", "short", "memo_arms", "text_arms", "still"),
+    [
+        pytest.param(("RES-001", "RES-002"), *ONE_SHORT, id="RES-001, one arm"),
+        pytest.param(("RES-003", "RES-002"), *TWO_SHORT, id="RES-003, two arms"),
+    ],
+)
 def test_a_review_that_is_unreadable_and_underpowered_does_not_say_to_read_the_intervals(
-    raw_spec: dict, blocking: tuple[str, ...]
+    raw_spec: dict,
+    blocking: tuple[str, ...],
+    short: tuple[str, ...],
+    memo_arms: str,
+    text_arms: str,
+    still: str,
 ) -> None:
     """The effect must not be read while RES-001, RES-003 or RES-012 blocks, so the advice to
     read its intervals, for RES-002, waits until it can be."""
     context = _revenue_context(raw_spec)
 
-    report = _report(context, _blocked(context, *blocking))
+    report = _report(context, _blocked(context, *blocking, evidence={"RES-002": _short(*short)}))
 
     memo = render_results_memo(report)
     assert "Read the intervals" not in _flat(memo)
     assert "Read the intervals" not in " ".join(render_results_text(report).split())
     assert (
-        "RES-002 also blocks: the arms are smaller than the registered sample size. Once the "
-        "effect can be read, and if the arms are still smaller, report the result as "
+        f"RES-002 also blocks: {memo_arms} smaller than the registered sample size. Once the "
+        f"effect can be read, and if {still} still smaller, report the result as "
         "underpowered: a small difference is not evidence of no effect."
     ) in _flat(memo.split("\n## ")[1])
+    label = (
+        "UNDERPOWERED: RES-002 blocks this review, {} smaller than registered. Do not read the "
+        "intervals yet: once the effect can be read, a small difference is still not evidence "
+        "of no effect."
+    )
+    assert label.format(memo_arms) in _flat(memo)
+    assert label.format(text_arms) in " ".join(render_results_text(report).split())
+
+
+def test_a_report_that_says_underpowered_without_a_res_002_finding_is_refused() -> None:
+    """The sentence names the arms from the finding's evidence; with no finding it has no words,
+    and a memo that guessed would be a wrong one."""
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["findings"] = [f for f in report["findings"] if f["rule_id"] != "RES-002"]
+    assert report["effect"]["underpowered"]
+
+    with pytest.raises(ValueError, match="holds no RES-002 finding"):
+        render_results_memo(report)
+
+
+CALENDAR_END = datetime(9999, 12, 28, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("span", "taken", "observed", "export", "assumption", "cohort"),
+    [
+        (
+            14,
+            None,
+            "The assignments span 14 of the 14 planned days.",
+            "Export taken: not known (no manifest time and no --as-of); completeness of the "
+            "outcome windows was not checked.",
+            "No time of the export is known, so no outcome window was checked: the effect table "
+            "reads every analysed player, a window still open included. Whether the export was "
+            "taken before the planned end of the experiment cannot be said.",
+            False,
+        ),
+        (
+            14,
+            at(10),
+            "The assignments span 14 of the 14 planned days.",
+            "Export taken: 2026-04-21T00:00:00Z (command line). That is before the planned end "
+            "of the experiment (2026-05-02T00:00:00Z).",
+            "The export was taken before the planned end of the experiment (2026-05-02T00:00:00Z).",
+            False,
+        ),
+        (
+            14,
+            at(21),
+            "The assignments span 14 of the 14 planned days.",
+            "Export taken: 2026-05-02T00:00:00Z (command line). That is at or after the planned "
+            "end of the experiment (2026-05-02T00:00:00Z).",
+            "The export was taken at or after the planned end of the experiment "
+            "(2026-05-02T00:00:00Z).",
+            False,
+        ),
+        (
+            6,
+            at(40),
+            "The assignments span 6 of the 14 planned days.",
+            "Export taken: 2026-05-21T00:00:00Z (command line). That is at or after the planned "
+            "end of the experiment (2026-05-02T00:00:00Z).",
+            "The export was taken at or after the planned end of the experiment "
+            "(2026-05-02T00:00:00Z).",
+            True,
+        ),
+        (
+            21,
+            at(40),
+            "The assignments span 21 days; 14 were planned.",
+            "Export taken: 2026-05-21T00:00:00Z (command line). That is at or after the planned "
+            "end of the experiment (2026-05-02T00:00:00Z).",
+            "The export was taken at or after the planned end of the experiment "
+            "(2026-05-02T00:00:00Z).",
+            False,
+        ),
+    ],
+    ids=[
+        "no time",
+        "before the planned end",
+        "at the planned end",
+        "short span, export later",
+        "long span",
+    ],
+)
+def test_the_memo_states_the_export_time_and_the_assignment_span_as_two_facts(
+    raw_spec: dict,
+    span: int,
+    taken: datetime | None,
+    observed: str,
+    export: str,
+    assumption: str,
+    cohort: bool,
+) -> None:
+    """The export is before or after the planned end; the assignments cover the planned days
+    or fewer. RES-007 calls the second an interim look, so the memo does not call the first one."""
+    rows = [*crowd("control", 2, assigned_at=at(0)), *crowd("variant_b", 2, assigned_at=at(span))]
+
+    sections = render_results_memo(
+        _report(_context(raw_spec, rows, exported_at=taken), source="command line")
+    ).split("\n## ")
+    memo, facts, assumptions = _flat(" ".join(sections)), _flat(sections[2]), _flat(sections[3])
+
+    assert observed in facts and export in facts and assumption in assumptions
+    assert "INTERIM RUN" not in memo and "interim run" not in memo
+    cohort_sentence = (
+        f"The assignments span {span} of the 14 planned days, fewer than planned, so the cohort "
+        "test of RES-007 is an interim look: it belongs at the planned end, and run repeatedly "
+        "on accumulating data it flags 11% to 13% of experiments with no change (design "
+        "section 21.6)."
+    )
+    assert (cohort_sentence in assumptions) == cohort
+
+
+def test_an_export_before_a_planned_end_beyond_the_calendar_is_said_to_be_before_it(
+    raw_spec: dict,
+) -> None:
+    rows = [
+        *crowd("control", 2, assigned_at=CALENDAR_END),
+        *crowd("variant_b", 2, assigned_at=CALENDAR_END),
+    ]
+    exported_at = datetime(9999, 12, 31, tzinfo=UTC)
+    # the default window end, seven days on, would run past the last date the calendar holds
+    context = _context(raw_spec, rows, exported_at=exported_at, window_column=False)
+
+    memo = _flat(render_results_memo(_report(context, source="command line")))
+
     assert (
-        "UNDERPOWERED: RES-002 blocks this review, the arms are smaller than registered. Do not "
-        "read the intervals yet: once the effect can be read, a small difference is still not "
-        "evidence of no effect."
-    ) in _flat(memo)
+        "Export taken: 9999-12-31T00:00:00Z (command line). That is before the planned end of "
+        "the experiment, which falls beyond the calendar."
+    ) in memo
+    assert (
+        "The planned end of the experiment falls beyond the calendar, so the export was taken "
+        "before it."
+    ) in memo

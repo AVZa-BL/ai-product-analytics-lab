@@ -185,6 +185,8 @@ def results_report(
             "origin_source": "design.start_utc" if spec.design.start_utc else "first assignment",
             "first_assignment": _instant(min(assigned)),
             "last_assignment": _instant(max(assigned)),
+            "observed_days": context.observed_days,
+            "planned_duration_days": spec.design.planned_duration_days,
             "assigned": context.count_by_arm(context.players),
             "analysed": context.count_by_arm(context.analysed),
             "ignored_before_start": list(context.ignored_before_start),
@@ -317,6 +319,8 @@ def _evidence_lines(value: Any, limit: int, indent: int) -> list[str]:
             ):
                 listing = cap_listing(item, limit=limit)
                 text = ", ".join(_plain(x) for x in listing.shown)
+                if key.endswith("_weeks"):  # week numbers: a lone 0 would read as a count of 0
+                    text = f"{'week' if len(item) == 1 else 'weeks'} {text}"
                 if listing.notice:
                     text += f" ({listing.notice})"
                 lines += _wrapped(f"{key}: {text}", pad)
@@ -344,9 +348,11 @@ def _is_effect_evidence(evidence: dict[str, Any]) -> bool:
     return isinstance(evidence.get("notes"), list) and "tests" in evidence
 
 
-_TABLES_IN_JSON = (
-    "The tests, plans and settings behind these sentences are in the JSON report (--format json)."
-)
+def _tables_in_json(evidence: dict[str, Any]) -> str:
+    """The sentence that says where the tables behind an effect rule's sentences are. It names
+    the ones this rule holds: RES-007 has plans, RES-004 and RES-008 have none."""
+    held = [name for name in ("tests", "plans", "settings") if name in evidence]
+    return f"The {_and(held)} behind these sentences are in the JSON report (--format json)."
 
 
 def _results_evidence_lines(evidence: dict[str, Any], limit: int) -> list[str]:
@@ -364,7 +370,7 @@ def _results_evidence_lines(evidence: dict[str, Any], limit: int) -> list[str]:
             lines += textwrap.wrap(
                 note, width=_TEXT_WIDTH, initial_indent="      - ", subsequent_indent="        "
             )
-        lines += _wrapped(_TABLES_IN_JSON, "      ", "")
+        lines += _wrapped(_tables_in_json(evidence), "      ", "")
         return lines
     return ["    Evidence:", *_evidence_lines(evidence, limit, 6)]
 
@@ -414,9 +420,37 @@ def _adjustment_text(effect: dict[str, Any]) -> str:
     )
 
 
-def _effect_sentences(effect: dict[str, Any], show: Callable[[str], str] = str) -> list[str]:
+def _short_arms(report: dict[str, Any], show: Callable[[str], str]) -> tuple[str, bool] | None:
+    """The arms RES-002 found smaller than the registered n, each with its numbers, as one
+    phrase ("a (6 analysed, 10 required) and b (...)"), and whether it is only one arm; None
+    when the effect is not underpowered. The numbers are the finding's own evidence."""
+    if not report["effect"]["underpowered"]:
+        return None
+    for finding in report["findings"]:
+        if finding["rule_id"] == "RES-002":  # a review holds a rule once
+            evidence = finding["evidence"]
+            arms = evidence["short_arms"]
+            return (
+                _and(
+                    [
+                        f"{show(arm)} ({evidence['analysed'][arm]:,} analysed, "
+                        f"{evidence['required'][arm]:,} required)"
+                        for arm in arms
+                    ]
+                ),
+                len(arms) == 1,
+            )
+    raise ValueError("the effect is underpowered but the report holds no RES-002 finding")
+
+
+def _effect_sentences(
+    effect: dict[str, Any],
+    show: Callable[[str], str] = str,
+    short: tuple[str, bool] | None = None,
+) -> list[str]:
     """The sentences above the effect table: what it holds, who was left out, how to read it.
-    `show` writes the name of an arm: as it is in the text, as a code span in the memo."""
+    `show` writes the name of an arm: as it is in the text, as a code span in the memo; `short`
+    is `_short_arms` of the report, None unless the effect is underpowered."""
     sentences = [
         f"Effect on {effect['metric']}, each arm against control, among the "
         f"{effect['population']}: two-sided tests and 95% intervals. The p values are "
@@ -435,7 +469,8 @@ def _effect_sentences(effect: dict[str, Any], show: Callable[[str], str] = str) 
             f"{'remediation says' if len(rules) == 1 else 'remediations say'} to settle this "
             f"before the effect is read. These numbers describe the sample and not the effect."
         )
-    if effect["underpowered"]:
+    if short is not None:
+        arms, one = short
         advice = (
             "Read the intervals; a small difference is not evidence of no effect."
             if effect["readable"]
@@ -443,8 +478,8 @@ def _effect_sentences(effect: dict[str, Any], show: Callable[[str], str] = str) 
             "difference is still not evidence of no effect."
         )
         sentences.append(
-            f"UNDERPOWERED: RES-002 blocks this review, the arms are smaller than registered. "
-            f"{advice}"
+            f"UNDERPOWERED: RES-002 blocks this review, {arms} {'is' if one else 'are'} smaller "
+            f"than registered. {advice}"
         )
     return sentences
 
@@ -477,9 +512,10 @@ def _effect_rows(
 _EFFECT_COLUMNS = ("arm", "players", "difference", "95% interval", "relative", "p", "adjusted p")
 
 
-def _effect_lines(effect: dict[str, Any]) -> list[str]:
+def _effect_lines(effect: dict[str, Any], short: tuple[str, bool] | None) -> list[str]:
     """The effect table as text: one row an arm, columns aligned, the reading rules above it."""
-    lines = [line for text in _effect_sentences(effect) for line in _wrapped(text, "", "  ")]
+    sentences = _effect_sentences(effect, short=short)
+    lines = [line for text in sentences for line in _wrapped(text, "", "  ")]
     rows, failed = _effect_rows(effect)
     if rows:
         table = [_EFFECT_COLUMNS]
@@ -562,7 +598,7 @@ def render_results_text(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMI
     lines += ["", "Always checked (a quiet result is not a pass):"]
     for line in report["summary_lines"]:
         lines += _paragraph(line, "  ")
-    lines += ["", *_effect_lines(report["effect"])]
+    lines += ["", *_effect_lines(report["effect"], _short_arms(report, str))]
 
     for finding in report["findings"]:
         heading = f"[{finding['severity'].upper()}] {finding['rule_id']}: {finding['title']}"
@@ -664,19 +700,22 @@ def _decision_sentences(report: dict[str, Any]) -> list[str]:
                 f"Do not decide on the primary metric alone: {', '.join(groups['harm'])} found "
                 "a guardrail worse than its tolerance allows."
             )
-        if effect["underpowered"] and effect["unreadable_because"]:
-            # the effect is not to be read yet, so neither are its intervals
-            said.append(
-                "RES-002 also blocks: the arms are smaller than the registered sample size. "
-                "Once the effect can be read, and if the arms are still smaller, report the "
-                "result as underpowered: a small difference is not evidence of no effect."
-            )
-        elif effect["underpowered"]:
-            said.append(
-                "Report the result as underpowered: the arms are smaller than the registered "
-                "sample size (RES-002). Read the intervals; a small difference is not evidence "
-                "of no effect."
-            )
+        short = _short_arms(report, _md_code)
+        if short is not None:
+            arms, one = short
+            smaller = f"{arms} {'is' if one else 'are'} smaller than the registered sample size"
+            if effect["unreadable_because"]:
+                # the effect is not to be read yet, so neither are its intervals
+                said.append(
+                    f"RES-002 also blocks: {smaller}. Once the effect can be read, and if "
+                    f"{'it is' if one else 'they are'} still smaller, report the result as "
+                    "underpowered: a small difference is not evidence of no effect."
+                )
+            else:
+                said.append(
+                    f"Report the result as underpowered: {smaller} (RES-002). Read the "
+                    "intervals; a small difference is not evidence of no effect."
+                )
         if any(
             f["rule_id"] == "RES-002"
             and f["severity"] == "blocker"
@@ -713,6 +752,15 @@ def _decision_sentences(report: dict[str, Any]) -> list[str]:
     return said
 
 
+def _span_text(population: dict[str, Any]) -> str:
+    """How many of the planned days the assignments span; "N of the M" reads wrongly when they
+    ran longer than planned."""
+    days, planned = population["observed_days"], population["planned_duration_days"]
+    if days <= planned:
+        return f"The assignments span {days} of the {planned} planned days."
+    return f"The assignments span {days} days; {planned} were planned."
+
+
 def _observed_lines(report: dict[str, Any], limit: int) -> list[str]:
     """The verdict, the population, the time of the export, the always-checked lines and the
     effect table, every number copied from the report."""
@@ -731,17 +779,27 @@ def _observed_lines(report: dict[str, Any], limit: int) -> list[str]:
     lines = _paragraphs(
         f"{verdict} {found}",
         f"Assigned from {population['first_assignment']} to {population['last_assignment']}; "
-        f"weeks are counted from {population['origin']} ({population['origin_source']}).",
+        f"weeks are counted from {population['origin']} ({population['origin_source']}). "
+        f"{_span_text(population)}",
     )
     lines += [
         "",
         *_md_table(
-            ("arm", "assigned", "analysed", "left out of the effect table"),
+            ("arm", "assigned", "analysed", "window still open (left out of the effect table)"),
             [
-                (arm, f"{n:,}", f"{population['analysed'][arm]:,}", f"{effect['left_out'][arm]:,}")
+                (
+                    arm,
+                    f"{n:,}",
+                    f"{population['analysed'][arm]:,}",
+                    "not checked" if as_of["time"] is None else f"{effect['left_out'][arm]:,}",
+                )
                 for arm, n in population["assigned"].items()
             ],
         ),
+        "",
+        "Analysed players are those of the assigned players above who were exposed and were not "
+        "first exposed after their first purchase; assigned players who were never exposed, or "
+        "were first exposed after buying, are not analysed.",
     ]
     ignored = population["ignored_before_start"]
     if ignored:
@@ -756,19 +814,22 @@ def _observed_lines(report: dict[str, Any], limit: int) -> list[str]:
     if as_of["time"] is None:
         taken = (
             "not known (no manifest time and no --as-of); completeness of the outcome windows "
-            "was not checked"
+            "was not checked."
         )
     else:
-        taken = f"{as_of['time']} ({as_of['source']})"
-    interim = (
-        f" INTERIM RUN: before the planned end of the experiment ({as_of['planned_end']})."
-        if as_of["interim"]
-        else ""
-    )
-    lines += ["", f"Export taken: {taken}.{interim}"]
+        when = (
+            "before the planned end of the experiment, which falls beyond the calendar"
+            if as_of["planned_end"] is None
+            else f"before the planned end of the experiment ({as_of['planned_end']})"
+            if as_of["interim"]
+            else f"at or after the planned end of the experiment ({as_of['planned_end']})"
+        )
+        taken = f"{as_of['time']} ({as_of['source']}). That is {when}."
+    lines += ["", f"Export taken: {taken}"]
     lines += ["", "Always checked (a quiet result is not a pass):", ""]
     lines += _items(report["summary_lines"])
-    lines += ["", *_paragraphs(*_effect_sentences(effect, show=_md_code))]
+    short = _short_arms(report, _md_code)
+    lines += ["", *_paragraphs(*_effect_sentences(effect, show=_md_code, short=short))]
     rows, failed = _effect_rows(effect)
     if rows:
         lines += ["", *_md_table(_EFFECT_COLUMNS, rows)]
@@ -793,25 +854,31 @@ def _assumption_sentences(report: dict[str, Any]) -> list[str]:
     if as_of["time"] is None:
         said.append(
             "No time of the export is known, so no outcome window was checked: the effect "
-            "table reads every analysed player, a window still open included, and whether this "
-            "is an interim run cannot be said."
-        )
-    elif as_of["interim"]:
-        said.append(
-            f"INTERIM RUN: the export was taken before the planned end of the experiment "
-            f"({as_of['planned_end']}). The cohort test of RES-007 belongs at the planned end; "
-            "run repeatedly on accumulating data it flags 11% to 13% of experiments with no "
-            "change (design section 21.6)."
+            "table reads every analysed player, a window still open included. Whether the "
+            "export was taken before the planned end of the experiment cannot be said."
         )
     elif as_of["planned_end"] is None:
         said.append(
-            "The planned end of the experiment falls outside the calendar, so whether this is "
-            "an interim run cannot be said."
+            "The planned end of the experiment falls beyond the calendar, so the export was "
+            "taken before it."
+        )
+    elif as_of["interim"]:
+        said.append(
+            f"The export was taken before the planned end of the experiment "
+            f"({as_of['planned_end']})."
         )
     else:
         said.append(
             f"The export was taken at or after the planned end of the experiment "
             f"({as_of['planned_end']})."
+        )
+    if population["observed_days"] < population["planned_duration_days"]:
+        said.append(
+            f"The assignments span {population['observed_days']} of the "
+            f"{population['planned_duration_days']} planned days, fewer than planned, so the "
+            "cohort test of RES-007 is an interim look: it belongs at the planned end, and run "
+            "repeatedly on accumulating data it flags 11% to 13% of experiments with no change "
+            "(design section 21.6)."
         )
     headline, *shifts = _sensitivity_sentences(report["origin_sensitivity"])
     said.append(" ".join([headline, *(f"{sentence}." for sentence in shifts)]))
@@ -852,7 +919,7 @@ def _quality_lines(report: dict[str, Any], limit: int) -> list[str]:
             lines += ["", "Evidence:", ""]
             if _is_effect_evidence(evidence):
                 lines += _items([_md_text(note) for note in evidence["notes"]])
-                lines += ["", _TABLES_IN_JSON]
+                lines += ["", _tables_in_json(evidence)]
             else:
                 lines += _evidence_lines(evidence, limit, 4)
         if finding["references"]:
