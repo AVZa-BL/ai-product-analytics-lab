@@ -1161,7 +1161,11 @@ def test_an_experiment_with_a_control_character_in_its_name_is_not_named_in_the_
         "python -m referee review-results SPEC DATA --experiment-id=ID --as-of "
     )
     assert "bell" not in command and "u0007" not in command
-    assert "ID is the experiment above, whose name holds control characters" in line
+    assert (
+        "carry these hashes. ID is the experiment above, whose name holds control characters "
+        "(shown there as escapes): pass it exactly as the export holds it. The memo holds no "
+        "timestamp"
+    ) in line
     assert "holds control characters" not in plain
 
 
@@ -1175,7 +1179,10 @@ def test_a_time_from_the_manifest_is_said_to_come_from_a_file_that_is_not_hashed
     assert (
         "--as-of" not in line
     )  # the manifest in DATA gives the time, and --as-of would replace it
-    assert "comes from the manifest.json in DATA (exported_at_utc), which is not among" in line
+    assert (
+        "carry these hashes. The export time above comes from the manifest.json in DATA "
+        "(exported_at_utc), which is not among the hashed files. The memo holds no timestamp"
+    ) in line
     assert "manifest.json" not in typed
 
 
@@ -1191,6 +1198,7 @@ def test_a_time_from_the_manifest_is_said_to_come_from_a_file_that_is_not_hashed
         (" a", "` a`"),
         ("a ", "`a `"),
         (" ", "` `"),
+        (" X ", "`  X  `"),
         ("a``b```c", "````a``b```c````"),
     ],
 )
@@ -1355,7 +1363,9 @@ def test_a_report_that_says_underpowered_without_a_res_002_finding_is_refused() 
     report["findings"] = [f for f in report["findings"] if f["rule_id"] != "RES-002"]
     assert report["effect"]["underpowered"]
 
-    with pytest.raises(ValueError, match="holds no RES-002 finding"):
+    with pytest.raises(
+        ValueError, match="^the effect is underpowered but the report holds no RES-002 finding$"
+    ):
         render_results_memo(report)
 
 
@@ -1440,9 +1450,11 @@ def test_the_memo_states_the_export_time_and_the_assignment_span_as_two_facts(
     sections = render_results_memo(
         _report(_context(raw_spec, rows, exported_at=taken), source="command line")
     ).split("\n## ")
-    memo, facts, assumptions = _flat(" ".join(sections)), _flat(sections[2]), _flat(sections[3])
+    memo, facts, assumptions = _flat(" ".join(sections)), sections[2].split("\n\n"), sections[3]
+    assumptions = assumptions.split("\n\n")
 
-    assert observed in facts and export in facts and assumption in assumptions
+    assert any(paragraph.endswith(observed) for paragraph in facts)
+    assert export in facts and assumption in assumptions
     assert "INTERIM RUN" not in memo and "interim run" not in memo
     cohort_sentence = (
         f"The assignments span {span} of the 14 planned days, fewer than planned, so the cohort "
@@ -1450,7 +1462,7 @@ def test_the_memo_states_the_export_time_and_the_assignment_span_as_two_facts(
         "on accumulating data it flags 11% to 13% of experiments with no change (design "
         "section 21.6)."
     )
-    assert (cohort_sentence in assumptions) == cohort
+    assert (cohort_sentence in assumptions) == cohort  # a whole paragraph of Assumptions
 
 
 def test_an_export_before_a_planned_end_beyond_the_calendar_is_said_to_be_before_it(
@@ -1464,13 +1476,412 @@ def test_an_export_before_a_planned_end_beyond_the_calendar_is_said_to_be_before
     # the default window end, seven days on, would run past the last date the calendar holds
     context = _context(raw_spec, rows, exported_at=exported_at, window_column=False)
 
-    memo = _flat(render_results_memo(_report(context, source="command line")))
+    paragraphs = render_results_memo(_report(context, source="command line")).split("\n\n")
 
     assert (
         "Export taken: 9999-12-31T00:00:00Z (command line). That is before the planned end of "
         "the experiment, which falls beyond the calendar."
-    ) in memo
+    ) in paragraphs
     assert (
         "The planned end of the experiment falls beyond the calendar, so the export was taken "
         "before it."
+    ) in paragraphs
+
+
+def _finding(rule_id: str, severity: str, **evidence: object) -> dict:
+    return {
+        "rule_id": rule_id,
+        "severity": severity,
+        "title": f"{rule_id} title",
+        "evidence": evidence,
+        "why_it_matters": "why",
+        "remediation": "what",
+        "references": [],
+    }
+
+
+def _decision_report(
+    verdict: str,
+    *,
+    unreadable: tuple[str, ...] = (),
+    harm: tuple[str, ...] = (),
+    short: tuple[str, ...] = (),
+    unattainable: bool = False,
+    warnings: tuple[str, ...] = (),
+    infos: tuple[str, ...] = (),
+) -> dict:
+    """The lab report with the findings, the verdict and the effect's labels this decision
+    reads replaced: the memo is built from the report alone (23.1)."""
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    arms = ("control", "variant_b", "variant_c")
+    findings = [_finding(rule, "blocker") for rule in (*unreadable, *harm)]
+    if short:
+        findings.append(
+            _finding(
+                "RES-002",
+                "blocker",
+                required={arm: 2000 for arm in arms},
+                analysed={arm: 1234 if arm in short else 2000 for arm in arms},
+                assigned={arm: 4000 for arm in arms},
+                short_arms=list(short),
+            )
+        )
+    if unattainable:
+        findings.append(_finding("RES-002", "blocker", unattainable=True))
+    findings += [_finding(rule, "warning") for rule in warnings]
+    findings += [_finding(rule, "info") for rule in infos]
+    blocking = [f["rule_id"] for f in findings if f["severity"] == "blocker"]
+    report |= {
+        "findings": findings,
+        "verdict": verdict,
+        "blocking_rule_ids": blocking,
+        "blocking_groups": {
+            "data_validity": [rule for rule in blocking if rule not in harm],
+            "harm": list(harm),
+        },
+    }
+    report["effect"] |= {
+        "unreadable_because": list(unreadable),
+        "readable": not unreadable,
+        "underpowered": bool(short),
+    }
+    return report
+
+
+DECIDED = (
+    "Decided here: whether the rules object to reading this experiment's result as it stands. "
+    "Not decided here: whether to ship, stop or continue the experiment. Referee is advisory, "
+    "and that decision rests with the experiment's owner."
+)
+NOT_READ_ONE = (
+    "Do not read the effect. {} blocks this review, and its remediation says to settle what it "
+    "found before the effect is read."
+)
+HARM = (
+    "Do not decide on the primary metric alone: RES-004 found a guardrail worse than its "
+    "tolerance allows."
+)
+ONE_SHORT_PAIR = "`variant_b` (1,234 analysed, 2,000 required)"
+CANNOT_BE_SIZED = (
+    "The design cannot be sized (RES-002): correct the spec's baseline and target effect and "
+    "register the experiment again. More data will not clear this."
+)
+CAUTION = (
+    "The rules that ran found no blocker and {} Read the effect with {} in view; {} qualified "
+    "under Data-quality qualification."
+)
+CLEAR = (
+    "The rules that ran found nothing that blocks or warns. That does not say the effect is "
+    "real: it says that none of the checks Referee makes objected."
+)
+
+
+@pytest.mark.parametrize(
+    ("report", "paragraphs"),
+    [
+        pytest.param(_decision_report("clear"), [CLEAR], id="clear"),
+        pytest.param(_decision_report("clear", infos=("RES-008",)), [CLEAR], id="clear, an info"),
+        pytest.param(
+            _decision_report("caution", warnings=("RES-007",)),
+            [CAUTION.format("1 warning (RES-007).", "it", "it is")],
+            id="one warning",
+        ),
+        pytest.param(
+            _decision_report("caution", warnings=("RES-007",), infos=("RES-008",)),
+            [CAUTION.format("1 warning (RES-007).", "it", "it is")],
+            id="a warning and an info",
+        ),
+        pytest.param(
+            _decision_report("caution", warnings=("RES-007", "RES-013")),
+            [CAUTION.format("2 warnings (RES-007, RES-013).", "them", "each is")],
+            id="two warnings",
+        ),
+        pytest.param(
+            _decision_report("caution", warnings=("RES-007", "RES-008", "RES-013")),
+            [CAUTION.format("3 warnings (RES-007, RES-008, RES-013).", "them", "each is")],
+            id="three warnings",
+        ),
+        pytest.param(
+            _decision_report("invalid", unreadable=("RES-001",)),
+            [NOT_READ_ONE.format("RES-001")],
+            id="RES-001",
+        ),
+        pytest.param(
+            _decision_report("invalid", unreadable=("RES-001", "RES-003")),
+            [
+                "Do not read the effect. RES-001 and RES-003 block this review, and the "
+                "remediation of each says to settle what it found before the effect is read."
+            ],
+            id="RES-001 and RES-003",
+        ),
+        pytest.param(
+            _decision_report("invalid", unreadable=("RES-001", "RES-003", "RES-012")),
+            [
+                "Do not read the effect. RES-001, RES-003 and RES-012 block this review, and "
+                "the remediation of each says to settle what it found before the effect is read."
+            ],
+            id="RES-001, RES-003 and RES-012",
+        ),
+        pytest.param(
+            _decision_report("invalid", short=("variant_b",)),
+            [
+                f"Report the result as underpowered: {ONE_SHORT_PAIR} is smaller than the "
+                "registered sample size (RES-002). Read the intervals; a small difference is not "
+                "evidence of no effect."
+            ],
+            id="one short arm",
+        ),
+        pytest.param(
+            _decision_report("invalid", short=("variant_b", "variant_c")),
+            [
+                f"Report the result as underpowered: {ONE_SHORT_PAIR} and `variant_c` (1,234 "
+                "analysed, 2,000 required) are smaller than the registered sample size "
+                "(RES-002). Read the intervals; a small difference is not evidence of no effect."
+            ],
+            id="two short arms",
+        ),
+        pytest.param(
+            _decision_report("invalid", unreadable=("RES-003",), short=("variant_b",)),
+            [
+                NOT_READ_ONE.format("RES-003"),
+                f"RES-002 also blocks: {ONE_SHORT_PAIR} is smaller than the registered sample "
+                "size. Once the effect can be read, and if it is still smaller, report the "
+                "result as underpowered: a small difference is not evidence of no effect.",
+            ],
+            id="RES-003 and one short arm",
+        ),
+        pytest.param(
+            _decision_report("invalid", unattainable=True),
+            [CANNOT_BE_SIZED],
+            id="a design that cannot be sized",
+        ),
+        pytest.param(
+            _decision_report("invalid", unreadable=("RES-001",), unattainable=True),
+            [NOT_READ_ONE.format("RES-001"), CANNOT_BE_SIZED],
+            id="RES-001 and a design that cannot be sized",
+        ),
+        pytest.param(_decision_report("invalid", harm=("RES-004",)), [HARM], id="a guardrail"),
+        pytest.param(
+            _decision_report("invalid", unreadable=("RES-001",), harm=("RES-004",)),
+            [NOT_READ_ONE.format("RES-001"), HARM],
+            id="RES-001 and a guardrail",
+        ),
+        pytest.param(
+            _decision_report("invalid", harm=("RES-004",), short=("variant_c",)),
+            [
+                HARM,
+                "Report the result as underpowered: `variant_c` (1,234 analysed, 2,000 required) "
+                "is smaller than the registered sample size (RES-002). Read the intervals; a "
+                "small difference is not evidence of no effect.",
+            ],
+            id="a guardrail and one short arm",
+        ),
+    ],
+)
+def test_the_decision_is_this_exact_text_for_each_verdict_and_blocking_group(
+    report: dict, paragraphs: list[str]
+) -> None:
+    decision = render_results_memo(report).split("\n## ")[1]
+
+    assert decision == "Decision\n\n" + "\n\n".join([*paragraphs, DECIDED]) + "\n"
+
+
+def test_a_blocker_the_memo_has_no_words_for_is_refused() -> None:
+    report = _decision_report("invalid")
+    report["blocking_rule_ids"] = ["RES-009"]
+
+    with pytest.raises(ValueError, match=r"no advice for the blocking rules \['RES-009'\]"):
+        render_results_memo(report)
+
+
+def _section(memo: str, heading: str) -> str:
+    return next(part for part in memo.split("\n## ") if part.startswith(heading))
+
+
+def test_a_memo_without_findings_says_so_in_the_facts_and_in_the_quality_section() -> None:
+    memo = render_results_memo(_decision_report("clear"))
+
+    facts, quality = _section(memo, "Observed facts"), _section(memo, "Data-quality")
+    assert facts.startswith("Observed facts\n\nVerdict: CLEAR. Findings: none.\n\n")
+    assert quality.startswith(
+        "Data-quality qualification\n\nNo finding: the rules that ran found nothing that blocks "
+        "or warns.\n\nRules run: "
+    )
+
+
+@pytest.mark.parametrize(
+    ("ignored", "limit", "said"),
+    [
+        (["a", "b"], 5, "2 (`a`, `b`)."),
+        (["a", "b", "c"], 2, "3 (`a`, `b`; showing 2 of 3; the full list is in the JSON report)."),
+    ],
+)
+def test_the_players_ignored_before_the_start_are_listed_and_the_list_is_cut_at_the_limit(
+    ignored: list[str], limit: int, said: str
+) -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["population"]["ignored_before_start"] = ignored
+
+    facts = _section(render_results_memo(report, limit=limit), "Observed facts").split("\n\n")
+
+    assert f"Ignored, assigned before design.start_utc and in no count: {said}" in facts
+
+
+def test_a_change_of_origin_that_changes_the_rules_is_said_with_the_rules_that_move() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["origin_sensitivity"] = {
+        "ran": True,
+        "reason": None,
+        "shifts": [
+            {
+                "days_earlier": day,
+                "same": day != 3,
+                "verdict": "clear",
+                "appear": ["RES-007", "RES-013"] if day == 3 else [],
+                "disappear": ["RES-012"] if day == 3 else [],
+            }
+            for day in range(1, 7)
+        ],
+    }
+
+    assumptions = _section(render_results_memo(report), "Assumptions").split("\n\n")
+
+    assert (
+        "Origin sensitivity: the rules that fire change with the origin. 3 days earlier: verdict "
+        "clear; appear RES-007, RES-013; disappear RES-012."
+    ) in assumptions
+
+
+def test_a_memo_without_an_export_time_says_in_its_reproducibility_that_it_is_not_known() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["as_of"] |= {"time": None, "source": None, "planned_end": None, "interim": None}
+
+    lines = _section(render_results_memo(report), "Reproducibility").splitlines()
+
+    assert "- Export taken: not known" in lines
+
+
+def test_evidence_that_is_not_an_effect_rules_is_printed_in_full_and_an_empty_one_not_at_all() -> (
+    None
+):
+    """An effect rule's evidence has `notes` and `tests` (its tables stay in the JSON report);
+    anything else is a code block of key and value, a false value written "no"."""
+    report = _decision_report("caution", warnings=("RES-007",))
+
+    report["findings"][0]["evidence"] = {"notes": ["a note"], "flag": False}
+    memo, text = render_results_memo(report), render_results_text(report)
+    assert "Evidence:\n\n    notes: a note\n    flag: no\n" in memo
+    assert "behind these sentences" not in memo and "behind these sentences" not in text
+
+    report["findings"][0]["evidence"] = {}
+    assert "Evidence:" not in render_results_memo(report)
+    assert "Evidence:" not in render_results_text(report)
+
+
+def test_the_p_values_are_said_not_to_be_adjusted_when_the_spec_registers_no_adjustment() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["effect"]["adjustment"] = "none"
+
+    memo = render_results_memo(report)
+
+    assert (
+        "The p values are not adjusted for the number of arms (the spec registers none). The "
+        "95% intervals are not adjusted for the number of arms."
+    ) in _flat(memo)
+
+
+def test_a_text_report_without_findings_or_an_export_time_says_so() -> None:
+    report = _decision_report("clear")
+    report["as_of"] |= {"time": None, "source": None, "planned_end": None, "interim": None}
+
+    lines = render_results_text(report).splitlines()
+
+    assert (
+        "As of:      not known (no manifest time and no --as-of); completeness was not checked"
+    ) in lines
+    assert lines[lines.index("Verdict: CLEAR") + 1] == "Findings: none"
+
+
+def test_the_text_report_indents_what_it_wraps_and_the_changes_of_origin() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["origin_sensitivity"] = {
+        "ran": True,
+        "reason": None,
+        "shifts": [
+            {
+                "days_earlier": day,
+                "same": day != 3,
+                "verdict": "clear",
+                "appear": ["RES-007", "RES-013"] if day == 3 else [],
+                "disappear": ["RES-012"] if day == 3 else [],
+            }
+            for day in range(1, 7)
+        ],
+    }
+    report["effect"]["arms"] = [
+        {
+            "arm": "variant_b",
+            "n_treatment": 0,
+            "n_control": 926,
+            "error": "no player of this arm has a window that closed, so no mean can be taken for "
+            "it and this error text is long enough to be wrapped across two lines",
+        }
+    ]
+
+    lines = render_results_text(report).splitlines()
+
+    at = lines.index("Origin sensitivity: the rules that fire change with the origin.")
+    assert lines[at + 1] == (
+        "  3 days earlier: verdict clear; appear RES-007, RES-013; disappear RES-012"
+    )
+    at = lines.index(
+        "  variant_b (0 vs 926): not estimated; no player of this arm has a window that closed,"
+    )
+    assert lines[at + 1 : at + 3] == [
+        "    so no mean can be taken for it and this error text is long enough to be wrapped",
+        "    across two lines",
+    ]
+
+
+def test_a_long_list_in_the_evidence_wraps_with_a_hanging_indent_in_both_formats() -> None:
+    report = _decision_report("caution", warnings=("RES-007",))
+    report["findings"][0]["evidence"] = {"players": [f"player_{i:03d}" for i in range(14)]}
+
+    text = render_results_text(report)
+    memo = render_results_memo(report)
+
+    assert (
+        "      players: player_000, player_001, player_002, player_003, player_004, player_005,\n"
+        "        player_006, player_007, player_008, player_009, player_010, player_011,\n"
+        "        player_012, player_013"
+    ) in text
+    assert (
+        "    players: player_000, player_001, player_002, player_003, player_004, player_005,\n"
+        "      player_006, player_007, player_008, player_009, player_010, player_011,\n"
+        "      player_012, player_013"
     ) in memo
+
+
+def test_a_long_change_of_origin_wraps_under_its_first_line_in_the_text_report() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["origin_sensitivity"] = {
+        "ran": True,
+        "reason": None,
+        "shifts": [
+            {
+                "days_earlier": day,
+                "same": day != 3,
+                "verdict": "clear",
+                "appear": [f"RES-{n:03d}" for n in range(1, 13)] if day == 3 else [],
+                "disappear": [],
+            }
+            for day in range(1, 7)
+        ],
+    }
+
+    lines = render_results_text(report).splitlines()
+
+    at = lines.index(
+        "  3 days earlier: verdict clear; appear RES-001, RES-002, RES-003, RES-004, RES-005,"
+    )
+    assert lines[at + 1] == "      RES-006, RES-007, RES-008, RES-009, RES-010, RES-011, RES-012"

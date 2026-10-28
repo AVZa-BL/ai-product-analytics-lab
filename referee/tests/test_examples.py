@@ -18,6 +18,11 @@ The results example is read against the committed lab export; regenerate its gol
 Its test compares the numbers and the layout. A float may differ in its last digits between
 machines, and the sentences (titles, explanations, advice, notes, summary lines and the
 description of the effect's population) are not compared: reading them is a person's job.
+
+The decision memo and the text report of the same review are pinned byte for byte, because
+their sentences are what a reader acts on; regenerate them with the same command and
+`--format memo`, to `tests/golden/offer-page-results.md`, and with no `--format`, to
+`tests/golden/offer-page-results.txt`, and read the diff before keeping either.
 """
 
 import json
@@ -146,6 +151,27 @@ def test_the_results_json_is_the_golden_file_in_its_numbers_and_layout(
         "RES-012",
         "RES-013",
     ]
+
+
+@pytest.mark.parametrize(("format_", "golden"), [("memo", "md"), ("text", "txt")])
+def test_the_results_memo_and_text_are_the_golden_files(
+    format_: str, golden: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, out = _run(
+        capsys,
+        "review-results",
+        str(EXAMPLES / "offer-page-results.yaml"),
+        str(ROOT / "tests" / "data" / "hybrid_offer_page_5000"),
+        "--experiment-id",
+        "hybrid_offer_page",
+        "--as-of",
+        "2026-06-30T00:00:00Z",
+        "--format",
+        format_,
+    )
+
+    assert code == 1
+    assert out == (GOLDEN / f"offer-page-results.{golden}").read_text(encoding="utf-8")
 
 
 def test_a_difference_in_a_number_is_found_and_one_in_a_sentence_is_not() -> None:
