@@ -1474,3 +1474,209 @@ def test_an_export_before_a_planned_end_beyond_the_calendar_is_said_to_be_before
         "The planned end of the experiment falls beyond the calendar, so the export was taken "
         "before it."
     ) in memo
+
+
+def _finding(rule_id: str, severity: str, **evidence: object) -> dict:
+    return {
+        "rule_id": rule_id,
+        "severity": severity,
+        "title": f"{rule_id} title",
+        "evidence": evidence,
+        "why_it_matters": "why",
+        "remediation": "what",
+        "references": [],
+    }
+
+
+def _decision_report(
+    verdict: str,
+    *,
+    unreadable: tuple[str, ...] = (),
+    harm: tuple[str, ...] = (),
+    short: tuple[str, ...] = (),
+    unattainable: bool = False,
+    warnings: tuple[str, ...] = (),
+    infos: tuple[str, ...] = (),
+) -> dict:
+    """The lab report with the findings, the verdict and the effect's labels this decision
+    reads replaced: the memo is built from the report alone (23.1)."""
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    arms = ("control", "variant_b", "variant_c")
+    findings = [_finding(rule, "blocker") for rule in (*unreadable, *harm)]
+    if short:
+        findings.append(
+            _finding(
+                "RES-002",
+                "blocker",
+                required={arm: 2000 for arm in arms},
+                analysed={arm: 1234 if arm in short else 2000 for arm in arms},
+                assigned={arm: 4000 for arm in arms},
+                short_arms=list(short),
+            )
+        )
+    if unattainable:
+        findings.append(_finding("RES-002", "blocker", unattainable=True))
+    findings += [_finding(rule, "warning") for rule in warnings]
+    findings += [_finding(rule, "info") for rule in infos]
+    blocking = [f["rule_id"] for f in findings if f["severity"] == "blocker"]
+    report |= {
+        "findings": findings,
+        "verdict": verdict,
+        "blocking_rule_ids": blocking,
+        "blocking_groups": {
+            "data_validity": [rule for rule in blocking if rule not in harm],
+            "harm": list(harm),
+        },
+    }
+    report["effect"] |= {
+        "unreadable_because": list(unreadable),
+        "readable": not unreadable,
+        "underpowered": bool(short),
+    }
+    return report
+
+
+DECIDED = (
+    "Decided here: whether the rules object to reading this experiment's result as it stands. "
+    "Not decided here: whether to ship, stop or continue the experiment. Referee is advisory, "
+    "and that decision rests with the experiment's owner."
+)
+NOT_READ_ONE = (
+    "Do not read the effect. {} blocks this review, and its remediation says to settle what it "
+    "found before the effect is read."
+)
+HARM = (
+    "Do not decide on the primary metric alone: RES-004 found a guardrail worse than its "
+    "tolerance allows."
+)
+ONE_SHORT_PAIR = "`variant_b` (1,234 analysed, 2,000 required)"
+CANNOT_BE_SIZED = (
+    "The design cannot be sized (RES-002): correct the spec's baseline and target effect and "
+    "register the experiment again. More data will not clear this."
+)
+CAUTION = (
+    "The rules that ran found no blocker and {} Read the effect with {} in view; {} qualified "
+    "under Data-quality qualification."
+)
+CLEAR = (
+    "The rules that ran found nothing that blocks or warns. That does not say the effect is "
+    "real: it says that none of the checks Referee makes objected."
+)
+
+
+@pytest.mark.parametrize(
+    ("report", "paragraphs"),
+    [
+        pytest.param(_decision_report("clear"), [CLEAR], id="clear"),
+        pytest.param(_decision_report("clear", infos=("RES-008",)), [CLEAR], id="clear, an info"),
+        pytest.param(
+            _decision_report("caution", warnings=("RES-007",)),
+            [CAUTION.format("1 warning (RES-007).", "it", "it is")],
+            id="one warning",
+        ),
+        pytest.param(
+            _decision_report("caution", warnings=("RES-007",), infos=("RES-008",)),
+            [CAUTION.format("1 warning (RES-007).", "it", "it is")],
+            id="a warning and an info",
+        ),
+        pytest.param(
+            _decision_report("caution", warnings=("RES-007", "RES-013")),
+            [CAUTION.format("2 warnings (RES-007, RES-013).", "them", "each is")],
+            id="two warnings",
+        ),
+        pytest.param(
+            _decision_report("caution", warnings=("RES-007", "RES-008", "RES-013")),
+            [CAUTION.format("3 warnings (RES-007, RES-008, RES-013).", "them", "each is")],
+            id="three warnings",
+        ),
+        pytest.param(
+            _decision_report("invalid", unreadable=("RES-001",)),
+            [NOT_READ_ONE.format("RES-001")],
+            id="RES-001",
+        ),
+        pytest.param(
+            _decision_report("invalid", unreadable=("RES-001", "RES-003")),
+            [
+                "Do not read the effect. RES-001 and RES-003 block this review, and the "
+                "remediation of each says to settle what it found before the effect is read."
+            ],
+            id="RES-001 and RES-003",
+        ),
+        pytest.param(
+            _decision_report("invalid", unreadable=("RES-001", "RES-003", "RES-012")),
+            [
+                "Do not read the effect. RES-001, RES-003 and RES-012 block this review, and "
+                "the remediation of each says to settle what it found before the effect is read."
+            ],
+            id="RES-001, RES-003 and RES-012",
+        ),
+        pytest.param(
+            _decision_report("invalid", short=("variant_b",)),
+            [
+                f"Report the result as underpowered: {ONE_SHORT_PAIR} is smaller than the "
+                "registered sample size (RES-002). Read the intervals; a small difference is not "
+                "evidence of no effect."
+            ],
+            id="one short arm",
+        ),
+        pytest.param(
+            _decision_report("invalid", short=("variant_b", "variant_c")),
+            [
+                f"Report the result as underpowered: {ONE_SHORT_PAIR} and `variant_c` (1,234 "
+                "analysed, 2,000 required) are smaller than the registered sample size "
+                "(RES-002). Read the intervals; a small difference is not evidence of no effect."
+            ],
+            id="two short arms",
+        ),
+        pytest.param(
+            _decision_report("invalid", unreadable=("RES-003",), short=("variant_b",)),
+            [
+                NOT_READ_ONE.format("RES-003"),
+                f"RES-002 also blocks: {ONE_SHORT_PAIR} is smaller than the registered sample "
+                "size. Once the effect can be read, and if it is still smaller, report the "
+                "result as underpowered: a small difference is not evidence of no effect.",
+            ],
+            id="RES-003 and one short arm",
+        ),
+        pytest.param(
+            _decision_report("invalid", unattainable=True),
+            [CANNOT_BE_SIZED],
+            id="a design that cannot be sized",
+        ),
+        pytest.param(
+            _decision_report("invalid", unreadable=("RES-001",), unattainable=True),
+            [NOT_READ_ONE.format("RES-001"), CANNOT_BE_SIZED],
+            id="RES-001 and a design that cannot be sized",
+        ),
+        pytest.param(_decision_report("invalid", harm=("RES-004",)), [HARM], id="a guardrail"),
+        pytest.param(
+            _decision_report("invalid", unreadable=("RES-001",), harm=("RES-004",)),
+            [NOT_READ_ONE.format("RES-001"), HARM],
+            id="RES-001 and a guardrail",
+        ),
+        pytest.param(
+            _decision_report("invalid", harm=("RES-004",), short=("variant_c",)),
+            [
+                HARM,
+                "Report the result as underpowered: `variant_c` (1,234 analysed, 2,000 required) "
+                "is smaller than the registered sample size (RES-002). Read the intervals; a "
+                "small difference is not evidence of no effect.",
+            ],
+            id="a guardrail and one short arm",
+        ),
+    ],
+)
+def test_the_decision_is_this_exact_text_for_each_verdict_and_blocking_group(
+    report: dict, paragraphs: list[str]
+) -> None:
+    decision = render_results_memo(report).split("\n## ")[1]
+
+    assert decision == "Decision\n\n" + "\n\n".join([*paragraphs, DECIDED]) + "\n"
+
+
+def test_a_blocker_the_memo_has_no_words_for_is_refused() -> None:
+    report = _decision_report("invalid")
+    report["blocking_rule_ids"] = ["RES-009"]
+
+    with pytest.raises(ValueError, match=r"no advice for the blocking rules \['RES-009'\]"):
+        render_results_memo(report)

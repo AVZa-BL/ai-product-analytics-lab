@@ -1,0 +1,335 @@
+# Decision memo: `Subscription offer page variants (read from the lab export)`
+
+A Referee results review of experiment `hybrid_offer_page` against spec `hybrid_offer_page_2026_10_results`. Referee is advisory: it recommends, and does not approve or stop an experiment.
+
+## Decision
+
+Do not read the effect. RES-001 blocks this review, and its remediation says to settle what it found before the effect is read.
+
+RES-002 also blocks: `control` (926 analysed, 2,107 required), `variant_b` (969 analysed, 2,107 required) and `variant_c` (731 analysed, 2,107 required) are smaller than the registered sample size. Once the effect can be read, and if they are still smaller, report the result as underpowered: a small difference is not evidence of no effect.
+
+Decided here: whether the rules object to reading this experiment's result as it stands. Not decided here: whether to ship, stop or continue the experiment. Referee is advisory, and that decision rests with the experiment's owner.
+
+## Observed facts
+
+Verdict: INVALID. Blocking rules: data validity RES-001, RES-002. Findings: blockers 2, warnings 4, info 0.
+
+Assigned from 2026-04-11T00:02:25Z to 2026-05-01T23:37:55Z; weeks are counted from 2026-04-11T00:02:25Z (first assignment). The assignments span 21 of the 21 planned days.
+
+| arm | assigned | analysed | window still open (left out of the effect table) |
+| --- | --- | --- | --- |
+| control | 997 | 926 | 0 |
+| variant_b | 1,046 | 969 | 0 |
+| variant_c | 781 | 731 | 0 |
+
+Analysed players are those of the assigned players above who were exposed and were not first exposed after their first purchase; assigned players who were never exposed, or were first exposed after buying, are not analysed.
+
+Export taken: 2026-06-30T00:00:00Z (command line). That is at or after the planned end of the experiment (2026-05-09T00:02:25Z).
+
+Always checked (a quiet result is not a pass):
+
+- RES-004: 2 comparisons of an arm against control on a guardrail, a breach shown in 0, possible in 0, 2 within the tolerance (0 of them with an interval that reaches beyond it, so the data cannot rule out a breach), 0 not evaluated.
+- RES-007: 4 tests, 1 flagged, 0 not evaluated, 2 low information
+- RES-008: 4 comparisons (binary metrics are not read), 2 with a sign of a heavy tail, 0 not evaluated. No sign is not a pass: in Referee's simulations every run of a revenue-like metric showed one, so they say nothing about a metric that shows none.
+
+Effect on revenue_usd_7d, each arm against control, among the analysed players with a closed outcome window: two-sided tests and 95% intervals. The p values are adjusted for 2 comparisons (the arms against control) by Bonferroni, and for nothing else: not for guardrails, other metrics or repeated looks. The 95% intervals are not adjusted for the number of arms.
+
+NOT TO BE READ: blocked by RES-001, whose remediation says to settle this before the effect is read. These numbers describe the sample and not the effect.
+
+UNDERPOWERED: RES-002 blocks this review, `control` (926 analysed, 2,107 required), `variant_b` (969 analysed, 2,107 required) and `variant_c` (731 analysed, 2,107 required) are smaller than registered. Do not read the intervals yet: once the effect can be read, a small difference is still not evidence of no effect.
+
+| arm | players | difference | 95% interval | relative | p | adjusted p |
+| --- | --- | --- | --- | --- | --- | --- |
+| variant_b | 969 vs 926 | +0.7131 | -0.247 to 1.673 | +62.1% | 0.145 | 0.291 |
+| variant_c | 731 vs 926 | +0.2584 | -0.7439 to 1.261 | +22.5% | 0.613 | 1 |
+
+## Assumptions and uncertainty
+
+The allocation and the baselines are the spec's registered values, not the data's: the sample-ratio check is read against the registered allocation, and the sample size against the registered baseline and target effect.
+
+The effect table is two-sided at 95% whatever design.sided and design.alpha say, and its p values are adjusted for 2 comparisons (the arms against control) by Bonferroni, and for nothing else: not for guardrails, other metrics or repeated looks. The relative difference is a point estimate with no interval of its own. The table describes the sample; the verdict and its label say whether it can be read.
+
+The export was taken at or after the planned end of the experiment (2026-05-09T00:02:25Z).
+
+Origin sensitivity: the same rules fire at the same severity for origins 1 to 6 days earlier.
+
+By first_seen_at_utc, 2,824 of the 2,824 assigned players were first seen before the origin and 0 at or after it (existing before the origin, new from it), so by the greater number they are existing users; at assignment they had existed for 131.1 to 239.4 days (median 185.9). population.kind is declared as existing_users, and the column agrees.
+
+The verdict words: clear says that the rules which ran found nothing that blocks or warns, caution that at least one warned, invalid that at least one blocked. A verdict is read together with the rules that ran, listed under Data-quality qualification: a rule that did not run found nothing because it did not look.
+
+## Data-quality qualification
+
+The effect is not to be read while RES-001 blocks (see the Decision), so a What to do line below that tells you to read, compare or report the effect applies once it is settled.
+
+**[BLOCKER] RES-001: Sample ratio mismatch: the arms are not the size the allocation promised**
+
+Why it matters: Random assignment gives arms of the registered sizes, up to chance. A mismatch this large means the arms were not formed as designed (a fault in assignment, in logging or in filtering), so who is in each arm may differ and a difference in the metrics can come from that. No estimate of the effect can be trusted until the cause is known.
+
+What to do: Do not read the effect. Find why the counts differ: assignment or bucketing, logging that loses events in one arm, bot or test-account filters, a crash or redirect on one variant, or an exposure rule applied to some arms only. The week-by-week table in the evidence shows whether the mismatch began at a point in time. Fix the cause and rerun the experiment.
+
+Evidence:
+
+    alpha: 0.001
+    allocation:
+      control: 0.333333
+      variant_b: 0.333333
+      variant_c: 0.333333
+    assigned:
+      control: 997
+      variant_b: 1,046
+      variant_c: 781
+    expected:
+      control: 941.33
+      variant_b: 941.33
+      variant_c: 941.33
+    chi_square: 42.2387
+    degrees_of_freedom: 2
+    p_value: 6.72961e-10
+    method: chi_square
+    by_week:
+      - week: 0
+        assigned:
+          control: 327
+          variant_b: 357
+          variant_c: 322
+        p_value: 0.343493
+        method: chi_square
+      - week: 1
+        assigned:
+          control: 343
+          variant_b: 356
+          variant_c: 252
+        p_value: 3.98919e-05
+        method: chi_square
+      - week: 2
+        assigned:
+          control: 327
+          variant_b: 333
+          variant_c: 207
+        p_value: 2.55924e-08
+        method: chi_square
+
+References:
+
+- Fabijan et al. Diagnosing Sample Ratio Mismatch in Online Controlled Experiments. KDD 2019.
+- Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+**[BLOCKER] RES-002: Fewer players than the registered sample size**
+
+Why it matters: The registered sample size is what the experiment needs to detect the registered effect with the registered power. With fewer players the test has less power than was promised, so a result that is not significant says little about whether the effect exists. A design that cannot be sized has no registered sample size at all, so no amount of data meets it.
+
+What to do: Keep the experiment running until every arm reaches its registered n (when the evidence gives sizes, it says how many are missing). If it must stop, report the result as underpowered, with the interval of the effect, and not as evidence of no effect. Do not lower the registered n after seeing the data. If the evidence says the design is unattainable, the spec's baseline and mde_relative cannot be turned into a sample size (the evidence gives the reason): more data will not clear this, so correct them and register the experiment again.
+
+Evidence:
+
+    required:
+      control: 2,107
+      variant_b: 2,107
+      variant_c: 2,107
+    analysed:
+      control: 926
+      variant_b: 969
+      variant_c: 731
+    assigned:
+      control: 997
+      variant_b: 1,046
+      variant_c: 781
+    short_arms: control, variant_b, variant_c
+    missing:
+      control: 1,181
+      variant_b: 1,138
+      variant_c: 1,376
+
+References:
+
+- Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+**[WARNING] RES-007: The effect differs between cohorts of first exposure, or the test could not run**
+
+Why it matters: The pooled effect is an average over players who were first exposed at different times. If the effect differs between those cohorts, the pooled figure describes none of them well, and what a later launch sees can differ from it. The test says that the effect differs, not why: a change tied to the calendar week of a cohort (a launch, a promotion, a build, the mix of players acquired) cannot be told from one tied to each player's own time since first exposure, because the export holds seven-day totals only. A test that could not run is reported too, so that a missing check cannot read as a pass.
+
+What to do: Read the table of cohorts in the evidence before the pooled effect: each cohort's difference and its standard error on both scales. Find out what differed between the weeks of the cohorts (a launch, a promotion, a build, a change in where players come from; RES-013 shows a change of configuration), and report the pooled effect together with the cohort table, naming no cause the data cannot show. For existing players, check whether the earliest cohorts are the most active. A flag labelled low information is a lead to re-check with more data at the planned end, not a finding. If the test did not run, the reason code says what was missing: more traffic or a longer run, arms closer in size, an export made after every outcome window has closed, randomisation and analysis in the same independent unit (player, user or device), or a metric that is not a ratio; for an effect that could not be estimated, values that vary in both arms with a mean above 0. The evidence prices the traffic that would let the cohorts be used, from the sizes observed (plans, traffic_needed), says when to export again if the outcome windows of some cohorts had not closed, or says why more traffic would not help.
+
+Evidence:
+
+- The test says that the effect differs between cohorts of first exposure, not why. A change tied to the calendar week of a cohort (a launch, a promotion, a build, the mix of players acquired) cannot be told from one tied to each player's own time since first exposure, because the export holds seven-day totals only.
+- By first_seen_at_utc, 2,824 of the 2,824 assigned players were first seen before the origin and 0 at or after it (existing before the origin, new from it), so by the greater number they are existing users; at assignment they had existed for 131.1 to 239.4 days (median 185.9). population.kind is declared as existing_users, and the column agrees. Existing users: players who see a change first can be the most active, so the earliest cohorts may differ from the later ones for that reason alone.
+- arm variant_b, metric revenue_usd_7d: not flagged. The usual power calculation puts at 80% the chance that the test would have flagged a linear fade (a difference between the arm and control of 3.32 (289% of the control mean) in the first cohort that falls in a straight line to nothing in the last) or a step (a difference of 2.11 (184% of the control mean) in the first half of the cohorts and nothing in the second), in the metric's units. That figure takes the standard errors as known and the effect as leaving the spread of the arm unchanged. Referee simulated the trigger only for two arms of the same size (a test within 1.25 to 1 counts as the same here), a control baseline that does not move, 4 or 8 cohorts and 100, 300 or 1,000 players an arm in a cohort (a count or a size between those counts as inside here). This test has 2 arms against control, 3 cohorts and a control baseline that moves between the cohorts, so what share of runs would flag a fade of this size is not known here; in the cases simulated the trigger flagged a fade of this size in 6.0% to 53.6% of runs for revenue-like metrics. The step was not simulated, and the test could have missed anything smaller. A result that is not flagged does not show that the effect is the same in every cohort. The test has low information here (shift_exceeds_control_mean).
+- arm variant_c, metric revenue_usd_7d: not flagged. The usual power calculation puts at 80% the chance that the test would have flagged a linear fade (a difference between the arm and control of 3.71 (323% of the control mean) in the first cohort that falls in a straight line to nothing in the last) or a step (a difference of 3.8 (331% of the control mean) in the first half of the cohorts and nothing in the second), in the metric's units. That figure takes the standard errors as known and the effect as leaving the spread of the arm unchanged. Referee simulated the trigger only for two arms of the same size (a test within 1.25 to 1 counts as the same here), a control baseline that does not move, 4 or 8 cohorts and 100, 300 or 1,000 players an arm in a cohort (a count or a size between those counts as inside here). This test has 2 arms against control, arms that differ in size by about 1.27 to 1, 3 cohorts and a control baseline that moves between the cohorts, so what share of runs would flag a fade of this size is not known here; in the cases simulated the trigger flagged a fade of this size in 6.0% to 53.6% of runs for revenue-like metrics. The step was not simulated, and the test could have missed anything smaller. A result that is not flagged does not show that the effect is the same in every cohort. The test has low information here (shift_exceeds_control_mean).
+- arm variant_b, metric sessions_7d: the effect differs between cohorts of first exposure.
+- arm variant_c, metric sessions_7d: not flagged. The usual power calculation puts at 80% the chance that the test would have flagged a linear fade (a difference between the arm and control of 1.35 (31% of the control mean) in the first cohort that falls in a straight line to nothing in the last) or a step (a difference of 1.14 (26% of the control mean) in the first half of the cohorts and nothing in the second), in the metric's units. That figure takes the standard errors as known and the effect as leaving the spread of the arm unchanged. Referee simulated the trigger only for two arms of the same size (a test within 1.25 to 1 counts as the same here), a control baseline that does not move, 4 or 8 cohorts and 100, 300 or 1,000 players an arm in a cohort (a count or a size between those counts as inside here). This test has 2 arms against control, arms that differ in size by about 1.27 to 1 and 3 cohorts, so what share of runs would flag a fade of this size is not known here; in the cases simulated the trigger flagged a fade of this size in 70.4% to 77.1% of runs for counts simulated as Poisson. The step was not simulated, and the test could have missed anything smaller. A result that is not flagged does not show that the effect is the same in every cohort.
+- arm variant_b, metric revenue_usd_7d: the control's mean differs between the cohorts compared (p = 0.0222).
+- arm variant_c, metric revenue_usd_7d: the control's mean differs between the cohorts compared (p = 0.0222).
+- A control baseline that changes can raise Cochran's Q on a scale that is not invariant to it, which is why an arm is flagged only when both scales show a difference between cohorts.
+- RES-013: the configuration of arm variant_b changed during the test (weeks of first exposure holding more than one version: 1). The version change falls in the same weeks as the cohorts compared, so a difference between cohorts may be the change itself.
+- 4 tests ran. In the simulations of design section 21.5 (two arms of equal size, no change over time) the trigger flagged 3.5% of tests on average and at most 5.1%, so about 0.14 flags (at most 0.2) would be expected by chance alone.
+
+The tests, plans and settings behind these sentences are in the JSON report (--format json).
+
+References:
+
+- Cochran. The Combination of Estimates from Different Experiments. Biometrics 10(1), 1954.
+- Higgins, Thompson. Quantifying Heterogeneity in a Meta-Analysis. Statistics in Medicine 21(11), 2002.
+- Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+**[WARNING] RES-008: Skewed or heavy-tailed metric: its 95% interval can be wrong more or less often than 5% of the time**
+
+Why it matters: Welch's interval for a difference of means, the one Referee prints, assumes that the mean of each arm is nearly normal. For a metric that most players leave at zero and a few drive up, that takes more players than an experiment often has (by the rule of thumb of Kohavi et al., revenue per user, with a skewness of about 18, needs about 114,000 users), and below that size the interval is wrong more or less often than the 5% it states. Referee measured how often for a revenue-like metric of independent players in two arms (design section 21.10), and the finding quotes the simulated cases on each side of the comparison: with equal arms the interval was mostly close to or under 5% for a small effect and above it for a large one; with arms of unequal size it was often above 5%, for a small effect mostly on the side that makes the larger arm look better than it is, and it was worst when the control was the larger arm (the arm there being the group with the higher mean); and at 9 to 1 with no effect it was worse the fewer the players who spend in the smaller arm. These rates come from one simulated family and are not a measure of the experiment in hand. Which simulated effects are read is decided by the difference seen between the two means, which for a heavy-tailed metric is itself noisy: with arms of about equal size an experiment with no effect can read as a warning and one with a large effect as info, and above the largest number of players who spend that was simulated the range of that case is used, which may be a ceiling there. A quiet RES-008 is not evidence that the interval is reliable: in the simulations every run of a revenue-like metric showed a sign. For a metric that is not revenue-like the finding gives the signs and says that no error rate was measured.
+
+What to do: Where an entry gives a simulated rate, read it in place of 5%: an interval that failed in 10% of simulated experiments behaved like a 90% interval, and for a small effect and arms of unequal size it mostly favoured the larger group. Where an entry states no error rate (a metric that is not revenue-like, units that are not independent players, a group with no analysed players, or no player who spends in the smaller group), treat its interval as unchecked: the signs show that it may be unreliable, but Referee has not measured how much. Do not call the result significant, or not, on one edge of this interval: if an end of it is close to zero or to a decision threshold, say that the result is uncertain. Where you can choose, do not make the control the larger arm, which was the worst case in the simulations (where the arm has the higher mean; for a metric you expect to fall, avoid the larger arm instead), and plan for more players who spend in the smaller arm. For a decision that rests on this metric, consider a less skewed version of it (a cap on the amount per player, or a transformation): Kohavi et al. report that capping revenue per user cut its skewness from about 18 to about 5. It changes what is estimated, and Referee has not measured how well capping, trimming or a transformation works, so register the choice before the next test and not after seeing the data. Referee shows no bootstrap interval, because in its simulations the percentile bootstrap interval failed more often than Welch's in most of the cells it was run on.
+
+Evidence:
+
+- RES-008 reads each non-control arm against control on the analysed players, for every metric of the spec that is not binary: revenue_usd_7d and sessions_7d. It looks for three signs of a skewed or heavy-tailed metric in either group (skewness is how lopsided the values are, and excess kurtosis how heavy their tails are, 0 for a normal distribution). The first, which the notes call the size rule, is the rule of thumb of Kohavi, Deng, Longbotham and Xu (2014): for a sample skewness above 1 in size, a group needs at least 355 times the square of the skewness in players before the interval for its mean can be trusted (the rule is built to keep the total error of a 95% interval for one mean within 4% to 6%). The other two are Referee's own levels: an excess kurtosis above 100, and the top 1% of players holding more than 50% of the total. In Referee's simulations of a revenue-like metric every run showed the first or the second sign, so the simulations cannot say whether the levels of the second and the third are the right ones, though samples that showed them failed less often than the others (see the note on the rates). A setting, in the notes below, is one combination of group sizes, share of players who spend, effect and tail weight that was simulated. The figures shown are rounded to three or four significant figures, with more where that is needed to show that one is over its level; the decisions are made on the figures rounded to six places.
+- arm variant_b, metric revenue_usd_7d: signs of a heavy-tailed metric in variant_b and control. The difference seen is +62% of control's mean. Welch's 95% interval for the difference (variant_b less control) is -0.247 to 1.67 USD per player. An interval like it should fail to contain the true difference in 5% of experiments; in Referee's simulations of comparisons like this one it failed in 5.6% to 21.7% of them with an effect of +50% or +100% (nearer the difference seen) and in 2.7% to 5.0% with an effect of none or +20%. Read the interval with those rates in mind. variant_b: 969 analysed players, 147 players who spend; skewness 19.26, for which the size rule asks for about 132,000 players (a sign); excess kurtosis 462.6 (above 100: a sign); the top 10 players (1% of them, rounded up) hold 51.2% of the total (above 50%: a sign). control: 926 analysed players, 124 players who spend; skewness 11.54, for which the size rule asks for about 47,300 players (a sign); excess kurtosis 151.3 (above 100: a sign); the top 10 players (1% of them, rounded up) hold 54.6% of the total (above 50%: a sign). This comparison is 1.05 to 1 (variant_b is the larger group), with 124 players who spend in the smaller group (control). Groups within 1.25 to 1 of each other in size are placed among the simulated cases of groups of the same size. The rate rises with the split, so near that limit it can be higher than those cases show when the larger group is the one with the lower mean. For an effect of +50% or +100% (nearer the difference seen), the simulated cases on each side of it (split 1 to 1 with 13 and 130 players who spend; 8 simulated settings, over two of the three tail weights, at least 20,000 experiments each) failed in 5.6% to 21.7% of experiments. These cases lie far apart, so the high end of that range comes from a case further from this comparison than the nearest one, 1 to 1 with 130 players who spend, which failed in 5.6% to 10.8%. For an effect of none or +20%, the simulated cases on each side of it (split 1 to 1 with 90 and 130 players who spend; 10 simulated settings, over two or three of the three tail weights, at least 20,000 experiments each) failed in 2.7% to 5.0% of experiments. With an effect of +50% or +100% and groups of about equal size, most of the failed intervals in the simulations understated the gap between the groups. Kohavi et al. (2014) note that when the two groups have the same distribution and equal sizes, the difference of the means is nearly symmetric and their size rule gives no useful bound. The simulated rates above, not that rule, are the guide here.
+- arm variant_c, metric revenue_usd_7d: signs of a heavy-tailed metric in variant_c and control. The difference seen is +23% of control's mean. Welch's 95% interval for the difference (variant_c less control) is -0.744 to 1.26 USD per player. An interval like it should fail to contain the true difference in 5% of experiments; in Referee's simulations of comparisons like this one it failed in 2.5% to 5.8% of them with an effect of none or +20% (nearer the difference seen) and in 3.2% to 28.2% with an effect of +50% or +100%. Read the interval with those rates in mind. variant_c: 731 analysed players, 90 players who spend; skewness 19.45, for which the size rule asks for about 134,000 players (a sign); excess kurtosis 434.7 (above 100: a sign); the top 8 players (1% of them, rounded up) hold 61.7% of the total (above 50%: a sign). control: 926 analysed players, 124 players who spend; skewness 11.54, for which the size rule asks for about 47,300 players (a sign); excess kurtosis 151.3 (above 100: a sign); the top 10 players (1% of them, rounded up) hold 54.6% of the total (above 50%: a sign). This comparison is 1.27 to 1 (control is the larger group), with 90 players who spend in the smaller group (variant_c). For an effect of none or +20% (nearer the difference seen), the simulated cases on each side of it (splits 1 to 1 (90 players who spend) and 1.5 to 1 (39 and 130 players who spend); 22 simulated settings, over two or three of the three tail weights, at least 20,000 experiments each) failed in 2.5% to 5.8% of experiments. For an effect of +50% or +100%, the simulated cases on each side of it (splits 1 to 1 and 3 to 1 with 13 and 130 players who spend; 24 simulated settings, over two of the three tail weights, at least 20,000 experiments each) failed in 3.2% to 28.2% of experiments. These cases lie far apart, so the ends of that range come from a case further from this comparison than the nearest one, 1 to 1 with 130 players who spend, which failed in 5.6% to 10.8%. In the simulated cases the arm is the group with the higher mean. The sample cannot be relied on to show which group that is (with few players who spend, the group with the higher mean seen can be the one with the lower true mean), so the ranges cover both orders: the arm the larger group, and control the larger group. With many players who spend the sign would be reliable, and the range is then wider than it needs to be. With an effect of none or +20% and groups of unequal size, most of the failed intervals in the simulations made the larger group look better than it is; here the larger group is control.
+- arm variant_b, metric sessions_7d: none of the three signs was found. variant_b: 969 analysed players, 936 players with a value other than 0; skewness 1.131; excess kurtosis 1.813; the top 10 players (1% of them, rounded up) hold 3.7% of the total. control: 926 analysed players, 884 players with a value other than 0; skewness 1.288; excess kurtosis 2.823; the top 10 players (1% of them, rounded up) hold 4.1% of the total. This does not show that the interval is reliable.
+- arm variant_c, metric sessions_7d: none of the three signs was found. variant_c: 731 analysed players, 703 players with a value other than 0; skewness 1.220; excess kurtosis 2.220; the top 8 players (1% of them, rounded up) hold 4.1% of the total. control: 926 analysed players, 884 players with a value other than 0; skewness 1.288; excess kurtosis 2.823; the top 10 players (1% of them, rounded up) hold 4.1% of the total. This does not show that the interval is reliable.
+- The simulated family (design section 21.10): two arms of independent players and one look at a fixed number of players; most players spend nothing, and the rest (13% in most cases, 3% or 30% in some) spend an amount with a lognormal distribution, whose tail is mild, middle or heavy (log standard deviation 1.0, 1.5 or 2.0); an effect multiplies what the players who spend spend, and only positive effects were run, so the arm in a simulated case is the group with the higher mean; the interval is the unadjusted 95% Welch interval that Referee prints. The rates describe this family only: another shape of tail, an effect that works through the share of players who spend, or a metric that is not money may behave differently.
+- Which effects are nearer the difference seen is decided on the higher mean over the lower one: 35% or more is nearer +50% and +100% (a lower mean of 0 counts as that), less is nearer none and +20%. That is a judgement at one level, so a difference close to it can switch which range sets the severity. With few players who spend the means seen often differ by that much even when the true effect is none or +20%, so the label is a weak guide to the true effect; both ranges are always printed. The severity follows the label, so with arms of about equal size an experiment with no effect can read as a warning and one with a large effect as info; Referee has not measured how often.
+- A rate is a share of simulated experiments and carries noise: it is within about 0.3 points either way (a 95% range) near a rate of 5% and 0.7 points near 35% when a setting has 20,000 experiments, and within about 1 and 2 points when it has 2,000. A range is the lowest and the highest of the rates of several settings, so its ends are more extreme than the rate of any one setting would be; it is not an interval.
+- The rates are over all the simulated experiments of a case. In nearly every setting where both kinds of sample were common (at least 200 experiments of each), those whose sample showed an excess kurtosis above 100 failed less often than the others, and so did those whose top share was above 50% (each sign compared alone), so for a sample that shows one of these signs the rate may be lower than the range, and for a sample that looks lighter-tailed it may be higher. Every simulated experiment of a revenue-like metric showed the first or the second sign, so the range is also the rate among the experiments that show a sign.
+- Referee places a comparison among the simulated cases by the split between the groups and the number of players who spend in the smaller group, not the number of players: at 9 to 1 with no effect the rate followed that number in the simulations (design section 21.10); at other splits this was not checked. Above the largest number simulated the range of that case is used; where the simulated rate fell as the number grew, the true rate beyond it may be lower, so that range may be a ceiling and not a measure, and the severity it sets can stay a warning however many players spend.
+- Referee shows no bootstrap interval. In its simulations the percentile bootstrap interval failed more often than Welch's in most of the cells it was run on, so it is not a repair (design section 21.10).
+
+The tests and settings behind these sentences are in the JSON report (--format json).
+
+References:
+
+- Kohavi, Deng, Longbotham, Xu. Seven Rules of Thumb for Web Site Experimenters. KDD 2014.
+- Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+**[WARNING] RES-012: Players first exposed after their first purchase**
+
+Why it matters: A purchase made before the player first saw the change cannot be an effect of it. These players are left out of the effect analysis, but they are in the arms, so a different share of the exposed players being late in different arms means the change reached the arms differently. It is the results-time counterpart of DES-007.
+
+What to do: Check how exposure is triggered. If it can follow a purchase, say so in the design and analyse from first exposure. Compare the estimates with and without these players in the evidence, and say which one the conclusion rests on. If the late share differs between arms, find out why before reading the effect.
+
+Evidence:
+
+    late:
+      control: 71
+      variant_b: 77
+      variant_c: 50
+    exposed:
+      control: 997
+      variant_b: 1,046
+      variant_c: 781
+    late_share_of_exposed:
+      control: 0.0712
+      variant_b: 0.0736
+      variant_c: 0.064
+    late_total: 198
+    share_of_assigned: 0.0701
+    share_of_purchasers: 0.3542
+    homogeneity:
+      chi_square: 0.6598
+      degrees_of_freedom: 2
+      p_value: 0.721543
+      alpha: 0.001
+      method: exact
+      smallest_expected: 54.76
+    estimate:
+      metric: revenue_usd_7d
+      by_arm:
+        variant_b:
+          with_late_exposed:
+            n_treatment: 1,046
+            n_control: 997
+            difference: 0.798901
+            ci_low: -0.27844
+            ci_high: 1.87624
+            confidence: 0.95
+          without_late_exposed:
+            n_treatment: 969
+            n_control: 926
+            difference: 0.713128
+            ci_low: -0.246964
+            ci_high: 1.67322
+            confidence: 0.95
+        variant_c:
+          with_late_exposed:
+            n_treatment: 781
+            n_control: 997
+            difference: -0.06145
+            ci_low: -1.16472
+            ci_high: 1.04182
+            confidence: 0.95
+          without_late_exposed:
+            n_treatment: 731
+            n_control: 926
+            difference: 0.25843
+            ci_low: -0.743926
+            ci_high: 1.26079
+            confidence: 0.95
+
+References:
+
+- Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+**[WARNING] RES-013: An arm's configuration changed during the test**
+
+Why it matters: A change of configuration part-way through is a second treatment inside the arm. Players before and after it saw different things, so the arm's effect is an average of two experiences, and a change of that effect over time (RES-007) cannot be told from the effect of the change itself.
+
+What to do: Find out what changed and when. Analyse the versions separately or restart the test on the final configuration; do not pool the versions and read a trend over weeks as novelty. The difference within a week in the evidence is descriptive only: the versions were not randomised.
+
+Evidence:
+
+    metric: revenue_usd_7d
+    version_from:
+      exposure: 2,626
+      assignment: 0
+    arms:
+      variant_b:
+        versions:
+          - version: 1
+            players: 540
+          - version: 2
+            players: 429
+        by_week:
+          - week: 0
+            versions:
+              - version: 1
+                players: 313
+          - week: 1
+            versions:
+              - version: 1
+                players: 227
+              - version: 2
+                players: 104
+          - week: 2
+            versions:
+              - version: 2
+                players: 325
+        mixed_weeks: week 1
+        assigned_differs: 0
+        within_week:
+          - week: 1
+            later_version: 2
+            earlier_version: 1
+            n_later: 104
+            n_earlier: 227
+            difference: 0.250488
+            ci_low: -0.914726
+            ci_high: 1.4157
+            confidence: 0.95
+
+References:
+
+- Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
+
+Rules run: RES-001, RES-002, RES-003, RES-004, RES-007, RES-008, RES-011, RES-012, RES-013.
+
+## Reproducibility
+
+- Spec: `hybrid_offer_page_2026_10_results` - `Subscription offer page variants (read from the lab export)`
+- Spec fingerprint: sha256:90fb71599fc0142801844991562f23ec0c8668a91ceff1a3295dcff235c0d861
+- Experiment: `hybrid_offer_page`
+- Data files (SHA-256 of the bytes):
+  - experiment_assignments.csv: faaa876d41f79dbc80105f44a7640cc0e826d4aa02b0dbc4a16cf42c9f131d8f
+  - experiment_exposures.csv: 2f8e9ea1fb3bf574ff2a0521b24408e44640deca95456b7dfed0e6c93d834757
+  - experiment_outcomes.csv: 4f813f3a333841c27262b8764acc02c795c67c25c723ba8e1da568076d8f7259
+- Export taken: 2026-06-30T00:00:00Z (command line)
+- Referee: 0.1.0, report version 1
+
+Reproduce it from the referee/ folder with `python -m referee review-results SPEC DATA --experiment-id=hybrid_offer_page --as-of 2026-06-30T00:00:00Z --format memo`, SPEC being the spec with the fingerprint above and DATA the folder whose files carry these hashes. The memo holds no timestamp, host or path: the same spec and data reviewed by the same Referee on one machine give the same bytes, and between machines a float may differ in its last digits.
