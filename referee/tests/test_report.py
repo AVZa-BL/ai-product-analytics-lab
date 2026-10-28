@@ -203,13 +203,13 @@ def test_the_report_always_carries_the_line_of_each_effect_rule_that_ran(raw_spe
     assert _report(context, only_sample_ratio)["summary_lines"] == []
 
 
-def _short(*arms: str, required: int = 10, analysed: int = 6) -> dict:
+def _short(*arms: str, required: int = 2_000, analysed: int = 1_234) -> dict:
     """The evidence of a sized RES-002: the arms that fall short, with their numbers."""
     every = ("control", "variant_b", "variant_c")
     return {
         "required": {arm: required for arm in every},
         "analysed": {arm: analysed if arm in arms else required for arm in every},
-        "assigned": {arm: required for arm in every},
+        "assigned": {arm: 2 * required for arm in every},
         "short_arms": list(arms),
         "missing": {arm: required - analysed for arm in arms},
     }
@@ -1129,7 +1129,8 @@ def _renamed(value: Any, old: str, new: str) -> Any:
 
 def test_the_name_of_an_arm_cannot_make_a_link_an_image_a_tag_or_emphasis_in_the_memo() -> None:
     """The arm is named in a table cell, in the sentence on who was left out, and in the notes
-    of the effect rules: three places, three ways of keeping its marks from acting."""
+    of the effect rules: three places, three ways of keeping its marks from acting (the
+    sentences that name the short arms and write them as code spans are pinned beside them)."""
     golden = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
     report = _renamed(golden, "variant_b", HOSTILE_ARM)
     report["effect"]["left_out"][HOSTILE_ARM] = 3
@@ -1175,14 +1176,15 @@ def test_the_memos_decision_follows_the_verdict_and_what_the_blocking_rules_advi
 
 ONE_SHORT = (
     ("variant_b",),
-    "`variant_b` (6 analysed, 10 required) is",
-    "variant_b (6 analysed, 10 required) is",
+    "`variant_b` (1,234 analysed, 2,000 required) is",
+    "variant_b (1,234 analysed, 2,000 required) is",
     "it is",
 )
 TWO_SHORT = (
     ("variant_b", "variant_c"),
-    "`variant_b` (6 analysed, 10 required) and `variant_c` (6 analysed, 10 required) are",
-    "variant_b (6 analysed, 10 required) and variant_c (6 analysed, 10 required) are",
+    "`variant_b` (1,234 analysed, 2,000 required) and `variant_c` (1,234 analysed, 2,000 "
+    "required) are",
+    "variant_b (1,234 analysed, 2,000 required) and variant_c (1,234 analysed, 2,000 required) are",
     "they are",
 )
 SHORT_ARMS = [pytest.param(*ONE_SHORT, id="one arm"), pytest.param(*TWO_SHORT, id="two arms")]
@@ -1302,8 +1304,24 @@ CALENDAR_END = datetime(9999, 12, 28, tzinfo=UTC)
             "(2026-05-02T00:00:00Z).",
             True,
         ),
+        (
+            21,
+            at(40),
+            "The assignments span 21 days; 14 were planned.",
+            "Export taken: 2026-05-21T00:00:00Z (command line). That is at or after the planned "
+            "end of the experiment (2026-05-02T00:00:00Z).",
+            "The export was taken at or after the planned end of the experiment "
+            "(2026-05-02T00:00:00Z).",
+            False,
+        ),
     ],
-    ids=["no time", "before the planned end", "at the planned end", "short span, export later"],
+    ids=[
+        "no time",
+        "before the planned end",
+        "at the planned end",
+        "short span, export later",
+        "long span",
+    ],
 )
 def test_the_memo_states_the_export_time_and_the_assignment_span_as_two_facts(
     raw_spec: dict,
@@ -1318,13 +1336,12 @@ def test_the_memo_states_the_export_time_and_the_assignment_span_as_two_facts(
     or fewer. RES-007 calls the second an interim look, so the memo does not call the first one."""
     rows = [*crowd("control", 2, assigned_at=at(0)), *crowd("variant_b", 2, assigned_at=at(span))]
 
-    memo = _flat(
-        render_results_memo(
-            _report(_context(raw_spec, rows, exported_at=taken), source="command line")
-        )
-    )
+    sections = render_results_memo(
+        _report(_context(raw_spec, rows, exported_at=taken), source="command line")
+    ).split("\n## ")
+    memo, facts, assumptions = _flat(" ".join(sections)), _flat(sections[2]), _flat(sections[3])
 
-    assert observed in memo and export in memo and assumption in memo
+    assert observed in facts and export in facts and assumption in assumptions
     assert "INTERIM RUN" not in memo and "interim run" not in memo
     cohort_sentence = (
         f"The assignments span {span} of the 14 planned days, fewer than planned, so the cohort "
@@ -1332,7 +1349,7 @@ def test_the_memo_states_the_export_time_and_the_assignment_span_as_two_facts(
         "on accumulating data it flags 11% to 13% of experiments with no change (design "
         "section 21.6)."
     )
-    assert (cohort_sentence in memo) == cohort
+    assert (cohort_sentence in assumptions) == cohort
 
 
 def test_an_export_before_a_planned_end_beyond_the_calendar_is_said_to_be_before_it(
