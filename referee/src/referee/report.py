@@ -748,6 +748,15 @@ def _decision_sentences(report: dict[str, Any]) -> list[str]:
     return said
 
 
+def _span_text(population: dict[str, Any]) -> str:
+    """How many of the planned days the assignments span; "N of the M" reads wrongly when they
+    ran longer than planned."""
+    days, planned = population["observed_days"], population["planned_duration_days"]
+    if days <= planned:
+        return f"The assignments span {days} of the {planned} planned days."
+    return f"The assignments span {days} days; {planned} were planned."
+
+
 def _observed_lines(report: dict[str, Any], limit: int) -> list[str]:
     """The verdict, the population, the time of the export, the always-checked lines and the
     effect table, every number copied from the report."""
@@ -767,8 +776,7 @@ def _observed_lines(report: dict[str, Any], limit: int) -> list[str]:
         f"{verdict} {found}",
         f"Assigned from {population['first_assignment']} to {population['last_assignment']}; "
         f"weeks are counted from {population['origin']} ({population['origin_source']}). "
-        f"The assignments span {population['observed_days']} of the "
-        f"{population['planned_duration_days']} planned days.",
+        f"{_span_text(population)}",
     )
     lines += [
         "",
