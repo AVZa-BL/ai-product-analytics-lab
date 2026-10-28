@@ -32,6 +32,8 @@
     "origin_source": "first assignment",
     "first_assignment": "2026-04-11T00:02:25Z",
     "last_assignment": "2026-05-01T23:37:55Z",
+    "observed_days": 21,
+    "planned_duration_days": 21,
     "assigned": {
       "control": 997,
       "variant_b": 1046,
