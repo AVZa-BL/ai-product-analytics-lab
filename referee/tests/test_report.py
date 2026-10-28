@@ -928,6 +928,58 @@ def _flat(text: str) -> str:
     return " ".join(text.split())
 
 
+def test_the_effect_sentences_say_the_intervals_are_not_adjusted_for_the_number_of_arms() -> None:
+    """The p values are adjusted for the arms and the intervals are not, so an interval can
+    exclude 0 beside an adjusted p value above 0.05."""
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    sentence = "The 95% intervals are not adjusted for the number of arms."
+
+    for adjustment in ("bonferroni", "none"):
+        report["effect"]["adjustment"] = adjustment
+        assert sentence in _flat(render_results_memo(report))
+        assert sentence in _flat(render_results_text(report))
+
+
+@pytest.mark.parametrize(
+    ("rules", "said"),
+    [
+        (["RES-001"], "while RES-001 blocks (see the Decision)"),
+        (["RES-001", "RES-003"], "while RES-001 and RES-003 block (see the Decision)"),
+        ([], None),
+    ],
+)
+def test_the_quality_section_says_that_its_advice_waits_for_the_blocking_rules(
+    rules: list[str], said: str | None
+) -> None:
+    """The rules' What to do lines are written for a reader who may read the effect."""
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["effect"].update(readable=not rules, unreadable_because=rules)
+
+    quality = render_results_memo(report).split("\n## ")[4]
+
+    if said is None:
+        assert "The effect is not to be read" not in quality
+        return
+    settled = "it is" if len(rules) == 1 else "they are"
+    assert quality.startswith(
+        f"Data-quality qualification\n\nThe effect is not to be read {said}, so a What to do "
+        "line below that tells you to read, compare or report the effect applies once "
+        f"{settled} settled.\n\n**["
+    )
+
+
+def test_the_memo_does_not_say_one_kind_of_players_confirms_a_declared_mixed_population() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["population"]["kind_declared"] = "mixed"
+
+    assumptions = _flat(render_results_memo(report).split("\n## ")[3])
+
+    assert (
+        "population.kind is declared as mixed, and the column shows only existing users: that "
+        "does not contradict a mixed population, and does not confirm one."
+    ) in assumptions
+
+
 def test_the_memo_carries_the_lab_templates_sections_in_order_filled_from_the_report() -> None:
     report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
 
@@ -973,6 +1025,55 @@ def test_the_memo_carries_the_lab_templates_sections_in_order_filled_from_the_re
     assert render_results_memo(report) == memo
 
 
+def test_the_players_table_says_what_its_columns_count_and_what_analysed_means() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["effect"]["left_out"]["control"] = 3
+
+    observed = render_results_memo(report).split("\n## ")[2]
+
+    assert "| arm | assigned | analysed | window still open (left out of the effect table) |" in (
+        observed
+    )
+    assert "| control | 997 | 926 | 3 |" in observed
+    assert "| variant_b | 1,046 | 969 | 0 |" in observed
+    assert (
+        "Analysed players are those of the assigned players above who were exposed and were not "
+        "first exposed after their first purchase; assigned players who were never exposed, or "
+        "were first exposed after buying, are not analysed."
+    ) in _flat(observed)
+
+
+def test_the_players_table_does_not_say_no_window_is_open_when_none_was_checked() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["as_of"]["time"] = None
+
+    observed = render_results_memo(report).split("\n## ")[2]
+
+    assert "| control | 997 | 926 | not checked |" in observed
+
+
+@pytest.mark.parametrize(("weeks", "shown"), [([0], "week 0"), ([0, 1], "weeks 0, 1")])
+def test_a_list_of_week_numbers_is_not_printed_as_a_bare_number(weeks, shown: str) -> None:
+    """RES-011 holds `failing_weeks` and RES-013 `mixed_weeks`: `failing_weeks: 0` reads as none."""
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    mixed = next(f for f in report["findings"] if f["rule_id"] == "RES-013")
+    mixed["evidence"]["arms"]["variant_b"]["mixed_weeks"] = weeks
+    report["findings"].append({**mixed, "rule_id": "RES-011", "evidence": {"failing_weeks": weeks}})
+
+    for rendering in (render_results_memo(report), render_results_text(report)):
+        assert f"failing_weeks: {shown}\n" in rendering
+        assert f"mixed_weeks: {shown}\n" in rendering
+
+
+def test_the_pointer_to_the_json_report_names_only_the_tables_the_rule_holds() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+
+    for rendering in (render_results_memo(report), render_results_text(report)):
+        flat = _flat(rendering)
+        assert "The tests, plans and settings behind these sentences are in the JSON report" in flat
+        assert "The tests and settings behind these sentences are in the JSON report" in flat
+
+
 def test_a_title_an_arm_or_a_player_cannot_make_a_heading_a_row_or_a_line_in_the_memo(
     raw_spec: dict,
 ) -> None:
@@ -1002,7 +1103,7 @@ def test_a_title_an_arm_or_a_player_cannot_make_a_heading_a_row_or_a_line_in_the
         "# Decision memo: `Offer\\n## Decision\\n| x |`",
         *(f"## {heading}" for heading in MEMO_HEADINGS),
     ]
-    assert "| b\\\\\\|c | 2 | 2 | 0 |" in memo
+    assert "| b\\\\\\|c | 2 | 2 | not checked |" in memo
     assert "\nArm `## Decision` (2 vs 2): not estimated; " in memo
     assert "in no count: 1 (`## Decision`)." in memo
     # Wherever a value appears, the line it is on is one of the memo's own: a sentence, a

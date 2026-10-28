@@ -1982,6 +1982,12 @@ def test_a_window_that_closes_exactly_at_the_export_is_closed_and_names_no_time(
             0,
             "population.kind is declared as existing_users, but the column says new users.",
         ),
+        (
+            "mixed",
+            200,
+            "population.kind is declared as mixed, and the column shows only existing users: "
+            "that does not contradict a mixed population, and does not confirm one.",
+        ),
         (None, 200, "population.kind is not declared."),
     ],
 )
