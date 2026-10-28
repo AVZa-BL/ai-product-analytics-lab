@@ -1161,7 +1161,11 @@ def test_an_experiment_with_a_control_character_in_its_name_is_not_named_in_the_
         "python -m referee review-results SPEC DATA --experiment-id=ID --as-of "
     )
     assert "bell" not in command and "u0007" not in command
-    assert "ID is the experiment above, whose name holds control characters" in line
+    assert (
+        "carry these hashes. ID is the experiment above, whose name holds control characters "
+        "(shown there as escapes): pass it exactly as the export holds it. The memo holds no "
+        "timestamp"
+    ) in line
     assert "holds control characters" not in plain
 
 
@@ -1175,7 +1179,10 @@ def test_a_time_from_the_manifest_is_said_to_come_from_a_file_that_is_not_hashed
     assert (
         "--as-of" not in line
     )  # the manifest in DATA gives the time, and --as-of would replace it
-    assert "comes from the manifest.json in DATA (exported_at_utc), which is not among" in line
+    assert (
+        "carry these hashes. The export time above comes from the manifest.json in DATA "
+        "(exported_at_utc), which is not among the hashed files. The memo holds no timestamp"
+    ) in line
     assert "manifest.json" not in typed
 
 
@@ -1191,6 +1198,7 @@ def test_a_time_from_the_manifest_is_said_to_come_from_a_file_that_is_not_hashed
         (" a", "` a`"),
         ("a ", "`a `"),
         (" ", "` `"),
+        (" X ", "`  X  `"),
         ("a``b```c", "````a``b```c````"),
     ],
 )
@@ -1355,7 +1363,9 @@ def test_a_report_that_says_underpowered_without_a_res_002_finding_is_refused() 
     report["findings"] = [f for f in report["findings"] if f["rule_id"] != "RES-002"]
     assert report["effect"]["underpowered"]
 
-    with pytest.raises(ValueError, match="holds no RES-002 finding"):
+    with pytest.raises(
+        ValueError, match="^the effect is underpowered but the report holds no RES-002 finding$"
+    ):
         render_results_memo(report)
 
 
@@ -1440,9 +1450,11 @@ def test_the_memo_states_the_export_time_and_the_assignment_span_as_two_facts(
     sections = render_results_memo(
         _report(_context(raw_spec, rows, exported_at=taken), source="command line")
     ).split("\n## ")
-    memo, facts, assumptions = _flat(" ".join(sections)), _flat(sections[2]), _flat(sections[3])
+    memo, facts, assumptions = _flat(" ".join(sections)), sections[2].split("\n\n"), sections[3]
+    assumptions = assumptions.split("\n\n")
 
-    assert observed in facts and export in facts and assumption in assumptions
+    assert any(paragraph.endswith(observed) for paragraph in facts)
+    assert export in facts and assumption in assumptions
     assert "INTERIM RUN" not in memo and "interim run" not in memo
     cohort_sentence = (
         f"The assignments span {span} of the 14 planned days, fewer than planned, so the cohort "
@@ -1450,7 +1462,7 @@ def test_the_memo_states_the_export_time_and_the_assignment_span_as_two_facts(
         "on accumulating data it flags 11% to 13% of experiments with no change (design "
         "section 21.6)."
     )
-    assert (cohort_sentence in assumptions) == cohort
+    assert (cohort_sentence in assumptions) == cohort  # a whole paragraph of Assumptions
 
 
 def test_an_export_before_a_planned_end_beyond_the_calendar_is_said_to_be_before_it(
@@ -1464,16 +1476,16 @@ def test_an_export_before_a_planned_end_beyond_the_calendar_is_said_to_be_before
     # the default window end, seven days on, would run past the last date the calendar holds
     context = _context(raw_spec, rows, exported_at=exported_at, window_column=False)
 
-    memo = _flat(render_results_memo(_report(context, source="command line")))
+    paragraphs = render_results_memo(_report(context, source="command line")).split("\n\n")
 
     assert (
         "Export taken: 9999-12-31T00:00:00Z (command line). That is before the planned end of "
         "the experiment, which falls beyond the calendar."
-    ) in memo
+    ) in paragraphs
     assert (
         "The planned end of the experiment falls beyond the calendar, so the export was taken "
         "before it."
-    ) in memo
+    ) in paragraphs
 
 
 def _finding(rule_id: str, severity: str, **evidence: object) -> dict:
@@ -1680,3 +1692,196 @@ def test_a_blocker_the_memo_has_no_words_for_is_refused() -> None:
 
     with pytest.raises(ValueError, match=r"no advice for the blocking rules \['RES-009'\]"):
         render_results_memo(report)
+
+
+def _section(memo: str, heading: str) -> str:
+    return next(part for part in memo.split("\n## ") if part.startswith(heading))
+
+
+def test_a_memo_without_findings_says_so_in_the_facts_and_in_the_quality_section() -> None:
+    memo = render_results_memo(_decision_report("clear"))
+
+    facts, quality = _section(memo, "Observed facts"), _section(memo, "Data-quality")
+    assert facts.startswith("Observed facts\n\nVerdict: CLEAR. Findings: none.\n\n")
+    assert quality.startswith(
+        "Data-quality qualification\n\nNo finding: the rules that ran found nothing that blocks "
+        "or warns.\n\nRules run: "
+    )
+
+
+@pytest.mark.parametrize(
+    ("ignored", "limit", "said"),
+    [
+        (["a", "b"], 5, "2 (`a`, `b`)."),
+        (["a", "b", "c"], 2, "3 (`a`, `b`; showing 2 of 3; the full list is in the JSON report)."),
+    ],
+)
+def test_the_players_ignored_before_the_start_are_listed_and_the_list_is_cut_at_the_limit(
+    ignored: list[str], limit: int, said: str
+) -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["population"]["ignored_before_start"] = ignored
+
+    facts = _section(render_results_memo(report, limit=limit), "Observed facts").split("\n\n")
+
+    assert f"Ignored, assigned before design.start_utc and in no count: {said}" in facts
+
+
+def test_a_change_of_origin_that_changes_the_rules_is_said_with_the_rules_that_move() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["origin_sensitivity"] = {
+        "ran": True,
+        "reason": None,
+        "shifts": [
+            {
+                "days_earlier": day,
+                "same": day != 3,
+                "verdict": "clear",
+                "appear": ["RES-007", "RES-013"] if day == 3 else [],
+                "disappear": ["RES-012"] if day == 3 else [],
+            }
+            for day in range(1, 7)
+        ],
+    }
+
+    assumptions = _section(render_results_memo(report), "Assumptions").split("\n\n")
+
+    assert (
+        "Origin sensitivity: the rules that fire change with the origin. 3 days earlier: verdict "
+        "clear; appear RES-007, RES-013; disappear RES-012."
+    ) in assumptions
+
+
+def test_a_memo_without_an_export_time_says_in_its_reproducibility_that_it_is_not_known() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["as_of"] |= {"time": None, "source": None, "planned_end": None, "interim": None}
+
+    lines = _section(render_results_memo(report), "Reproducibility").splitlines()
+
+    assert "- Export taken: not known" in lines
+
+
+def test_evidence_that_is_not_an_effect_rules_is_printed_in_full_and_an_empty_one_not_at_all() -> (
+    None
+):
+    """An effect rule's evidence has `notes` and `tests` (its tables stay in the JSON report);
+    anything else is a code block of key and value, a false value written "no"."""
+    report = _decision_report("caution", warnings=("RES-007",))
+
+    report["findings"][0]["evidence"] = {"notes": ["a note"], "flag": False}
+    memo, text = render_results_memo(report), render_results_text(report)
+    assert "Evidence:\n\n    notes: a note\n    flag: no\n" in memo
+    assert "behind these sentences" not in memo and "behind these sentences" not in text
+
+    report["findings"][0]["evidence"] = {}
+    assert "Evidence:" not in render_results_memo(report)
+    assert "Evidence:" not in render_results_text(report)
+
+
+def test_the_p_values_are_said_not_to_be_adjusted_when_the_spec_registers_no_adjustment() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["effect"]["adjustment"] = "none"
+
+    memo = render_results_memo(report)
+
+    assert (
+        "The p values are not adjusted for the number of arms (the spec registers none). The "
+        "95% intervals are not adjusted for the number of arms."
+    ) in _flat(memo)
+
+
+def test_a_text_report_without_findings_or_an_export_time_says_so() -> None:
+    report = _decision_report("clear")
+    report["as_of"] |= {"time": None, "source": None, "planned_end": None, "interim": None}
+
+    lines = render_results_text(report).splitlines()
+
+    assert (
+        "As of:      not known (no manifest time and no --as-of); completeness was not checked"
+    ) in lines
+    assert lines[lines.index("Verdict: CLEAR") + 1] == "Findings: none"
+
+
+def test_the_text_report_indents_what_it_wraps_and_the_changes_of_origin() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["origin_sensitivity"] = {
+        "ran": True,
+        "reason": None,
+        "shifts": [
+            {
+                "days_earlier": day,
+                "same": day != 3,
+                "verdict": "clear",
+                "appear": ["RES-007", "RES-013"] if day == 3 else [],
+                "disappear": ["RES-012"] if day == 3 else [],
+            }
+            for day in range(1, 7)
+        ],
+    }
+    report["effect"]["arms"] = [
+        {
+            "arm": "variant_b",
+            "n_treatment": 0,
+            "n_control": 926,
+            "error": "no player of this arm has a window that closed, so no mean can be taken for "
+            "it and this error text is long enough to be wrapped across two lines",
+        }
+    ]
+
+    lines = render_results_text(report).splitlines()
+
+    at = lines.index("Origin sensitivity: the rules that fire change with the origin.")
+    assert lines[at + 1] == (
+        "  3 days earlier: verdict clear; appear RES-007, RES-013; disappear RES-012"
+    )
+    at = lines.index(
+        "  variant_b (0 vs 926): not estimated; no player of this arm has a window that closed,"
+    )
+    assert lines[at + 1 : at + 3] == [
+        "    so no mean can be taken for it and this error text is long enough to be wrapped",
+        "    across two lines",
+    ]
+
+
+def test_a_long_list_in_the_evidence_wraps_with_a_hanging_indent_in_both_formats() -> None:
+    report = _decision_report("caution", warnings=("RES-007",))
+    report["findings"][0]["evidence"] = {"players": [f"player_{i:03d}" for i in range(14)]}
+
+    text = render_results_text(report)
+    memo = render_results_memo(report)
+
+    assert (
+        "      players: player_000, player_001, player_002, player_003, player_004, player_005,\n"
+        "        player_006, player_007, player_008, player_009, player_010, player_011,\n"
+        "        player_012, player_013"
+    ) in text
+    assert (
+        "    players: player_000, player_001, player_002, player_003, player_004, player_005,\n"
+        "      player_006, player_007, player_008, player_009, player_010, player_011,\n"
+        "      player_012, player_013"
+    ) in memo
+
+
+def test_a_long_change_of_origin_wraps_under_its_first_line_in_the_text_report() -> None:
+    report = json.loads(GOLDEN_RESULTS.read_text(encoding="utf-8"))
+    report["origin_sensitivity"] = {
+        "ran": True,
+        "reason": None,
+        "shifts": [
+            {
+                "days_earlier": day,
+                "same": day != 3,
+                "verdict": "clear",
+                "appear": [f"RES-{n:03d}" for n in range(1, 13)] if day == 3 else [],
+                "disappear": [],
+            }
+            for day in range(1, 7)
+        ],
+    }
+
+    lines = render_results_text(report).splitlines()
+
+    at = lines.index(
+        "  3 days earlier: verdict clear; appear RES-001, RES-002, RES-003, RES-004, RES-005,"
+    )
+    assert lines[at + 1] == "      RES-006, RES-007, RES-008, RES-009, RES-010, RES-011, RES-012"
