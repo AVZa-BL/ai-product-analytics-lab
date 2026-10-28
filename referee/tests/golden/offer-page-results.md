@@ -161,7 +161,7 @@ Evidence:
 - arm variant_b, metric revenue_usd_7d: the control's mean differs between the cohorts compared (p = 0.0222).
 - arm variant_c, metric revenue_usd_7d: the control's mean differs between the cohorts compared (p = 0.0222).
 - A control baseline that changes can raise Cochran's Q on a scale that is not invariant to it, which is why an arm is flagged only when both scales show a difference between cohorts.
-- RES-013: the configuration of arm variant_b changed during the test (weeks of first exposure holding more than one version: 1). The version change falls in the same weeks as the cohorts compared, so a difference between cohorts may be the change itself.
+- RES-013: the configuration of arm variant_b changed during the test (weeks of first exposure holding more than one version: week 1). The version change falls in the same weeks as the cohorts compared, so a difference between cohorts may be the change itself.
 - 4 tests ran. In the simulations of design section 21.5 (two arms of equal size, no change over time) the trigger flagged 3.5% of tests on average and at most 5.1%, so about 0.14 flags (at most 0.2) would be expected by chance alone.
 
 The tests, plans and settings behind these sentences are in the JSON report (--format json).

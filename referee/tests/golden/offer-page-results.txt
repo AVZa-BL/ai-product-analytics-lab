@@ -252,9 +252,9 @@ UNDERPOWERED: RES-002 blocks this review, control (926 analysed, 2,107 required)
         invariant to it, which is why an arm is flagged only when both scales show a
         difference between cohorts.
       - RES-013: the configuration of arm variant_b changed during the test (weeks of
-        first exposure holding more than one version: 1). The version change falls in
-        the same weeks as the cohorts compared, so a difference between cohorts may be
-        the change itself.
+        first exposure holding more than one version: week 1). The version change falls
+        in the same weeks as the cohorts compared, so a difference between cohorts may
+        be the change itself.
       - 4 tests ran. In the simulations of design section 21.5 (two arms of equal size,
         no change over time) the trigger flagged 3.5% of tests on average and at most
         5.1%, so about 0.14 flags (at most 0.2) would be expected by chance alone.

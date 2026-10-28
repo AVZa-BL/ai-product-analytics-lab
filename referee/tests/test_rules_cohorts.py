@@ -44,6 +44,7 @@ from referee.rules import RESULTS_RULES
 from referee.rules.cohorts import (
     _amount,
     _binding_text,
+    _configuration_note,
     _count,
     _entry_note,
     _players,
@@ -818,8 +819,8 @@ def test_a_change_of_configuration_is_said_to_fall_in_the_same_weeks_as_the_coho
     assert configuration["arms"]["variant_b"]["mixed_weeks"] == [2]
     assert (
         "RES-013: the configuration of arm variant_b changed during the test (weeks of first"
-        " exposure holding more than one version: 2). The version change falls in the same weeks"
-        " as the cohorts compared, so a difference between cohorts may be the change itself."
+        " exposure holding more than one version: week 2). The version change falls in the same"
+        " weeks as the cohorts compared, so a difference between cohorts may be the change itself."
     ) in with_it
     assert not any("RES-013" in note for note in without_it + clean)
 
@@ -950,6 +951,18 @@ def _head(arm, weeks):
     )
 
 
+@pytest.mark.parametrize(
+    ("mixed", "shown"), [([], "none"), ([0], "week 0"), ([1], "week 1"), ([0, 3], "weeks 0, 3")]
+)
+def test_the_weeks_that_held_more_than_one_version_are_named_as_weeks_not_as_a_count(
+    mixed, shown
+) -> None:
+    """A lone 0 or 1 would read as a count of weeks."""
+    note = _configuration_note("variant_b", {"mixed_weeks": mixed, "by_week": []}, [], "control")
+
+    assert note.startswith(_head("variant_b", shown))
+
+
 INSIDE = (
     "The version change falls in the same weeks as the cohorts compared, so a difference"
     " between cohorts may be the change itself."
@@ -974,8 +987,8 @@ def test_a_version_change_is_said_to_fall_among_the_cohorts_only_if_they_were_co
 
     assert notes["left_out"]["plans"]["variant_b"]["usable"] == [0, 1, 2, 3]
     assert notes["counted"]["plans"]["variant_b"]["usable"] == [0, 1, 2, 3, 4]
-    assert _head(arm, 4) + OUTSIDE in notes["left_out"]["notes"]
-    assert _head(arm, 4) + INSIDE in notes["counted"]["notes"]
+    assert _head(arm, "week 4") + OUTSIDE in notes["left_out"]["notes"]
+    assert _head(arm, "week 4") + INSIDE in notes["counted"]["notes"]
 
 
 def test_a_version_change_in_an_arm_whose_test_did_not_run_has_no_cohorts_to_fall_among(
@@ -1024,7 +1037,7 @@ def test_a_change_of_the_control_falls_among_the_cohorts_if_any_test_compared_th
     # week 4 is too small for variant_c's test and large enough for variant_b's
     assert report["plans"]["variant_b"]["usable"] == [0, 1, 2, 3, 4]
     assert report["plans"]["variant_c"]["usable"] == [0, 1, 2, 3]
-    assert _head("control", 4) + INSIDE in report["notes"]
+    assert _head("control", "week 4") + INSIDE in report["notes"]
 
 
 @pytest.mark.parametrize("first_week_of_version_2", [6, 7])  # the first or second week of block 3
