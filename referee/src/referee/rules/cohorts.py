@@ -751,7 +751,11 @@ def _configuration_note(
     after the last cohort, is said to fall outside them. A test with no cohort on either scale,
     because a gate or the plan stopped it, compared nothing.
     """
-    weeks = ", ".join(str(week) for week in changed["mixed_weeks"]) or "none"
+    mixed = changed["mixed_weeks"]
+    # Week numbers: a lone 0 or 1 would read as a count.
+    weeks = "none"
+    if mixed:
+        weeks = f"{'week' if len(mixed) == 1 else 'weeks'} {', '.join(map(str, mixed))}"
     seen = {item["week"]: {v["version"] for v in item["versions"]} for item in changed["by_week"]}
     ran = split = False
     for entry in entries:
