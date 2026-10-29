@@ -1,0 +1,2933 @@
+{
+ "what": "a closed-vocabulary checker over bounded enumerations of short texts, and how many catalogue sentences hold none of a list of loaded words",
+ "provenance": "Language-model agents wrote the code, tests, loaded-word list, probes and this document, and every harm label; no question is involved and no human labelled a probe.",
+ "no_model": "No model was run through Referee or for this study; the figures describe a checker's acceptance space, not what a model can or cannot do; harm is not computed.",
+ "command": "python tests/grounding_study/run.py",
+ "catalogue": {
+  "as_of": "8a7119b",
+  "sha256": "2f8689de5634620d51d0330cbceda78479299e8ece32465346abb7b9083b98be",
+  "sentences": 81
+ },
+ "lexicon": {
+  "sha256": "6efa9f81dbb72fbb1af7574ce3b2edd6b1eadfc40b2a0bf1b9f5ed9b08717095",
+  "words": 400,
+  "categories": {
+   "negation": [
+    "absent",
+    "aren't",
+    "can't",
+    "cannot",
+    "couldn't",
+    "didn't",
+    "doesn't",
+    "don't",
+    "fail",
+    "failed",
+    "failure",
+    "hasn't",
+    "haven't",
+    "isn't",
+    "lack",
+    "miss",
+    "missing",
+    "neither",
+    "never",
+    "no",
+    "none",
+    "nor",
+    "not",
+    "nothing",
+    "shouldn't",
+    "unable",
+    "wasn't",
+    "weren't",
+    "without",
+    "won't",
+    "wouldn't"
+   ],
+   "condition": [
+    "although",
+    "assume",
+    "but",
+    "depend",
+    "either",
+    "else",
+    "however",
+    "if",
+    "once",
+    "or",
+    "otherwise",
+    "then",
+    "though",
+    "unless",
+    "until",
+    "when",
+    "whenever",
+    "where",
+    "whether",
+    "while"
+   ],
+   "limiter": [
+    "about",
+    "almost",
+    "alone",
+    "around",
+    "enough",
+    "entirely",
+    "even",
+    "exactly",
+    "except",
+    "instead",
+    "just",
+    "largely",
+    "limit",
+    "mainly",
+    "maximum",
+    "merely",
+    "minimum",
+    "mostly",
+    "nearly",
+    "only",
+    "part",
+    "partly",
+    "rather",
+    "roughly",
+    "slightly",
+    "solely",
+    "somewhat",
+    "too",
+    "very"
+   ],
+   "modal": [
+    "able",
+    "allow",
+    "can",
+    "could",
+    "impossible",
+    "likely",
+    "may",
+    "maybe",
+    "might",
+    "must",
+    "need",
+    "perhap",
+    "possible",
+    "probably",
+    "require",
+    "should",
+    "unlikely",
+    "will",
+    "would"
+   ],
+   "decision": [
+    "accept",
+    "adopt",
+    "advice",
+    "approve",
+    "call",
+    "choice",
+    "choose",
+    "conclude",
+    "conclusion",
+    "continue",
+    "correct",
+    "decide",
+    "decided",
+    "decision",
+    "drop",
+    "dropped",
+    "fix",
+    "keep",
+    "launch",
+    "pick",
+    "plan",
+    "planned",
+    "proceed",
+    "recommend",
+    "register",
+    "registered",
+    "reject",
+    "rerun",
+    "restart",
+    "select",
+    "ship",
+    "stop",
+    "stopped"
+   ],
+   "quantity": [
+    "all",
+    "amount",
+    "any",
+    "average",
+    "both",
+    "count",
+    "double",
+    "each",
+    "estimate",
+    "every",
+    "few",
+    "five",
+    "four",
+    "half",
+    "hundred",
+    "interval",
+    "many",
+    "mean",
+    "million",
+    "much",
+    "n",
+    "number",
+    "one",
+    "per",
+    "percentage",
+    "pooled",
+    "power",
+    "rate",
+    "ratio",
+    "sample",
+    "seven",
+    "several",
+    "share",
+    "six",
+    "size",
+    "some",
+    "thousand",
+    "three",
+    "threshold",
+    "tolerance",
+    "total",
+    "twice",
+    "two",
+    "value",
+    "whole",
+    "zero"
+   ],
+   "comparison": [
+    "against",
+    "as",
+    "best",
+    "better",
+    "change",
+    "changed",
+    "close",
+    "compare",
+    "comparison",
+    "cut",
+    "decrease",
+    "differ",
+    "difference",
+    "different",
+    "drift",
+    "equal",
+    "exceed",
+    "fall",
+    "fewer",
+    "gain",
+    "greater",
+    "high",
+    "higher",
+    "highest",
+    "increase",
+    "large",
+    "larger",
+    "largest",
+    "least",
+    "less",
+    "lift",
+    "like",
+    "low",
+    "lower",
+    "lowest",
+    "match",
+    "mismatch",
+    "more",
+    "most",
+    "reduce",
+    "relative",
+    "reverse",
+    "rise",
+    "same",
+    "shift",
+    "small",
+    "smaller",
+    "smallest",
+    "than",
+    "unequal",
+    "versus",
+    "worse",
+    "worst"
+   ],
+   "certainty": [
+    "actual",
+    "appear",
+    "certain",
+    "chance",
+    "evidence",
+    "exact",
+    "false",
+    "imply",
+    "indicate",
+    "know",
+    "known",
+    "measure",
+    "measured",
+    "noise",
+    "proof",
+    "prove",
+    "real",
+    "reliable",
+    "rough",
+    "say",
+    "seem",
+    "show",
+    "shown",
+    "suggest",
+    "tell",
+    "true",
+    "trust",
+    "uncertain",
+    "unclear",
+    "unknown",
+    "unreliable"
+   ],
+   "cause": [
+    "affect",
+    "because",
+    "cause",
+    "caused",
+    "drive",
+    "due",
+    "effect",
+    "explain",
+    "hence",
+    "impact",
+    "influence",
+    "lead",
+    "led",
+    "produce",
+    "reason",
+    "result",
+    "since",
+    "so",
+    "therefore",
+    "thus",
+    "tied",
+    "trigger",
+    "triggered",
+    "why"
+   ],
+   "verdict": [
+    "acceptable",
+    "bad",
+    "block",
+    "blocker",
+    "breach",
+    "caution",
+    "clear",
+    "error",
+    "finding",
+    "fine",
+    "flag",
+    "good",
+    "harm",
+    "harmful",
+    "info",
+    "invalid",
+    "issue",
+    "pass",
+    "problem",
+    "risk",
+    "safe",
+    "serious",
+    "severe",
+    "significance",
+    "significant",
+    "success",
+    "underpowered",
+    "valid",
+    "verdict",
+    "warning",
+    "win",
+    "wrong"
+   ],
+   "unit": [
+    "cluster",
+    "cycle",
+    "day",
+    "device",
+    "duration",
+    "event",
+    "hour",
+    "minute",
+    "month",
+    "percent",
+    "period",
+    "player",
+    "purchase",
+    "revenue",
+    "session",
+    "spend",
+    "spent",
+    "time",
+    "unit",
+    "user",
+    "week",
+    "window",
+    "year"
+   ],
+   "position": [
+    "above",
+    "after",
+    "at",
+    "before",
+    "began",
+    "begin",
+    "below",
+    "between",
+    "beyond",
+    "during",
+    "early",
+    "end",
+    "from",
+    "in",
+    "into",
+    "late",
+    "on",
+    "out",
+    "over",
+    "partway",
+    "point",
+    "side",
+    "start",
+    "through",
+    "to",
+    "under",
+    "up",
+    "within"
+   ],
+   "arm": [
+    "allocation",
+    "arm",
+    "assign",
+    "assigned",
+    "assignment",
+    "bucket",
+    "cohort",
+    "control",
+    "expose",
+    "exposed",
+    "exposure",
+    "group",
+    "population",
+    "random",
+    "randomisation",
+    "randomization",
+    "segment",
+    "treatment",
+    "variant"
+   ],
+   "ordinal": [
+    "earlier",
+    "final",
+    "first",
+    "initial",
+    "last",
+    "later",
+    "next",
+    "previous",
+    "primary",
+    "second",
+    "secondary",
+    "third"
+   ]
+  },
+  "views": {
+   "full": [
+    "negation",
+    "condition",
+    "limiter",
+    "modal",
+    "decision",
+    "quantity",
+    "comparison",
+    "certainty",
+    "cause",
+    "verdict",
+    "unit",
+    "position",
+    "arm",
+    "ordinal"
+   ],
+   "qualifiers": [
+    "negation",
+    "condition",
+    "limiter",
+    "modal"
+   ],
+   "digits": []
+  }
+ },
+ "function_words": [
+  "a",
+  "an",
+  "the",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "being",
+  "do",
+  "did",
+  "have",
+  "has",
+  "had",
+  "of",
+  "for",
+  "with",
+  "and",
+  "that",
+  "which",
+  "who",
+  "it",
+  "its",
+  "this",
+  "these",
+  "those",
+  "they",
+  "their",
+  "them",
+  "we",
+  "our",
+  "you",
+  "your",
+  "there",
+  "such"
+ ],
+ "free": {
+  "full": {
+   "count": 0,
+   "ids": []
+  },
+  "qualifiers": {
+   "count": 8,
+   "ids": [
+    "RES-001.why.1",
+    "RES-001.do.4",
+    "RES-002.title",
+    "RES-007.why.1",
+    "RES-007.do.1",
+    "RES-012.title",
+    "RES-012.do.1",
+    "RES-013.title"
+   ]
+  },
+  "digits": {
+   "count": 65,
+   "ids": [
+    "RES-001.title",
+    "RES-001.why.1",
+    "RES-001.why.2",
+    "RES-001.why.3",
+    "RES-001.do.1",
+    "RES-001.do.2",
+    "RES-001.do.3",
+    "RES-001.do.4",
+    "RES-002.title",
+    "RES-002.why.1",
+    "RES-002.why.2",
+    "RES-002.why.3",
+    "RES-002.do.1",
+    "RES-002.do.2",
+    "RES-002.do.3",
+    "RES-003.title",
+    "RES-003.why.1",
+    "RES-003.why.2",
+    "RES-003.do.2",
+    "RES-003.do.3",
+    "RES-004.title",
+    "RES-004.why.1",
+    "RES-004.why.2",
+    "RES-004.why.3",
+    "RES-004.why.4",
+    "RES-004.why.5",
+    "RES-004.why.6",
+    "RES-004.do.1",
+    "RES-004.do.2",
+    "RES-004.do.3",
+    "RES-004.do.4",
+    "RES-007.title",
+    "RES-007.why.1",
+    "RES-007.why.2",
+    "RES-007.why.3",
+    "RES-007.why.4",
+    "RES-007.do.1",
+    "RES-007.do.3",
+    "RES-007.do.4",
+    "RES-008.why.1",
+    "RES-008.why.4",
+    "RES-008.why.5",
+    "RES-008.why.7",
+    "RES-008.do.2",
+    "RES-008.do.3",
+    "RES-008.do.4",
+    "RES-008.do.6",
+    "RES-008.do.7",
+    "RES-011.title",
+    "RES-011.why.1",
+    "RES-011.why.2",
+    "RES-011.do.1",
+    "RES-011.do.2",
+    "RES-012.title",
+    "RES-012.why.1",
+    "RES-012.why.2",
+    "RES-012.do.1",
+    "RES-012.do.2",
+    "RES-012.do.3",
+    "RES-012.do.4",
+    "RES-013.title",
+    "RES-013.why.1",
+    "RES-013.do.1",
+    "RES-013.do.2",
+    "RES-013.do.3"
+   ]
+  }
+ },
+ "fewest_loaded": {
+  "count": 2,
+  "ids": [
+   "RES-001.do.1",
+   "RES-012.do.1"
+  ]
+ },
+ "sentences": [
+  {
+   "id": "RES-001.title",
+   "loaded": [
+    "sample",
+    "ratio",
+    "mismatch",
+    "arm",
+    "not",
+    "size",
+    "allocation"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-001.why.1",
+   "loaded": [
+    "random",
+    "assignment",
+    "arm",
+    "registered",
+    "size",
+    "up",
+    "to",
+    "chance"
+   ],
+   "free_under": [
+    "qualifiers",
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-001.why.2",
+   "loaded": [
+    "mismatch",
+    "large",
+    "mean",
+    "arm",
+    "not",
+    "as",
+    "in",
+    "assignment",
+    "or",
+    "so",
+    "each",
+    "may",
+    "differ",
+    "difference",
+    "can",
+    "from"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-001.why.3",
+   "loaded": [
+    "no",
+    "estimate",
+    "effect",
+    "can",
+    "until",
+    "cause",
+    "known"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-001.do.1",
+   "loaded": [
+    "not",
+    "effect"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-001.do.2",
+   "loaded": [
+    "why",
+    "count",
+    "differ",
+    "assignment",
+    "or",
+    "event",
+    "in",
+    "one",
+    "arm",
+    "on",
+    "variant",
+    "exposure",
+    "to",
+    "some",
+    "only"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-001.do.3",
+   "loaded": [
+    "week",
+    "in",
+    "evidence",
+    "show",
+    "whether",
+    "mismatch",
+    "began",
+    "at",
+    "point",
+    "time"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-001.do.4",
+   "loaded": [
+    "fix",
+    "cause",
+    "rerun"
+   ],
+   "free_under": [
+    "qualifiers",
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-002.title",
+   "loaded": [
+    "fewer",
+    "player",
+    "than",
+    "registered",
+    "sample",
+    "size"
+   ],
+   "free_under": [
+    "qualifiers",
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-002.why.1",
+   "loaded": [
+    "registered",
+    "sample",
+    "size",
+    "need",
+    "to",
+    "effect",
+    "power"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-002.why.2",
+   "loaded": [
+    "fewer",
+    "player",
+    "less",
+    "power",
+    "than",
+    "so",
+    "result",
+    "not",
+    "significant",
+    "say",
+    "about",
+    "whether",
+    "effect"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-002.why.3",
+   "loaded": [
+    "cannot",
+    "no",
+    "registered",
+    "sample",
+    "size",
+    "at",
+    "all",
+    "so",
+    "amount"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-002.do.1",
+   "loaded": [
+    "keep",
+    "until",
+    "every",
+    "arm",
+    "registered",
+    "n",
+    "when",
+    "evidence",
+    "size",
+    "say",
+    "many",
+    "missing"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-002.do.2",
+   "loaded": [
+    "if",
+    "must",
+    "stop",
+    "result",
+    "as",
+    "underpowered",
+    "interval",
+    "effect",
+    "not",
+    "evidence",
+    "no"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-002.do.3",
+   "loaded": [
+    "not",
+    "lower",
+    "registered",
+    "n",
+    "after"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-002.do.4",
+   "loaded": [
+    "if",
+    "evidence",
+    "say",
+    "mde_relative",
+    "cannot",
+    "into",
+    "sample",
+    "size",
+    "reason",
+    "more",
+    "will",
+    "not",
+    "clear",
+    "so",
+    "correct",
+    "register"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-003.title",
+   "loaded": [
+    "less",
+    "than",
+    "registered",
+    "minimum",
+    "duration"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-003.why.1",
+   "loaded": [
+    "minimum",
+    "duration",
+    "registered",
+    "so",
+    "cycle",
+    "effect",
+    "time",
+    "to",
+    "chance",
+    "show"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-003.why.2",
+   "loaded": [
+    "measure",
+    "window",
+    "may",
+    "not",
+    "week",
+    "cannot",
+    "show",
+    "change",
+    "over",
+    "time"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-003.do.1",
+   "loaded": [
+    "to",
+    "at",
+    "least",
+    "design.min_duration_days",
+    "whole",
+    "number",
+    "week",
+    "where",
+    "can"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-003.do.2",
+   "loaded": [
+    "not",
+    "stop",
+    "on",
+    "day",
+    "result",
+    "good"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-003.do.3",
+   "loaded": [
+    "if",
+    "registered",
+    "minimum",
+    "wrong",
+    "say",
+    "so",
+    "why",
+    "before",
+    "effect"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-003.do.4",
+   "loaded": [
+    "register",
+    "design.start_utc",
+    "without",
+    "first",
+    "last",
+    "assignment",
+    "in",
+    "duration",
+    "one",
+    "zero",
+    "can",
+    "finding"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-004.title",
+   "loaded": [
+    "worse",
+    "than",
+    "tolerance",
+    "allow",
+    "or",
+    "may"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-004.why.1",
+   "loaded": [
+    "registered",
+    "limit",
+    "on",
+    "change",
+    "may"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-004.why.2",
+   "loaded": [
+    "change",
+    "primary",
+    "not",
+    "on",
+    "alone",
+    "harm",
+    "real",
+    "in",
+    "sample",
+    "may",
+    "larger",
+    "or",
+    "smaller",
+    "population",
+    "so",
+    "point",
+    "estimate",
+    "beyond",
+    "tolerance",
+    "same",
+    "as",
+    "breach"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-004.why.3",
+   "loaded": [
+    "therefore",
+    "breach",
+    "shown",
+    "whole",
+    "interval",
+    "beyond",
+    "tolerance",
+    "from",
+    "one",
+    "only",
+    "possible",
+    "harm",
+    "against",
+    "control",
+    "mean",
+    "change",
+    "caused",
+    "registered",
+    "as"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-004.why.4",
+   "loaded": [
+    "when",
+    "two",
+    "decide",
+    "say",
+    "control",
+    "beyond",
+    "tolerance",
+    "registered",
+    "may",
+    "no",
+    "breach",
+    "against",
+    "alone",
+    "not",
+    "show",
+    "arm",
+    "caused"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-004.why.5",
+   "loaded": [
+    "interval",
+    "number",
+    "arm",
+    "so",
+    "several",
+    "some",
+    "will",
+    "miss",
+    "player",
+    "to",
+    "session",
+    "or",
+    "cluster",
+    "as",
+    "unit",
+    "too",
+    "say"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-004.why.6",
+   "loaded": [
+    "within",
+    "tolerance",
+    "not",
+    "finding",
+    "where",
+    "interval",
+    "beyond",
+    "cannot",
+    "out",
+    "breach"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-004.do.1",
+   "loaded": [
+    "not",
+    "decide",
+    "on",
+    "primary",
+    "alone"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-004.do.2",
+   "loaded": [
+    "if",
+    "shown",
+    "breach",
+    "only",
+    "on",
+    "registered",
+    "say",
+    "decide",
+    "or",
+    "control",
+    "beyond",
+    "tolerance",
+    "first",
+    "whether",
+    "change",
+    "since",
+    "arm",
+    "against",
+    "register",
+    "next",
+    "not",
+    "one"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-004.do.3",
+   "loaded": [
+    "if",
+    "against",
+    "control",
+    "mean",
+    "show",
+    "breach",
+    "arm",
+    "to",
+    "either",
+    "fix",
+    "or",
+    "drop",
+    "tolerance",
+    "registered",
+    "before",
+    "so",
+    "not"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-004.do.4",
+   "loaded": [
+    "breach",
+    "only",
+    "possible",
+    "cannot",
+    "tell",
+    "from",
+    "noise",
+    "decide",
+    "in",
+    "before",
+    "decision",
+    "whether",
+    "harm",
+    "acceptable",
+    "or",
+    "registered",
+    "sample",
+    "size",
+    "once",
+    "at",
+    "end"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-004.do.5",
+   "loaded": [
+    "not",
+    "keep",
+    "player",
+    "to",
+    "until",
+    "interval",
+    "clear",
+    "tolerance",
+    "at",
+    "95%"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-004.do.6",
+   "loaded": [
+    "few",
+    "event",
+    "or",
+    "interval",
+    "rough",
+    "revenue",
+    "like",
+    "one",
+    "less",
+    "reliable",
+    "than",
+    "95%",
+    "suggest"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-007.title",
+   "loaded": [
+    "effect",
+    "differ",
+    "between",
+    "cohort",
+    "first",
+    "exposure",
+    "or",
+    "could",
+    "not"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-007.why.1",
+   "loaded": [
+    "pooled",
+    "effect",
+    "average",
+    "over",
+    "player",
+    "first",
+    "exposed",
+    "at",
+    "different",
+    "time"
+   ],
+   "free_under": [
+    "qualifiers",
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-007.why.2",
+   "loaded": [
+    "if",
+    "effect",
+    "differ",
+    "between",
+    "cohort",
+    "pooled",
+    "none",
+    "later",
+    "launch",
+    "can",
+    "from"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-007.why.3",
+   "loaded": [
+    "say",
+    "effect",
+    "differ",
+    "not",
+    "why",
+    "change",
+    "tied",
+    "to",
+    "week",
+    "cohort",
+    "launch",
+    "player",
+    "cannot",
+    "from",
+    "one",
+    "each",
+    "time",
+    "since",
+    "first",
+    "exposure",
+    "because",
+    "seven",
+    "day",
+    "total",
+    "only"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-007.why.4",
+   "loaded": [
+    "could",
+    "not",
+    "too",
+    "so",
+    "missing",
+    "cannot",
+    "as",
+    "pass"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-007.do.1",
+   "loaded": [
+    "cohort",
+    "in",
+    "evidence",
+    "before",
+    "pooled",
+    "effect",
+    "each",
+    "difference",
+    "error",
+    "on",
+    "both"
+   ],
+   "free_under": [
+    "qualifiers",
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-007.do.2",
+   "loaded": [
+    "out",
+    "between",
+    "week",
+    "cohort",
+    "launch",
+    "change",
+    "in",
+    "where",
+    "player",
+    "from",
+    "013",
+    "show",
+    "pooled",
+    "effect",
+    "no",
+    "cause",
+    "cannot"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-007.do.3",
+   "loaded": [
+    "player",
+    "whether",
+    "cohort",
+    "most"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-007.do.4",
+   "loaded": [
+    "flag",
+    "low",
+    "lead",
+    "to",
+    "more",
+    "at",
+    "planned",
+    "end",
+    "not",
+    "finding"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-007.do.5",
+   "loaded": [
+    "if",
+    "not",
+    "reason",
+    "say",
+    "missing",
+    "more",
+    "or",
+    "arm",
+    "in",
+    "size",
+    "after",
+    "every",
+    "window",
+    "randomisation",
+    "same",
+    "unit",
+    "player",
+    "user",
+    "device",
+    "ratio",
+    "effect",
+    "could",
+    "value",
+    "both",
+    "mean",
+    "above",
+    "0"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-007.do.6",
+   "loaded": [
+    "evidence",
+    "would",
+    "cohort",
+    "from",
+    "size",
+    "plan",
+    "traffic_needed",
+    "say",
+    "when",
+    "to",
+    "if",
+    "window",
+    "some",
+    "not",
+    "or",
+    "why",
+    "more"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-008.title",
+   "loaded": [
+    "or",
+    "95%",
+    "interval",
+    "can",
+    "wrong",
+    "more",
+    "less",
+    "than",
+    "5%",
+    "time"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-008.why.1",
+   "loaded": [
+    "interval",
+    "difference",
+    "mean",
+    "one",
+    "assume",
+    "each",
+    "arm",
+    "nearly"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-008.why.2",
+   "loaded": [
+    "most",
+    "player",
+    "at",
+    "zero",
+    "few",
+    "drive",
+    "up",
+    "more",
+    "than",
+    "revenue",
+    "per",
+    "user",
+    "about",
+    "18",
+    "need",
+    "114,000",
+    "below",
+    "size",
+    "interval",
+    "wrong",
+    "or",
+    "less",
+    "5%"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-008.why.3",
+   "loaded": [
+    "measured",
+    "revenue",
+    "like",
+    "player",
+    "in",
+    "two",
+    "arm",
+    "21.10",
+    "finding",
+    "on",
+    "each",
+    "side",
+    "comparison",
+    "equal",
+    "interval",
+    "mostly",
+    "close",
+    "to",
+    "or",
+    "under",
+    "5%",
+    "small",
+    "effect",
+    "above",
+    "large",
+    "one",
+    "unequal",
+    "size",
+    "larger",
+    "better",
+    "than",
+    "worst",
+    "when",
+    "control",
+    "group",
+    "higher",
+    "mean",
+    "at",
+    "9",
+    "1",
+    "no",
+    "worse",
+    "fewer",
+    "spend",
+    "smaller"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-008.why.4",
+   "loaded": [
+    "rate",
+    "from",
+    "one",
+    "not",
+    "measure",
+    "in"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-008.why.5",
+   "loaded": [
+    "effect",
+    "decided",
+    "difference",
+    "between",
+    "two",
+    "mean",
+    "arm",
+    "about",
+    "equal",
+    "size",
+    "no",
+    "can",
+    "as",
+    "warning",
+    "one",
+    "large",
+    "info",
+    "above",
+    "largest",
+    "number",
+    "player",
+    "spend",
+    "may"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-008.why.6",
+   "loaded": [
+    "008",
+    "not",
+    "evidence",
+    "interval",
+    "reliable",
+    "in",
+    "every",
+    "revenue",
+    "like"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-008.why.7",
+   "loaded": [
+    "not",
+    "revenue",
+    "like",
+    "finding",
+    "say",
+    "no",
+    "error",
+    "rate",
+    "measured"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-008.do.1",
+   "loaded": [
+    "where",
+    "rate",
+    "in",
+    "5%",
+    "interval",
+    "failed",
+    "10%",
+    "like",
+    "90%",
+    "small",
+    "effect",
+    "arm",
+    "unequal",
+    "size",
+    "mostly",
+    "larger",
+    "group"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-008.do.2",
+   "loaded": [
+    "where",
+    "no",
+    "error",
+    "rate",
+    "not",
+    "revenue",
+    "like",
+    "unit",
+    "player",
+    "group",
+    "or",
+    "spend",
+    "in",
+    "smaller",
+    "interval",
+    "as",
+    "show",
+    "may",
+    "unreliable",
+    "but",
+    "measured",
+    "much"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-008.do.3",
+   "loaded": [
+    "not",
+    "call",
+    "result",
+    "significant",
+    "or",
+    "on",
+    "one",
+    "interval",
+    "if",
+    "end",
+    "close",
+    "to",
+    "zero",
+    "decision",
+    "threshold",
+    "say",
+    "uncertain"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-008.do.4",
+   "loaded": [
+    "where",
+    "can",
+    "choose",
+    "not",
+    "control",
+    "larger",
+    "arm",
+    "worst",
+    "in",
+    "higher",
+    "mean",
+    "to",
+    "fall",
+    "instead",
+    "plan",
+    "more",
+    "player",
+    "spend",
+    "smaller"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-008.do.5",
+   "loaded": [
+    "decision",
+    "on",
+    "less",
+    "amount",
+    "per",
+    "player",
+    "or",
+    "revenue",
+    "user",
+    "cut",
+    "from",
+    "about",
+    "18",
+    "to",
+    "5"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-008.do.6",
+   "loaded": [
+    "change",
+    "not",
+    "measured",
+    "or",
+    "so",
+    "register",
+    "choice",
+    "before",
+    "next",
+    "after"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-008.do.7",
+   "loaded": [
+    "show",
+    "no",
+    "interval",
+    "because",
+    "in",
+    "failed",
+    "more",
+    "than",
+    "most",
+    "on"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-011.title",
+   "loaded": [
+    "sample",
+    "ratio",
+    "drift",
+    "over",
+    "time",
+    "although",
+    "total"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-011.why.1",
+   "loaded": [
+    "mismatch",
+    "reverse",
+    "partway",
+    "through",
+    "can",
+    "in",
+    "total",
+    "one",
+    "begin",
+    "or",
+    "end"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-011.why.2",
+   "loaded": [
+    "week",
+    "point",
+    "to",
+    "change",
+    "in",
+    "assignment",
+    "or",
+    "during",
+    "planned",
+    "up",
+    "allocation",
+    "so",
+    "player",
+    "may",
+    "not"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-011.do.1",
+   "loaded": [
+    "changed",
+    "in",
+    "week",
+    "change",
+    "to",
+    "assignment",
+    "or"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-011.do.2",
+   "loaded": [
+    "decide",
+    "to",
+    "week",
+    "from",
+    "cause",
+    "never",
+    "because",
+    "out",
+    "change",
+    "result"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-012.title",
+   "loaded": [
+    "player",
+    "first",
+    "exposed",
+    "after",
+    "purchase"
+   ],
+   "free_under": [
+    "qualifiers",
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-012.why.1",
+   "loaded": [
+    "purchase",
+    "before",
+    "player",
+    "first",
+    "change",
+    "cannot",
+    "effect"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-012.why.2",
+   "loaded": [
+    "player",
+    "out",
+    "effect",
+    "but",
+    "in",
+    "arm",
+    "so",
+    "different",
+    "share",
+    "exposed",
+    "late",
+    "mean",
+    "change"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-012.why.3",
+   "loaded": [
+    "result",
+    "time",
+    "007"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-012.do.1",
+   "loaded": [
+    "exposure",
+    "triggered"
+   ],
+   "free_under": [
+    "qualifiers",
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-012.do.2",
+   "loaded": [
+    "if",
+    "can",
+    "purchase",
+    "say",
+    "so",
+    "in",
+    "from",
+    "first",
+    "exposure"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-012.do.3",
+   "loaded": [
+    "compare",
+    "estimate",
+    "without",
+    "player",
+    "in",
+    "evidence",
+    "say",
+    "one",
+    "conclusion",
+    "on"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-012.do.4",
+   "loaded": [
+    "if",
+    "late",
+    "share",
+    "differ",
+    "between",
+    "arm",
+    "out",
+    "why",
+    "before",
+    "effect"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-013.title",
+   "loaded": [
+    "arm",
+    "changed",
+    "during"
+   ],
+   "free_under": [
+    "qualifiers",
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-013.why.1",
+   "loaded": [
+    "change",
+    "part",
+    "through",
+    "second",
+    "treatment",
+    "arm"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-013.why.2",
+   "loaded": [
+    "player",
+    "before",
+    "after",
+    "different",
+    "so",
+    "arm",
+    "effect",
+    "average",
+    "two",
+    "change",
+    "over",
+    "time",
+    "007",
+    "cannot",
+    "from"
+   ],
+   "free_under": []
+  },
+  {
+   "id": "RES-013.do.1",
+   "loaded": [
+    "out",
+    "changed",
+    "when"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-013.do.2",
+   "loaded": [
+    "or",
+    "restart",
+    "on",
+    "final",
+    "not",
+    "over",
+    "week",
+    "as"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  },
+  {
+   "id": "RES-013.do.3",
+   "loaded": [
+    "difference",
+    "within",
+    "week",
+    "in",
+    "evidence",
+    "only",
+    "not"
+   ],
+   "free_under": [
+    "digits"
+   ]
+  }
+ ],
+ "enumeration": {
+  "full": {
+   "free": [],
+   "vocabulary": 36,
+   "max_length": 0,
+   "texts": 0,
+   "function_words_only": [],
+   "alone": {},
+   "any": []
+  },
+  "qualifiers": {
+   "free": [
+    "RES-001.why.1",
+    "RES-001.do.4",
+    "RES-002.title",
+    "RES-007.why.1",
+    "RES-007.do.1",
+    "RES-012.title",
+    "RES-012.do.1",
+    "RES-013.title"
+   ],
+   "vocabulary": 85,
+   "max_length": 3,
+   "texts": 621435,
+   "function_words_only": [
+    36,
+    1296,
+    46656
+   ],
+   "alone": {
+    "RES-001.why.1": [
+     9,
+     729,
+     44469
+    ],
+    "RES-001.do.4": [
+     4,
+     304,
+     17344
+    ],
+    "RES-002.title": [
+     6,
+     468,
+     27432
+    ],
+    "RES-007.why.1": [
+     10,
+     820,
+     50680
+    ],
+    "RES-007.do.1": [
+     15,
+     1305,
+     85995
+    ],
+    "RES-012.title": [
+     5,
+     385,
+     22265
+    ],
+    "RES-012.do.1": [
+     4,
+     304,
+     17344
+    ],
+    "RES-013.title": [
+     5,
+     385,
+     22265
+    ]
+   },
+   "any": [
+    49,
+    5929,
+    510391
+   ]
+  },
+  "digits": {
+   "free": [
+    "RES-001.title",
+    "RES-001.why.1",
+    "RES-001.why.2",
+    "RES-001.why.3",
+    "RES-001.do.1",
+    "RES-001.do.2",
+    "RES-001.do.3",
+    "RES-001.do.4",
+    "RES-002.title",
+    "RES-002.why.1",
+    "RES-002.why.2",
+    "RES-002.why.3",
+    "RES-002.do.1",
+    "RES-002.do.2",
+    "RES-002.do.3",
+    "RES-003.title",
+    "RES-003.why.1",
+    "RES-003.why.2",
+    "RES-003.do.2",
+    "RES-003.do.3",
+    "RES-004.title",
+    "RES-004.why.1",
+    "RES-004.why.2",
+    "RES-004.why.3",
+    "RES-004.why.4",
+    "RES-004.why.5",
+    "RES-004.why.6",
+    "RES-004.do.1",
+    "RES-004.do.2",
+    "RES-004.do.3",
+    "RES-004.do.4",
+    "RES-007.title",
+    "RES-007.why.1",
+    "RES-007.why.2",
+    "RES-007.why.3",
+    "RES-007.why.4",
+    "RES-007.do.1",
+    "RES-007.do.3",
+    "RES-007.do.4",
+    "RES-008.why.1",
+    "RES-008.why.4",
+    "RES-008.why.5",
+    "RES-008.why.7",
+    "RES-008.do.2",
+    "RES-008.do.3",
+    "RES-008.do.4",
+    "RES-008.do.6",
+    "RES-008.do.7",
+    "RES-011.title",
+    "RES-011.why.1",
+    "RES-011.why.2",
+    "RES-011.do.1",
+    "RES-011.do.2",
+    "RES-012.title",
+    "RES-012.why.1",
+    "RES-012.why.2",
+    "RES-012.do.1",
+    "RES-012.do.2",
+    "RES-012.do.3",
+    "RES-012.do.4",
+    "RES-013.title",
+    "RES-013.why.1",
+    "RES-013.do.1",
+    "RES-013.do.2",
+    "RES-013.do.3"
+   ],
+   "vocabulary": 413,
+   "max_length": 2,
+   "texts": 170982,
+   "function_words_only": [
+    36,
+    1296
+   ],
+   "alone": {
+    "RES-001.title": [
+     8,
+     640
+    ],
+    "RES-001.why.1": [
+     9,
+     729
+    ],
+    "RES-001.why.2": [
+     23,
+     2185
+    ],
+    "RES-001.why.3": [
+     8,
+     640
+    ],
+    "RES-001.do.1": [
+     3,
+     225
+    ],
+    "RES-001.do.2": [
+     27,
+     2673
+    ],
+    "RES-001.do.3": [
+     12,
+     1008
+    ],
+    "RES-001.do.4": [
+     4,
+     304
+    ],
+    "RES-002.title": [
+     6,
+     468
+    ],
+    "RES-002.why.1": [
+     10,
+     820
+    ],
+    "RES-002.why.2": [
+     17,
+     1513
+    ],
+    "RES-002.why.3": [
+     13,
+     1105
+    ],
+    "RES-002.do.1": [
+     17,
+     1513
+    ],
+    "RES-002.do.2": [
+     12,
+     1008
+    ],
+    "RES-002.do.3": [
+     7,
+     553
+    ],
+    "RES-003.title": [
+     6,
+     468
+    ],
+    "RES-003.why.1": [
+     17,
+     1513
+    ],
+    "RES-003.why.2": [
+     14,
+     1204
+    ],
+    "RES-003.do.2": [
+     7,
+     553
+    ],
+    "RES-003.do.3": [
+     10,
+     820
+    ],
+    "RES-004.title": [
+     7,
+     553
+    ],
+    "RES-004.why.1": [
+     8,
+     640
+    ],
+    "RES-004.why.2": [
+     27,
+     2673
+    ],
+    "RES-004.why.3": [
+     30,
+     3060
+    ],
+    "RES-004.why.4": [
+     26,
+     2548
+    ],
+    "RES-004.why.5": [
+     23,
+     2185
+    ],
+    "RES-004.why.6": [
+     14,
+     1204
+    ],
+    "RES-004.do.1": [
+     6,
+     468
+    ],
+    "RES-004.do.2": [
+     37,
+     4033
+    ],
+    "RES-004.do.3": [
+     26,
+     2548
+    ],
+    "RES-004.do.4": [
+     30,
+     3060
+    ],
+    "RES-007.title": [
+     11,
+     913
+    ],
+    "RES-007.why.1": [
+     10,
+     820
+    ],
+    "RES-007.why.2": [
+     16,
+     1408
+    ],
+    "RES-007.why.3": [
+     35,
+     3745
+    ],
+    "RES-007.why.4": [
+     13,
+     1105
+    ],
+    "RES-007.do.1": [
+     15,
+     1305
+    ],
+    "RES-007.do.3": [
+     8,
+     640
+    ],
+    "RES-007.do.4": [
+     15,
+     1305
+    ],
+    "RES-008.why.1": [
+     12,
+     1008
+    ],
+    "RES-008.why.4": [
+     11,
+     913
+    ],
+    "RES-008.why.5": [
+     37,
+     4033
+    ],
+    "RES-008.why.7": [
+     12,
+     1008
+    ],
+    "RES-008.do.2": [
+     32,
+     3328
+    ],
+    "RES-008.do.3": [
+     18,
+     1620
+    ],
+    "RES-008.do.4": [
+     25,
+     2425
+    ],
+    "RES-008.do.6": [
+     22,
+     2068
+    ],
+    "RES-008.do.7": [
+     18,
+     1620
+    ],
+    "RES-011.title": [
+     8,
+     640
+    ],
+    "RES-011.why.1": [
+     13,
+     1105
+    ],
+    "RES-011.why.2": [
+     24,
+     2304
+    ],
+    "RES-011.do.1": [
+     16,
+     1408
+    ],
+    "RES-011.do.2": [
+     12,
+     1008
+    ],
+    "RES-012.title": [
+     5,
+     385
+    ],
+    "RES-012.why.1": [
+     9,
+     729
+    ],
+    "RES-012.why.2": [
+     17,
+     1513
+    ],
+    "RES-012.do.1": [
+     4,
+     304
+    ],
+    "RES-012.do.2": [
+     12,
+     1008
+    ],
+    "RES-012.do.3": [
+     11,
+     913
+    ],
+    "RES-012.do.4": [
+     12,
+     1008
+    ],
+    "RES-013.title": [
+     5,
+     385
+    ],
+    "RES-013.why.1": [
+     9,
+     729
+    ],
+    "RES-013.do.1": [
+     5,
+     385
+    ],
+    "RES-013.do.2": [
+     17,
+     1513
+    ],
+    "RES-013.do.3": [
+     10,
+     820
+    ]
+   },
+   "any": [
+    377,
+    169273
+   ]
+  }
+ },
+ "probes": {
+  "total": 28,
+  "admitted": {
+   "full": 0,
+   "qualifiers": 9,
+   "digits": 26
+  },
+  "rows": [
+   {
+    "cited": [
+     "RES-012.do.1"
+    ],
+    "text": "Exposure is triggered.",
+    "harm": "turns an instruction to check into a statement",
+    "verdict": {
+     "full": "'exposure' is no function word and no word of a cited free sentence",
+     "qualifiers": null,
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-001.do.4"
+    ],
+    "text": "Rerun the experiment.",
+    "harm": "drops the fix, so the same faulty experiment is rerun",
+    "verdict": {
+     "full": "'rerun' is no function word and no word of a cited free sentence",
+     "qualifiers": null,
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-001.do.4"
+    ],
+    "text": "Fix the experiment and rerun the cause.",
+    "harm": "swaps the objects of the two instructions",
+    "verdict": {
+     "full": "'fix' is no function word and no word of a cited free sentence",
+     "qualifiers": null,
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-013.title"
+    ],
+    "text": "The test changed the arm's configuration.",
+    "harm": "adds a cause: the test, not a change made during it",
+    "verdict": {
+     "full": "'test' is no function word and no word of a cited free sentence",
+     "qualifiers": null,
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-002.title"
+    ],
+    "text": "Players are the registered sample size.",
+    "harm": "relates two numbers as equal where the title says fewer",
+    "verdict": {
+     "full": "'player' is no function word and no word of a cited free sentence",
+     "qualifiers": null,
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-001.why.1"
+    ],
+    "text": "Random assignment gives arms of the registered sizes.",
+    "harm": "drops 'up to chance', so the sizes read as exact",
+    "verdict": {
+     "full": "'random' is no function word and no word of a cited free sentence",
+     "qualifiers": null,
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-007.do.1"
+    ],
+    "text": "Read the pooled effect before the table of cohorts in the evidence.",
+    "harm": "reverses the order the advice sets",
+    "verdict": {
+     "full": "'read' is no function word and no word of a cited free sentence",
+     "qualifiers": null,
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-012.title"
+    ],
+    "text": "Players were first exposed and their first purchase was after that.",
+    "harm": "reverses the order of exposure and purchase",
+    "verdict": {
+     "full": "'player' is no function word and no word of a cited free sentence",
+     "qualifiers": null,
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-007.why.1"
+    ],
+    "text": "The pooled effect is an average over players.",
+    "harm": "drops 'first exposed at different times', which is why the average can mislead",
+    "verdict": {
+     "full": "'pooled' is no function word and no word of a cited free sentence",
+     "qualifiers": null,
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-003.title"
+    ],
+    "text": "Ran for the registered minimum duration.",
+    "harm": "drops 'less than', so a short run reads as one that met the minimum",
+    "verdict": {
+     "full": "'ran' is no function word and no word of a cited free sentence",
+     "qualifiers": "'ran' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-013.why.1"
+    ],
+    "text": "The arm is a second treatment.",
+    "harm": "names the arm as the second treatment, where a change inside it is one",
+    "verdict": {
+     "full": "'arm' is no function word and no word of a cited free sentence",
+     "qualifiers": "'arm' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-003.why.1"
+    ],
+    "text": "The run gives effects that cover the weekly cycle.",
+    "harm": "changes what covers the weekly cycle, the effects for the run",
+    "verdict": {
+     "full": "'run' is no function word and no word of a cited free sentence",
+     "qualifiers": "'run' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-001.do.1"
+    ],
+    "text": "Read the effect.",
+    "harm": "reverses a negation: the instruction not to read the effect becomes one to read it",
+    "verdict": {
+     "full": "'read' is no function word and no word of a cited free sentence",
+     "qualifiers": "'read' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-002.do.3"
+    ],
+    "text": "Lower the registered n after seeing the data.",
+    "harm": "reverses a negation",
+    "verdict": {
+     "full": "'lower' is no function word and no word of a cited free sentence",
+     "qualifiers": "'lower' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-004.do.1"
+    ],
+    "text": "Decide on the primary metric alone.",
+    "harm": "reverses a negation",
+    "verdict": {
+     "full": "'decide' is no function word and no word of a cited free sentence",
+     "qualifiers": "'decide' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-001.why.3"
+    ],
+    "text": "The estimate of the effect can be trusted.",
+    "harm": "drops 'no ... until the cause is known', so an untrusted estimate reads as trusted",
+    "verdict": {
+     "full": "'estimate' is no function word and no word of a cited free sentence",
+     "qualifiers": "'estimate' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-012.why.1"
+    ],
+    "text": "A purchase made before the player first saw the change is an effect of it.",
+    "harm": "replaces 'cannot be' with 'is'",
+    "verdict": {
+     "full": "'purchase' is no function word and no word of a cited free sentence",
+     "qualifiers": "'purchase' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-004.why.6"
+    ],
+    "text": "A guardrail within its tolerance is a breach.",
+    "harm": "hardens 'is not a finding' to a breach",
+    "verdict": {
+     "full": "'guardrail' is no function word and no word of a cited free sentence",
+     "qualifiers": "'guardrail' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-004.why.6"
+    ],
+    "text": "The data rule out a breach.",
+    "harm": "softens 'cannot rule out a breach' to a clear guardrail",
+    "verdict": {
+     "full": "'data' is no function word and no word of a cited free sentence",
+     "qualifiers": "'data' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-013.do.2"
+    ],
+    "text": "Pool the versions and read a trend over weeks as novelty.",
+    "harm": "reverses 'do not pool the versions and read a trend as novelty'",
+    "verdict": {
+     "full": "'pool' is no function word and no word of a cited free sentence",
+     "qualifiers": "'pool' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-011.do.2"
+    ],
+    "text": "Decide what to do with those weeks because leaving them out changes the result.",
+    "harm": "turns 'never because' into the reason for the decision",
+    "verdict": {
+     "full": "'decide' is no function word and no word of a cited free sentence",
+     "qualifiers": "'decide' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-002.do.1"
+    ],
+    "text": "Keep the experiment running.",
+    "harm": "drops the stopping condition, every arm at its registered n",
+    "verdict": {
+     "full": "'keep' is no function word and no word of a cited free sentence",
+     "qualifiers": "'keep' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-008.do.3"
+    ],
+    "text": "Call the result significant on one edge of this interval.",
+    "harm": "reverses 'do not call the result significant on one edge'",
+    "verdict": {
+     "full": "'call' is no function word and no word of a cited free sentence",
+     "qualifiers": "'call' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-001.do.3"
+    ],
+    "text": "The mismatch began at a point in time.",
+    "harm": "turns 'shows whether' into a fact about when it began",
+    "verdict": {
+     "full": "'mismatch' is no function word and no word of a cited free sentence",
+     "qualifiers": "'mismatch' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-013.do.3"
+    ],
+    "text": "The versions were randomised.",
+    "harm": "reverses a negation: the versions were not randomised",
+    "verdict": {
+     "full": "'version' is no function word and no word of a cited free sentence",
+     "qualifiers": "'version' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-001.do.4",
+     "RES-001.do.1"
+    ],
+    "text": "Fix the cause and read the effect.",
+    "harm": "joins two sentences into advice to read the effect",
+    "verdict": {
+     "full": "'fix' is no function word and no word of a cited free sentence",
+     "qualifiers": "'read' is no function word and no word of a cited free sentence",
+     "digits": null
+    }
+   },
+   {
+    "cited": [
+     "RES-008.do.1"
+    ],
+    "text": "The interval is wrong in 10 percent of experiments.",
+    "harm": "adds a number the sentence does not give",
+    "verdict": {
+     "full": "holds a digit or a symbol",
+     "qualifiers": "holds a digit or a symbol",
+     "digits": "holds a digit or a symbol"
+    }
+   },
+   {
+    "cited": [
+     "RES-008.why.6"
+    ],
+    "text": "A quiet rule is evidence that the interval is reliable.",
+    "harm": "reverses the negation of a quiet rule, a reassurance",
+    "verdict": {
+     "full": "'quiet' is no function word and no word of a cited free sentence",
+     "qualifiers": "'quiet' is no function word and no word of a cited free sentence",
+     "digits": "'quiet' is no function word and no word of a cited free sentence"
+    }
+   }
+  ]
+ },
+ "row5": "0 of the 81 catalogue sentences contain none of the study's loaded words under its full list and 65 under the digits-only ablation, and the checker admitted 0 of 28 hand-written harmful probes (docs/grounding-study.md)."
+}
