@@ -519,6 +519,7 @@ def test_no_number_of_the_table_or_the_estimate_is_a_negative_zero(
         ci_high=tiny,
         confidence=0.95,
         p_value=0.5,
+        std_error=1.0,
     )
     monkeypatch.setattr(results, "welch_difference", lambda treatment, control: found)
     rows = _revenue_rows(control=CONTROL_REVENUE, variant_b=B_REVENUE, variant_c=C_REVENUE)

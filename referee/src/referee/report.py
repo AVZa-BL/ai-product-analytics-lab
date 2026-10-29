@@ -463,6 +463,45 @@ def _short_arms(report: dict[str, Any], show: Callable[[str], str]) -> tuple[str
     raise ValueError("the effect is underpowered but the report holds no RES-002 finding")
 
 
+def _covariate_sentences(
+    effect: dict[str, Any], show: Callable[[str], str], *, with_detail: bool
+) -> list[str]:
+    """What the registered pre-period covariate did to the effect table (design section 29), or
+    nothing when the spec registers none. The text may quote the reason in full; the memo gives
+    only its code, because the detail holds a column name from the export."""
+    covariate = effect.get("covariate")
+    if covariate is None:
+        return []
+    column = show(covariate["column"])
+    if not covariate["applied"]:
+        detail = f": {covariate['detail']}" if with_detail else ""
+        return [
+            f"The spec registers the pre-period covariate {column}, which could not be used "
+            f"({covariate['reason']}{detail}). Only the unadjusted estimate is shown."
+        ]
+    sentences = [
+        f"The spec registers {column} as a pre-period covariate, so the adjusted estimate "
+        "(CUPED, design section 29) is the registered analysis, and the unadjusted one above "
+        "is shown as the reference. One slope is estimated from the arms together and the "
+        "interval allows for that. The adjustment removes only what the covariate predicts: "
+        "the correlation and the share of variance left are in the second table."
+    ]
+    flagged = covariate["balance_flagged_arms"]
+    if flagged:
+        sentences.append(
+            f"NOT TO BE READ: the covariate's mean differs between control and "
+            f"{_and([show(arm) for arm in flagged])} by more than chance allows (p below "
+            f"{covariate['balance_alpha_per_arm']:.3g}), so it may have been affected by the "
+            "treatment. Do not read the adjusted estimate."
+        )
+    if covariate["metric_family"] == "revenue_like":
+        sentences.append(
+            "The simulated error rates of RES-008 were measured for the unadjusted interval and "
+            "do not carry over to the adjusted one."
+        )
+    return sentences
+
+
 def _effect_sentences(
     effect: dict[str, Any],
     show: Callable[[str], str] = str,
@@ -489,6 +528,7 @@ def _effect_sentences(
             f"{'remediation says' if len(rules) == 1 else 'remediations say'} to settle this "
             f"before the effect is read. These numbers describe the sample and not the effect."
         )
+    sentences += _covariate_sentences(effect, show, with_detail=show is str)
     if short is not None:
         arms, one = short
         advice = (
@@ -530,6 +570,49 @@ def _effect_rows(
 
 
 _EFFECT_COLUMNS = ("arm", "players", "difference", "95% interval", "relative", "p", "adjusted p")
+_ADJUSTED_COLUMNS = (
+    "arm",
+    "adjusted",
+    "95% interval",
+    "relative",
+    "p",
+    "adjusted p",
+    "slope",
+    "correlation",
+    "variance left",
+)
+
+
+def _adjusted_rows(
+    effect: dict[str, Any],
+) -> tuple[list[tuple[str, ...]], list[tuple[str, str]]]:
+    """The second table, one row an arm, when a covariate was applied; (arm, reason) for each arm
+    whose adjusted estimate could not be made."""
+    rows, failed = [], []
+    if not effect.get("covariate", {}).get("applied"):
+        return rows, failed
+    for arm in effect["arms"]:
+        adjusted = arm.get("adjusted")
+        if adjusted is None:
+            continue
+        if "error" in adjusted:
+            failed.append((arm["arm"], adjusted["error"]))
+            continue
+        relative = adjusted["relative_difference"]
+        rows.append(
+            (
+                arm["arm"],
+                f"{adjusted['difference']:+.4g}",
+                f"{adjusted['ci_low']:.4g} to {adjusted['ci_high']:.4g}",
+                "n/a" if relative is None else f"{relative:+.1%}",
+                f"{adjusted['p_value']:.3g}",
+                f"{adjusted['adjusted_p_value']:.3g}",
+                f"{adjusted['slope']:.3g}",
+                f"{adjusted['correlation']:.2f}",
+                f"{adjusted['variance_ratio']:.0%}",
+            )
+        )
+    return rows, failed
 
 
 def _effect_lines(effect: dict[str, Any], short: tuple[str, bool] | None) -> list[str]:
@@ -547,6 +630,18 @@ def _effect_lines(effect: dict[str, Any], short: tuple[str, bool] | None) -> lis
         ]
     for arm, players, error in failed:
         lines += _wrapped(f"{arm} ({players}): not estimated; {error}", "  ", "  ")
+    adjusted, adjusted_failed = _adjusted_rows(effect)
+    if adjusted:
+        table = [_ADJUSTED_COLUMNS]
+        widths = [max(len(row[i]) for row in [*table, *adjusted]) for i in range(9)]
+        lines += ["", "  Adjusted for the pre-period covariate:"]
+        lines += [
+            "  "
+            + "  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip()
+            for row in [*table, *adjusted]
+        ]
+    for arm, error in adjusted_failed:
+        lines += _wrapped(f"{arm}: not adjusted; {error}", "  ", "  ")
     return lines
 
 
@@ -868,6 +963,16 @@ def _observed_lines(report: dict[str, Any], limit: int) -> list[str]:
         lines += ["", *_md_table(_EFFECT_COLUMNS, rows)]
     for arm, players, error in failed:
         lines += ["", f"Arm {_md_code(arm)} ({players}): not estimated; {error}"]
+    adjusted, adjusted_failed = _adjusted_rows(effect)
+    if adjusted:
+        lines += [
+            "",
+            "Adjusted for the pre-period covariate:",
+            "",
+            *_md_table(_ADJUSTED_COLUMNS, adjusted),
+        ]
+    for arm, error in adjusted_failed:
+        lines += ["", f"Arm {_md_code(arm)}: not adjusted; {error}"]
     return lines
 
 
