@@ -1,0 +1,468 @@
+{
+  "report_version": 1,
+  "specwright_version": "0.1.0",
+  "referee_version": "0.1.0",
+  "status": "ok",
+  "documents": [
+    {
+      "name": "08-stated-size-differs.md",
+      "sha256": "bb309f971da8cc9bc4928c181d6a7112694ad0f90a25ed177e2cb3876e1a9897",
+      "bytes": 925
+    }
+  ],
+  "attempts": [
+    {
+      "number": 1,
+      "model": "replay",
+      "usage": null,
+      "parse_problems": [],
+      "problems": [
+        {
+          "code": "RULE:DES-006",
+          "severity": "warning",
+          "path": null,
+          "message": "Interference between units is possible. Randomize at a level that contains the interaction (clusters of players), or set population.interference to none_expected and record why."
+        },
+        {
+          "code": "RULE:DES-008",
+          "severity": "warning",
+          "path": null,
+          "message": "No pre-period covariate declared. Declare design.pre_period_covariate, for example the primary metric measured for each unit before exposure."
+        },
+        {
+          "code": "RULE:HYP-002",
+          "severity": "warning",
+          "path": null,
+          "message": "Primary metric has no governed reference. Define the metric in docs/metrics/ and set primary_metric.governed_reference to that file."
+        },
+        {
+          "code": "RULE:PRO-003",
+          "severity": "warning",
+          "path": null,
+          "message": "No guardrail metrics declared. Declare at least one guardrail with its harmful direction and a tolerance, for example a refund rate that must not rise by more than 10% relative."
+        },
+        {
+          "code": "RULE:DES-009",
+          "severity": "info",
+          "path": null,
+          "message": "The cohort check of the results review would not run on this plan. If an effect that differs between the weeks players joined could matter for this change, plan at least 21 days (42 days or more allows blocks of 14 days, which need fewer players a week), bring in more eligible units each day or give the smaller arm a larger share, keep the arms within 9 to 1, and randomise and analyse in the same independent unit (player, user or device). The evidence gives the units a day that pass with even arrivals; allow more, because arrivals vary (design section 21.6: spiky arrivals need 1.5 to 3 times as much). Otherwise accept that the cohort check will not run: the other results checks are not affected."
+        },
+        {
+          "code": "RULE:PRO-004",
+          "severity": "info",
+          "path": null,
+          "message": "Bucketing salt not declared. Set procedure.bucketing_salt to a value unique to this experiment, for example its id."
+        },
+        {
+          "code": "SIZE_DIFFERS",
+          "severity": "warning",
+          "path": "stated.required_total_players",
+          "message": "the draft states 20000 players; Referee's power plan for these inputs needs 16,412 players. Referee's figure is the one reported"
+        }
+      ],
+      "feedback_sent": []
+    }
+  ],
+  "claims": [
+    {
+      "path": "id",
+      "value": "gloomwood_boss_damage",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "title",
+      "value": "Lower first-dungeon boss damage",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "owner",
+      "value": "dungeon-design",
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "Owner: dungeon-design.",
+        "note": ""
+      }
+    },
+    {
+      "path": "hypothesis.null",
+      "value": "The lower damage does not change how many players clear the first dungeon within 7 days.",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "hypothesis.alternative",
+      "value": "The lower damage makes more players clear the first dungeon",
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "The lower damage makes more players clear the first dungeon",
+        "note": ""
+      }
+    },
+    {
+      "path": "hypothesis.direction",
+      "value": "increase",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.randomization_unit",
+      "value": "player",
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "Assignment is per player, 50/50",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.analysis_unit",
+      "value": "player",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.eligibility",
+      "value": "Existing players who enter the first dungeon.",
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "Existing players.",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.exposure_trigger",
+      "value": "first entry into the dungeon",
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "when a player first enters the dungeon",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.kind",
+      "value": "existing_users",
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "Existing players.",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.daily_eligible_units",
+      "value": 4000,
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "4,000 players enter the dungeon for the first time each day",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[0].name",
+      "value": "control",
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "Control keeps the old damage",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[0].allocation",
+      "value": 0.5,
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "Assignment is per player, 50/50",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[0].is_control",
+      "value": true,
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "Control keeps the old damage",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[1].name",
+      "value": "variant_a",
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "variant_a has the lower damage",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[1].allocation",
+      "value": 0.5,
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "Assignment is per player, 50/50",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[1].is_control",
+      "value": false,
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "primary_metric.name",
+      "value": "dungeon_clear_7d",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "primary_metric.kind",
+      "value": "binary",
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "Dungeon clear rate within 7 days",
+        "note": ""
+      }
+    },
+    {
+      "path": "primary_metric.baseline",
+      "value": 0.35,
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "35% today",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.mde_relative",
+      "value": 0.06,
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "detect a 6% relative lift",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.alpha",
+      "value": 0.05,
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "Alpha 0.05, power 80%, two-sided.",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.power",
+      "value": 0.8,
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "Alpha 0.05, power 80%, two-sided.",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.sided",
+      "value": "two_sided",
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "two-sided",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.planned_duration_days",
+      "value": 14,
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "14 days, and no less than 14 days",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.min_duration_days",
+      "value": 14,
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "no less than 14 days",
+        "note": ""
+      }
+    },
+    {
+      "path": "procedure.stopping_rule",
+      "value": "fixed_horizon",
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "Read once at the end.",
+        "note": ""
+      }
+    },
+    {
+      "path": "procedure.srm_check_cadence",
+      "value": "daily",
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "Check the sample ratio daily.",
+        "note": ""
+      }
+    },
+    {
+      "path": "stated.required_total_players",
+      "value": 20000,
+      "evidence": {
+        "kind": "document",
+        "document": "08-stated-size-differs.md",
+        "quote": "we need 20,000 players in total",
+        "note": ""
+      }
+    }
+  ],
+  "questions": [],
+  "plan": {
+    "required_total": 16412,
+    "required_per_arm": [
+      [
+        "control",
+        8206
+      ],
+      [
+        "variant_a",
+        8206
+      ]
+    ],
+    "required_days": 5,
+    "required_days_whole_weeks": 7,
+    "achievable_total": 56000,
+    "achievable_mde_relative": 0.03238468617371566,
+    "is_powered": true
+  },
+  "review": [
+    {
+      "rule_id": "DES-006",
+      "severity": "warning",
+      "title": "Interference between units is possible"
+    },
+    {
+      "rule_id": "DES-008",
+      "severity": "warning",
+      "title": "No pre-period covariate declared"
+    },
+    {
+      "rule_id": "HYP-002",
+      "severity": "warning",
+      "title": "Primary metric has no governed reference"
+    },
+    {
+      "rule_id": "PRO-003",
+      "severity": "warning",
+      "title": "No guardrail metrics declared"
+    },
+    {
+      "rule_id": "DES-009",
+      "severity": "info",
+      "title": "The cohort check of the results review would not run on this plan"
+    },
+    {
+      "rule_id": "PRO-004",
+      "severity": "info",
+      "title": "Bucketing salt not declared"
+    }
+  ],
+  "spec": {
+    "referee_spec_version": 1,
+    "id": "gloomwood_boss_damage",
+    "title": "Lower first-dungeon boss damage",
+    "owner": "dungeon-design",
+    "hypothesis": {
+      "null": "The lower damage does not change how many players clear the first dungeon within 7 days.",
+      "alternative": "The lower damage makes more players clear the first dungeon",
+      "direction": "increase"
+    },
+    "population": {
+      "randomization_unit": "player",
+      "analysis_unit": "player",
+      "eligibility": "Existing players who enter the first dungeon.",
+      "exposure_trigger": "first entry into the dungeon",
+      "kind": "existing_users",
+      "daily_eligible_units": 4000
+    },
+    "primary_metric": {
+      "name": "dungeon_clear_7d",
+      "kind": "binary",
+      "baseline": 0.35
+    },
+    "design": {
+      "mde_relative": 0.06,
+      "alpha": 0.05,
+      "power": 0.8,
+      "sided": "two_sided",
+      "planned_duration_days": 14,
+      "min_duration_days": 14
+    },
+    "procedure": {
+      "stopping_rule": "fixed_horizon",
+      "srm_check_cadence": "daily"
+    },
+    "arms": [
+      {
+        "name": "control",
+        "allocation": 0.5,
+        "is_control": true
+      },
+      {
+        "name": "variant_a",
+        "allocation": 0.5,
+        "is_control": false
+      }
+    ]
+  },
+  "spec_sha256": "43cb04526ab00135229ae014109a543136061567c56c66fd4c00a40d5f783e8a"
+}

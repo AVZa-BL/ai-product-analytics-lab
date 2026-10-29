@@ -33,6 +33,7 @@ jobs:
       lab: ${{ steps.filter.outputs.lab }}
       referee: ${{ steps.filter.outputs.referee }}
       tracewright: ${{ steps.filter.outputs.tracewright }}
+      specwright: ${{ steps.filter.outputs.specwright }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,23 +44,26 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          lab=false; referee=false; tracewright=false
+          lab=false; referee=false; tracewright=false; specwright=false
           if [ "$EVENT_NAME" != "pull_request" ]; then
-            lab=true; referee=true; tracewright=true
+            lab=true; referee=true; tracewright=true; specwright=true
           else
             files=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
             echo "$files"
             if echo "$files" | grep -q '^\.github/'; then
-              lab=true; referee=true; tracewright=true
+              lab=true; referee=true; tracewright=true; specwright=true
             fi
             if echo "$files" | grep -q '^analytics-lab/'; then lab=true; fi
             if echo "$files" | grep -q '^referee/'; then referee=true; fi
             if echo "$files" | grep -q '^tracewright/'; then tracewright=true; fi
+            # Specwright builds on Referee and Tracewright, so a change to either runs its tests too
+            if echo "$files" | grep -q '^\(specwright\|referee\|tracewright\)/'; then specwright=true; fi
           fi
           {
             echo "lab=$lab"
             echo "referee=$referee"
             echo "tracewright=$tracewright"
+            echo "specwright=$specwright"
           } >> "$GITHUB_OUTPUT"
 
   shared-quality-gate:
@@ -194,6 +198,29 @@ jobs:
           key: uv-${{ runner.os }}-${{ hashFiles('tracewright/pyproject.toml') }}
       - name: Install project
         run: python -m pip install uv && uv pip install --system -e '.[dev]'
+      - name: Lint
+        run: ruff check src tests
+      - name: Test
+        run: python -m pytest -q
+
+  specwright-quality-gate:
+    needs: changes
+    if: needs.changes.outputs.specwright == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: specwright
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: .uv-cache
+          key: uv-${{ runner.os }}-${{ hashFiles('specwright/pyproject.toml', 'referee/pyproject.toml', 'tracewright/pyproject.toml') }}
+      - name: Install projects
+        run: python -m pip install uv && uv pip install --system -e ../referee -e ../tracewright -e '.[dev]'
       - name: Lint
         run: ruff check src tests
       - name: Test

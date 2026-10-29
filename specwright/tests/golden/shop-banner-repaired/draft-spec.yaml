@@ -1,0 +1,47 @@
+# A draft. Every value is the model's reading of the documents: check each one
+# against report.md, and confirm the values it lists as inferred, before registering this.
+referee_spec_version: 1
+id: shop_banner_starter_pack
+title: Starter Pack banner first in the shop
+owner: monetisation-analytics
+hypothesis:
+  'null': Showing the Starter Pack banner first does not change the share of players who buy within 7
+    days of opening the shop.
+  alternative: The Starter Pack banner first makes more players buy within 7 days.
+  direction: increase
+population:
+  randomization_unit: player
+  analysis_unit: player
+  eligibility: Existing players who open the shop.
+  exposure_trigger: first opening of the shop
+  exposure_timing: pre_treatment
+  interference: none_expected
+  kind: existing_users
+  daily_eligible_units: 12000
+primary_metric:
+  name: purchase_conversion_7d
+  kind: binary
+  baseline: 0.042
+design:
+  mde_relative: 0.1
+  alpha: 0.05
+  power: 0.8
+  sided: two_sided
+  planned_duration_days: 21
+  min_duration_days: 14
+procedure:
+  stopping_rule: fixed_horizon
+  srm_check_cadence: daily
+arms:
+- name: control
+  allocation: 0.5
+  is_control: true
+- name: variant_a
+  allocation: 0.5
+  is_control: false
+guardrails:
+- name: day1_retention
+  kind: binary
+  baseline: 0.38
+  harmful_direction: decrease
+  tolerance_relative: 0.05

@@ -1,0 +1,336 @@
+{
+  "report_version": 1,
+  "specwright_version": "0.1.0",
+  "referee_version": "0.1.0",
+  "status": "needs_answers",
+  "documents": [
+    {
+      "name": "03-missing-baseline.md",
+      "sha256": "966642c31ffc6bc801bd18927bad2ab19e3eadb5dc55ac45a72cdb0272a9b9b2",
+      "bytes": 932
+    }
+  ],
+  "attempts": [
+    {
+      "number": 1,
+      "model": "replay",
+      "usage": null,
+      "parse_problems": [],
+      "problems": [],
+      "feedback_sent": []
+    }
+  ],
+  "claims": [
+    {
+      "path": "id",
+      "value": "harbor_tales_tutorial",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "title",
+      "value": "New Harbor Tales tutorial",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "owner",
+      "value": "onboarding",
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "Owner: onboarding.",
+        "note": ""
+      }
+    },
+    {
+      "path": "hypothesis.null",
+      "value": "The new tutorial does not change the share of new players who finish it.",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "hypothesis.alternative",
+      "value": "More new players finish the new tutorial than the old one.",
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "More new players finish the new tutorial than the old one.",
+        "note": ""
+      }
+    },
+    {
+      "path": "hypothesis.direction",
+      "value": "increase",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.randomization_unit",
+      "value": "player",
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "assigned per player at the first launch",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.analysis_unit",
+      "value": "player",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.eligibility",
+      "value": "New players.",
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "New players, assigned per player",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.exposure_trigger",
+      "value": "tutorial screen shown",
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "Exposure is the moment the tutorial screen is",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.exposure_timing",
+      "value": "pre_treatment",
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "which happens before any difference between the arms",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.kind",
+      "value": "new_users",
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "New players, assigned per player",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.daily_eligible_units",
+      "value": 2500,
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "2,500 new players start the",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[0].name",
+      "value": "control",
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "the old tutorial (control)",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[0].allocation",
+      "value": 0.5,
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "50/50 between the old tutorial",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[0].is_control",
+      "value": true,
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "the old tutorial (control)",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[1].name",
+      "value": "variant_a",
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "the new one (variant_a)",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[1].allocation",
+      "value": 0.5,
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "50/50 between the old tutorial",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[1].is_control",
+      "value": false,
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "primary_metric.name",
+      "value": "tutorial_completion",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "primary_metric.kind",
+      "value": "binary",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": "a completion rate"
+      }
+    },
+    {
+      "path": "primary_metric.baseline",
+      "value": null,
+      "evidence": {
+        "kind": "missing",
+        "document": "",
+        "quote": "",
+        "note": "What share of new players finish the old tutorial today? The brief says it has never been measured: a baseline from any earlier cohort or a pilot is needed to size the test."
+      }
+    },
+    {
+      "path": "design.mde_relative",
+      "value": 0.08,
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "improve it by 8% relative",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.alpha",
+      "value": 0.05,
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "Alpha 0.05, power 80%, two-sided.",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.power",
+      "value": 0.8,
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "Alpha 0.05, power 80%, two-sided.",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.sided",
+      "value": "two_sided",
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "two-sided",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.planned_duration_days",
+      "value": 14,
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "We plan 14 days",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.min_duration_days",
+      "value": 7,
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "would not stop before 7",
+        "note": ""
+      }
+    },
+    {
+      "path": "procedure.stopping_rule",
+      "value": "fixed_horizon",
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "Read once at the end of the test.",
+        "note": ""
+      }
+    },
+    {
+      "path": "procedure.srm_check_cadence",
+      "value": "daily",
+      "evidence": {
+        "kind": "document",
+        "document": "03-missing-baseline.md",
+        "quote": "Check the sample ratio daily.",
+        "note": ""
+      }
+    }
+  ],
+  "questions": [
+    {
+      "path": "primary_metric.baseline",
+      "kind": "missing",
+      "note": "What share of new players finish the old tutorial today? The brief says it has never been measured: a baseline from any earlier cohort or a pilot is needed to size the test."
+    }
+  ],
+  "plan": null,
+  "review": null,
+  "spec": null,
+  "spec_sha256": null
+}

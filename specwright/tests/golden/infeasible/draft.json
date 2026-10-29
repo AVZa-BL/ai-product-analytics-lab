@@ -1,0 +1,474 @@
+{
+  "report_version": 1,
+  "specwright_version": "0.1.0",
+  "referee_version": "0.1.0",
+  "status": "infeasible",
+  "documents": [
+    {
+      "name": "02-infeasible-niche-event.md",
+      "sha256": "0520c79e3ed0a48e2d62be546197956fb5b83ea720d22d17d3ddb76581fbd32c",
+      "bytes": 1069
+    }
+  ],
+  "attempts": [
+    {
+      "number": 1,
+      "model": "replay",
+      "usage": null,
+      "parse_problems": [],
+      "problems": [
+        {
+          "code": "RULE:DES-001",
+          "severity": "blocker",
+          "path": null,
+          "message": "Design cannot reach the planned power. Run for the required days, bring in more eligible units, accept the larger minimum detectable effect the evidence reports, or choose a target effect that can exist."
+        },
+        {
+          "code": "RULE:DES-008",
+          "severity": "warning",
+          "path": null,
+          "message": "No pre-period covariate declared. Declare design.pre_period_covariate, for example the primary metric measured for each unit before exposure."
+        },
+        {
+          "code": "RULE:HYP-002",
+          "severity": "warning",
+          "path": null,
+          "message": "Primary metric has no governed reference. Define the metric in docs/metrics/ and set primary_metric.governed_reference to that file."
+        },
+        {
+          "code": "RULE:PRO-003",
+          "severity": "warning",
+          "path": null,
+          "message": "No guardrail metrics declared. Declare at least one guardrail with its harmful direction and a tolerance, for example a refund rate that must not rise by more than 10% relative."
+        },
+        {
+          "code": "RULE:DES-009",
+          "severity": "info",
+          "path": null,
+          "message": "The cohort check of the results review would not run on this plan. If an effect that differs between the weeks players joined could matter for this change, plan at least 21 days (42 days or more allows blocks of 14 days, which need fewer players a week), bring in more eligible units each day or give the smaller arm a larger share, keep the arms within 9 to 1, and randomise and analyse in the same independent unit (player, user or device). The evidence gives the units a day that pass with even arrivals; allow more, because arrivals vary (design section 21.6: spiky arrivals need 1.5 to 3 times as much). Otherwise accept that the cohort check will not run: the other results checks are not affected."
+        },
+        {
+          "code": "RULE:PRO-004",
+          "severity": "info",
+          "path": null,
+          "message": "Bucketing salt not declared. Set procedure.bucketing_salt to a value unique to this experiment, for example its id."
+        }
+      ],
+      "feedback_sent": []
+    }
+  ],
+  "claims": [
+    {
+      "path": "id",
+      "value": "lantern_festival_reward",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "title",
+      "value": "Larger Lantern Festival reward for guild leaders",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "owner",
+      "value": "community-design",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Owner: community-design.",
+        "note": ""
+      }
+    },
+    {
+      "path": "hypothesis.null",
+      "value": "A larger reward does not change how many guild leaders complete the event.",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "hypothesis.alternative",
+      "value": "A larger reward makes more guild leaders complete the event.",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "A larger reward makes more guild leaders complete the event.",
+        "note": ""
+      }
+    },
+    {
+      "path": "hypothesis.direction",
+      "value": "increase",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.randomization_unit",
+      "value": "player",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Assignment is per player, 50/50",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.analysis_unit",
+      "value": "player",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.eligibility",
+      "value": "Guild leaders who open the event page.",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Guild leaders who open the event page.",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.exposure_trigger",
+      "value": "first opening of the event page",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "when they first open the page",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.exposure_timing",
+      "value": "pre_treatment",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "before they see the reward",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.interference",
+      "value": "none_expected",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Guild leaders in different guilds do not interact.",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.kind",
+      "value": "existing_users",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Guild leaders who open the event page.",
+        "note": ""
+      }
+    },
+    {
+      "path": "population.daily_eligible_units",
+      "value": 300,
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "300 guild leaders open it each day",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[0].name",
+      "value": "control",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Control: today's reward.",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[0].allocation",
+      "value": 0.5,
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Assignment is per player, 50/50",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[0].is_control",
+      "value": true,
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Control: today's reward.",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[1].name",
+      "value": "variant_a",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "between control and variant_a",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[1].allocation",
+      "value": 0.5,
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Assignment is per player, 50/50",
+        "note": ""
+      }
+    },
+    {
+      "path": "arms[1].is_control",
+      "value": false,
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "primary_metric.name",
+      "value": "event_completion_7d",
+      "evidence": {
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": ""
+      }
+    },
+    {
+      "path": "primary_metric.kind",
+      "value": "binary",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Event completion within 7 days of opening the page",
+        "note": ""
+      }
+    },
+    {
+      "path": "primary_metric.baseline",
+      "value": 0.02,
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "2% today",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.mde_relative",
+      "value": 0.05,
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "detect a 5% relative improvement",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.alpha",
+      "value": 0.05,
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Alpha 0.05, power 80%, two-sided.",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.power",
+      "value": 0.8,
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Alpha 0.05, power 80%, two-sided.",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.sided",
+      "value": "two_sided",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "two-sided",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.planned_duration_days",
+      "value": 14,
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "those 14 days, and no less than 7 days",
+        "note": ""
+      }
+    },
+    {
+      "path": "design.min_duration_days",
+      "value": 7,
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "no less than 7 days",
+        "note": ""
+      }
+    },
+    {
+      "path": "procedure.stopping_rule",
+      "value": "fixed_horizon",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Read once at the end.",
+        "note": ""
+      }
+    },
+    {
+      "path": "procedure.srm_check_cadence",
+      "value": "daily",
+      "evidence": {
+        "kind": "document",
+        "document": "02-infeasible-niche-event.md",
+        "quote": "Check the sample ratio every day.",
+        "note": ""
+      }
+    }
+  ],
+  "questions": [],
+  "plan": {
+    "required_total": 630412,
+    "required_per_arm": [
+      [
+        "control",
+        315206
+      ],
+      [
+        "variant_a",
+        315206
+      ]
+    ],
+    "required_days": 2102,
+    "required_days_whole_weeks": 2107,
+    "achievable_total": 4200,
+    "achievable_mde_relative": 0.7005489790252035,
+    "is_powered": false
+  },
+  "review": [
+    {
+      "rule_id": "DES-001",
+      "severity": "blocker",
+      "title": "Design cannot reach the planned power"
+    },
+    {
+      "rule_id": "DES-008",
+      "severity": "warning",
+      "title": "No pre-period covariate declared"
+    },
+    {
+      "rule_id": "HYP-002",
+      "severity": "warning",
+      "title": "Primary metric has no governed reference"
+    },
+    {
+      "rule_id": "PRO-003",
+      "severity": "warning",
+      "title": "No guardrail metrics declared"
+    },
+    {
+      "rule_id": "DES-009",
+      "severity": "info",
+      "title": "The cohort check of the results review would not run on this plan"
+    },
+    {
+      "rule_id": "PRO-004",
+      "severity": "info",
+      "title": "Bucketing salt not declared"
+    }
+  ],
+  "spec": {
+    "referee_spec_version": 1,
+    "id": "lantern_festival_reward",
+    "title": "Larger Lantern Festival reward for guild leaders",
+    "owner": "community-design",
+    "hypothesis": {
+      "null": "A larger reward does not change how many guild leaders complete the event.",
+      "alternative": "A larger reward makes more guild leaders complete the event.",
+      "direction": "increase"
+    },
+    "population": {
+      "randomization_unit": "player",
+      "analysis_unit": "player",
+      "eligibility": "Guild leaders who open the event page.",
+      "exposure_trigger": "first opening of the event page",
+      "exposure_timing": "pre_treatment",
+      "interference": "none_expected",
+      "kind": "existing_users",
+      "daily_eligible_units": 300
+    },
+    "primary_metric": {
+      "name": "event_completion_7d",
+      "kind": "binary",
+      "baseline": 0.02
+    },
+    "design": {
+      "mde_relative": 0.05,
+      "alpha": 0.05,
+      "power": 0.8,
+      "sided": "two_sided",
+      "planned_duration_days": 14,
+      "min_duration_days": 7
+    },
+    "procedure": {
+      "stopping_rule": "fixed_horizon",
+      "srm_check_cadence": "daily"
+    },
+    "arms": [
+      {
+        "name": "control",
+        "allocation": 0.5,
+        "is_control": true
+      },
+      {
+        "name": "variant_a",
+        "allocation": 0.5,
+        "is_control": false
+      }
+    ]
+  },
+  "spec_sha256": "2e04447e06593ca7b31582a2c2450553fb813e9082509409a79e8569e417297d"
+}
