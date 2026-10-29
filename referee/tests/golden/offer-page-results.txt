@@ -465,14 +465,20 @@ UNDERPOWERED: RES-002 blocks this review, control (926 analysed, 2,107 required)
     Why it matters:
       A purchase made before the player first saw the change cannot be an effect of it.
       These players are left out of the effect analysis, but they are in the arms, so a
-      different share of the exposed players being late in different arms means the
+      different share of the players who bought being late in different arms means the
       change reached the arms differently. It is the results-time counterpart of
-      DES-007.
+      DES-007. The share of all exposed players is not the test, because it is the
+      purchase rate times the late share of those who bought, so an arm in which the
+      change makes players buy more shows more late players whatever the exposure did;
+      the evidence gives it, and the seconds from assignment to first exposure in each
+      arm, as description only.
     What to do:
       Check how exposure is triggered. If it can follow a purchase, say so in the design
       and analyse from first exposure. Compare the estimates with and without these
       players in the evidence, and say which one the conclusion rests on. If the late
-      share differs between arms, find out why before reading the effect.
+      share of the purchasers differs between arms, find out why before reading the
+      effect; if only the delay to first exposure differs, check the exposure trigger of
+      each arm.
     References:
       - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge
         University Press, 2020.
@@ -499,6 +505,27 @@ UNDERPOWERED: RES-002 blocks this review, control (926 analysed, 2,107 required)
         alpha: 0.001
         method: exact
         smallest_expected: 54.76
+      purchasers:
+        control: 195
+        variant_b: 224
+        variant_c: 140
+      late_share_of_purchasers:
+        control: 0.3641
+        variant_b: 0.3438
+        variant_c: 0.3571
+      purchaser_homogeneity:
+        chi_square: 0.1958
+        degrees_of_freedom: 2
+        p_value: 0.905353
+        alpha: 0.001
+        method: exact
+        smallest_expected: 49.59
+      exposure_delay:
+        median_seconds:
+          control: 268
+          variant_b: 251.5
+          variant_c: 263
+        kruskal_wallis_p_value: 0.344474
       estimate:
         metric: revenue_usd_7d
         by_arm:

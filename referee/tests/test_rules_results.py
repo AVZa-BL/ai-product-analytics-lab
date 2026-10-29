@@ -251,13 +251,21 @@ SESSIONS = {
 }
 
 
-def _late_rows(control_late: int, variant_late: int, *, exposed: int = 5000) -> list:
-    """Two arms of `exposed` players, each with the given number of late-exposed ones."""
+BOUGHT = {"purchases": 1, "first_purchase_at": at(0, 10)}  # exposed first (5 minutes in)
+
+
+def _late_rows(
+    control_late: int, variant_late: int, *, exposed: int = 5000, buyers: int = 300
+) -> list:
+    """Two arms of `exposed` players, each with the given number of late-exposed ones and
+    `buyers` more who bought after they were exposed."""
     return [
-        *crowd("control", exposed - control_late, prefix="c"),
+        *crowd("control", exposed - control_late - buyers, prefix="c"),
         *crowd("control", control_late, prefix="cl", **LATE),
-        *crowd("variant_b", exposed - variant_late, prefix="v"),
+        *crowd("control", buyers, prefix="cb", **BOUGHT),
+        *crowd("variant_b", exposed - variant_late - buyers, prefix="v"),
         *crowd("variant_b", variant_late, prefix="vl", **LATE),
+        *crowd("variant_b", buyers, prefix="vb", **BOUGHT),
     ]
 
 
@@ -267,18 +275,19 @@ def _res_012(raw_spec, rows, **changes):
 
 @pytest.mark.parametrize(
     ("variant_late", "severity"),
-    [(270, "blocker")],
-    ids=["p-0.00094"],
+    [(300, "blocker")],
+    ids=["p-0.00091"],
 )
-def test_res_012_becomes_a_blocker_when_the_late_share_differs_between_arms(
+def test_res_012_becomes_a_blocker_when_the_late_share_of_the_purchasers_differs_between_arms(
     raw_spec, variant_late: int, severity: str
 ) -> None:
     finding = _res_012(raw_spec, _late_rows(200, variant_late))
 
     assert finding is not None and finding.severity == severity
-    expected = homogeneity_test([200, variant_late], [5000, 5000])
+    expected = homogeneity_test([200, variant_late], [500, variant_late + 300])
     assert expected.method == "chi_square"  # every expected count is far above 100
-    assert finding.evidence["homogeneity"] == {
+    assert finding.evidence["late_share_of_purchasers"] == {"control": 0.4, "variant_b": 0.5}
+    assert finding.evidence["purchaser_homogeneity"] == {
         "chi_square": round(expected.chi_square, 4),
         "degrees_of_freedom": 1,
         "p_value": expected.p_value,
@@ -286,6 +295,45 @@ def test_res_012_becomes_a_blocker_when_the_late_share_differs_between_arms(
         "method": "chi_square",
         "smallest_expected": round(expected.smallest_expected, 2),
     }
+
+
+def test_res_012_does_not_block_when_only_the_purchase_rate_differs(raw_spec) -> None:
+    """Both arms are late for 40% of their purchasers, but one arm buys half as often again, so
+    the late share of all its exposed players is 6% against 4% (p = 4e-6, design section 25)."""
+    rows = [
+        *crowd("control", 4500, prefix="c"),
+        *crowd("control", 200, prefix="cl", **LATE),
+        *crowd("control", 300, prefix="cb", **BOUGHT),
+        *crowd("variant_b", 4250, prefix="v"),
+        *crowd("variant_b", 300, prefix="vl", **LATE),
+        *crowd("variant_b", 450, prefix="vb", **BOUGHT),
+    ]
+
+    finding = _res_012(raw_spec, rows)
+
+    assert finding is not None and finding.severity == "warning"
+    assert finding.evidence["homogeneity"]["p_value"] < 0.001
+    assert finding.evidence["purchaser_homogeneity"]["p_value"] == 1.0
+
+
+def test_res_012_reports_a_difference_in_exposure_delay_and_does_not_block_on_it(raw_spec) -> None:
+    slow = {"exposed_at": at(0, 2)}  # two hours after the assignment, the other arm's is 5 minutes
+    rows = [
+        *crowd("control", 300, prefix="c"),
+        *crowd("control", 20, prefix="cl", **LATE),
+        *crowd("control", 30, prefix="cb", **BOUGHT),
+        *crowd("variant_b", 300, prefix="v", **slow),
+        *crowd("variant_b", 20, prefix="vl", **LATE),
+        *crowd("variant_b", 30, prefix="vb", **BOUGHT, **slow),
+    ]
+
+    finding = _res_012(raw_spec, rows)
+
+    assert finding is not None and finding.severity == "warning"
+    delay = finding.evidence["exposure_delay"]
+    assert delay["median_seconds"] == {"control": 300.0, "variant_b": 7200.0}
+    assert delay["kruskal_wallis_p_value"] < 0.001
+    assert finding.evidence["purchaser_homogeneity"]["p_value"] == 1.0
 
 
 @pytest.mark.parametrize(("p_value", "severity"), [(0.001, "warning")], ids=["at"])

@@ -403,6 +403,30 @@ ALLOWLIST: dict[str, dict[str, Admitted]] = {
         "homogeneity.alpha": Admitted("significance level for the late shares", "probability"),
         "homogeneity.method": Admitted("test used", words=_TEST),
         "homogeneity.smallest_expected": Admitted("smallest expected count", "players"),
+        "purchasers.*": Admitted("exposed players who bought, by arm", "players"),
+        "late_share_of_purchasers.*": Admitted(
+            "share of the exposed players who bought that were exposed late", "share"
+        ),
+        "purchaser_homogeneity.chi_square": Admitted(
+            "chi-squared statistic of the late shares of the purchasers"
+        ),
+        "purchaser_homogeneity.degrees_of_freedom": Admitted(
+            "degrees of freedom of the late shares of the purchasers"
+        ),
+        "purchaser_homogeneity.p_value": Admitted(
+            "p value of the late shares of the purchasers across arms", "probability"
+        ),
+        "purchaser_homogeneity.alpha": Admitted(
+            "significance level for the late shares of the purchasers", "probability"
+        ),
+        "purchaser_homogeneity.method": Admitted("test used", words=_TEST),
+        "purchaser_homogeneity.smallest_expected": Admitted("smallest expected count", "players"),
+        "exposure_delay.median_seconds.*": Admitted(
+            "median seconds from assignment to first exposure", "seconds"
+        ),
+        "exposure_delay.kruskal_wallis_p_value": Admitted(
+            "p value of the difference in delay to first exposure across arms", "probability"
+        ),
     },
     "RES-013": {
         "version_from.exposure": Admitted(

@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-28
 **Status:** Approved design (Alexander Zatey), pending implementation plan
-**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. 2 (2026-09-30): milestone 2 decisions, see section 17. 3 (2026-10-02): milestone 2c decisions, see section 18. 4 (2026-10-04): milestone 3 decisions, see section 19. 5 (2026-10-05): milestone 4 decisions, see section 20. 6 (2026-10-08): milestone 4b decisions, see section 21. 7 (2026-10-22): milestone 4c decisions, see section 22. 8 (2026-10-24): milestone 4c-3 decisions, see section 23. 9 (2026-10-29): milestone 5 decisions, see section 24. 10 (2026-10-28): the rules at repeated looks, measured, see section 25. Sections 0 to 15 are unchanged.
+**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. 2 (2026-09-30): milestone 2 decisions, see section 17. 3 (2026-10-02): milestone 2c decisions, see section 18. 4 (2026-10-04): milestone 3 decisions, see section 19. 5 (2026-10-05): milestone 4 decisions, see section 20. 6 (2026-10-08): milestone 4b decisions, see section 21. 7 (2026-10-22): milestone 4c decisions, see section 22. 8 (2026-10-24): milestone 4c-3 decisions, see section 23. 9 (2026-10-29): milestone 5 decisions, see section 24. 10 (2026-10-28): the rules at repeated looks, measured, see section 25. 11 (2026-10-29): RES-012 escalates on the purchasers, see section 26. Sections 0 to 15 are unchanged.
 **Scope:** New module inside `ai-product-analytics-lab`; first milestone is the experiment spec schema
 
 This document is the handoff from the design conversation into Claude Code. It is self-contained: nothing outside this file and the repository is needed to start.
@@ -1001,3 +1001,16 @@ Decided (owner, 2026-10-28), not yet built:
 - In a monitor (interim) run a guardrail is shown as `attention`, with its interval and the number of players, and never as a stop, until an explicit error budget over the looks exists.
 
 Not verified: independence of the guardrails (the figures for several are the product of one), unequal arms, a baseline that no longer describes the traffic, other generators, real data. The studies' scripts need the lab installed beside Referee; Referee does not.
+
+
+## 26. Amendment 11: RES-012 escalates on the late share of the purchasers (2026-10-29)
+
+Built from the decision recorded in section 25; where it disagrees with 20.4, 21.4 or 21.9 on what makes RES-012 a blocker, it wins.
+
+- The test. RES-012 still fires as a warning when any assigned player was first exposed after their first purchase. It now becomes a blocker when the share of the exposed players who bought (first purchase in the seven-day window, before or after the exposure) that were exposed late differs between the arms: the chi-squared test of homogeneity across the arms (exact below an expected count of 100), p below 0.001, as before. Before, it was the share of all exposed players; that is the purchase rate times the late share of the buyers, so an arm in which the change makes players buy more was escalated for it (section 25: 5% of planted seeds at day 10 against 0.1% nominal, none of the A/A seeds).
+- Evidence. The old keys are unchanged, and `homogeneity` (all exposed players) stays as description. New: `purchasers` (exposed players with a first purchase, by arm), `late_share_of_purchasers`, `purchaser_homogeneity` (the same fields as `homogeneity`; the escalation reads this one) and `exposure_delay` (the median seconds from assignment to first exposure in each arm, and the Kruskal-Wallis p value of the difference, null when every delay is the same). The delay is never an escalation: any difference flags it, an hour included (section 25). All of them are admitted to the narration fact list (`narration/facts.py`), because a page that quoted `homogeneity` beside a blocker decided by another test would misstate the reason; the pinned counts of `tests/test_narration_facts.py` moved with them (82 catalogue sentences, 77 facts on the golden).
+- Power, stated in the rule's text. In the simulation of section 25 (the lab's experiment, the exposures of one arm delayed by 24 hours), the escalation fired in 4% of seeds at 10 days and 22% at 21 days, and the old rule in 2% and 10%. An escalation is strong evidence; its absence is not evidence that the arms were exposed alike.
+- Measured on the committed export (golden): late share of the buyers 36.4%, 34.4% and 35.7%, p = 0.91; the delay medians 268, 252 and 263 seconds, p = 0.34. The golden files (`.json`, `.md`, `.txt`) were regenerated and changed only in RES-012's finding.
+- Tests: a case where only the purchase rate differs (late share of all exposed players 4% against 6%, p = 4e-6, stays a warning); a case where the late share of the buyers differs (blocker, p = 0.00091); a delay difference of two hours that does not escalate.
+
+Not verified: other generators, real data, a threshold of size for the delay, and power at larger samples (it grows with the late players, 30 to 50 in the lab's experiment).
