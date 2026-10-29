@@ -1,4 +1,4 @@
-"""Late exposure (RES-012) and the sample-ratio onset in the lab's experiment (design section 24).
+"""Late exposure (RES-012) and the sample-ratio onset in the lab's experiment (design section 25).
 
 Per seed, with the lab's generator at the 5,000-player scale:
 

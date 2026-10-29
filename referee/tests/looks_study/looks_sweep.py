@@ -1,4 +1,4 @@
-"""Which rules block an interim review of the lab's experiment, planted and A/A (design section 24).
+"""Which rules block an interim review of the lab's experiment, planted and A/A (design section 25).
 
 For each seed the lab's generator makes the 5,000-player offer-page experiment. Two variants are
 read at 2, 3, 5, 7, 10, 14 and 21 days after the first assignment: `orig`, as generated (with its

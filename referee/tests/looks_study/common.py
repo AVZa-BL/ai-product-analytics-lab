@@ -1,4 +1,4 @@
-"""Shared pieces of the repeated-looks studies (design section 24).
+"""Shared pieces of the repeated-looks studies (design section 25).
 
 These scripts are studies, not tests: pytest does not collect them. They need the analytics lab's
 generator (`pip install -e ../analytics-lab`, which brings DuckDB) next to Referee, because they

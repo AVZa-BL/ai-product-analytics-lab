@@ -1,5 +1,5 @@
 """How often RES-004's guardrail check alarms on A/A data when it is read at several looks
-(design section 24).
+(design section 25).
 
 Three equal arms are drawn from one distribution whose mean is the registered baseline, so
 nothing differs. The samples are nested: the first n players of each arm are what the review sees
