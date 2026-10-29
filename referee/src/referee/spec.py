@@ -26,6 +26,7 @@ ALLOCATION_TOLERANCE = 1e-9
 RandomizationUnit = Literal["player", "user", "device", "session", "cluster"]
 Direction = Literal["increase", "decrease", "two_sided"]
 MetricKind = Literal["binary", "continuous", "ratio"]
+MetricFamily = Literal["revenue_like", "count", "binary", "other"]
 HarmfulDirection = Literal["increase", "decrease"]
 Sidedness = Literal["two_sided", "one_sided"]
 ExposureTiming = Literal["pre_treatment", "post_treatment"]
@@ -36,6 +37,11 @@ StoppingRule = Literal["fixed_horizon", "sequential"]
 SrmCadence = Literal["daily", "weekly", "none"]
 
 _ID_PATTERN = re.compile(r"^[a-z0-9_]+$")
+_COLUMN_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# Columns of the outcomes file that mean something to the loader and cannot hold a metric.
+RESERVED_COLUMNS = frozenset(
+    {"experiment_id", "player_id", "first_purchase_at_utc", "window_end_utc"}
+)
 
 
 class SpecError(ValueError):
@@ -79,10 +85,27 @@ class Arm:
 
 @dataclass(frozen=True, kw_only=True)
 class Metric:
+    """A metric the spec declares. `column` is the column of the outcomes file that holds one
+    value for each player (default: the metric's name); `family` says what the values look like
+    (default: from the kind), and decides which simulated error rates Referee may quote."""
+
     name: str
     kind: MetricKind
     baseline: float
     baseline_std: float | None
+    column: str | None = None
+    family: MetricFamily | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class SecondaryMetric:
+    """A metric the analyst wants watched that is neither the primary metric nor a guardrail:
+    it has no baseline and no tolerance, and is read for its effect only."""
+
+    name: str
+    kind: MetricKind
+    column: str | None = None
+    family: MetricFamily | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -136,6 +159,7 @@ class ExperimentSpec:
     guardrails: tuple[Guardrail, ...]
     design: Design
     procedure: Procedure
+    secondary_metrics: tuple[SecondaryMetric, ...] | None = None  # None: none declared
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> ExperimentSpec:
@@ -166,7 +190,9 @@ class ExperimentSpec:
             guardrails=_guardrails(root),
             design=_design(root.mapping("design")),
             procedure=_procedure(root.mapping("procedure", required=False)),
+            secondary_metrics=_secondary_metrics(root),
         )
+        _reject_reused_metric_names(root, spec)
         root.reject_unknown()
 
         if violations:
@@ -288,6 +314,8 @@ def _read_metric(node: _Node) -> Metric:
         kind=kind,
         baseline=node.number("baseline"),
         baseline_std=node.optional_number("baseline_std"),
+        column=_column(node),
+        family=node.optional_choice("family", get_args(MetricFamily)),
     )
     if node.failed("kind"):
         return metric
@@ -318,6 +346,8 @@ def _primary_metric(node: _Node) -> PrimaryMetric:
         kind=metric.kind,
         baseline=metric.baseline,
         baseline_std=metric.baseline_std,
+        column=metric.column,
+        family=metric.family,
         governed_reference=node.optional_text("governed_reference"),
     )
     node.reject_unknown()
@@ -338,6 +368,8 @@ def _guardrail(node: _Node) -> Guardrail:
         kind=metric.kind,
         baseline=metric.baseline,
         baseline_std=metric.baseline_std,
+        column=metric.column,
+        family=metric.family,
         harmful_direction=node.choice("harmful_direction", get_args(HarmfulDirection)),
         tolerance_relative=node.number("tolerance_relative", gt=0),
     )
@@ -380,8 +412,57 @@ def _procedure(node: _Node) -> Procedure:
     return procedure
 
 
+def _column(node: _Node) -> str | None:
+    """The optional `column` of a metric: a name the outcomes file can hold, not a reserved one."""
+    column = node.optional_text("column")
+    if column is None:
+        return None
+    if not _COLUMN_PATTERN.match(column):
+        node.fail(
+            "column", f"must be a column name (letters, digits and underscores), got {column!r}"
+        )
+    elif column in RESERVED_COLUMNS:
+        node.fail("column", f"{column!r} is a column the loader reads for another purpose")
+    return column
+
+
+def _secondary_metrics(root: _Node) -> tuple[SecondaryMetric, ...] | None:
+    nodes = root.sequence("secondary_metrics", required=False)
+    if not nodes:
+        return None
+    metrics = tuple(_secondary_metric(node) for node in nodes)
+    _reject_duplicate_names(root, "secondary_metrics", nodes, metrics)
+    return metrics
+
+
+def _secondary_metric(node: _Node) -> SecondaryMetric:
+    metric = SecondaryMetric(
+        name=node.text("name"),
+        kind=node.choice("kind", get_args(MetricKind)),
+        column=_column(node),
+        family=node.optional_choice("family", get_args(MetricFamily)),
+    )
+    node.reject_unknown()
+    return metric
+
+
+def _reject_reused_metric_names(root: _Node, spec: ExperimentSpec) -> None:
+    """A metric is declared once: a secondary metric may not repeat the primary metric's name
+    or a guardrail's."""
+    taken = {spec.primary_metric.name, *(g.name for g in spec.guardrails)}
+    for metric in spec.secondary_metrics or ():
+        if metric.name in taken:
+            root.fail(
+                "secondary_metrics",
+                f"{metric.name!r} is already the primary metric or a guardrail",
+            )
+
+
 def _reject_duplicate_names(
-    root: _Node, key: str, nodes: Sequence[_Node], items: Sequence[Arm | Guardrail]
+    root: _Node,
+    key: str,
+    nodes: Sequence[_Node],
+    items: Sequence[Arm | Guardrail | SecondaryMetric],
 ) -> None:
     """Names must differ, and must still differ as a report writes them: the text and memo
     reports key a table by the written form (`for_line`), and the JSON report is ASCII, which

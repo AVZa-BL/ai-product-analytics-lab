@@ -13,14 +13,21 @@ import math
 import statistics
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
-from referee.data import Assignment, ExperimentData, Exposure, Outcome, exposure_time_key
+from referee.data import (
+    BUILT_IN_COLUMNS,
+    Assignment,
+    ExperimentData,
+    Exposure,
+    Outcome,
+    exposure_time_key,
+)
 from referee.methods import StatsError, two_proportion_difference, welch_difference
 from referee.power import PowerError, PowerPlan, plan_power, power_alpha_adjustment
-from referee.spec import ExperimentSpec
+from referee.spec import ExperimentSpec, MetricFamily
 
 DAYS_PER_BLOCK = 7
 _ESTIMATE_DIGITS = 6
@@ -52,6 +59,7 @@ class PlayerRecord:
     first_purchase_at: datetime | None
     window_end: datetime | None
     first_seen_at: datetime | None = None  # None when the export has no such column
+    extra: Mapping[str, float] = field(default_factory=dict)  # the outcome's other numeric columns
 
     @property
     def exposed(self) -> bool:
@@ -93,6 +101,7 @@ class ExportMetric:
     name: str
     kind: Literal["binary", "continuous"]
     value: Callable[[PlayerRecord], float]
+    family: MetricFamily = "other"
 
 
 def _as_float(count: int) -> float:
@@ -120,29 +129,134 @@ def _purchased(player: PlayerRecord) -> float:
     return 1.0 if player.purchases_7d > 0 else 0.0
 
 
+# What kind of values a metric holds decides what Referee has simulated for it. `revenue_like`: an
+# amount of money that most players leave at zero (the family of the pooled-effect study, design
+# section 21.10); `count`: a whole number of events per player (not simulated for the pooled
+# effect); `binary`: 0 or 1; `other`: nothing is known, so no simulated error rate is quoted.
+# The four metrics below are the ones Referee knew before a spec could name its own column (design
+# section 28); they keep their families unless the spec declares another.
 METRICS: Mapping[str, ExportMetric] = {
     metric.name: metric
     for metric in (
-        ExportMetric("sessions_7d", "continuous", _sessions),
-        ExportMetric("purchases_7d", "continuous", _purchases),
-        ExportMetric("revenue_usd_7d", "continuous", _revenue),
-        ExportMetric("purchased_7d", "binary", _purchased),
+        ExportMetric("sessions_7d", "continuous", _sessions, "count"),
+        ExportMetric("purchases_7d", "continuous", _purchases, "count"),
+        ExportMetric("revenue_usd_7d", "continuous", _revenue, "revenue_like"),
+        ExportMetric("purchased_7d", "binary", _purchased, "binary"),
     )
 }
+METRIC_FAMILIES: Mapping[str, MetricFamily] = {name: m.family for name, m in METRICS.items()}
 
 
-MetricFamily = Literal["revenue_like", "count", "binary"]
+@dataclass(frozen=True, slots=True)
+class ColumnValue:
+    """The value of a column of the outcomes file for a player (a class, so that it pickles)."""
 
-# What kind of values each export metric holds, which decides what Referee has simulated for it.
-# `revenue_like`: an amount of money that most players leave at zero (the family of the pooled-
-# effect study, design section 21.10); `count`: a whole number of events per player (not
-# simulated for the pooled effect); `binary`: 0 or 1.
-METRIC_FAMILIES: Mapping[str, MetricFamily] = {
-    "sessions_7d": "count",
-    "purchases_7d": "count",
-    "revenue_usd_7d": "revenue_like",
-    "purchased_7d": "binary",
-}
+    column: str
+
+    def __call__(self, player: PlayerRecord) -> float:
+        return player.extra[self.column]
+
+
+@dataclass(frozen=True, slots=True)
+class MetricResolution:
+    """A metric the spec declares, and whether the export holds it.
+
+    `metric` is None when it cannot be read, and `reason` (one of `REASONS`) and `detail` say
+    why. `role` is `primary`, `guardrail` or `other`; `where` is the metric's place in the spec.
+    """
+
+    role: Literal["primary", "guardrail", "other"]
+    where: str
+    name: str
+    kind: str
+    column: str
+    family: MetricFamily | None
+    metric: ExportMetric | None
+    reason: str | None = None
+    detail: str | None = None
+
+
+REASONS = (
+    "column_missing",
+    "column_not_numeric",
+    "values_not_binary",
+    "kind_mismatch",
+    "kind_unsupported",
+)
+
+
+def resolve_metrics(spec: ExperimentSpec, data: ExperimentData) -> list[MetricResolution]:
+    """Every metric the spec declares (primary, guardrails, secondary), each with the export
+    metric that reads it or the reason it cannot be read (design section 28).
+
+    A metric reads the column named by its `column`, else by its `name`. A column of the
+    outcomes file in which every row holds a finite number is a metric of the spec's kind (a
+    binary one must hold 0 or 1). The four columns Referee knew before (`sessions_7d`,
+    `purchases_7d`, `revenue_usd_7d`, and `purchased_7d`, which is derived from the purchases)
+    keep their fixed kind and their family unless the spec declares one.
+    """
+    declared = [("primary", "primary_metric", spec.primary_metric)]
+    declared += [("guardrail", f"guardrails[{i}]", g) for i, g in enumerate(spec.guardrails)]
+    declared += [
+        ("other", f"secondary_metrics[{i}]", m) for i, m in enumerate(spec.secondary_metrics or ())
+    ]
+    return [_resolve(role, where, m, data) for role, where, m in declared]
+
+
+def _resolve(role: str, where: str, declared: Any, data: ExperimentData) -> MetricResolution:
+    column = declared.column or declared.name
+
+    def unread(reason: str, detail: str) -> MetricResolution:
+        return MetricResolution(
+            role, where, declared.name, declared.kind, column, declared.family, None, reason, detail
+        )
+
+    def read(metric: ExportMetric, family: MetricFamily) -> MetricResolution:
+        chosen = declared.family or family
+        found = replace(metric, name=declared.name, family=chosen)
+        return MetricResolution(role, where, declared.name, declared.kind, column, chosen, found)
+
+    if declared.kind == "ratio":
+        return unread(
+            "kind_unsupported", "a ratio metric needs the delta method, which is not built"
+        )
+    if column in data.non_numeric_columns:
+        return unread(
+            "column_not_numeric",
+            f"column {column!r} holds an empty cell or a value that is not a finite number",
+        )
+    derived = column == "purchased_7d"  # from the purchases, unless the file has such a column
+    holds_it = any(column in o.extra for o in data.outcomes)
+    if column not in BUILT_IN_COLUMNS and (holds_it or not derived):
+        values = [o.extra.get(column) for o in data.outcomes]
+        if not values or any(v is None for v in values):
+            have = sorted({c for o in data.outcomes for c in o.extra})
+            return unread(
+                "column_missing",
+                f"column {column!r} is not in the outcomes file; its numeric columns are: "
+                f"{', '.join(have) or 'none'}; the built-in metrics are: {', '.join(METRICS)}",
+            )
+        if declared.kind == "binary" and any(v not in (0.0, 1.0) for v in values):
+            return unread("values_not_binary", f"column {column!r} holds a value other than 0 or 1")
+        family: MetricFamily = "binary" if declared.kind == "binary" else "other"
+        return read(ExportMetric(declared.name, declared.kind, ColumnValue(column)), family)
+    built_in = METRICS[column]
+    needs = "purchases_7d" if derived else column
+    if data.outcome_columns is not None and needs not in data.outcome_columns:
+        return unread("column_missing", f"column {needs!r} is not in the outcomes file")
+    if declared.kind != built_in.kind:
+        return unread(
+            "kind_mismatch", f"{declared.kind} in the spec, {built_in.kind} in the export"
+        )
+    return read(built_in, built_in.family)
+
+
+def problem_text(resolution: MetricResolution) -> str:
+    """The line a refused review gives for a metric it cannot read."""
+    return (
+        f"{resolution.where}.name: {resolution.name!r} cannot be read ({resolution.reason}): "
+        f"{resolution.detail}"
+    )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -182,7 +296,9 @@ class ResultsContext:
                 f"the export has arms the spec does not list: {unknown} "
                 f"(the spec's arms: {[arm.name for arm in spec.arms]})"
             )
-        metrics = _metrics_of(spec, problems)
+        resolved = resolve_metrics(spec, data)
+        metrics = {r.name: r.metric for r in resolved if r.metric is not None}
+        problems += [problem_text(r) for r in resolved if r.metric is None]
 
         if not data.assignments:
             problems.append("the export has no assignments")
@@ -322,8 +438,9 @@ def window_is_open(player: PlayerRecord, as_of: datetime | None) -> bool:
     return as_of is not None and player.window_closes_at > as_of
 
 
-def effect_table(context: ResultsContext) -> dict[str, Any]:
-    """The primary metric's difference against control for every other arm (design section 22.3).
+def effect_table(context: ResultsContext, metric_name: str | None = None) -> dict[str, Any]:
+    """The primary metric's (or `metric_name`'s) difference against control for every other arm
+    (design section 22.3).
 
     It is read among the analysed players (section 21.3) whose outcome window had closed at the
     time of the export, as RES-004 does: a window still open holds a part of the seven days, and
@@ -339,7 +456,7 @@ def effect_table(context: ResultsContext) -> dict[str, Any]:
     of the effect, and the review's verdict is what says whether the sample can be read.
     """
     spec = context.spec
-    metric = context.metrics[spec.primary_metric.name]
+    metric = context.metrics[metric_name or spec.primary_metric.name]
     values: dict[str, list[float]] = {name: [] for name in context.arm_names}
     left_out = dict.fromkeys(context.arm_names, 0)
     for player in context.analysed:
@@ -490,6 +607,7 @@ def _record(assignment: Assignment, exposure: Exposure | None, outcome: Outcome)
         first_purchase_at=outcome.first_purchase_at,
         window_end=outcome.window_end,
         first_seen_at=assignment.first_seen_at,
+        extra=outcome.extra,
     )
 
 
@@ -579,25 +697,3 @@ def describe_first_seen(summary: dict[str, Any] | None, declared: str | None) ->
     if summary["agrees"]:
         return f"{facts} population.kind is declared as {declared}, and the column agrees."
     return f"{facts} population.kind is declared as {declared}, but the column says {kind}."
-
-
-def _metrics_of(spec: ExperimentSpec, problems: list[str]) -> dict[str, ExportMetric]:
-    """The export metrics for the spec's primary metric and guardrails, or why not."""
-    found: dict[str, ExportMetric] = {}
-    named = [("primary_metric", spec.primary_metric)]
-    named += [(f"guardrails[{i}]", g) for i, g in enumerate(spec.guardrails)]
-    for where, metric in named:
-        export_metric = METRICS.get(metric.name)
-        if export_metric is None:
-            problems.append(
-                f"{where}.name: {metric.name!r} is not a metric the export holds; "
-                f"the registry has: {', '.join(METRICS)}"
-            )
-        elif metric.kind != export_metric.kind:
-            problems.append(
-                f"{where}.kind: {metric.name!r} is {metric.kind} in the spec but "
-                f"{export_metric.kind} in the export"
-            )
-        else:
-            found[metric.name] = export_metric
-    return found

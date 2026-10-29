@@ -1,0 +1,61 @@
+# A spec whose metrics are columns of the analyst's own export (design section 28). The export in
+# this folder has no sessions_7d, purchases_7d or revenue_usd_7d: the primary metric, the guardrail
+# and the secondary metric each name the column that holds them. The CSV files were made with a
+# fixed seed: 100 players an arm, a tutorial completion rate of 0.40 against 0.52.
+#
+#   python -m referee review-results examples/custom-metrics/spec.yaml examples/custom-metrics \
+#       --experiment-id tutorial_test --as-of 2026-03-20T00:00:00Z --mode monitor
+referee_spec_version: 1
+id: tutorial_test
+title: Shorter tutorial
+owner: onboarding
+
+hypothesis:
+  "null": The shorter tutorial does not change the share of new players who finish it.
+  alternative: The shorter tutorial raises the share of new players who finish it.
+  direction: increase
+
+population:
+  randomization_unit: player
+  analysis_unit: player
+  eligibility: New players who start the tutorial.
+  daily_eligible_units: 40
+  exposure_trigger: tutorial_start
+  exposure_timing: pre_treatment
+  interference: none_expected
+  kind: new_users
+
+arms:
+  - {name: control, allocation: 0.5, is_control: true}
+  - {name: variant_a, allocation: 0.5}
+
+primary_metric:
+  name: tutorial_completion
+  kind: binary
+  baseline: 0.4
+  column: tutorial_done # the column of experiment_outcomes.csv that holds 0 or 1 for each player
+
+guardrails:
+  - name: session_minutes
+    kind: continuous
+    baseline: 30
+    baseline_std: 10
+    column: minutes_played
+    harmful_direction: decrease
+    tolerance_relative: 0.10
+
+secondary_metrics:
+  - {name: levels_cleared, kind: continuous, family: count}
+
+design:
+  mde_relative: 0.3
+  alpha: 0.05
+  power: 0.80
+  sided: two_sided
+  planned_duration_days: 14
+  min_duration_days: 7
+
+procedure:
+  stopping_rule: fixed_horizon
+  srm_check_cadence: daily
+  bucketing_salt: tutorial_test_2026_03

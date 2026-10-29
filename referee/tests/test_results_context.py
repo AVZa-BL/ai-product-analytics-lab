@@ -90,11 +90,15 @@ def test_an_arm_the_spec_does_not_list_is_refused(raw_spec) -> None:
 @pytest.mark.parametrize(
     ("name", "kind", "fragment"),
     [
-        ("subscription_conversion_7d", "binary", "is not a metric the export holds"),
-        ("purchased_7d", "continuous", "is continuous in the spec but binary in the export"),
+        ("subscription_conversion_7d", "binary", "cannot be read (column_missing)"),
+        (
+            "purchased_7d",
+            "continuous",
+            "cannot be read (kind_mismatch): continuous in the spec, binary in the export",
+        ),
     ],
 )
-def test_a_primary_metric_the_export_cannot_give_is_refused_with_the_registry(
+def test_a_primary_metric_the_export_cannot_give_is_refused_with_the_reason(
     raw_spec, name: str, kind: str, fragment: str
 ) -> None:
     baseline = {"baseline": 0.05} if kind == "binary" else {"baseline": 4.0, "baseline_std": 2.0}
@@ -107,7 +111,7 @@ def test_a_primary_metric_the_export_cannot_give_is_refused_with_the_registry(
 
     assert len(problems) == 1 and problems[0].startswith("primary_metric.")
     assert fragment in problems[0]
-    if "registry" in fragment or "not a metric" in fragment:
+    if "column_missing" in fragment:
         assert "sessions_7d, purchases_7d, revenue_usd_7d, purchased_7d" in problems[0]
 
 

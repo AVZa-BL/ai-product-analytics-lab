@@ -26,7 +26,7 @@ from referee import __version__
 from referee.data import ExperimentData
 from referee.findings import Finding
 from referee.report import REPORT_VERSION, _as_of, _counts, _finding_dicts, _inert
-from referee.results import METRICS, ResultsContext, effect_table
+from referee.results import ResultsContext, ResultsError, effect_table, resolve_metrics
 from referee.review import review_context
 from referee.rules import RESULTS_RULES
 from referee.rules.guardrails import guardrail_report
@@ -57,45 +57,35 @@ _SEQUENTIAL_LABEL = (
 )
 
 
-def metric_ledger(spec: ExperimentSpec) -> list[dict[str, Any]]:
-    """Every metric the spec declares, with its role and whether the export reader can read it.
-
-    This is the reading by name and kind that `ResultsContext` makes (design section 21.3), so
-    that a metric it would refuse is listed here with the reason instead.
-    """
-    declared = [("primary", spec.primary_metric)] + [("guardrail", g) for g in spec.guardrails]
+def metric_ledger(spec: ExperimentSpec, data: ExperimentData) -> list[dict[str, Any]]:
+    """Every metric the spec declares, with its role, the column that holds it, the family
+    Referee reads it as and whether the export can be read for it (`resolve_metrics`)."""
     ledger = []
-    for role, metric in declared:
-        entry: dict[str, Any] = {"role": role, "name": metric.name, "kind": metric.kind}
-        known = METRICS.get(metric.name)
-        if known is None:
-            entry |= {
-                "evaluated": False,
-                "reason": "not_in_export",
-                "detail": f"the export reader holds only: {', '.join(METRICS)}",
+    for found in resolve_metrics(spec, data):
+        ledger.append(
+            {
+                "role": found.role,
+                "name": found.name,
+                "kind": found.kind,
+                "column": found.column,
+                "family": found.family,
+                "evaluated": found.metric is not None,
+                "reason": found.reason,
+                "detail": found.detail,
             }
-        elif metric.kind == "ratio":
-            entry |= {
-                "evaluated": False,
-                "reason": "kind_unsupported",
-                "detail": "a ratio metric needs the delta method, which is not built",
-            }
-        elif metric.kind != known.kind:
-            entry |= {
-                "evaluated": False,
-                "reason": "kind_mismatch",
-                "detail": f"{metric.kind} in the spec, {known.kind} in the export",
-            }
-        else:
-            entry |= {"evaluated": True, "reason": None, "detail": None}
-        ledger.append(entry)
+        )
     return ledger
 
 
 def readable_spec(spec: ExperimentSpec, ledger: Sequence[dict[str, Any]]) -> ExperimentSpec:
-    """The spec without the guardrails the ledger could not read."""
-    unread = {e["name"] for e in ledger if e["role"] == "guardrail" and not e["evaluated"]}
-    return replace(spec, guardrails=tuple(g for g in spec.guardrails if g.name not in unread))
+    """The spec without the guardrails and secondary metrics the ledger could not read."""
+    unread = {e["name"] for e in ledger if e["role"] != "primary" and not e["evaluated"]}
+    secondary = tuple(m for m in spec.secondary_metrics or () if m.name not in unread)
+    return replace(
+        spec,
+        guardrails=tuple(g for g in spec.guardrails if g.name not in unread),
+        secondary_metrics=secondary or None,
+    )
 
 
 def monitor_rules() -> list:
@@ -157,6 +147,27 @@ def _primary(context: ResultsContext, findings: dict[str, Finding]) -> dict[str,
     }
 
 
+def _secondary(context: ResultsContext) -> list[dict[str, Any]]:
+    """Each secondary metric's difference against control with its interval and no p value."""
+    blocks = []
+    for declared in context.spec.secondary_metrics or ():
+        table = effect_table(context, declared.name)
+        blocks.append(
+            {
+                "metric": declared.name,
+                "kind": table["kind"],
+                "family": context.metrics[declared.name].family,
+                "population": table["population"],
+                "left_out": table["left_out"],
+                "arms": [
+                    {k: v for k, v in row.items() if k not in _P_VALUE_KEYS}
+                    for row in table["arms"]
+                ],
+            }
+        )
+    return blocks
+
+
 def _guardrails(context: ResultsContext) -> list[dict[str, Any]]:
     """Each arm against control on each guardrail, with the stricter reference's tier. A breach,
     shown or possible, is `attention` here and never a stop (design section 27)."""
@@ -188,7 +199,10 @@ def _guardrails(context: ResultsContext) -> list[dict[str, Any]]:
 
 
 def _unevaluated_in_run(
-    ledger: list[dict[str, Any]], primary: dict[str, Any], guardrails: list
+    ledger: list[dict[str, Any]],
+    primary: dict[str, Any],
+    guardrails: list,
+    secondary: list[dict[str, Any]],
 ) -> None:
     """Mark in the ledger the metrics that the export reader holds but the data did not allow:
     `window_not_matured` when every analysed player's outcome window is still open, else
@@ -217,6 +231,11 @@ def _unevaluated_in_run(
             if rows and all(r["tier"] is None for r in rows):
                 reasons = sorted({reason for r in rows for reason in r["reasons"] if reason})
                 unread(entry, "; ".join(reasons))
+        if entry["role"] == "other" and entry["evaluated"]:
+            block = next(b for b in secondary if b["metric"] == entry["name"])
+            if all("error" in row for row in block["arms"]):
+                errors = sorted({row["error"] for row in block["arms"]})
+                unread(entry, "; ".join(errors))
 
 
 def monitor_report(
@@ -227,15 +246,25 @@ def monitor_report(
     as_of_source: str | None,
 ) -> dict[str, Any]:
     """The monitor's report for `spec` and `data`, or `ResultsError` if the data cannot be read
-    against the spec. The primary metric must be one the export reader holds: `metric_ledger`
-    says whether it is, and the command refuses before this is called if it is not."""
-    ledger = metric_ledger(spec)
+    against the spec. The primary metric must be readable (its column must be in the export);
+    without it there is no effect table to build, and the run is refused. Any other declared
+    metric that cannot be read is a ledger line."""
+    ledger = metric_ledger(spec, data)
+    primary_entry = next(e for e in ledger if e["role"] == "primary")
+    if not primary_entry["evaluated"]:
+        raise ResultsError(
+            [
+                f"the primary metric {primary_entry['name']!r} cannot be read "
+                f"({primary_entry['reason']}): {primary_entry['detail']}; the monitor needs it"
+            ]
+        )
     context = ResultsContext.of(readable_spec(spec, ledger), data)
     review = review_context(context, rules=monitor_rules())
     found = {finding.rule_id: finding for finding in review.findings}
     primary = _primary(context, found)
     guardrails = _guardrails(context)
-    _unevaluated_in_run(ledger, primary, guardrails)
+    secondary = _secondary(context)
+    _unevaluated_in_run(ledger, primary, guardrails, secondary)
 
     reasons: list[dict[str, str]] = []
     stop = False
@@ -290,6 +319,7 @@ def monitor_report(
         "progress": _progress(context, found, primary["left_out"]),
         "ledger": ledger,
         "primary_metric": primary,
+        "secondary_metrics": secondary,
         "guardrails": guardrails,
         "rules_run": list(review.rules_run),
         "rules_not_run": dict(_NOT_RUN),
@@ -340,10 +370,11 @@ def render_monitor_text(report: dict[str, Any]) -> str:
                 f"  {arm}: {row['analysed']} analysed ({row['closed_window']} with a closed "
                 f"outcome window) of {row['required']} registered ({row['missing']} missing)"
             )
-    lines += ["", "Metrics declared (role, name, read)"]
+    lines += ["", "Metrics declared (role, name, column, family, read)"]
     for entry in report["ledger"]:
         said = "read" if entry["evaluated"] else f"NOT read: {entry['reason']} - {entry['detail']}"
-        lines.append(f"  {entry['role']:9} {entry['name']}: {said}")
+        family = "" if entry["family"] is None else f", {entry['family']}"
+        lines.append(f"  {entry['role']:9} {entry['name']} ({entry['column']}{family}): {said}")
     primary = report["primary_metric"]
     lines += ["", f"Primary metric {primary['metric']} (so far, {primary['population']})"]
     lines.append("  " + primary["label"])
@@ -357,6 +388,16 @@ def render_monitor_text(report: dict[str, Any]) -> str:
                 f"  {row['arm']}: n {row['n_treatment']} vs {row['n_control']}, difference "
                 f"{row['difference']} [{row['ci_low']}, {row['ci_high']}]"
             )
+    for block in report["secondary_metrics"]:
+        lines += ["", f"Secondary metric {block['metric']} (so far, {block['population']})"]
+        for row in block["arms"]:
+            if "error" in row:
+                lines.append(f"  {row['arm']}: no estimate ({row['error']})")
+            else:
+                lines.append(
+                    f"  {row['arm']}: n {row['n_treatment']} vs {row['n_control']}, difference "
+                    f"{row['difference']} [{row['ci_low']}, {row['ci_high']}]"
+                )
     lines += ["", "Guardrails"]
     if not report["guardrails"]:
         lines.append("  none read")

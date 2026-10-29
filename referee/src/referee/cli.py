@@ -27,11 +27,7 @@ from referee.data import (
 )
 from referee.display import cap_listing, for_line
 from referee.loader import LoadError, load_spec
-from referee.monitor import (
-    metric_ledger,
-    monitor_report,
-    render_monitor_text,
-)
+from referee.monitor import monitor_report, render_monitor_text
 from referee.report import (
     design_report,
     render_json,
@@ -177,6 +173,12 @@ def _review_results(args: argparse.Namespace) -> int:
         return EXIT_UNREADABLE
     if args.mode == "monitor":
         return _monitor_results(args, spec)
+    if spec.secondary_metrics:
+        names = ", ".join(for_line(m.name) for m in spec.secondary_metrics)
+        _complain(
+            f"referee: note: the secondary metrics ({names}) are not analysed in a results "
+            "review; --mode monitor reads them"
+        )
 
     as_of: datetime | None = None
     if args.as_of is not None:
@@ -237,14 +239,6 @@ def _monitor_results(args: argparse.Namespace, spec: ExperimentSpec) -> int:
         except ValueError as problem:
             _complain(f"referee: error: --as-of {problem}")
             return EXIT_UNREADABLE
-    ledger = metric_ledger(spec)
-    primary = next(entry for entry in ledger if entry["role"] == "primary")
-    if not primary["evaluated"]:
-        _complain(
-            f"referee: error: the primary metric {primary['name']!r} cannot be read "
-            f"({primary['reason']}: {primary['detail']}); the monitor needs it"
-        )
-        return EXIT_UNREADABLE
     try:
         if args.experiment_id is None:
             ids = ", ".join(list_experiment_ids(args.data)) or "none"

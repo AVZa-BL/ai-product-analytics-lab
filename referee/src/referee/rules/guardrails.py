@@ -32,7 +32,7 @@ from referee.guardrails import (
     guardrail_tests,
     window_is_open,
 )
-from referee.results import METRIC_FAMILIES, ResultsContext
+from referee.results import ResultsContext
 from referee.rules.text import join_and, percent_exact, percent_near, sig, sig_up
 
 _UNITS = {
@@ -74,13 +74,13 @@ def _reference_evidence(result: ReferenceResult) -> dict[str, Any]:
     return {"evaluated": True, "reason": None, **_harm_evidence(result.harm)}
 
 
-def _entry(test: GuardrailTest) -> dict[str, Any]:
+def _entry(test: GuardrailTest, family: str) -> dict[str, Any]:
     binary = test.kind == "binary"
     return {
         "arm": test.arm,
         "guardrail": test.guardrail,
         "kind": test.kind,
-        "family": METRIC_FAMILIES.get(test.guardrail),
+        "family": family,
         "harmful_direction": test.harmful_direction,
         "tolerance": test.tolerance,
         "baseline": test.baseline,
@@ -527,7 +527,9 @@ def guardrail_report(context: ResultsContext) -> dict[str, Any]:
     The guardrails come in the spec's order and the arms inside each in the spec's order. The
     report has the keys `summary`, `settings`, `tests` and `notes`.
     """
-    entries = [_entry(test) for test in guardrail_tests(context)]
+    entries = [
+        _entry(test, context.metrics[test.guardrail].family) for test in guardrail_tests(context)
+    ]
     settings = _settings(context)
     return {
         "summary": summarise(entries),
