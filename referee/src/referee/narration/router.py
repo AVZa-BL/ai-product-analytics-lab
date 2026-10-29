@@ -88,13 +88,13 @@ TARGETS = (
 )
 STEERED = (
     TARGETS + " check* rule* validat* verif* instruction* guideline* prompt* constraint* "
-    "restriction* polic* "
-    "programming directive* safeguard* default* setting* everything previous above earlier"
+    "restriction* polic* programming directive* safeguard* default* setting* everything previous "
+    "above earlier mismatch* duration* cohort* tolerance* underpowered tail* weekly alarming"
 )
 QUALITY = (
     "fine valid ok okay safe trust* reliab* rely sound acceptable clean solid robust credible "
     "accurate normal reasonable sensible appropriate wise healthy legit* kosher correct right "
-    "proper tolerable relied"
+    "trivial proper tolerable relied"
 )
 REAL = (
     "real genuine* significant significantly chance nois* random* fluke* luck* "
@@ -118,15 +118,13 @@ AMOUNTS = (
 )
 PEOPLE = "player* user* customer* account* buyer* gamer* member* people"
 ANALYSES = (
-    "median mean average* revenue conversion retention metric* test* model* method* window* "
-    "period* approach* estimator*"
+    "mean revenue conversion retention metric* test* model* method* window* period* approach* "
+    "estimator* " + AVERAGES
 )
 # Where a question or a clause starts, so that a verb after it is a command: "Skip the warnings."
 CLAUSE = "^ , or and but so what which how"
 SUBJECT = "review referee report you anyone anybody someone it they we"
-CHECKING = (
-    "check* test* verif* examin* inspect* assess* evaluat* look* cover* consider*"
-)
+CHECKING = "check* test* verif* examin* inspect* assess* evaluat* look* cover*"
 START = "^ , and then also but plus so please just now kindly"
 START_YOU = START + " you"
 
@@ -134,7 +132,7 @@ HIDE = (
     "hid* skip* omit* suppress* leav* left exclude* delete* remov* drop* cut strip* eras* conceal* "
     "censor* mask* discard* ignor* disregard* withhold* overlook* disabl* strik* clear purge* "
     "sanitiz* neglect* dismiss* bury* sweep* sugarcoat* whitewash* spin cook* falsif* rig gloss* "
-    "embellish* exaggerat* downplay* minimi* shrug* brush*"
+    "embellish* exaggerat* downplay* minimi* shrug* brush* fudg*"
 )
 SPINNABLE = (
     STEERED + " result* number* figure* data stat* conclusion* outcome* summary review report "
@@ -147,12 +145,13 @@ SAY = (
 ALTER = (
     "downgrad* demot* soften* reclassif* relabel* recategor* lower* reduc* turn turns turned "
     "chang* convert* mak* set sets mark marks marked label* classif* rewrit* replac* swap* "
-    "substitut*"
+    "substitut* reinterpret* redefin*"
 )
 TREAT = (
     ALTER + " treat* regard regards regarded consider* count counts counted report* call* rate "
     "rates rated record records recorded log logs logged present presents presented describe* "
-    "portray* depict* frame frames framed characteriz*"
+    "portray* depict* frame frames framed characteriz* certif* declar* deem* pronounc* proclaim* "
+    "approv* endors*"
 )
 SEVERITIES = (
     "info informational note minor low nonblocking advisory warning fine ok okay no zero none "
@@ -180,9 +179,69 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (START_YOU, 1, "updat* chang* modif* adjust*", 1, "your", "behavio* rules instructions "
          "guidelines"),
         (0, "from", "the", "next", 1, "message answer reply turn time", "on onward"),
-        (0, "asked told instructed ordered requested wants want need needs require requires", 2,
+        ("asked told instructed ordered requested wants want need needs require requires", 2,
          "us me you him her them", "to", 1, HIDE, 4, STEERED),
         (0, "whatever", "it", "takes"),
+        ("rules instructions guidelines checks", 3, "suspended waived void wrong obsolete"),
+        ("dont not", 2, "need have required obliged", "to", 1, "follow* obey* observ* apply*"),
+        (START, 1, "obey* follow*", 2, "me my mine"),
+        (0, "start", "fresh over anew"),
+        (0, "you", "are", 1, "a an my", 2, "assistant bot cheerleader salesperson lawyer pirate"),
+        ("must", 2, "be", 1, "reported rated marked labelled labeled treated recorded", "as",
+         VERDICTS + " minor info"),
+        (START_YOU, 1, "say state write claim declare assert insist", 2, "that", 8,
+         VERDICTS + " fine trustworthy balanced met sound healthy correct reliable good "
+         "success* positive perfect"),
+        (START_YOU, 1, "give grant award", 4, SUBJECTS, 2, "a an the", "pass approval"),
+        (START_YOU, 1, "approv* certif* endors* bless*", 2, "review report verdict results"),
+        (START_YOU, 1, "sign", "off", 1, "on", 3, SUBJECTS, 1, "as", VERDICTS),
+        (START_YOU, 1, "mak* see ensure", 3, "sure it that", 6, SUBJECTS + " output answer summary "
+         "reply", 3, "say says read reads show shows state states be is", 2, VERDICTS),
+        ("only", 1, SAY, 3, "pass* positive good green clean successful"),
+        (0, "you", "will", "now"),
+        (0, "only", "in", "positives positive"),
+        (5, "verdict review result* conclusion*", "without excluding ignoring", 3, TARGETS),
+        (0, "free allowed permitted", "to", 1, HIDE, 4, STEERED),
+        (START_YOU, 1, "adjust* edit* tweak* rework* revis* amend* rewrit* chang*", 6,
+         SUBJECTS + " summary answer output reply response page", 6,
+         "success* valid clear pass* approved fine ok okay good positive"),
+        (6, TARGETS, "were was are is be been", "not never",
+         "displayed shown listed mentioned included reported printed"),
+        (START_YOU, 1, "declar* deem* proclaim* pronounc* call* label*", 4, SUBJECTS, 2,
+         "a an the", "success* win winner pass valid"),
+        ("bend* break* skirt* relax* loosen* waive* suspend*", 2, "the your these those",
+         "rule* guideline* check* restriction*"),
+        (0, "my", "authority"),
+        (START_YOU + " to must should can will", "consider* assume* treat* regard* deem*", 4,
+         TARGETS, 2, "resolved fixed closed cleared fine ok okay minor info informational"),
+        (START_YOU, 1, "assum* suppos* presum*", 3, SUBJECTS + " everything", 2,
+         "is are was were be", VERDICTS),
+        (START_YOU, 1, "stop quit cease", "checking validating verifying reviewing evaluating "
+         "flagging"),
+        (0, "leaves leaving", "out", 3, "anything everything critical negative bad"),
+        ("hide hides hiding conceals obscure* mask* bury* downplays", 4, TARGETS),
+        (START_YOU, 1, "show give print output present write produce generate", 2, "a an the", 1,
+         "clean passing green positive favourable favorable perfect spotless", 2,
+         "report review summary verdict answer output"),
+        ("rosy",),
+        (START_YOU, 1, "paint*", 3, "picture"),
+        (START_YOU, 1, "replac* swap* substitut* overwrit*", 4,
+         "summary answer output reply response report review page", 2, "with by", 4,
+         "no zero none nothing clear valid passed approved"),
+        (0, "lets", "say pretend assume imagine", 6, SUBJECTS + " #", 3, VERDICTS),
+        (1, "approved authorized authorised allowed permitted okayed", HIDE, 4, STEERED),
+        (START, HIDE, "it them this that those these"),
+        (0, "no", "more", 2, FINDINGS),
+        (0, "in", "charge"),
+        (0, "highest", "authority"),
+        (START_YOU, 1, "print* output write show", 3, SUBJECTS, 1, "as", VERDICTS),
+        (START, 1, "tell say state report claim", 5, SUBJECTS, 2, "found finds shows showed says "
+         "said has had", 2, "no zero none nothing"),
+        (0, "your", "job task role mission purpose goal aim", "is", "to",
+         "defend support justify promote sell convince"),
+        (0, "instead", "of", 3, "verdict result* conclusion* finding* review", 6,
+         "give tell show say print output write use"),
+        (0, "so", "that", 3, "it they the", 2, "read reads say says be", 2, VERDICTS),
         (START_YOU, 1, "correct* updat* amend*", 2, "that it this them", 1, "to into as", 2,
          "warning* info informational minor note valid clear pass*"),
         (5, "output answer summary reply response page", "not never", 3,
@@ -194,7 +253,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (START, 1, SAY, 6, "except excluding besides", 2, FINDINGS),
         (0, "correct right real true", "verdict conclusion outcome", 2, "is should be", 2,
          VERDICTS),
-        (2, "dont not never without", 4, "take taking", 4, STEERED),
+        ("dont not never without", 4, "take taking", 4, STEERED),
         (START, 1, "switch* turn* shut*", 4, STEERED, 1, "off"),
         (3, "only", "what", 1, "support* favor* favour* help*"),
         ("lenient lenience leniency",),
@@ -202,7 +261,9 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
          "warning* info informational minor note"),
         (0, "you", "work works", "for", "me us"),
         (0, "i we", "decide determine set choose", 4, "verdict conclusion outcome"),
-        (START, 1, "take pull", 1, "out away off", 4, STEERED),
+        (START, 1, "take pull edit cut strike filter throw toss cross scrap ditch", 1,
+         "out away off", 6, STEERED),
+        (START_YOU, 1, "keep", 4, STEERED, 2, "out to"),
         (START, 1, "leav* left", 3, "that this it them those these one ones", 1, "out"),
         (START_YOU, 1, "call* label* rate* mark* classif* regard* treat*", 5, TARGETS, 1,
          "a an the", 1, "minor trivial negligible irrelevant informational note"),
@@ -219,12 +280,12 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "from", "now here then", "on onward onwards"),
         (0, "from", "this", "point", 1, "on onward forward"),
         (0, "you youre", "now"),
-        (0, "you", "are", "now"),
+        (0, "you", "are", 4, "now"),
         (0, "imagin*", "youre"),
         (0, "your", "job task role mission purpose goal", 1, "now"),
         (1, "your", "new", 0, "role task job purpose mission"),
         (3, "take assume adopt", "role character identity"),
-        (0, "play", 1, "the a", "role character", "of as"),
+        ("play", 1, "the a", "role character", "of as"),
         (0, "cherry", "pick*"),
         (0, "rubber", "stamp*"),
         (0, "your", "only sole one", "goal job task purpose mission aim"),
@@ -251,7 +312,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
          SAY + " answer respond reply call treat mark label state write"),
         (0, "regardless", "of", 3, "what the report rules checks findings result* data"),
         (0, "no", "matter", "what"),
-        (0, "whatever", 3, "data report rules results review checks"),
+        ("whatever", 3, "data report rules results review checks"),
         # invent, hide or alter a finding or the verdict: commands
         (6, "invent* fabricat* falsif* fak* forg*",
          FINDINGS + " verdict number* figure* result* data estimate*"),
@@ -298,10 +359,10 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (START_YOU, 1, "say tell state claim declare conclude report write print respond answer",
          3, "that", 5, SUBJECTS + " everything all it #", 3, VERDICTS),
         (0, "imagin* suppose", "you youre", 3, "have had are were no without"),
-        (0, "no without", 1, "rules guidelines restrictions instructions constraints limits "
+        ("no without", 1, "rules guidelines restrictions instructions constraints limits "
          "filters safeguards"),
         (START, 1, "replac* swap* substitut* overwrit* cancel* void* nullif*", 4,
-         "finding* verdict warning* block* # list result*"),
+         FINDINGS + " verdict # list result*"),
         # tell Referee what to say, or how to treat a finding
         (START_YOU, 1, TREAT, 8, "to as into", 4,
          SEVERITIES + " success* positive good great healthy valid clean"),
@@ -319,11 +380,11 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
          "no zero none nothing", 2, TARGETS),
         (START, 1, "say tell state claim output print write declar* report* conclude", 4,
          "that there", 6, "no zero none nothing", 4, TARGETS),
-        (0, "asked requested insisted demanded want wants need needs", 2, "that us me you", 8,
+        ("asked requested insisted demanded want wants need needs", 2, "that us me you", 8,
          SUBJECTS + " output answer summary report", 3,
          "show shows say says state states read reads be is has have contain contains", 2,
          "no zero none nothing clear valid passed"),
-        (0, "treat* regard* consider* count* classif* rate* record* log* report* mark* label* "
+        ("treat* regard* consider* count* classif* rate* record* log* report* mark* label* "
             "call*", 4, TARGETS, 1, "as", 2,
          "info informational note minor low nonblocking advisory resolved fixed closed fine ok "
          "okay trivial negligible irrelevant"),
@@ -349,6 +410,10 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (START, 1, "roll rolls rolling", 4, "out"),
         (3, READY, "roll rolls rolling", 4, "out"),
         (0, "go", "with"),
+        (4, "tell ask", "to", 0, LAUNCH),
+        (0, "our my", "pick choice"),
+        (2, "give provide need want", "recommendation*", 2, "on for about", OBJECTS),
+        (3, OBJECTS, "be", "retired scrapped dropped replaced kept"),
         (1, "go", "or", "hold"),
         (0, "the", "call", "on", 2, OBJECTS),
         (0, "go", "ahead", "with"),
@@ -487,6 +552,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "enough", "yet"),
         (2, "is are was", "test experiment trial study", 0, "done"),
         (0, "to", "completion"),
+        (1, "run running", "to", "the", "end"),
         (0, "early", "look read glance"),
         (2, "far", "along enough"),
         (0, "at", "this", "point stage"),
@@ -497,14 +563,17 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "how", "long", 3, "until before must need"),
     ),
     "reassurance": (
-        (8, "confirm* reassur* assur*",
+        ("reassur*",),
+        (0, "assure convince persuade", "me us"),
+        (8, "confirm* assur*",
          QUALITY + " properly correctly wrong problem* issue* worry worried concern* nothing "
          "quality enough small tiny minor"),
         ("surely",),
         (0, ",", "right correct agreed yes yeah no ok okay true fair", 1, "$"),
         (0, "non", "issue"),
-        (0, "as", 1, "noise minor fluke"),
-        (0, "doesnt isnt arent wasnt werent", "it they that this", 1, "$"),
+        ("as", 1, "noise minor fluke"),
+        (0, "doesnt isnt arent wasnt werent shouldnt couldnt wouldnt dont", "it they that this", 1,
+         "$"),
         (0, "cant couldnt shouldnt wont wouldnt dont", "i we you", 1, "$"),
         (0, "i", "assume presume guess suppose hope", 0, ", $"),
         (0, "rest", "easy easier assured"),
@@ -514,7 +583,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "within", "tolerance range limits bounds"),
         (0, "no", "red", "flag flags"),
         (0, "isnt arent", "a", "concern problem issue worry"),
-        (0, "really actually truly", 1, "a an that such", "problem issue concern worry deal"),
+        ("really actually truly", 1, "a an that such", "problem issue concern worry deal"),
         (0, "that so really", "serious bad important critical worrying severe"),
         (0, "serious bad important critical worrying severe big major", "or", 1,
          "just only merely", "noise minor nothing fluke"),
@@ -529,25 +598,36 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "^ , or and but so", "is are was were can could", 8, QUALITY, 0, "!or"),
         ("^", "so then okay basically", 5, "is are was were", 5, QUALITY, 0, "!or"),
         (0, "^ , or and but so", "does do", 2, "look* seem*", 3, QUALITY, 0, "!or"),
-        (0, "wont isnt doesnt arent wasnt dont cant couldnt", 6, ",", 0,
-         "will is does are was do can could", "it they that this he she there", 1, "$"),
         (0, "i im we id",
          "say assume* presum* guess suppos* think believe hope gather understand", 8,
          QUALITY + " minor small tiny"),
         (0, "you youd", "agree* think say consider* believe* deem*", 8, QUALITY),
         (1, "would could can do will", "you", 1, "trust* rely vouch*"),
         (0, "sign", "off", 6, "data results numbers test experiment quality"),
+        (0, "nothing", "to", "see"),
+        (0, "overly over", "cautious"),
+        (0, "dont doesnt", "you", "think agree believe"),
+        ("overreact* overthink* paranoid",),
+        (4, "comfortable confident happy", "relying trusting using rely trust"),
         (2, "nothing",
          "worry wrong broken concern* alarming sleep fret* stress* fix change repair"),
-        (0, "too", "small tiny minor little", 3, "matter ignore worry"),
+        (0, "too", "small tiny minor little mild slight trivial", 3, "matter ignore worry"),
         (0, "no", "impact effect bearing influence", "on", 1,
          "validity results conclusion* data verdict quality"),
-        (0, ",", "should shall do does can could is are was would will", "we i you", 1, "$"),
+        (0, ",", "should shall do does can could is are was would will",
+         "we i you it they that this he she there", 1, "$"),
+        (0, "live", "with"),
+        (0, "amount amounts", "to", "nothing"),
+        (0, "i", "can could may", "trust* rely"),
+        (0, "can could may", "i", "trust* rely"),
+        (0, "in", "good great fine decent", "shape condition"),
+        (0, "^ ,", "agree* concur*", ", $"),
+        (0, "safely", "ignor* disregard* skip* dismiss* overlook*"),
         (0, "count counting", "on", 1, "these those the", "numbers results data figures"),
         (0, "of", "no", "consequence importance concern"),
         ("irrelevant unimportant inconsequential",),
         (2, "worth", "worrying worry bother sleep"),
-        (4, "should shouldnt shall do dont does doesnt need must",
+        (4, "should shouldnt shall do dont does doesnt need must would",
          "worry worried concerned alarmed bothered panic worrying"),
         (2, "stop* quit* cease*", "worrying worry"),
         (0, "to", "worry worrying worried fret*"),
@@ -556,10 +636,13 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (3, "enough small tiny minor safe fine ok okay", "ignor* disregard* dismiss* overlook*"),
         (3, "small tiny minor low little", "enough", 3, "matter"),
         (2, "it they that this", "doesnt dont wont", "matter"),
-        (0, "feel", "confident comfortable reassured safe good okay"),
+        (0, "feel", "confident comfortable safe good okay"),
         (0, "no", "reason", "to", 1, "be", "concerned worried worry alarmed"),
-        (3, "can could may might should shall",
+        (6, "can could may might should shall would",
          "ignor* disregard* dismiss* overlook* brush* shrug* skip*"),
+        ("isnt arent wasnt werent", 4, QUALITY),
+        (0, "really actually truly", "matter matters"),
+        (0, "should", "i we", "be", 0, ", $"),
         ("ignorable negligible harmless benign immaterial",),
         (0, "false", "alarm* positive* alert* flag* warning* signal*"),
         (0, "big", "deal"),
@@ -646,7 +729,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
          "revenue conversion retention spend* arpu sessions rate*", 4, GROUP),
         (START_YOU, 1, "give show tell report print state provide quote read list send quantify", 4,
          "lift* uplift* effect* difference* delta* gain* improvement* number* figure* revenue "
-         "conversion retention spend* arpu sessions mean average* median"),
+         "conversion retention spend* arpu sessions mean " + AVERAGES),
         (START_YOU, 1, "show tell give", 5, "statistics result*", 4, GROUP + " metric* kpi*"),
         (0, "i we id wed", "need want like", 4,
          "lift* uplift* effect* difference* delta* gain* improvement* number* figure*"),
@@ -803,7 +886,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "separately", "for by per each"),
         (0, "per each", "day week hour"),
         (2, "cap capped capping", "revenue spend values value purchases at"),
-        (4, "numbers results estimate* interval* lift effect conclusion* verdict p", 4,
+        ("numbers results estimate* interval* lift effect conclusion* verdict p", 4,
          "change changes differ differs look be", 6, "if"),
         (2, "outlier* extreme*", "removed excluded dropped omitted filtered discarded"),
         (5, "compute calculat* determine", "sample power"),
@@ -818,7 +901,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (4, "exclu* omit* remov* filter* drop* leav* left discard* ignor*",
          "players users days week* data rows cohort* buyers customers spenders everyone anyone "
          "everybody outlier* extreme*"),
-        (2, "different another alternative other",
+        (2, "different another alternative other stricter looser tighter",
          "metric test method window period threshold model analysis approach definition outcome* "
          "kpi* measure* tolerance* alpha level"),
         (4, ANALYSES, "instead rather"),
@@ -845,7 +928,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "table", "of", "assignment* exposure* event* player* user* purchase*"),
         (0, "player user customer account", "list lists"),
         (0, "id identifier*", "of for", 1, PEOPLE),
-        (0, "!rule rules finding findings check checks", "ids"),
+        ("!rule rules finding findings check checks", "ids"),
         ("row* download* csv record records dataset* timestamp* spreadsheet* sql parquet",),
         (0, "player user", "level"),
         (1, "export", "file* folder*"),
@@ -860,7 +943,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
          "digestible diplomatic* politely tactful* gentl* softer kinder nicer polite tweet*",),
         (3, "say put phrase word explain write", "differently"),
         (0, "non", "technical expert*"),
-        (0, "in", 1, "a an", LATER),
+        ("in", 1, "a an", LATER),
         (0, "different", "words wording terms way"),
         (2, "make keep but bit little more much give write say", LATER),
         (1, "keep make be", "it this them that", 1, "short brief concise clear quick"),
@@ -878,7 +961,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         ("analog* metaphor* everyday",),
         (1, "in", "seconds minutes minute"),
         (1, "fewer less", "technical terms words"),
-        (0, "without", 2, "technical statistical statistics stats math",
+        ("without", 2, "technical statistical statistics stats math",
          "terms words language speak lingo"),
         ("rephras* reword* rewrit* paraphras* restat* translat* tone casual* friendl* formal*",),
         ("poem* haiku* limerick* pirate* rhym* funny humor* humour* sarcastic*",),
@@ -915,7 +998,7 @@ INTENT_PATTERNS: dict[str, tuple[Pattern, ...]] = {
          "assess* examin* compar*"),
         (0, "not", "yet", "built"),
         (0, "not", "built"),
-        (0, "there", 1, "a an any", "check* rule* test*"),
+        ("there", 1, "a an any", "check* rule* test*"),
         (3, "which what", "rule* check*", 4, "go went", 0, "through"),
         (4, "check* rule* tests analys* guardrail*", "did do does are", 4, "run ran"),
         (3, "which what", "test", "ran run made perform* execut* conduct*"),
@@ -933,7 +1016,7 @@ INTENT_PATTERNS: dict[str, tuple[Pattern, ...]] = {
         (2, "what", "checked tested covered examined looked evaluated assessed"),
         (3, "what which", "skip omitted missed left"),
         ("which what", 2, "area* aspect* part* thing* kind* type*", 4, CHECKING),
-        (0, "anything something", 4, "didnt hasnt wasnt not never", 2, CHECKING),
+        ("anything something", 4, "didnt hasnt wasnt not never", 2, CHECKING),
         (4, "what which", "look looked", 0, "at into"),
         (8, "was were",
          "checked tested covered examined verified included run ran applied performed done "
@@ -978,9 +1061,9 @@ INTENT_PATTERNS: dict[str, tuple[Pattern, ...]] = {
         ("why explain* mean means meaning matter matters",),
     ),
     "summary": (
-        ("finding* block* warning* overview summar* overall verdict* picture sever* serious* "
-         "problem* issue* wrong rundown gist takeaway* highlight* headline* recap concern* risk* "
-         "critical* urgent*",),
+        (FINDINGS + " overview summar* overall verdict* picture sever* serious* problem* issue* "
+         "wrong rundown gist takeaway* highlight* headline* recap concern* risk* critical* "
+         "urgent*",),
         (3, "review* report* experiment* you",
          "find found say says show shows contain contains conclude concluded flagged raised noted "
          "report reports reported identified raise raises rate rates rating decide decided flag "

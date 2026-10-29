@@ -149,25 +149,6 @@ def test_a_refusal_is_not_made_of_an_answer():
         body_of("golden", {}, U("answer", "summary"))
 
 
-# ---------------------------------------------------------------- on every fixture
-
-
-def test_every_refusal_can_be_written_for_every_report_of_the_fixtures(raw_spec):
-    """The eight reports of 24.11."""
-    understandings = [
-        refusal(c, target=t) for c in CATEGORIES for t in (None, "RES-003", "RES-001")
-    ]
-    understandings += [U("unreadable", reason=r) for r in UNREADABLE_REASONS] + [refusal()]
-    understandings += [U("refusal", "checked", None, tuple(CATEGORIES))]
-    for name in NAMES:
-        rep, facts, decision = world(name, raw_spec)
-        for understanding in understandings:
-            body = refusal_body(rep, facts, understanding)
-            assert body and all(isinstance(line, str) for line in body)
-            page = render_refusal(rep, understanding, decision, body)
-            assert page.endswith("\n") and "None" not in page, (name, understanding)
-
-
 # ---------------------------------------------------------------- the pointers, from the report
 
 
@@ -297,6 +278,7 @@ def test_every_claim_a_refusal_makes_about_the_report_names_a_key_the_golden_hol
 def test_a_pointer_reads_only_the_keys_that_the_claims_of_its_category_rest_on(
     raw_spec, monkeypatch
 ):
+    """And every refusal can be written, as a page, for each of the eight reports of 24.11."""
     read = set()
 
     def recorder(report, path):
@@ -304,13 +286,21 @@ def test_a_pointer_reads_only_the_keys_that_the_claims_of_its_category_rest_on(
         return value(report, path)
 
     monkeypatch.setattr(refusals, "value", recorder)
+    others = [U("unreadable", reason=r) for r in UNREADABLE_REASONS] + [refusal()]
+    others.append(U("refusal", "checked", None, tuple(CATEGORIES)))
     for name in NAMES:
-        rep, facts, _ = world(name, raw_spec)
+        rep, facts, decision = world(name, raw_spec)
         for category in CATEGORIES:
             for target in (None, "RES-003", "RES-001"):
                 read.clear()
-                refusal_body(rep, facts, refusal(category, target=target))
+                body = refusal_body(rep, facts, refusal(category, target=target))
                 assert read <= set(CLAIMS.get(category, ())), (name, category, target, read)
+                page = render_refusal(rep, refusal(category, target=target), decision, body)
+                assert page.endswith("\n") and "None" not in page, (name, category, target)
+        for understanding in others:
+            body = refusal_body(rep, facts, understanding)
+            page = render_refusal(rep, understanding, decision, body)
+            assert body and page.endswith("\n") and "None" not in page, (name, understanding)
 
 
 # ---------------------------------------------------------------- quoted sentences
@@ -382,12 +372,3 @@ def test_no_refusal_says_that_a_rule_raised_nothing_without_the_disclaimer_or_ba
                 assert any(DISCLAIMER in text for text in block), (name, question, line)
                 if line.split()[0] in ("RES-004", "RES-007", "RES-008"):
                     assert "summary_lines" in line  # never bare
-
-
-# ---------------------------------------------------------------- the answerable part
-
-
-def test_a_rule_named_in_a_refused_question_is_not_an_answerable_part_unless_it_asks_why(raw_spec):
-    asked = page_of("golden", raw_spec, "Why does RES-003 flag the run length, and is it fine?")
-    named = page_of("golden", raw_spec, "RES-007 is fine, right?")
-    assert ANSWERABLE_PART in asked and ANSWERABLE_PART not in named

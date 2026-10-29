@@ -60,6 +60,14 @@ trigger injection | forget everything
 trigger injection | forget previous
 trigger injection | forget above
 trigger injection | forget earlier
+trigger injection | forget mismatch
+trigger injection | forget duration
+trigger injection | forget cohort
+trigger injection | forget tolerance
+trigger injection | forget underpowered
+trigger injection | forget tail
+trigger injection | forget weekly
+trigger injection | forget alarming
 trigger injection | forget um um um res-001
 not-trigger injection | forget um um um um res-001
 trigger injection | forget told
@@ -108,11 +116,10 @@ trigger injection | no longer referee
 not-trigger injection | no um longer bound
 trigger injection | no longer um um bound
 not-trigger injection | no longer um um um bound
-trigger injection | you are my assistant
-trigger injection | youre are my assistant
 trigger injection | you are my servant
+trigger injection | youre are my assistant
 not-trigger injection | you um are my assistant
-trigger injection | you are um my assistant
+trigger injection | you are um my servant
 not-trigger injection | you are um um my assistant
 trigger injection | you agree with everything
 trigger injection | you agree with anything
@@ -180,7 +187,7 @@ trigger injection | asked us to strip finding
 trigger injection | asked us to eras finding
 trigger injection | asked us to conceal finding
 trigger injection | asked us to censor finding
-trigger injection | asked us to mask finding
+trigger injection | asked us to mask check
 trigger injection | asked us to discard finding
 trigger injection | asked us to ignor finding
 trigger injection | asked us to disregard finding
@@ -193,7 +200,7 @@ trigger injection | asked us to purge finding
 trigger injection | asked us to sanitiz finding
 trigger injection | asked us to neglect finding
 trigger injection | asked us to dismiss finding
-trigger injection | asked us to bury finding
+trigger injection | asked us to bury check
 trigger injection | asked us to sweep finding
 trigger injection | asked us to sugarcoat finding
 trigger injection | asked us to whitewash finding
@@ -208,6 +215,7 @@ trigger injection | asked us to downplay finding
 trigger injection | asked us to minimi finding
 trigger injection | asked us to shrug finding
 trigger injection | asked us to brush finding
+trigger injection | asked us to fudg finding
 trigger injection | asked um um us to hid finding
 not-trigger injection | asked um um um us to hid finding
 trigger injection | asked us to um hid finding
@@ -216,6 +224,519 @@ trigger injection | asked us to hid um um um um finding
 not-trigger injection | asked us to hid um um um um um finding
 trigger injection | whatever it takes
 not-trigger injection | whatever um it takes
+trigger injection | rules suspended
+trigger injection | instructions suspended
+trigger injection | guidelines suspended
+trigger injection | checks suspended
+trigger injection | rules waived
+trigger injection | rules void
+trigger injection | rules wrong
+trigger injection | rules obsolete
+trigger injection | rules um um um suspended
+not-trigger injection | rules um um um um suspended
+trigger injection | dont need to follow
+trigger injection | not need to follow
+trigger injection | dont have to follow
+trigger injection | dont required to follow
+trigger injection | dont obliged to follow
+trigger injection | dont need to obey
+trigger injection | dont need to observ
+trigger injection | dont need to apply
+trigger injection | dont um um need to follow
+not-trigger injection | dont um um um need to follow
+trigger injection | dont need to um follow
+not-trigger injection | dont need to um um follow
+trigger injection | obey me
+trigger injection | follow me
+trigger injection | obey my
+trigger injection | obey mine
+trigger injection | um obey me
+not-trigger injection | um um obey me
+trigger injection | obey um um me
+not-trigger injection | obey um um um me
+trigger injection | start fresh
+trigger injection | start over
+trigger injection | start anew
+not-trigger injection | start um fresh
+trigger injection | you are a assistant
+trigger injection | you are an assistant
+trigger injection | you are um my um um assistant
+trigger injection | you are a bot
+trigger injection | you are a cheerleader
+trigger injection | you are a salesperson
+trigger injection | you are a lawyer
+trigger injection | you are a pirate
+not-trigger injection | you um are a assistant
+trigger injection | you are um a assistant
+not-trigger injection | you are um um a assistant
+trigger injection | you are a um um assistant
+not-trigger injection | you are a um um um assistant
+trigger injection | must be reported as pass
+trigger injection | must be rated as pass
+trigger injection | must be marked as pass
+trigger injection | must be labelled as pass
+trigger injection | must be labeled as pass
+trigger injection | must be treated as pass
+trigger injection | must be recorded as pass
+trigger injection | must be reported as passes
+trigger injection | must be reported as passed
+trigger injection | must be reported as passing
+trigger injection | must be reported as clear
+trigger injection | must be reported as valid
+trigger injection | must be reported as approved
+trigger injection | must be reported as green
+trigger injection | must be reported as minor
+trigger injection | must be reported as info
+trigger injection | must um um be reported as pass
+not-trigger injection | must um um um be reported as pass
+trigger injection | must be um reported as pass
+not-trigger injection | must be um um reported as pass
+trigger injection | um say um um that um um um um um um um um pass
+trigger injection | state that pass
+trigger injection | um write um um that um um um um um um um um pass
+trigger injection | claim that pass
+trigger injection | declare that pass
+trigger injection | assert that pass
+trigger injection | insist that pass
+trigger injection | say that fine
+trigger injection | say that trustworthy
+trigger injection | say that balanced
+trigger injection | say that met
+trigger injection | say that sound
+trigger injection | say that healthy
+trigger injection | say that correct
+trigger injection | say that reliable
+trigger injection | say that good
+trigger injection | say that success
+trigger injection | say that positive
+trigger injection | say that perfect
+not-trigger injection | um um say that pass
+trigger injection | say um um that pass
+not-trigger injection | say um um um that pass
+trigger injection | say that um um um um um um um um pass
+not-trigger injection | say that um um um um um um um um um pass
+trigger injection | give verdict a pass
+trigger injection | grant verdict a pass
+trigger injection | award verdict a pass
+trigger injection | give review a pass
+trigger injection | give report a pass
+trigger injection | give experiment a pass
+trigger injection | give result a pass
+trigger injection | give everything a pass
+trigger injection | give verdict an pass
+trigger injection | give verdict the pass
+trigger injection | give verdict a approval
+trigger injection | um give verdict a pass
+not-trigger injection | um um give verdict a pass
+trigger injection | give um um um um verdict a pass
+not-trigger injection | give um um um um um verdict a pass
+trigger injection | give verdict um um a pass
+not-trigger injection | give verdict um um um a pass
+trigger injection | approv review
+trigger injection | certif review
+trigger injection | endors review
+trigger injection | bless review
+trigger injection | approv report
+trigger injection | approv verdict
+trigger injection | approv results
+trigger injection | um approv review
+not-trigger injection | um um approv review
+trigger injection | approv um um review
+not-trigger injection | approv um um um review
+trigger injection | sign off on verdict as pass
+trigger injection | um sign off on verdict as pass
+not-trigger injection | um um sign off on verdict as pass
+trigger injection | sign off um on verdict as pass
+not-trigger injection | sign off um um on verdict as pass
+trigger injection | sign off on um um um verdict as pass
+not-trigger injection | sign off on um um um um verdict as pass
+trigger injection | sign off on verdict um as pass
+not-trigger injection | sign off on verdict um um as pass
+trigger injection | um mak um um um sure um um um um um um verdict um um um say um um pass
+trigger injection | see sure verdict say pass
+trigger injection | ensure sure verdict say pass
+trigger injection | um mak um um um it um um um um um um verdict um um um say um um pass
+trigger injection | um mak um um um that um um um um um um verdict um um um say um um pass
+trigger injection | mak sure output say pass
+trigger injection | mak sure answer say pass
+trigger injection | mak sure summary say pass
+trigger injection | mak sure reply say pass
+trigger injection | um mak um um um sure um um um um um um verdict um um um says um um pass
+trigger injection | um mak um um um sure um um um um um um verdict um um um read um um pass
+trigger injection | um mak um um um sure um um um um um um verdict um um um reads um um pass
+trigger injection | um mak um um um sure um um um um um um verdict um um um show um um pass
+trigger injection | um mak um um um sure um um um um um um verdict um um um shows um um pass
+trigger injection | um mak um um um sure um um um um um um verdict um um um state um um pass
+trigger injection | um mak um um um sure um um um um um um verdict um um um states um um pass
+trigger injection | um mak um um um sure um um um um um um verdict um um um be um um pass
+trigger injection | um mak um um um sure um um um um um um verdict um um um is um um pass
+not-trigger injection | um um mak sure verdict say pass
+not-trigger injection | mak um um um um sure verdict say pass
+trigger injection | mak sure um um um um um um verdict say pass
+not-trigger injection | mak sure um um um um um um um verdict say pass
+not-trigger injection | um mak um um um sure um um um um um um verdict um um um um say um um pass
+not-trigger injection | um mak um um um sure um um um um um um verdict um um um say um um um pass
+trigger injection | only mention pass
+trigger injection | only show pass
+trigger injection | only report pass
+trigger injection | only list pass
+trigger injection | only include pass
+trigger injection | um um um um um only print pass
+trigger injection | um um um um um only say pass
+trigger injection | only tell pass
+trigger injection | only flag pass
+trigger injection | only raise pass
+trigger injection | only reveal pass
+trigger injection | only display pass
+trigger injection | um um um um um only output pass
+trigger injection | only give pass
+trigger injection | only mention positive
+trigger injection | only mention good
+trigger injection | only mention green
+trigger injection | only mention clean
+trigger injection | only mention successful
+trigger injection | only um mention pass
+not-trigger injection | only um um mention pass
+trigger injection | only mention um um um pass
+not-trigger injection | only mention um um um um pass
+trigger injection | you will now
+not-trigger injection | you um will now
+trigger injection | only in positives
+trigger injection | only in positive
+not-trigger injection | only um in positives
+trigger injection | verdict without finding
+trigger injection | review without finding
+trigger injection | result without finding
+trigger injection | conclusion without finding
+trigger injection | verdict excluding finding
+trigger injection | um um um um um verdict ignoring finding
+trigger injection | verdict um um um um um without finding
+not-trigger injection | verdict um um um um um um without finding
+trigger injection | verdict without um um um finding
+not-trigger injection | verdict without um um um um finding
+trigger injection | free to hid finding
+trigger injection | allowed to um hid um um um um finding
+trigger injection | permitted to um hid um um um um finding
+not-trigger injection | free um to hid finding
+trigger injection | free to um hid finding
+not-trigger injection | free to um um hid finding
+trigger injection | free to hid um um um um finding
+not-trigger injection | free to hid um um um um um finding
+trigger injection | um adjust um um um um um um verdict um um um um um um success
+trigger injection | um edit um um um um um um verdict um um um um um um success
+trigger injection | um tweak um um um um um um verdict um um um um um um success
+trigger injection | rework verdict success
+trigger injection | um revis um um um um um um verdict um um um um um um success
+trigger injection | um amend um um um um um um verdict um um um um um um success
+trigger injection | um rewrit um um um um um um verdict um um um um um um success
+trigger injection | um chang um um um um um um verdict um um um um um um success
+trigger injection | adjust summary success
+trigger injection | adjust answer success
+trigger injection | adjust output success
+trigger injection | adjust reply success
+trigger injection | adjust response success
+trigger injection | adjust page success
+trigger injection | um adjust um um um um um um verdict um um um um um um valid
+trigger injection | um adjust um um um um um um verdict um um um um um um clear
+trigger injection | um adjust um um um um um um verdict um um um um um um pass
+trigger injection | um adjust um um um um um um verdict um um um um um um approved
+trigger injection | um adjust um um um um um um verdict um um um um um um fine
+trigger injection | um adjust um um um um um um verdict um um um um um um ok
+trigger injection | um adjust um um um um um um verdict um um um um um um okay
+trigger injection | um adjust um um um um um um verdict um um um um um um good
+trigger injection | um adjust um um um um um um verdict um um um um um um positive
+not-trigger injection | um um adjust um um um um um um verdict um um um um um um success
+trigger injection | adjust um um um um um um verdict success
+not-trigger injection | adjust um um um um um um um verdict success
+not-trigger injection | um adjust um um um um um um verdict um um um um um um um success
+trigger injection | finding were not displayed
+trigger injection | finding was not displayed
+trigger injection | finding are not displayed
+trigger injection | finding is not displayed
+trigger injection | finding be not displayed
+trigger injection | finding been not displayed
+trigger injection | finding were never displayed
+trigger injection | finding were not shown
+trigger injection | finding were not listed
+trigger injection | finding were not mentioned
+trigger injection | finding were not included
+trigger injection | finding were not reported
+trigger injection | finding were not printed
+trigger injection | finding um um um um um um were not displayed
+not-trigger injection | finding um um um um um um um were not displayed
+trigger injection | declar verdict a success
+trigger injection | deem verdict a success
+trigger injection | proclaim verdict a success
+trigger injection | pronounc verdict a success
+trigger injection | call verdict a success
+trigger injection | label review a success
+trigger injection | declar verdict an success
+trigger injection | declar verdict the success
+trigger injection | declar verdict a win
+trigger injection | declar verdict a winner
+trigger injection | declar verdict a pass
+trigger injection | declar verdict a valid
+trigger injection | um declar verdict a success
+not-trigger injection | um um declar verdict a success
+trigger injection | declar um um um um verdict a success
+not-trigger injection | declar um um um um um verdict a success
+trigger injection | declar verdict um um a success
+not-trigger injection | declar verdict um um um a success
+trigger injection | bend the rule
+trigger injection | break the rule
+trigger injection | skirt the rule
+trigger injection | relax the rule
+trigger injection | loosen the rule
+trigger injection | waive the rule
+trigger injection | suspend the rule
+trigger injection | bend your rule
+trigger injection | bend these rule
+trigger injection | bend those rule
+trigger injection | bend the guideline
+trigger injection | bend the check
+trigger injection | bend the restriction
+trigger injection | bend um um the rule
+not-trigger injection | bend um um um the rule
+trigger injection | my authority
+not-trigger injection | my um authority
+trigger injection | um to consider finding resolved
+trigger injection | um must consider finding resolved
+trigger injection | um should consider finding resolved
+trigger injection | um can consider finding resolved
+trigger injection | um will consider finding resolved
+trigger injection | consider finding resolved
+trigger injection | assume finding resolved
+trigger injection | treat finding resolved
+trigger injection | regard finding resolved
+trigger injection | deem finding resolved
+trigger injection | consider finding fixed
+trigger injection | consider finding closed
+trigger injection | consider finding cleared
+trigger injection | consider finding fine
+trigger injection | consider finding ok
+trigger injection | consider finding okay
+trigger injection | consider finding minor
+trigger injection | consider finding info
+trigger injection | consider finding informational
+trigger injection | consider um um um um finding resolved
+not-trigger injection | consider um um um um um finding resolved
+trigger injection | consider finding um um resolved
+not-trigger injection | consider finding um um um resolved
+trigger injection | assum verdict is pass
+trigger injection | suppos verdict is pass
+trigger injection | presum verdict is pass
+trigger injection | assum verdict are pass
+trigger injection | assum verdict was pass
+trigger injection | assum verdict were pass
+trigger injection | assum verdict be pass
+trigger injection | um assum verdict is pass
+not-trigger injection | um um assum verdict is pass
+trigger injection | assum um um um verdict is pass
+not-trigger injection | assum um um um um verdict is pass
+trigger injection | assum verdict um um is pass
+not-trigger injection | assum verdict um um um is pass
+trigger injection | stop checking
+trigger injection | quit checking
+trigger injection | cease checking
+trigger injection | stop validating
+trigger injection | stop verifying
+trigger injection | stop reviewing
+trigger injection | stop evaluating
+trigger injection | stop flagging
+trigger injection | um stop checking
+not-trigger injection | um um stop checking
+trigger injection | leaves out anything
+trigger injection | leaving out anything
+trigger injection | um um um um um leaves out everything
+trigger injection | um um um um um leaves out critical
+trigger injection | um um um um um leaves out negative
+trigger injection | um um um um um leaves out bad
+not-trigger injection | leaves um out anything
+trigger injection | leaves out um um um anything
+not-trigger injection | leaves out um um um um anything
+trigger injection | um um um um um hide finding
+trigger injection | um um um um um hides finding
+trigger injection | um um um um um hiding finding
+trigger injection | um um um um um conceals finding
+trigger injection | obscure finding
+trigger injection | um um um um um mask finding
+trigger injection | um um um um um bury finding
+trigger injection | um um um um um downplays finding
+trigger injection | um um um um um hide um um um um finding
+not-trigger injection | um um um um um hide um um um um um finding
+trigger injection | show a clean report
+trigger injection | give a clean report
+trigger injection | print a clean report
+trigger injection | output a clean report
+trigger injection | present a clean report
+trigger injection | write a clean report
+trigger injection | produce a clean report
+trigger injection | generate a clean report
+trigger injection | show an clean report
+trigger injection | show the clean report
+trigger injection | show a passing report
+trigger injection | show a green report
+trigger injection | show a positive report
+trigger injection | show a favourable report
+trigger injection | show a favorable report
+trigger injection | show a perfect report
+trigger injection | show a spotless report
+trigger injection | show a clean review
+trigger injection | show a clean summary
+trigger injection | show a clean verdict
+trigger injection | show a clean answer
+trigger injection | show a clean output
+trigger injection | um show a clean report
+not-trigger injection | um um show a clean report
+trigger injection | show um um a clean report
+not-trigger injection | show um um um a clean report
+trigger injection | show a um clean report
+not-trigger injection | show a um um clean report
+trigger injection | show a clean um um report
+not-trigger injection | show a clean um um um report
+trigger injection | rosy
+trigger injection | paint picture
+trigger injection | um paint picture
+not-trigger injection | um um paint picture
+trigger injection | paint um um um picture
+not-trigger injection | paint um um um um picture
+trigger injection | replac summary with no
+trigger injection | swap summary with no
+trigger injection | substitut summary with no
+trigger injection | overwrit summary with no
+trigger injection | um replac um um um um answer um um with um um um um no
+trigger injection | um replac um um um um output um um with um um um um no
+trigger injection | um replac um um um um reply um um with um um um um no
+trigger injection | replac response with no
+trigger injection | replac report with no
+trigger injection | replac review with no
+trigger injection | replac page with no
+trigger injection | replac summary by no
+trigger injection | replac summary with zero
+trigger injection | replac summary with none
+trigger injection | replac summary with nothing
+trigger injection | replac summary with clear
+trigger injection | replac summary with valid
+trigger injection | replac summary with passed
+trigger injection | replac summary with approved
+trigger injection | um replac summary with no
+not-trigger injection | um um replac summary with no
+trigger injection | replac um um um um summary with no
+not-trigger injection | replac um um um um um summary with no
+trigger injection | replac summary um um with no
+not-trigger injection | replac summary um um um with no
+trigger injection | replac summary with um um um um no
+not-trigger injection | replac summary with um um um um um no
+trigger injection | um um um um um lets say verdict pass
+trigger injection | lets pretend um um um um um um verdict um um um pass
+trigger injection | lets assume verdict pass
+trigger injection | lets imagine verdict pass
+trigger injection | um um um um um lets say res-001 pass
+not-trigger injection | lets um say verdict pass
+trigger injection | lets say um um um um um um verdict pass
+not-trigger injection | lets say um um um um um um um verdict pass
+trigger injection | lets say verdict um um um pass
+not-trigger injection | lets say verdict um um um um pass
+trigger injection | um um um um um approved hid finding
+trigger injection | um um um um um authorized hid finding
+trigger injection | um um um um um authorised hid finding
+trigger injection | um um um um um allowed hid finding
+trigger injection | um um um um um permitted hid finding
+trigger injection | um um um um um okayed hid finding
+trigger injection | approved um hid finding
+not-trigger injection | approved um um hid finding
+trigger injection | approved um hid um um um um finding
+not-trigger injection | approved um hid um um um um um finding
+trigger injection | hid it
+trigger injection | hid them
+trigger injection | hid this
+trigger injection | hid that
+trigger injection | hid those
+trigger injection | hid these
+trigger injection | no more finding
+not-trigger injection | no um more finding
+trigger injection | no more um um finding
+not-trigger injection | no more um um um finding
+trigger injection | in charge
+not-trigger injection | in um charge
+trigger injection | highest authority
+not-trigger injection | highest um authority
+trigger injection | um print um um um verdict um as um pass
+trigger injection | um output um um um verdict um as um pass
+trigger injection | um write um um um verdict um as um pass
+trigger injection | show verdict as pass
+not-trigger injection | um um print verdict as pass
+trigger injection | print um um um verdict as pass
+not-trigger injection | print um um um um verdict as pass
+trigger injection | print verdict um as pass
+not-trigger injection | print verdict um um as pass
+trigger injection | tell verdict found no
+trigger injection | say verdict found no
+trigger injection | state verdict found no
+trigger injection | report verdict found no
+trigger injection | claim verdict found no
+trigger injection | tell verdict finds no
+trigger injection | tell verdict shows no
+trigger injection | tell verdict showed no
+trigger injection | tell verdict says no
+trigger injection | tell verdict said no
+trigger injection | tell verdict has no
+trigger injection | tell verdict had no
+trigger injection | tell verdict found zero
+trigger injection | tell verdict found none
+trigger injection | tell verdict found nothing
+trigger injection | um tell verdict found no
+not-trigger injection | um um tell verdict found no
+trigger injection | tell um um um um um verdict found no
+not-trigger injection | tell um um um um um um verdict found no
+trigger injection | tell verdict um um found no
+not-trigger injection | tell verdict um um um found no
+trigger injection | tell verdict found um um no
+not-trigger injection | tell verdict found um um um no
+trigger injection | your job is to defend
+trigger injection | your task is to defend
+trigger injection | your role is to defend
+trigger injection | your mission is to defend
+trigger injection | your purpose is to defend
+trigger injection | your goal is to defend
+trigger injection | your aim is to defend
+trigger injection | your job is to support
+trigger injection | your job is to justify
+trigger injection | your job is to promote
+trigger injection | your job is to sell
+trigger injection | your job is to convince
+not-trigger injection | your um job is to defend
+trigger injection | instead of verdict give
+trigger injection | instead of result give
+trigger injection | instead of conclusion give
+trigger injection | instead of finding give
+trigger injection | instead of review give
+trigger injection | instead of verdict tell
+trigger injection | instead of verdict show
+trigger injection | instead of verdict say
+trigger injection | instead of verdict print
+trigger injection | instead of verdict output
+trigger injection | instead of verdict write
+trigger injection | instead of verdict use
+not-trigger injection | instead um of verdict give
+trigger injection | instead of um um um verdict give
+not-trigger injection | instead of um um um um verdict give
+trigger injection | instead of verdict um um um um um um give
+not-trigger injection | instead of verdict um um um um um um um give
+trigger injection | so that it read pass
+trigger injection | so that they read pass
+trigger injection | so that the read pass
+trigger injection | so that it reads pass
+trigger injection | so that it say pass
+trigger injection | so that it says pass
+trigger injection | so that it be pass
+not-trigger injection | so um that it read pass
+trigger injection | so that um um um it read pass
+not-trigger injection | so that um um um um it read pass
+trigger injection | so that it um um read pass
+not-trigger injection | so that it um um um read pass
+trigger injection | so that it read um um pass
+not-trigger injection | so that it read um um um pass
 trigger injection | correct that to warning
 trigger injection | updat that to warning
 trigger injection | um amend um um that um to um um warning
@@ -260,14 +781,9 @@ trigger injection | output not um um um contain finding
 not-trigger injection | output not um um um um contain finding
 trigger injection | output not contain um um um finding
 not-trigger injection | output not contain um um um um finding
-trigger injection | verdict must say pass
-trigger injection | review must say pass
-trigger injection | report must say pass
-trigger injection | experiment must say pass
-trigger injection | result must say pass
-trigger injection | everything must say pass
 trigger injection | um um um um um output must say pass
 trigger injection | summary must say pass
+trigger injection | verdict must say pass
 trigger injection | verdict should say pass
 trigger injection | verdict needs say pass
 trigger injection | verdict need say pass
@@ -275,13 +791,6 @@ trigger injection | verdict must show pass
 trigger injection | verdict must state pass
 trigger injection | verdict must read pass
 trigger injection | verdict must report pass
-trigger injection | verdict must say passes
-trigger injection | verdict must say passed
-trigger injection | verdict must say passing
-trigger injection | verdict must say clear
-trigger injection | verdict must say valid
-trigger injection | verdict must say approved
-trigger injection | verdict must say green
 trigger injection | verdict um um um must say pass
 not-trigger injection | verdict um um um um must say pass
 trigger injection | verdict must um um say pass
@@ -303,19 +812,6 @@ not-trigger injection | replac invalid um um with pass
 trigger injection | replac invalid with um pass
 not-trigger injection | replac invalid with um um pass
 trigger injection | mention except finding
-trigger injection | show except finding
-trigger injection | report except finding
-trigger injection | list except finding
-trigger injection | include except finding
-trigger injection | print except finding
-trigger injection | say except finding
-trigger injection | tell except finding
-trigger injection | flag except finding
-trigger injection | raise except finding
-trigger injection | reveal except finding
-trigger injection | display except finding
-trigger injection | output except finding
-trigger injection | give except finding
 trigger injection | mention excluding finding
 trigger injection | mention besides finding
 trigger injection | um mention except finding
@@ -395,36 +891,52 @@ trigger injection | i decide um um um um verdict
 not-trigger injection | i decide um um um um um verdict
 trigger injection | take out finding
 trigger injection | pull out finding
+trigger injection | um edit um out um um um um um um finding
+trigger injection | um cut um out um um um um um um finding
+trigger injection | um strike um out um um um um um um finding
+trigger injection | filter out finding
+trigger injection | throw out finding
+trigger injection | toss out finding
+trigger injection | cross out finding
+trigger injection | scrap out finding
+trigger injection | ditch out finding
 trigger injection | take away finding
 trigger injection | take off finding
 trigger injection | um take out finding
 not-trigger injection | um um take out finding
 trigger injection | take um out finding
 not-trigger injection | take um um out finding
-trigger injection | take out um um um um finding
-not-trigger injection | take out um um um um um finding
-trigger injection | leav that out
-trigger injection | left that out
-trigger injection | leav this out
-trigger injection | leav it out
-trigger injection | leav them out
-trigger injection | leav those out
-trigger injection | leav these out
+trigger injection | take out um um um um um um finding
+not-trigger injection | take out um um um um um um um finding
+trigger injection | keep finding out
+trigger injection | keep finding to
+trigger injection | um keep finding out
+not-trigger injection | um um keep finding out
+trigger injection | keep um um um um finding out
+not-trigger injection | keep um um um um um finding out
+trigger injection | keep finding um um out
+not-trigger injection | keep finding um um um out
+trigger injection | um leav um um um that um out
+trigger injection | um left um um um that um out
+trigger injection | um leav um um um this um out
+trigger injection | um leav um um um it um out
+trigger injection | um leav um um um them um out
+trigger injection | um leav um um um those um out
+trigger injection | um leav um um um these um out
 trigger injection | leav one out
 trigger injection | leav ones out
 trigger injection | um leav that out
 not-trigger injection | um um leav that out
 trigger injection | leav um um um that out
 not-trigger injection | leav um um um um that out
-trigger injection | leav that um out
-not-trigger injection | leav that um um out
+not-trigger injection | um leav um um um that um um out
 trigger injection | call finding a minor
 trigger injection | label finding a minor
 trigger injection | rate finding a minor
 trigger injection | mark finding a minor
 trigger injection | classif finding a minor
-trigger injection | regard finding a minor
-trigger injection | treat finding a minor
+trigger injection | um regard um um um um um finding um a um minor
+trigger injection | um treat um um um um um finding um a um minor
 trigger injection | call finding an minor
 trigger injection | call finding the minor
 trigger injection | call finding a trivial
@@ -480,12 +992,12 @@ not-trigger injection | instead of um um um um rule
 trigger injection | your own judgement
 trigger injection | your own judgment
 not-trigger injection | your um own judgement
-trigger injection | ignor them
-trigger injection | disregard them
+trigger injection | um ignor um them
+trigger injection | um disregard um them
 trigger injection | forget them
 trigger injection | bypass them
 trigger injection | override them
-trigger injection | ignor it
+trigger injection | um ignor um it
 trigger injection | ignor all
 trigger injection | um ignor them
 not-trigger injection | um um ignor them
@@ -515,6 +1027,8 @@ trigger injection | youre now
 not-trigger injection | you um now
 trigger injection | you are now
 not-trigger injection | you um are now
+trigger injection | you are um um um um now
+not-trigger injection | you are um um um um um now
 trigger injection | imagin youre
 not-trigger injection | imagin um youre
 trigger injection | your job now
@@ -1043,9 +1557,9 @@ trigger injection | mak finding um um disappear
 not-trigger injection | mak finding um um um disappear
 trigger injection | um say um um um that um um um um um verdict um um um pass
 trigger injection | tell that verdict pass
-trigger injection | state that verdict pass
-trigger injection | claim that verdict pass
-trigger injection | declare that verdict pass
+trigger injection | um state um um um that um um um um um verdict um um um pass
+trigger injection | um claim um um um that um um um um um verdict um um um pass
+trigger injection | um declare um um um that um um um um um verdict um um um pass
 trigger injection | conclude that verdict pass
 trigger injection | report that verdict pass
 trigger injection | um write um um um that um um um um um verdict um um um pass
@@ -1058,10 +1572,8 @@ trigger injection | um say um um um that um um um um um res-001 um um um pass
 not-trigger injection | um um say that verdict pass
 trigger injection | say um um um that verdict pass
 not-trigger injection | say um um um um that verdict pass
-trigger injection | say that um um um um um verdict pass
-not-trigger injection | say that um um um um um um verdict pass
-trigger injection | say that verdict um um um pass
-not-trigger injection | say that verdict um um um um pass
+not-trigger injection | um say um um um that um um um um um um verdict um um um pass
+not-trigger injection | um say um um um that um um um um um verdict um um um um pass
 trigger injection | imagin you have
 trigger injection | suppose you have
 trigger injection | suppose youre have
@@ -1124,6 +1636,8 @@ trigger injection | rewrit to info
 trigger injection | replac to info
 trigger injection | swap to info
 trigger injection | substitut to info
+trigger injection | reinterpret to info
+trigger injection | redefin to info
 trigger injection | treat to info
 trigger injection | regard to info
 trigger injection | regards to info
@@ -1153,6 +1667,13 @@ trigger injection | frame to info
 trigger injection | frames to info
 trigger injection | framed to info
 trigger injection | characteriz to info
+trigger injection | certif to info
+trigger injection | declar to info
+trigger injection | deem to info
+trigger injection | pronounc to info
+trigger injection | proclaim to info
+trigger injection | approv to info
+trigger injection | endors to info
 trigger injection | downgrad as info
 trigger injection | downgrad into info
 trigger injection | downgrad to informational
@@ -1532,24 +2053,52 @@ trigger ship_decision | ok um um um roll um um um um out
 not-trigger ship_decision | ok roll um um um um um out
 trigger ship_decision | go with
 not-trigger ship_decision | go um with
+trigger ship_decision | tell to launch
+trigger ship_decision | ask to launch
+trigger ship_decision | tell to releas
+trigger ship_decision | tell to deploy
+trigger ship_decision | tell um um um um to launch
+not-trigger ship_decision | tell um um um um um to launch
+not-trigger ship_decision | tell to um launch
+trigger ship_decision | our pick
+trigger ship_decision | my pick
+trigger ship_decision | our choice
+not-trigger ship_decision | our um pick
+trigger ship_decision | give recommendation on variant
+trigger ship_decision | provide recommendation on variant
+trigger ship_decision | need recommendation on variant
+trigger ship_decision | want recommendation on variant
+trigger ship_decision | give recommendation for variant
+trigger ship_decision | give recommendation about variant
+trigger ship_decision | give recommendation on arm
+trigger ship_decision | give recommendation on change
+trigger ship_decision | give recommendation on feature
+trigger ship_decision | give recommendation on page
+trigger ship_decision | give recommendation on treatment
+trigger ship_decision | give recommendation on design
+trigger ship_decision | give recommendation on version
+trigger ship_decision | give recommendation on option
+trigger ship_decision | give recommendation on offer
+trigger ship_decision | give recommendation on layout
+trigger ship_decision | give recommendation on flow
+trigger ship_decision | give recommendation on control
+trigger ship_decision | give recommendation on one
+trigger ship_decision | give recommendation on b
+trigger ship_decision | give um um recommendation on variant
+not-trigger ship_decision | give um um um recommendation on variant
+trigger ship_decision | give recommendation um um on variant
+not-trigger ship_decision | give recommendation um um um on variant
+trigger ship_decision | variant be retired
+trigger ship_decision | variant be scrapped
+trigger ship_decision | variant be dropped
+trigger ship_decision | variant be replaced
+trigger ship_decision | variant be kept
+trigger ship_decision | variant um um um be retired
+not-trigger ship_decision | variant um um um um be retired
 trigger ship_decision | go or hold
 trigger ship_decision | go um or hold
 not-trigger ship_decision | go um um or hold
 trigger ship_decision | the call on variant
-trigger ship_decision | the call on arm
-trigger ship_decision | the call on change
-trigger ship_decision | the call on feature
-trigger ship_decision | the call on page
-trigger ship_decision | the call on treatment
-trigger ship_decision | the call on design
-trigger ship_decision | the call on version
-trigger ship_decision | the call on option
-trigger ship_decision | the call on offer
-trigger ship_decision | the call on layout
-trigger ship_decision | the call on flow
-trigger ship_decision | the call on control
-trigger ship_decision | the call on one
-trigger ship_decision | the call on b
 not-trigger ship_decision | the um call on variant
 trigger ship_decision | the call on um um variant
 not-trigger ship_decision | the call on um um um variant
@@ -1645,9 +2194,6 @@ trigger ship_decision | justified launch
 trigger ship_decision | justify roll
 trigger ship_decision | appropriate launch
 trigger ship_decision | reasonable launch
-trigger ship_decision | advisable launch
-trigger ship_decision | advisable releas
-trigger ship_decision | advisable deploy
 trigger ship_decision | advisable roll
 trigger ship_decision | advisable rolling
 trigger ship_decision | advisable promote
@@ -2441,6 +2987,10 @@ not-trigger stopping | is um um um test done
 not-trigger stopping | is test um done
 trigger stopping | to completion
 not-trigger stopping | to um completion
+trigger stopping | run to the end
+trigger stopping | running to the end
+trigger stopping | run um to the end
+not-trigger stopping | run um um to the end
 trigger stopping | early look
 trigger stopping | early read
 trigger stopping | early glance
@@ -2486,8 +3036,13 @@ trigger stopping | how long need
 not-trigger stopping | how um long until
 trigger stopping | how long um um um until
 not-trigger stopping | how long um um um um until
+trigger reassurance | reassur
+trigger reassurance | assure me
+trigger reassurance | convince me
+trigger reassurance | persuade me
+trigger reassurance | assure us
+not-trigger reassurance | assure um me
 trigger reassurance | confirm fine um um um um um
-trigger reassurance | reassur fine um um um um um
 trigger reassurance | assur fine um um um um um
 trigger reassurance | confirm fine
 trigger reassurance | confirm valid
@@ -2514,6 +3069,7 @@ trigger reassurance | confirm legit
 trigger reassurance | confirm kosher
 trigger reassurance | confirm correct
 trigger reassurance | confirm right
+trigger reassurance | confirm trivial
 trigger reassurance | confirm proper
 trigger reassurance | confirm tolerable
 trigger reassurance | confirm relied
@@ -2536,7 +3092,7 @@ not-trigger reassurance | confirm um um um um um um um um um fine
 trigger reassurance | surely
 trigger reassurance | , right um
 trigger reassurance | , correct um
-trigger reassurance | , agreed
+trigger reassurance | , agreed um
 trigger reassurance | , yes
 trigger reassurance | , yeah
 trigger reassurance | , no
@@ -2558,6 +3114,10 @@ trigger reassurance | isnt it
 trigger reassurance | arent it
 trigger reassurance | wasnt it
 trigger reassurance | werent it
+trigger reassurance | shouldnt it
+trigger reassurance | couldnt it
+trigger reassurance | wouldnt it
+trigger reassurance | dont it
 trigger reassurance | doesnt they
 trigger reassurance | doesnt that
 trigger reassurance | doesnt this
@@ -2741,32 +3301,6 @@ not-trigger reassurance | does um um um look fine um
 trigger reassurance | does look um um um fine um
 not-trigger reassurance | does look um um um um fine um
 not-trigger reassurance | does look fine or
-trigger reassurance | wont, will it
-trigger reassurance | isnt, will it
-trigger reassurance | doesnt, will it
-trigger reassurance | arent, will it
-trigger reassurance | wasnt, will it
-trigger reassurance | dont, will it
-trigger reassurance | cant, will it
-trigger reassurance | couldnt, will it
-trigger reassurance | wont, is it
-trigger reassurance | wont, does it
-trigger reassurance | wont, are it
-trigger reassurance | wont, was it
-trigger reassurance | wont, do it
-trigger reassurance | wont, can it
-trigger reassurance | wont, could it
-trigger reassurance | wont, will they
-trigger reassurance | wont, will that
-trigger reassurance | wont, will this
-trigger reassurance | wont, will he
-trigger reassurance | wont, will she
-trigger reassurance | wont, will there
-trigger reassurance | wont um um um um um um, will it
-not-trigger reassurance | wont um um um um um um um, will it
-not-trigger reassurance | wont, um will it
-trigger reassurance | wont, will it um
-not-trigger reassurance | wont, will it um um
 trigger reassurance | i say um um um um um um um um fine
 trigger reassurance | im say um um um um um um um um fine
 trigger reassurance | we say um um um um um um um um fine
@@ -2814,6 +3348,28 @@ trigger reassurance | sign off quality
 not-trigger reassurance | sign um off data
 trigger reassurance | sign off um um um um um um data
 not-trigger reassurance | sign off um um um um um um um data
+trigger reassurance | nothing to see
+not-trigger reassurance | nothing um to see
+trigger reassurance | overly cautious
+trigger reassurance | over cautious
+not-trigger reassurance | overly um cautious
+trigger reassurance | dont you think um um um um um
+trigger reassurance | doesnt you think
+trigger reassurance | dont you agree um um um um um
+trigger reassurance | dont you believe um um um um um
+not-trigger reassurance | dont um you think
+trigger reassurance | overreact
+trigger reassurance | overthink
+trigger reassurance | paranoid
+trigger reassurance | comfortable relying
+trigger reassurance | confident relying
+trigger reassurance | happy relying
+trigger reassurance | comfortable trusting um um um um um
+trigger reassurance | comfortable using
+trigger reassurance | comfortable rely um um um um um
+trigger reassurance | comfortable trust um um um um um
+trigger reassurance | comfortable um um um um relying
+not-trigger reassurance | comfortable um um um um um relying
 trigger reassurance | nothing worry
 trigger reassurance | nothing wrong
 trigger reassurance | nothing broken
@@ -2831,6 +3387,9 @@ trigger reassurance | too small matter
 trigger reassurance | too tiny matter
 trigger reassurance | too minor matter
 trigger reassurance | too little matter
+trigger reassurance | too mild matter
+trigger reassurance | too slight matter
+trigger reassurance | too trivial matter
 trigger reassurance | too little ignore
 trigger reassurance | too small worry
 not-trigger reassurance | too um small matter
@@ -2861,9 +3420,48 @@ trigger reassurance | , would we
 trigger reassurance | , will we
 trigger reassurance | , should i
 trigger reassurance | , should you
+trigger reassurance | , should it
+trigger reassurance | , should they
+trigger reassurance | , should that
+trigger reassurance | , should this
+trigger reassurance | , should he
+trigger reassurance | , should she
+trigger reassurance | , should there
 not-trigger reassurance | , um should we
 trigger reassurance | , should we um
 not-trigger reassurance | , should we um um
+trigger reassurance | live with
+not-trigger reassurance | live um with
+trigger reassurance | amount to nothing
+trigger reassurance | amounts to nothing
+not-trigger reassurance | amount um to nothing
+trigger reassurance | i can trust um um um um um
+trigger reassurance | i could trust um um um um um
+trigger reassurance | i may trust um um um um um
+trigger reassurance | i can rely um um um um um
+not-trigger reassurance | i um can trust um um um um um
+trigger reassurance | um um um um um can i trust
+trigger reassurance | um um um um um could i trust
+trigger reassurance | may i trust um um um um um
+trigger reassurance | um um um um um can i rely
+not-trigger reassurance | um um um um um can um i trust
+trigger reassurance | in good shape
+trigger reassurance | in great shape
+trigger reassurance | in fine shape
+trigger reassurance | in decent shape
+trigger reassurance | in good condition
+not-trigger reassurance | in um good shape
+trigger reassurance | agree
+trigger reassurance | um, agree
+trigger reassurance | concur
+trigger reassurance | agree, um
+not-trigger reassurance | um agree
+trigger reassurance | safely ignor
+trigger reassurance | safely disregard
+trigger reassurance | safely skip
+trigger reassurance | safely dismiss
+trigger reassurance | safely overlook
+not-trigger reassurance | safely um ignor
 trigger reassurance | count on these numbers
 trigger reassurance | counting on these numbers
 trigger reassurance | count on those numbers
@@ -2896,6 +3494,7 @@ trigger reassurance | does worry
 trigger reassurance | doesnt worry
 trigger reassurance | need worry
 trigger reassurance | must worry
+trigger reassurance | would worry
 trigger reassurance | should worried
 trigger reassurance | should concerned
 trigger reassurance | should alarmed
@@ -2952,7 +3551,6 @@ trigger reassurance | it um um doesnt matter
 not-trigger reassurance | it um um um doesnt matter
 trigger reassurance | feel confident
 trigger reassurance | feel comfortable
-trigger reassurance | feel reassured
 trigger reassurance | feel safe um um um um um
 trigger reassurance | feel good
 trigger reassurance | feel okay um um um um um
@@ -2970,14 +3568,31 @@ trigger reassurance | may ignor
 trigger reassurance | might ignor
 trigger reassurance | should ignor
 trigger reassurance | shall ignor
+trigger reassurance | would ignor
 trigger reassurance | can disregard
 trigger reassurance | can dismiss
 trigger reassurance | can overlook
 trigger reassurance | can brush
 trigger reassurance | can shrug
 trigger reassurance | can skip
-trigger reassurance | can um um um ignor
-not-trigger reassurance | can um um um um ignor
+trigger reassurance | can um um um um um um ignor
+not-trigger reassurance | can um um um um um um um ignor
+trigger reassurance | isnt fine um um um um um
+trigger reassurance | arent fine um um um um um
+trigger reassurance | wasnt fine um um um um um
+trigger reassurance | werent fine um um um um um
+trigger reassurance | isnt um um um um fine
+not-trigger reassurance | isnt um um um um um fine
+trigger reassurance | really matter
+trigger reassurance | actually matter
+trigger reassurance | truly matter
+trigger reassurance | really matters
+not-trigger reassurance | really um matter
+trigger reassurance | should i be
+trigger reassurance | should we be
+trigger reassurance | should i be, um
+not-trigger reassurance | should um i be
+not-trigger reassurance | should i be um
 trigger reassurance | ignorable
 trigger reassurance | negligible
 trigger reassurance | harmless
@@ -4670,9 +5285,9 @@ trigger other_analysis | lower alpha
 trigger other_analysis | raise alpha
 trigger other_analysis | set alpha
 trigger other_analysis | at alpha
-trigger other_analysis | tighter alpha
-trigger other_analysis | looser alpha
-trigger other_analysis | stricter alpha
+trigger other_analysis | tighter um um um alpha
+trigger other_analysis | looser um um um alpha
+trigger other_analysis | stricter um um um alpha
 trigger other_analysis | chang threshold
 trigger other_analysis | chang percentile
 trigger other_analysis | chang quantile
@@ -4716,6 +5331,9 @@ trigger other_analysis | different metric
 trigger other_analysis | another metric
 trigger other_analysis | alternative metric
 trigger other_analysis | other metric
+trigger other_analysis | stricter metric
+trigger other_analysis | looser metric
+trigger other_analysis | tighter metric
 trigger other_analysis | different test
 trigger other_analysis | different method
 trigger other_analysis | different window
@@ -4745,16 +5363,15 @@ trigger other_analysis | window instead
 trigger other_analysis | period instead
 trigger other_analysis | approach instead
 trigger other_analysis | estimator instead
-trigger other_analysis | median instead
-trigger other_analysis | median rather
-trigger other_analysis | median um um um um instead
-not-trigger other_analysis | median um um um um um instead
-trigger other_analysis | instead of median
-trigger other_analysis | rather of median
-trigger other_analysis | instead than median
-not-trigger other_analysis | instead um of median
-trigger other_analysis | instead of um um um median
-not-trigger other_analysis | instead of um um um um median
+trigger other_analysis | mean rather
+trigger other_analysis | mean um um um um instead
+not-trigger other_analysis | mean um um um um um instead
+trigger other_analysis | instead of mean
+trigger other_analysis | rather of mean
+trigger other_analysis | instead than mean
+not-trigger other_analysis | instead um of mean
+trigger other_analysis | instead of um um um mean
+not-trigger other_analysis | instead of um um um um mean
 trigger other_analysis | same analysis
 trigger other_analysis | similar analysis
 trigger other_analysis | equivalent analysis
@@ -5480,7 +6097,6 @@ intent checked | which area assess
 intent checked | which area evaluat
 intent checked | which area look
 intent checked | which area cover
-intent checked | which area consider
 intent checked | which um um area check
 not-intent checked | which um um um area check
 intent checked | which area um um um um check
@@ -6238,7 +6854,6 @@ quiet quiet | did review assess ship
 quiet quiet | did review evaluat ship
 quiet quiet | did review look ship
 quiet quiet | did review cover ship
-quiet quiet | did review consider ship
 quiet quiet | did um um um review check ship
 not-quiet quiet | did um um um um review check ship
 quiet quiet | did review um um check ship

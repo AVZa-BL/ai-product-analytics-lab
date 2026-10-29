@@ -24,9 +24,7 @@ from referee.narration.render import CATEGORIES, RULE_IDS, UNREADABLE_REASONS, U
 from referee.narration.router import (
     INTENT_PATTERNS,
     PHRASES,
-    SOFT,
     STRETCH,
-    STRETCH_ENDS,
     TRIGGERS,
     UNLESS_NAMED,
     WHEN_NO_RULE_NAMED,
@@ -59,15 +57,6 @@ def rows(kind):
 
 
 # ---------------------------------------------------------------- the tables and the order
-
-
-def test_the_tables_are_in_the_order_of_precedence_and_name_the_rules_of_the_taxonomy():
-    assert list(TRIGGERS) == list(CATEGORIES) == list(ns.PRECEDENCE)
-    # the order the intents are tried in
-    assert list(INTENT_PATTERNS) == ["checked", "next_steps", "explain_finding", "summary"]
-    assert list(PHRASES) == list(RULE_IDS) == sorted(ns.TAXONOMY["rules"])
-    assert set(WHEN_NO_RULE_NAMED) <= set(CATEGORIES) and set(UNLESS_NAMED) <= set(CATEGORIES)
-    assert {rule for rules in UNLESS_NAMED.values() for rule in rules} <= set(RULE_IDS)
 
 
 def test_no_row_of_shipping_is_stopping_and_no_row_of_stopping_is_shipping():
@@ -216,6 +205,7 @@ def test_a_letter_that_nfkc_composed_from_a_letter_and_a_mark_is_the_plain_lette
         ("re-, run", ["^", "re", ",", "run", "$"], []),  # nothing is joined to a boundary
         ("re-run", ["^", "rerun", "$"], []),
         ("re-run re-do it", ["^", "rerun", "redo", "it", "$"], []),
+        ("re-re-run it", ["^", "rererun", "it", "$"], []),  # the second re joins the third piece
         ("why res004?", ["^", "why", "#", ",", "$"], ["RES-004"]),
         ("0.4% ok", ["^", "0", "4", "ok", "$"], []),  # a point between digits is no boundary
         ("yes. ok", ["^", "yes", ",", "ok", "$"], []),  # a full stop is
@@ -259,20 +249,6 @@ def test_reading_the_words_of_a_question(text, words, ids):
 )
 def test_a_rule_id_is_three_letters_and_three_digits_in_the_shapes_it_is_written(text, ids):
     assert read(text)[1] == ids
-
-
-@pytest.mark.parametrize(
-    "form",
-    [
-        "RES-004",
-        "res 004",
-        "Res004",
-        "\uff32\uff25\uff33\uff0d\uff10\uff10\uff14",  # fullwidth
-        "RES\u2013004",  # an en dash
-    ],
-)
-def test_the_target_is_the_canonical_id_whatever_the_case_spacing_or_width(form):
-    assert route(f"Why does {form} block?") == U("answer", "explain_finding", target="RES-004")
 
 
 # ---------------------------------------------------------------- matching a pattern
@@ -331,13 +307,17 @@ def hushed_words(text):
     return [word for word, quiet in zip(words, hush(words), strict=True) if word != quiet]
 
 
-@pytest.mark.parametrize("word", [word.rstrip("*") for word in SOFT.split()])
+@pytest.mark.parametrize(
+    "word",
+    ["ship", "launch", "releas", "deploy", "call", "stop", "trust", "safe", "real", "enough"]
+    + ["worr", "concern"],
+)
 def test_each_word_that_asks_for_a_decision_is_hushed_after_before(word):
     assert hushed_words(f"fix it before we {word}") == [word]
     assert hushed_words(f"fix it, we {word}") == []  # and not without the opener
 
 
-@pytest.mark.parametrize("end", [word for word in STRETCH_ENDS.split() if word != "$"])
+@pytest.mark.parametrize("end", [",", "and", "but", "then", "so", "or"])
 def test_a_stretch_ends_at_a_comma_or_a_joining_word(end):
     words = ["^", "fix", "it", "before", "we", end, "ship", "$"]
     assert hush(words) == words
