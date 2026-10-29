@@ -31,7 +31,7 @@ The near-zero upgrade-attempt correlation is an ecological cohort-level associat
 - Configuration timing and the acquisition-mix shift are observational confounders.
 - Reconciled purchases are associated with their governed transaction records; no causal monetization effect is inferred here.
 - The six contained incident classes are retained as known measurement context. Their existence does not imply that every reported estimate is biased by the same amount.
-- The published figures are exact for the recorded execution platform only. A Linux/x86_64 run of the same commit, from byte-identical generated inputs, shifts the population by one player and the observed change from −3.97% to −3.19%. The Reproducibility section states the measured divergence in full.
+- The published figures are exact for the recorded execution platform only. A Linux/x86_64 run from byte-identical generated inputs shifts the population by one player and the observed change from −3.97% to −3.19%. The Reproducibility section states the measured divergence in full.
 
 ## Data-quality qualification
 
@@ -62,10 +62,11 @@ The incident controls were exercised by the scenario dbt build and targeted sing
 - Results artifact: `reports/live_strategy/d7_retention_diagnostic_results.json`
 - Executable analysis: `notebooks/live_strategy/01_d7_retention_diagnostic.py`
 - Generated notebook: `notebooks/live_strategy/01_d7_retention_diagnostic.ipynb` (untracked local artifact; the results JSON is the published evidence)
-- Execution timestamp: `2026-09-24T05:04:47.677706Z`
-- Code version: `683ff9d581913949de6c5356bf43b743d4f7a8ea`
-- Runtime: Python 3.12.14, pandas 2.3.3, DuckDB 1.5.5, NumPy 2.5.2
-- Execution platform: macOS, arm64. The values above are platform-dependent; see below.
+- Execution timestamp: `2026-10-29T05:00:01.235324Z`
+- Code version: `ba82c6cb3501140d668646a0ea254dfc541efe28`
+- Runtime: Python 3.12.14, pandas 2.3.3, DuckDB 1.5.6, NumPy 2.5.3, pyarrow 21.0.0
+- Execution platform: macOS, arm64 (`Darwin`/`arm64` in `metadata.execution_platform`). The values above are platform-dependent; see below.
+- Input fingerprint: `ef3b9be6e7e8a218579f2c2b2c45ecaccc442b1bcd0c810a0448f2c73a69bf5f` over 1,618 diagnostic-input rows (`metadata.input_fingerprint`; a re-run whose digest differs read different inputs)
 - Bootstrap: seed 42, 2,000 draws, stratified over governed cohort rows
 - Metric definitions: [`docs/metrics/live_strategy.md`](../../docs/metrics/live_strategy.md)
 - Incident context: [`docs/incidents/live_strategy.md`](../../docs/incidents/live_strategy.md)
@@ -73,8 +74,12 @@ The incident controls were exercised by the scenario dbt build and targeted sing
 ### Reproducibility is exact within a platform, not across platforms
 
 Re-running this analysis on the recorded platform reproduces every value above
-exactly. Re-running it on Linux/x86_64 does not. The divergence was measured
-directly and is stated here rather than left for a reader to discover:
+exactly: the execution of 2026-10-29 at the commit recorded above, the published
+one, repeated every analytical value of the first execution of 2026-09-24, with
+DuckDB 1.5.6 and NumPy 2.5.3 in place of the 1.5.5 and 2.5.2 of that run. Re-running
+it on Linux/x86_64 does not. The divergence was measured directly, on 2026-09-24
+against that first execution, and is stated here rather than left for a reader to
+discover:
 
 | | macOS, arm64 (published) | Linux, x86_64 |
 | --- | --- | --- |

@@ -82,7 +82,7 @@ Notebooks are stored as jupytext percent-format Python, not `.ipynb`, so they di
 ./.venv/bin/python -m jupytext --to notebook --execute notebooks/live_strategy/01_d7_retention_diagnostic.py --output notebooks/live_strategy/01_d7_retention_diagnostic.ipynb
 ```
 
-This rewrites `reports/live_strategy/d7_retention_diagnostic_results.json`. Compare it with the committed version. On the platform the report was produced on, every analytical value should be identical, with only `code_version`, `executed_at_utc` and `input_fingerprint` changing. If an analytical value moves on that platform, that is a real finding, not noise — and `input_fingerprint.sha256` tells you immediately whether the inputs changed or only the computation did.
+This rewrites `reports/live_strategy/d7_retention_diagnostic_results.json`. Compare it with the committed version. On the platform the report was produced on, every analytical value should be identical, with only `code_version` and `executed_at_utc` changing. If an analytical value moves on that platform, that is a real finding, not noise — and `input_fingerprint.sha256` tells you immediately whether the inputs changed or only the computation did.
 
 Generated `.ipynb` files and figures are gitignored by design — the committed JSON is the published evidence, not the notebook.
 
