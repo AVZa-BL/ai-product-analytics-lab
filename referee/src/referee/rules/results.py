@@ -8,7 +8,10 @@ triggered it.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from statistics import median
 from typing import Any
+
+from scipy.stats import kruskal
 
 from referee.methods import (
     SMALL_EXPECTED_COUNT,
@@ -33,6 +36,7 @@ from referee.rules.references import (
 )
 
 LATE_SHARE_ALPHA = 0.001  # RES-012's escalation; its own judgement, not SRM_ALPHA (section 21.9)
+_DELAY_DIGITS = 1
 _SHARE_DIGITS = 4
 _CHI_SQUARE_DIGITS = 4
 _EXPECTED_DIGITS = 2
@@ -117,6 +121,51 @@ def _sample_ratio_drift(context: ResultsContext) -> dict[str, Any] | None:
     }
 
 
+def _late_share_test(arms: list[str], late: dict[str, int], base: dict[str, int]) -> dict[str, Any]:
+    """Whether the share of late players is the same in every arm, among `base` players."""
+    tested = [arm for arm in arms if base[arm] > 0]
+    try:
+        result = homogeneity_test(
+            [late[a] for a in tested],
+            [base[a] for a in tested],
+            exact_below=SMALL_EXPECTED_COUNT,
+        )
+    except StatsError as error:
+        # one arm in the base, or everyone or no one late: there is nothing to compare
+        return {"error": str(error)}
+    return {
+        "chi_square": round(result.chi_square, _CHI_SQUARE_DIGITS),
+        "degrees_of_freedom": result.degrees_of_freedom,
+        "p_value": result.p_value,
+        "alpha": LATE_SHARE_ALPHA,
+        "method": result.method,
+        "smallest_expected": round(result.smallest_expected, _EXPECTED_DIGITS),
+    }
+
+
+def _exposure_delay(context: ResultsContext, exposed_players: list) -> dict[str, Any]:
+    """Seconds from assignment to first exposure, by arm: described, never an escalation.
+
+    The Kruskal-Wallis test flags any difference in the delay, however small and however
+    little it moves the late share (an hour is flagged in every simulated run, design
+    section 25), so it can describe but not escalate.
+    """
+    delays: dict[str, list[float]] = {arm: [] for arm in context.arm_names}
+    for player in exposed_players:
+        delays[player.arm].append((player.first_exposed_at - player.assigned_at).total_seconds())
+    groups = [values for values in delays.values() if values]
+    p_value = None
+    if len(groups) > 1 and len({delay for values in groups for delay in values}) > 1:
+        p_value = float(kruskal(*groups).pvalue)  # not defined when every delay is the same
+    return {
+        "median_seconds": {
+            arm: round(median(values), _DELAY_DIGITS) if values else None
+            for arm, values in delays.items()
+        },
+        "kruskal_wallis_p_value": p_value,
+    }
+
+
 def _late_exposure(context: ResultsContext) -> dict[str, Any] | None:
     """Players first exposed after their first purchase: how many, where, and what they change."""
     arms = context.arm_names
@@ -126,27 +175,14 @@ def _late_exposure(context: ResultsContext) -> dict[str, Any] | None:
         return None
     late = context.count_by_arm(late_players)
     exposed = context.count_by_arm(exposed_players)
-    purchasers = sum(p.first_purchase_at is not None for p in context.players)
+    all_purchasers = sum(p.first_purchase_at is not None for p in context.players)
 
-    tested = [arm for arm in arms if exposed[arm] > 0]
-    homogeneity: dict[str, Any]
-    try:
-        result = homogeneity_test(
-            [late[a] for a in tested],
-            [exposed[a] for a in tested],
-            exact_below=SMALL_EXPECTED_COUNT,
-        )
-        homogeneity = {
-            "chi_square": round(result.chi_square, _CHI_SQUARE_DIGITS),
-            "degrees_of_freedom": result.degrees_of_freedom,
-            "p_value": result.p_value,
-            "alpha": LATE_SHARE_ALPHA,
-            "method": result.method,
-            "smallest_expected": round(result.smallest_expected, _EXPECTED_DIGITS),
-        }
-    except StatsError as error:
-        # one arm exposed, or everyone or no one late: there is nothing to compare
-        homogeneity = {"error": str(error)}
+    purchasers = context.count_by_arm(p for p in exposed_players if p.first_purchase_at is not None)
+    homogeneity = _late_share_test(arms, late, exposed)
+    # The escalation reads the late share of the exposed players who bought, not of all exposed
+    # players: the second is the purchase rate times a late share, so an arm that buys more
+    # looks later-exposed whatever the exposure did (design section 25).
+    purchaser_homogeneity = _late_share_test(arms, late, purchasers)
 
     with_late = effect_estimates(context, exposed_players)
     without_late = effect_estimates(context, context.analysed)
@@ -159,8 +195,15 @@ def _late_exposure(context: ResultsContext) -> dict[str, Any] | None:
         },
         "late_total": len(late_players),
         "share_of_assigned": round(len(late_players) / len(context.players), _SHARE_DIGITS),
-        "share_of_purchasers": round(len(late_players) / purchasers, _SHARE_DIGITS),
+        "share_of_purchasers": round(len(late_players) / all_purchasers, _SHARE_DIGITS),
         "homogeneity": homogeneity,
+        "purchasers": purchasers,
+        "late_share_of_purchasers": {
+            arm: round(late[arm] / purchasers[arm], _SHARE_DIGITS) if purchasers[arm] else None
+            for arm in arms
+        },
+        "purchaser_homogeneity": purchaser_homogeneity,
+        "exposure_delay": _exposure_delay(context, exposed_players),
         "estimate": {
             "metric": context.spec.primary_metric.name,
             "by_arm": {
@@ -175,7 +218,7 @@ def _late_exposure(context: ResultsContext) -> dict[str, Any] | None:
 
 
 def _late_share_differs(evidence: dict[str, Any]) -> bool:
-    homogeneity = evidence.get("homogeneity")
+    homogeneity = evidence.get("purchaser_homogeneity")
     return (
         homogeneity is not None
         and "p_value" in homogeneity
@@ -681,23 +724,34 @@ RESULTS_RULES: tuple[Rule[ResultsContext], ...] = (
         why_it_matters=(
             "A purchase made before the player first saw the change cannot be an effect of it. "
             "These players are left out of the effect analysis, but they are in the arms, so "
-            "a different share of the exposed players being late in different arms means the "
-            "change reached the arms differently. It is the results-time counterpart of DES-007."
+            "a different share of the players who bought being late in different arms means the "
+            "change reached the arms differently. It is the results-time counterpart of DES-007. "
+            "The share of all exposed players is not the test, because it is the purchase rate "
+            "times the late share of those who bought, so an arm in which the change makes "
+            "players buy more shows more late players whatever the exposure did; the evidence "
+            "gives it, and the seconds from assignment to first exposure in each arm, as "
+            "description only."
         ),
         remediation=(
             "Check how exposure is triggered. If it can follow a purchase, say so in the "
             "design and analyse from first exposure. Compare the estimates with and without "
             "these players in the evidence, and say which one the conclusion rests on. If the "
-            "late share differs between arms, find out why before reading the effect."
+            "late share of the purchasers differs between arms, find out why before reading the "
+            "effect; if only the delay to first exposure differs, check the exposure trigger of "
+            "each arm."
         ),
         references=(KOHAVI_TANG_XU_2020,),
         check=_late_exposure,
         escalation=Escalation(
             to="blocker",
             when=(
-                "the share of exposed players who were exposed late differs between the arms: "
-                "the chi-squared test of homogeneity across the arms (the exact test when an "
-                "expected count is below 100) has p below 0.001."
+                "the share of the exposed players who bought that were exposed late differs "
+                "between the arms: the chi-squared test of homogeneity across the arms (the exact "
+                "test when an expected count is below 100) has p below 0.001. The test has low "
+                "power at the size of the lab's experiment: with the exposures of one arm delayed "
+                "by 24 hours it escalated in 22% of simulated runs at 21 days and 4% at 10 days "
+                "(design section 25), so an escalation is strong evidence and its absence is not "
+                "evidence that the arms were exposed alike."
             ),
             applies=_late_share_differs,
         ),

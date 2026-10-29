@@ -621,11 +621,11 @@ def test_the_rule_sets_of_the_check_are_copies_of_those_of_the_report_code() -> 
 # --- Sentences --------------------------------------------------------------------------------
 
 
-def test_the_nine_results_rules_have_81_sentences_that_join_back_into_their_texts() -> None:
+def test_the_nine_results_rules_have_82_sentences_that_join_back_into_their_texts() -> None:
     found = catalogue_sentences()
 
     assert len(RESULTS_RULES) == 9
-    assert Counter(key.split(".")[1] for key in found) == {"title": 9, "why": 32, "do": 40}
+    assert Counter(key.split(".")[1] for key in found) == {"title": 9, "why": 33, "do": 40}
     for rule in RESULTS_RULES:
         assert found[f"{rule.id}.title"] == rule.title
         for kind, text in (("why", rule.why_it_matters), ("do", rule.remediation)):
@@ -730,6 +730,37 @@ LABELS = {
     "RES-012.homogeneity.alpha": ("significance level for the late shares", "probability"),
     "RES-012.homogeneity.method": ("test used", ""),
     "RES-012.homogeneity.smallest_expected": ("smallest expected count", "players"),
+    "RES-012.purchasers.*": ("exposed players who bought, by arm", "players"),
+    "RES-012.late_share_of_purchasers.*": (
+        "share of the exposed players who bought that were exposed late",
+        "share",
+    ),
+    "RES-012.purchaser_homogeneity.chi_square": (
+        "chi-squared statistic of the late shares of the purchasers",
+        "",
+    ),
+    "RES-012.purchaser_homogeneity.degrees_of_freedom": (
+        "degrees of freedom of the late shares of the purchasers",
+        "",
+    ),
+    "RES-012.purchaser_homogeneity.p_value": (
+        "p value of the late shares of the purchasers across arms",
+        "probability",
+    ),
+    "RES-012.purchaser_homogeneity.alpha": (
+        "significance level for the late shares of the purchasers",
+        "probability",
+    ),
+    "RES-012.purchaser_homogeneity.method": ("test used", ""),
+    "RES-012.purchaser_homogeneity.smallest_expected": ("smallest expected count", "players"),
+    "RES-012.exposure_delay.median_seconds.*": (
+        "median seconds from assignment to first exposure",
+        "seconds",
+    ),
+    "RES-012.exposure_delay.kruskal_wallis_p_value": (
+        "p value of the difference in delay to first exposure across arms",
+        "probability",
+    ),
     "RES-013.version_from.exposure": (
         "analysed players with the version of their first exposure",
         "players",
@@ -747,6 +778,7 @@ ENUMERATIONS = {
     "RES-001.method": ("chi_square", "exact"),
     "RES-011.total.method": ("chi_square", "exact"),
     "RES-012.homogeneity.method": ("chi_square", "exact"),
+    "RES-012.purchaser_homogeneity.method": ("chi_square", "exact"),
 }
 
 
@@ -1089,7 +1121,7 @@ def test_no_free_text_of_the_report_reaches_the_fact_list(golden: dict) -> None:
     # not vacuous: the canaries are in the report, and the facts are the golden's, aliases too
     text = json.dumps(canaried)
     assert len(canaries) > 30 and all(canary in text for canary in canaries)
-    assert sum(len(f.facts) for f in facts.findings) == 61
+    assert sum(len(f.facts) for f in facts.findings) == 77
     assert sorted(facts.aliases.values()) == ["A1", "A2", "A3"]
     assert facts.findings == plain.findings
     # and no canary is in them

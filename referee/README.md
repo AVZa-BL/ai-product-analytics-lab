@@ -69,6 +69,24 @@ Status 2 means the spec or the data cannot be read or reviewed (the problems are
 
 The report states the spec's fingerprint and the SHA-256 of each CSV file, the origin the weeks were counted from, the first and last assignment, the players assigned, analysed and ignored, whether the run is an interim one (the memo instead states how the time of the export and the span of the assignments compare with the planned end and the planned days), whether the same rules fire at the same severity if the origin is 1 to 6 days earlier (not run when `design.start_utc` is registered; it costs six more reviews, about 4 s on the example on the development machine and about twice that on a slower one), one line for each of RES-004, RES-007 and RES-008 even when it found nothing, the effect of the primary metric among the players whose outcome window had closed (labelled not to be read when RES-001, RES-003 or RES-012 blocks, and as underpowered when RES-002 does), and every finding with its evidence. `--format json` holds every row; the text lists at most 1,000 rows of a list and says so. Anything in the text that could move a terminal or forge a line (a control character or a newline in a title, an experiment or a player id) is written as an escape. The same spec and data reviewed by the same Referee on one machine give the same bytes. Between machines a float may differ in its last digits.
 
+## Monitoring a running experiment
+
+`review-results` judges an experiment as finished, so an unfinished one is `invalid` at once: RES-002 (too few players) and RES-003 (too short) block until it ends. `--mode monitor` asks other questions of the same spec and export: how far has it got, is the data healthy, are the guardrails holding, and what does the primary metric look like so far.
+
+```bash
+python -m referee review-results examples/offer-page-results.yaml \
+    tests/data/hybrid_offer_page_5000 --experiment-id hybrid_offer_page \
+    --as-of 2026-06-30T00:00:00Z --mode monitor
+```
+
+| Status | Meaning | Exit status |
+| --- | --- | --- |
+| `on_track` | Nothing needs attention | 0 |
+| `attention` | A warning from a data-health rule (RES-011, RES-012, RES-013), a guardrail beyond its tolerance, or a declared metric that could not be read | 0 |
+| `stop_for_cause` | A sample ratio mismatch (RES-001) or a late-exposure imbalance (RES-012 at blocker level): find the cause before reading anything | 1 |
+
+These words are the monitor's own, not the verdicts of `review-results`. The report lists progress (players against the registered n and days against the registered minimum, which are numbers, never a status), every metric the spec declares with its role and whether it could be read and why not (a metric is never skipped silently), the primary metric's interval so far with no p value, and each guardrail with its interval and number of players. A guardrail beyond its tolerance is `attention` at an interim look, never a stop: an unadjusted 95% interval read at several looks raises false blockers (design section 25), and Referee has no error budget over looks yet. The cohort test (RES-007) and the heavy-tail note (RES-008) are not run. `--format text` or `json`; no memo. A primary metric the export reader does not hold is refused (status 2) with the reason.
+
 ## Working on it
 
 Referee is self-contained. Run everything from this folder (`referee/`), with Python 3.12:
