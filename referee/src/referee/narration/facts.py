@@ -30,6 +30,7 @@ from referee.rules import RESULTS_RULES
 MAX_REPORT_BYTES = 5 * 1024 * 1024
 MAX_PROBLEMS = 1_000
 SHOWN_CHARS = 80  # of a report's name or key in a problem line
+MAX_DEPTH = 32  # of nesting; the engine's own reports go 10 deep
 
 SEVERITIES = ("blocker", "warning", "info")  # most serious first, as findings.py ranks them
 SUMMARISED_RULES = ("RES-004", "RES-007", "RES-008")
@@ -131,16 +132,24 @@ def _at(node: object, *path: str) -> object:
     return node
 
 
-def _non_finite(node: object, path: tuple[str | int, ...], out: _Problems) -> None:
-    if isinstance(node, float) and not math.isfinite(node):
-        where = "".join(f"[{p}]" if isinstance(p, int) else f".{_shown(p)}" for p in path)
-        out.add(f"{where[1:]}: not a finite number")
-    elif isinstance(node, dict):
-        for key, item in node.items():
-            _non_finite(item, (*path, key), out)
-    elif isinstance(node, list):
-        for index, item in enumerate(node):
-            _non_finite(item, (*path, index), out)
+def _check_values(report: object, out: _Problems) -> None:
+    """Refuse a number that is not finite and, once, nesting deeper than MAX_DEPTH, so that the
+    recursive readers below are bounded whatever the caller's stack."""
+    stack: list[tuple[object, tuple[str | int, ...]]] = [(report, ())]
+    deep = False
+    while stack:
+        node, path = stack.pop()
+        if len(path) > MAX_DEPTH:
+            if not deep:
+                out.add(f"the report is nested more than {MAX_DEPTH} levels deep")
+            deep = True
+        elif isinstance(node, float) and not math.isfinite(node):
+            where = "".join(f"[{p}]" if isinstance(p, int) else f".{_shown(p)}" for p in path)
+            out.add(f"{where[1:]}: not a finite number")
+        elif isinstance(node, dict):
+            stack.extend((item, (*path, key)) for key, item in reversed(node.items()))
+        elif isinstance(node, list):
+            stack.extend((item, (*path, index)) for index, item in reversed(list(enumerate(node))))
 
 
 def _check_arms(report: dict[str, Any], out: _Problems) -> list[str] | None:
@@ -165,7 +174,8 @@ def _check_arms(report: dict[str, Any], out: _Problems) -> list[str] | None:
         if isinstance(rows, list)
         else []
     )
-    control = [arm for arm in assigned if arm not in others]
+    named = {arm for arm in others if isinstance(arm, str)}
+    control = [arm for arm in assigned if arm not in named]
     if not isinstance(rows, list) or len(control) != 1 or len(others) != len(assigned) - 1:
         out.add("effect.arms: the arms and the control are not the arms of population.assigned")
         return None
@@ -192,7 +202,7 @@ def _check(report: object, out: _Problems) -> None:
     ):
         if not _same(report.get(key), wanted):
             out.add(f"{key}: not what this build of Referee writes")
-    _non_finite(report, (), out)
+    _check_values(report, out)
     order = _check_arms(report, out)
     findings = report.get("findings")
     if not isinstance(findings, list) or not all(_is_finding(item) for item in findings):
@@ -327,7 +337,9 @@ ALLOWLIST: dict[str, dict[str, Admitted]] = {
         "missing.*": Admitted("players missing from the number required", "players"),
     },
     "RES-003": {
-        "observed_days": Admitted("days from the first to the last assignment", "days"),
+        "observed_days": Admitted(
+            "whole days, rounded up, from the first to the last assignment", "days"
+        ),
         "min_duration_days": Admitted("registered minimum duration", "days"),
         "planned_duration_days": Admitted("registered planned duration", "days"),
     },

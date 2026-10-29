@@ -6,7 +6,7 @@ once for each name and spec dict in a session (`raw_spec` is a function-scoped f
 may change, so it is a parameter and its hash is part of the cache key).
 
     clear                a clear verdict: a binary primary metric, no guardrail, 28 days of 5,000
-                         players an arm (fewer, or a shorter plan, and RES-002 or RES-007 speak)
+                         players an arm (fewer, or a plan of 14 days, and RES-002 or RES-007 speak)
     warnings_only        a caution: RES-012 (equal late shares) and RES-013 (a changed arm)
     harm_blocker         invalid by RES-004 alone: variant_b makes a guardrail worse
     unattainable_design  RES-002 for a design that cannot be sized

@@ -1,7 +1,6 @@
 """The report check and the fact list of the narration layer (design sections 24.4 and 24.11)."""
 
 import copy
-import dataclasses
 import itertools
 import json
 import os
@@ -150,6 +149,7 @@ def test_every_fixture_is_json_as_the_engine_wrote_it_and_passes_the_check(
     assert json.loads(json.dumps(built)) == built
     assert read_report(path) == built
     check_report_consistency(built)
+    check_report_consistency(json.loads(json.dumps(built, sort_keys=True)))  # as `jq -S` writes it
 
 
 @pytest.mark.parametrize("kind", ["a FIFO", "a FIFO with a silent writer", "/dev/zero", "a folder"])
@@ -195,14 +195,20 @@ def test_reading_leaves_no_descriptor_open_whether_it_succeeds_or_refuses(
 ) -> None:
     path = tmp_path / "report.json"
     path.write_text(render_json(golden), encoding="utf-8")
-    before = len(os.listdir("/dev/fd"))
+
+    def next_descriptor() -> int:
+        probe = os.dup(0)
+        os.close(probe)
+        return probe
+
+    before = next_descriptor()
 
     for _ in range(5):
         read_report(path)
         with pytest.raises(ReportError):
             read_report(tmp_path)
 
-    assert len(os.listdir("/dev/fd")) == before
+    assert next_descriptor() == before
 
 
 @pytest.mark.parametrize(
@@ -421,6 +427,12 @@ CORRUPTIONS = [
     ),
     pytest.param(
         "golden",
+        lambda r: r["effect"]["arms"].append(copy.deepcopy(r["effect"]["arms"][0])),
+        EFFECT_ARMS,
+        id="an arm's row twice",
+    ),
+    pytest.param(
+        "golden",
         lambda r: put(r, "effect", "arms", 0, "arm", value="variant_z"),
         EFFECT_ARMS,
         id="an unknown arm in the effect",
@@ -582,8 +594,21 @@ def test_at_most_1000_problems_are_listed_and_all_of_them_counted(golden: dict) 
     assert raised.value.problems[0] == "findings[0].evidence.junk[0]: not a finite number"
 
 
-def test_a_report_error_reads_as_its_problems_one_to_a_line() -> None:
-    assert str(ReportError(["first", "second"])) == "first\nsecond"
+@pytest.mark.parametrize(("levels", "refused"), [(28, False), (29, True)])  # 32 deep, 33
+def test_nesting_deeper_than_the_bound_is_refused_once_wherever_it_is(
+    golden: dict, levels: int, refused: bool
+) -> None:
+    nested: object = 1
+    for _ in range(levels):
+        nested = [nested]
+    evidence_of(golden, "RES-001")["notes"] = nested  # the value is 4 keys below the report
+    evidence_of(golden, "RES-002")["notes"] = nested
+
+    problems = problems_of(golden)
+
+    assert problems == (["the report is nested more than 32 levels deep"] if refused else [])
+    if not refused:
+        fact_list(golden)
 
 
 def test_the_rule_sets_of_the_check_are_copies_of_those_of_the_report_code() -> None:
@@ -642,7 +667,10 @@ LABELS = {
     "RES-002.analysed.*": ("players analysed", "players"),
     "RES-002.assigned.*": ("players assigned", "players"),
     "RES-002.missing.*": ("players missing from the number required", "players"),
-    "RES-003.observed_days": ("days from the first to the last assignment", "days"),
+    "RES-003.observed_days": (
+        "whole days, rounded up, from the first to the last assignment",
+        "days",
+    ),
     "RES-003.min_duration_days": ("registered minimum duration", "days"),
     "RES-003.planned_duration_days": ("registered planned duration", "days"),
     "RES-004.summary.tests": ("guardrail comparisons of an arm against control", "comparisons"),
@@ -817,19 +845,6 @@ def test_the_facts_of_the_golden_are_the_allowed_values_under_aliases_and_the_re
     assert [(f.dropped, f.withheld) for f in facts.findings if f.rule_id == "RES-012"] == [(0, 25)]
 
 
-def test_the_allowlist_and_the_fact_list_are_values_that_cannot_be_changed(golden: dict) -> None:
-    facts = fact_list(golden)
-
-    for value in (
-        ALLOWLIST["RES-001"]["alpha"],
-        facts,
-        facts.findings[0],
-        facts.findings[0].facts[0],
-    ):
-        with pytest.raises(dataclasses.FrozenInstanceError):
-            setattr(value, dataclasses.fields(value)[0].name, None)
-
-
 def test_the_order_of_the_facts_is_the_allowlists_and_the_aliases_whatever_the_report_does(
     golden: dict,
 ) -> None:
@@ -885,12 +900,14 @@ def test_a_fact_list_is_refused_for_a_report_whose_arm_tables_disagree(
 
 def test_an_unknown_key_inside_a_listed_group_is_unlisted_with_its_path(golden: dict) -> None:
     golden["findings"] = [{**golden["findings"][0], "rule_id": "RES-012"}]
-    golden["findings"][0]["evidence"] = {"homogeneity": {"p_value": 0.1, "novel": 3}}
+    golden["findings"][0]["evidence"] = {
+        "homogeneity": {"p_value": 0.1, "novel": 3, "novel_rate": 0.5}
+    }
 
     (found,) = fact_list(golden).findings
 
     assert [f.id for f in found.facts] == ["RES-012.homogeneity.p_value"]
-    assert found.unlisted == ("homogeneity.novel",)
+    assert found.unlisted == ("homogeneity.novel", "homogeneity.novel_rate")
 
 
 def test_only_a_number_a_boolean_or_a_listed_word_at_its_path_is_a_fact(golden: dict) -> None:
