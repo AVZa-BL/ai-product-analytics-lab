@@ -312,6 +312,7 @@ class Admitted:
     label: str
     unit: str = ""
     words: tuple[str, ...] | None = None
+    boolean: bool = False  # a yes or no; every other path without words holds a number
 
 
 _TEST = ("chi_square", "exact")
@@ -330,7 +331,7 @@ ALLOWLIST: dict[str, dict[str, Admitted]] = {
         "method": Admitted("test used", words=_TEST),
     },
     "RES-002": {
-        "unattainable": Admitted("design cannot be sized"),
+        "unattainable": Admitted("design cannot be sized", boolean=True),
         "required.*": Admitted("players required by the power plan", "players"),
         "analysed.*": Admitted("players analysed", "players"),
         "assigned.*": Admitted("players assigned", "players"),
@@ -560,8 +561,11 @@ class _Walk:
                     f"{'.'.join((self.rule_id, *here))}: not one of the words the engine writes"
                 )
                 return False
-        elif not isinstance(value, int | float):
-            return False
+        elif entry.boolean:
+            if not isinstance(value, bool):
+                return False
+        elif isinstance(value, bool) or not isinstance(value, int | float):
+            return False  # a boolean is not a number: True at a rate would print as yes
         aliases = iter(arms)
         parts = [next(aliases) if part == ARM else part for part in here]
         label = f"{entry.label} ({arms[0]})" if arms else entry.label
