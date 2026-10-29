@@ -125,7 +125,31 @@ def test_the_columns_are_the_documented_ones(small: ExperimentSimulation) -> Non
         "purchases_7d",
         "revenue_usd_7d",
         "first_purchase_at_utc",
+        "sessions_pre_7d",
+        "revenue_usd_pre_7d",
         "scenario_run_id",
+    ]
+
+
+def test_the_pre_period_measures_follow_the_players_engagement_and_not_the_arm(
+    reference: dict,
+) -> None:
+    """What a covariate adjustment (CUPED) relies on: the pre-period is correlated with the
+    outcome through the player's engagement (by the generator's own model, not tuned), is
+    unaffected by the arm, and does not change the older columns."""
+    frame = outcomes(reference["sim"]).merge(assigned(reference["sim"])[["player_id", "arm"]])
+
+    # sessions: Poisson counts around 4 x engagement, engagement lognormal with sigma 0.5, so the
+    # correlation is Var(4 E) / (Var(4 E) + E[4 E]) = 0.56 in theory; revenue is dominated by the
+    # heavy-tailed amounts, so its pre-period carries almost nothing
+    assert 0.52 < frame.sessions_7d.corr(frame.sessions_pre_7d) < 0.62
+    assert abs(frame.revenue_usd_7d.corr(frame.revenue_usd_pre_7d)) < 0.05
+    for column in ("sessions_pre_7d", "revenue_usd_pre_7d"):
+        groups = [frame.loc[frame.arm == arm, column] for arm in ARMS]
+        assert stats.f_oneway(*groups).pvalue > 0.01, column  # balanced across arms
+    assert ground_truth(reference["launch"])["pre_period"]["columns"] == [
+        "sessions_pre_7d",
+        "revenue_usd_pre_7d",
     ]
 
 
