@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-28
 **Status:** Approved design (Alexander Zatey), pending implementation plan
-**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. 2 (2026-09-30): milestone 2 decisions, see section 17. 3 (2026-10-02): milestone 2c decisions, see section 18. 4 (2026-10-04): milestone 3 decisions, see section 19. 5 (2026-10-05): milestone 4 decisions, see section 20. 6 (2026-10-08): milestone 4b decisions, see section 21. 7 (2026-10-22): milestone 4c decisions, see section 22. 8 (2026-10-24): milestone 4c-3 decisions, see section 23. Sections 0 to 15 are unchanged. 9 (2026-10-28): milestone 5 decisions, see section 24.
+**Amendments:** 1 (2026-09-29): repository layout and settled validation rules, see section 16. 2 (2026-09-30): milestone 2 decisions, see section 17. 3 (2026-10-02): milestone 2c decisions, see section 18. 4 (2026-10-04): milestone 3 decisions, see section 19. 5 (2026-10-05): milestone 4 decisions, see section 20. 6 (2026-10-08): milestone 4b decisions, see section 21. 7 (2026-10-22): milestone 4c decisions, see section 22. 8 (2026-10-24): milestone 4c-3 decisions, see section 23. 9 (2026-10-28): milestone 5 decisions, see section 24. Sections 0 to 15 are unchanged.
 **Scope:** New module inside `ai-product-analytics-lab`; first milestone is the experiment spec schema
 
 This document is the handoff from the design conversation into Claude Code. It is self-contained: nothing outside this file and the repository is needed to start.
