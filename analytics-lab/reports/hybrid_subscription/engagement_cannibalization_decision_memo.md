@@ -30,7 +30,7 @@ Population counts come from `population` in the JSON:
 | missing_or_invalid_source_watermark_count | 0 |
 | no_eligible_exposure_count | 20 |
 | pre_session_count_selection_gap | 0.8991766350784527 |
-| pre_session_count_standardized_mean_difference | 1.8872441243566622 |
+| pre_session_count_standardized_mean_difference | 1.8872441243566618 |
 | subscription_not_after_exposure_count | 0 |
 | unmatched_control_count | 0 |
 | unmatched_subscriber_count | 123 |
@@ -85,11 +85,14 @@ The governed incident mart retains defects and containment decisions; containmen
 | analysis_population_exclusion | 563 | contained | Exclude invalid identity/covariates, ineligible exposure and incomplete source windows; retain all exclusion reasons and counts in population summary. |
 | cancellation_pending_expiry | 48 | contained | Preserve access through contractual period end; cancellation disables renewal only. |
 | duplicate_store_webhook | 55 | contained | Use the latest ingested webhook per transaction and retain duplicate evidence. |
+| experiment_exposure_after_purchase | 42 | contained | Exclude the player from outcome figures, retain the row with its exclusion reason, and publish assigned and excluded counts. |
+| experiment_mid_test_config_change | 95 | contained | Disclose, do not correct: publish has_config_change and the version columns by date; outcomes stay pooled across versions. |
+| experiment_sample_ratio_mismatch | 0 | clear | Publish the statistic and flag, and set every difference against control to NULL for the experiment. |
 | missing_subscription_grant_link | 32 | contained | Set reconciled subscription currency to zero until a transaction link is present. |
 | mixed_timestamp_mismatch | 0 | clear | Derive UTC from local timestamp plus named time zone and retain the source mismatch flag. |
 | post_subscription_exposure | 20 | contained | Null approved exposure fields and exclude the row from incrementality analysis. |
 
-Duplicate webhooks are canonicalized with evidence retained; cancellation alone preserves entitlement until expiry/revocation. Missing grant links are delivery-integrity defects, not direct cash-revenue losses. Ineligible post-subscription exposures stay visible for quality reporting while approved exposure fields are NULL.
+Duplicate webhooks are canonicalized with evidence retained; cancellation alone preserves entitlement until expiry/revocation. Missing grant links are delivery-integrity defects, not direct cash-revenue losses. Ineligible post-subscription exposures stay visible for quality reporting while approved exposure fields are NULL. The three `experiment_*` incidents belong to the synthetic offer-page experiment this scenario carries for Referee; the matched-pair analysis reads none of the experiment relations, and the re-execution that added them to this table left every estimate above unchanged.
 
 ## Recommended experiment
 
@@ -101,8 +104,8 @@ Keep reward-track exclusion and refund accounting fixed; monitor exposure eligib
 
 The [tracked notebook source](../../notebooks/hybrid_subscription/01_engagement_cannibalization_diagnostic.py) queries `mart_hybrid_subscription__matched_incrementality` and reconciles it to the engagement/cannibalization aggregates plus `mart_hybrid_subscription__match_population_summary` before calculation. The independent summary remains one row at zero pairs; estimates and intervals become NULL/unavailable and unsupported bootstrap/plots are skipped. With zero prior-payer pairs, engagement remains reportable and revenue is unavailable. Pair lineage includes `fct_hybrid_subscription__player_behavior_28d`; the notebook does not reconstruct business metrics from raw or staging data.
 
-The executed source version is `f7349296f45cc99184e91537dfe0444e5386567b`; execution time is `2026-09-21T21:59:51.223464Z`, both copied from the JSON metadata. The refreshed JSON and this memo follow the source repair; metadata binds the native execution to that exact source.
+The executed source version is `ba82c6cb3501140d668646a0ea254dfc541efe28`; execution time is `2026-10-29T05:13:33.602671Z`, both copied from the JSON metadata. The JSON was re-executed on 2026-10-29 at that commit, which is on `main`, after the incident mart gained the three experiment incidents. Compared with the execution of 2026-09-21, every analytical value is unchanged except the last digits of `pre_session_count_standardized_mean_difference` (1.8872441243566622 then, 1.8872441243566618 now, two units in the last place); the cause of that difference was not traced, and the memo rounds the value to three decimals where it reasons from it. DuckDB 1.5.6 and NumPy 2.5.3 replaced 1.5.5 and 2.5.2.
 
-The [machine-readable validation record](native_validation.json) binds a clean dbt reconstruction to the exact source snapshot above. The full `hybrid_subscription` selector completed with PASS=312 tests, SUCCESS=36 models, WARN=0, ERROR=0, SKIP=0, TOTAL=348. The diagnostic JSON records `explicit remote snapshot override` for the source version and `existing local governed DuckDB artifact` for execution mode; it is committed by the commit immediately following that pinned source version, because an artifact cannot carry the identifier of the commit that contains it. Generated notebooks and figures remain untracked; they are not published evidence and are not linked here.
+The [machine-readable validation record](native_validation.json) binds the dbt build that produced the governed DuckDB artifact to the same commit. The full `hybrid_subscription` selector completed with PASS=430 (44 models, 377 data tests and 9 unit tests), WARN=0, ERROR=0, SKIP=0, TOTAL=430, at dbt 1.12.3, before the notebook ran (`generated_at_utc` precedes `diagnostic_executed_at_utc` in the record). The record is written by `scripts/validation/write_native_validation.py` from dbt's `target/run_results.json` and the diagnostic JSON, so the two cannot name different executions. The diagnostic JSON records `local git HEAD` for the source version and `existing local governed DuckDB artifact` for execution mode; it is committed by the commit immediately following that source version, because an artifact cannot carry the identifier of the commit that contains it. Generated notebooks and figures remain untracked; they are not published evidence and are not linked here.
 
 Use the [audit](../../docs/ai-audit/hybrid_subscription.md), [metric catalogue](../../docs/metrics/hybrid_subscription.md), and JSON execution provenance for the exact validation boundary.

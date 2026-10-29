@@ -942,25 +942,49 @@ def test_an_unknown_key_inside_a_listed_group_is_unlisted_with_its_path(golden: 
     assert found.unlisted == ("homogeneity.novel", "homogeneity.novel_rate")
 
 
-def test_only_a_number_a_boolean_or_a_listed_word_at_its_path_is_a_fact(golden: dict) -> None:
+def test_only_a_number_at_a_numeric_path_and_a_listed_word_at_its_path_is_a_fact(
+    golden: dict,
+) -> None:
     golden["findings"] = golden["findings"][:1]
     golden["findings"][0]["evidence"] = {
         "alpha": "0.001",  # a string where a number belongs
         "allocation": [1, 2],  # a list where the arms are
         "assigned": {"control": "997", "variant_b": 1046.5, "variant_c": None},
-        "expected": {"control": True, "variant_b": {"x": 1}},
+        "expected": {"control": True, "variant_b": {"x": 1}, "variant_c": False},  # no number
         "p_value": {"x": 1, "y": [2, 3]},
         "method": "bogus",
     }
 
     (found,) = fact_list(golden).findings
 
-    assert [(f.id, f.value) for f in found.facts] == [
-        ("RES-001.assigned.A2", 1046.5),
-        ("RES-001.expected.A1", True),
-    ]
-    # alpha 1, allocation 2, two of assigned, one of expected, p_value 3, method 1
-    assert (found.dropped, found.withheld, found.unlisted) == (10, 0, ())
+    assert [(f.id, f.value) for f in found.facts] == [("RES-001.assigned.A2", 1046.5)]
+    # alpha 1, allocation 2, two of assigned, three of expected, p_value 3, method 1
+    assert (found.dropped, found.withheld, found.unlisted) == (12, 0, ())
+
+
+@pytest.mark.parametrize(
+    ("value", "kept"),
+    [
+        (True, True),
+        (False, True),
+        (1, False),
+        ("yes", False),
+        (None, False),
+    ],
+)
+def test_the_one_boolean_path_admits_a_boolean_and_nothing_else(
+    golden: dict, value: object, kept: bool
+) -> None:
+    golden["findings"] = [f for f in golden["findings"] if f["rule_id"] == "RES-002"]
+    golden["findings"][0]["evidence"] = {"unattainable": value}
+
+    (found,) = fact_list(golden).findings
+
+    assert [(f.id, f.value) for f in found.facts] == (
+        [("RES-002.unattainable", value)] if kept else []
+    )
+    assert all(f.value is value for f in found.facts)  # True stays True, not 1
+    assert found.dropped == (0 if kept else 1)
 
 
 def test_a_value_is_counted_as_dropped_for_each_value_in_a_subtree_or_list_and_unknown_keys_named(

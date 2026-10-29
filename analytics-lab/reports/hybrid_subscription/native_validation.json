@@ -1,15 +1,17 @@
 {
-  "source_commit": "f7349296f45cc99184e91537dfe0444e5386567b",
-  "mode": "clean dbt reconstruction from exact published source snapshot",
+  "source_commit": "ba82c6cb3501140d668646a0ea254dfc541efe28",
+  "mode": "dbt build of the selector from the regenerated fixture, before the diagnostic notebook read the resulting DuckDB artifact",
   "selector": "hybrid_subscription",
   "dbt_version": "1.12.3",
-  "generated_at_utc": "2026-09-21T21:34:42Z",
+  "generated_at_utc": "2026-10-29T05:13:30.955017Z",
+  "diagnostic_executed_at_utc": "2026-10-29T05:13:33.602671Z",
   "results": {
-    "passed_tests": 312,
-    "successful_models": 36,
+    "successful_models": 44,
+    "passed_tests": 377,
+    "passed_unit_tests": 9,
     "warnings": 0,
     "errors": 0,
     "skipped": 0,
-    "total": 348
+    "total": 430
   }
 }
