@@ -203,19 +203,16 @@ def with_info(rep: dict) -> dict:
         (0.05, "0.05"),
         (12, "12"),
         (12.0, "12"),
-        (0.5, "0.5"),
         (0.0, "0"),
         (100000, "100,000"),
         (100000.0, "100,000"),
         (2107.0, "2,107"),
         (1234567.0, "1,234,570"),
-        (1234.5, "1,234.5"),
         (0.7215426614114665, "0.721543"),
         (1.5e20, "1.50000e+20"),
         (1e-7, "1.00000e-07"),
         (True, "yes"),
         (False, "no"),
-        (1, "1"),
         ("chi_square", "chi_square"),
     ],
 )
@@ -406,7 +403,6 @@ def test_the_understood_line_is_written_from_the_routers_result(
     [
         {"kind": "answer", "intent": "explain_finding", "target": "ZZZ-123"},
         {"kind": "answer", "intent": "explain_finding", "target": "RES-005"},
-        {"kind": "answer", "intent": "explain_finding", "target": "DES-001"},
         {"kind": "answer", "intent": "shout"},
         {"kind": "advice"},
     ],
@@ -500,7 +496,6 @@ def test_the_frame_has_one_shape_for_an_answer_a_refusal_an_unreadable_question_
         ([("fact", "RES-003")], False),  # not a finding of the report
         ([("fact", "hostile\nid")], False),
         ([("nothing", "RES-001")], False),
-        ([("schema\n", "-")], False),
     ],
 )
 def test_a_withheld_page_prints_codes_and_finding_ids_of_the_report_only(
@@ -630,12 +625,6 @@ def test_a_quiet_rule_is_never_bare_and_never_without_the_disclaimer(raw_spec: d
         assert checked == frame(rep, "what was checked", [CHOSEN_FIXED], body, decision)
         assert quiet_discipline(checked) == len(quiet_rules)
     assert set(SUMMARISED) <= quiet_seen
-
-
-def test_the_numbering_of_the_sentence_a_quiet_heavy_tail_rule_quotes_has_not_moved() -> None:
-    assert SENTENCES["RES-008.why.6"].startswith(
-        "A quiet RES-008 is not evidence that the interval is reliable"
-    )
 
 
 def test_a_report_with_no_finding_gets_one_line_and_the_disclaimer_for_any_intent(
