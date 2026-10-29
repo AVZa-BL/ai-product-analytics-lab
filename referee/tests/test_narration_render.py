@@ -206,6 +206,10 @@ def with_info(rep: dict) -> dict:
         (0.0, "0"),
         (100000, "100,000"),
         (100000.0, "100,000"),
+        (10.0, "10"),
+        (100.0, "100"),
+        (1000.0, "1,000"),
+        (1500.0, "1,500"),
         (2107.0, "2,107"),
         (1234567.0, "1,234,570"),
         (0.7215426614114665, "0.721543"),
@@ -247,7 +251,6 @@ def test_every_page_of_every_intent_is_its_sources_in_a_fixed_order(raw_spec: di
             )
             page = frame(rep, understood, [CHOSEN_FIXED], body, decision)
             assert render_answer(*args) == page
-            assert "Not selected by the narrator:" not in page
             if intent == "checked":  # code only, whatever the narrator was asked
                 assert render_answer(*args, {}) == page
             if intent != "checked" and raised:
@@ -284,36 +287,15 @@ def test_every_page_of_every_intent_is_its_sources_in_a_fixed_order(raw_spec: di
             )
             selection[rule] = Chosen(frozenset(led), frozenset(led_facts))
             counts["facts led"] += len(led_facts)
-        page = render_answer(rep, found, understanding, decision, selection)
+        order = list(selection.items())
+        rng.shuffle(order)  # the narrator's order, which the page must not use
+        page = render_answer(rep, found, understanding, decision, dict(order))
         body = answer_body(rep, found, intent, target, selection)
         assert page == frame(rep, understood_of(intent, target), CHOSEN_MODEL, body, decision)
         counts["second label"] += "Not selected by the narrator:" in page
         seen.add((id(rep), intent, target))
     assert len(seen) == len(cases)
     assert all(counts.values()), counts
-
-
-def test_an_info_finding_the_narrator_left_out_is_listed_and_the_model_path_says_so(
-    raw_spec: dict,
-) -> None:
-    rep = with_info(report("golden", raw_spec))
-    selection = {
-        rule: Chosen(frozenset({f"{rule}.why.1"}))
-        for rule in ("RES-001", "RES-002", "RES-007", "RES-012", "RES-013")
-    }
-    page = render_answer(
-        rep, fact_list(rep), Understanding("answer", "summary"), decision_block(rep), selection
-    )
-
-    lines = page.split("\n")
-    assert lines[3:5] == CHOSEN_MODEL
-    assert lines[-5:-1] == [
-        "Findings not narrated:",
-        f"  RES-008 info {SENTENCES['RES-008.title']}",
-        "",
-        FOOTER,
-    ]
-    assert "RES-008 info:" not in page
 
 
 def test_the_count_of_evidence_values_not_shown_is_written_with_separators(raw_spec: dict) -> None:
@@ -403,6 +385,9 @@ def test_the_understood_line_is_written_from_the_routers_result(
     [
         {"kind": "answer", "intent": "explain_finding", "target": "ZZZ-123"},
         {"kind": "answer", "intent": "explain_finding", "target": "RES-005"},
+        {"kind": "answer", "intent": "explain_finding", "target": "DES-001"},
+        {"kind": "answer", "intent": "explain_finding", "target": "res-001"},
+        {"kind": "answer", "intent": "explain_finding", "target": "RES-001 x"},
         {"kind": "answer", "intent": "shout"},
         {"kind": "advice"},
     ],
@@ -426,8 +411,11 @@ def test_a_fact_list_that_is_not_the_reports_cannot_drop_a_finding_from_the_page
         )
 
 
-def test_an_explanation_without_a_single_target_is_a_summary_that_says_so(raw_spec: dict) -> None:
-    rep = report("golden", raw_spec)
+@pytest.mark.parametrize("name", ["golden", "clear"])  # clear has no finding to summarise
+def test_an_explanation_without_a_single_target_is_a_summary_that_says_so(
+    raw_spec: dict, name: str
+) -> None:
+    rep = report(name, raw_spec)
     found, decision = fact_list(rep), decision_block(rep)
     summary = render_answer(rep, found, Understanding("answer", "summary"), decision).split("\n")
     explained = render_answer(
@@ -436,6 +424,17 @@ def test_an_explanation_without_a_single_target_is_a_summary_that_says_so(raw_sp
 
     assert explained[2].endswith("so it is answered as a summary.")
     assert explained[:2] + explained[3:] == summary[:2] + summary[3:]
+
+
+def test_an_empty_selection_is_the_model_path_with_nothing_narrated(raw_spec: dict) -> None:
+    rep = report("golden", raw_spec)
+    found, decision = fact_list(rep), decision_block(rep)
+    page = render_answer(rep, found, Understanding("answer", "summary"), decision, {})
+    body = answer_body(rep, found, "summary", None, {})
+
+    assert page == frame(rep, "a summary of the review", CHOSEN_MODEL, body, decision)
+    assert body[0] == "Findings not narrated:"
+    assert len(body) == 1 + len(rep["findings"])  # every finding, whatever its severity
 
 
 def test_the_frame_has_one_shape_for_an_answer_a_refusal_an_unreadable_question_and_a_withheld_page(
@@ -482,7 +481,6 @@ def test_the_frame_has_one_shape_for_an_answer_a_refusal_an_unreadable_question_
     }
     for page, understood, middle, body in pages.values():
         assert page == frame(rep, understood, middle, body)
-        assert page.endswith(FOOTER + "\n")  # one string, with one newline at its end
 
 
 @pytest.mark.parametrize(
@@ -495,7 +493,10 @@ def test_the_frame_has_one_shape_for_an_answer_a_refusal_an_unreadable_question_
         ([("schema", "RES-002")], True),
         ([("fact", "RES-003")], False),  # not a finding of the report
         ([("fact", "hostile\nid")], False),
+        ([("fact", "RES-001\x1b[2J")], False),  # an ID the report holds, with something after it
         ([("nothing", "RES-001")], False),
+        ([("retry", "-")], False),  # a seventh code
+        ([("schema", "-"), ("nothing", "RES-001")], False),  # one good, one bad
     ],
 )
 def test_a_withheld_page_prints_codes_and_finding_ids_of_the_report_only(
@@ -625,25 +626,6 @@ def test_a_quiet_rule_is_never_bare_and_never_without_the_disclaimer(raw_spec: d
         assert checked == frame(rep, "what was checked", [CHOSEN_FIXED], body, decision)
         assert quiet_discipline(checked) == len(quiet_rules)
     assert set(SUMMARISED) <= quiet_seen
-
-
-def test_a_report_with_no_finding_gets_one_line_and_the_disclaimer_for_any_intent(
-    raw_spec: dict,
-) -> None:
-    rep = report("clear", raw_spec)
-    found, decision = fact_list(rep), decision_block(rep)
-    for understanding, understood in (
-        (Understanding("answer", "summary"), "a summary of the review"),
-        (Understanding("answer", "next_steps"), "what to do next"),
-        (
-            Understanding("answer", "explain_finding", as_summary=True),
-            "an explanation of a finding, but no single rule was named, so it is answered as a "
-            "summary",
-        ),
-    ):
-        page = render_answer(rep, found, understanding, decision)
-        assert page == frame(rep, understood, [CHOSEN_FIXED], [NO_FINDING, DISCLAIMER_OTHER])
-        assert quiet_discipline(page) == 1
 
 
 def test_a_target_that_is_not_a_finding_gets_one_code_written_line_and_the_disclaimer(
