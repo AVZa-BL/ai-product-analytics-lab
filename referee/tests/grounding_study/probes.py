@@ -2,9 +2,9 @@
 
 Written by an agent in plain words, to be put to the checker; they are probes, not a sample of
 anything, and the checker does not compute harm. The first group cites sentences that are free
-once the list is cut to qualifiers and markers, and is built from their words; the second cites
-sentences that are free only when it is cut to markers; the last holds a digit or a symbol, or
-cites a sentence with a marker.
+once the list is cut to qualifiers and digits, and is built from their words; the second cites
+sentences that are free only when it is cut to digits; the last holds a digit, or cites a
+sentence that holds one.
 """
 
 from typing import NamedTuple
@@ -144,7 +144,8 @@ PROBES: tuple[Probe, ...] = (
     Probe(
         ("RES-008.do.1",),
         "The interval is wrong in 10 percent of experiments.",
-        "adds a number the sentence does not give",
+        "states a rate as a general fact; the sentence offers 10% and 90% only as an example of "
+        "a simulated entry",
     ),
     Probe(
         ("RES-008.why.6",),

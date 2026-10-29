@@ -2,9 +2,10 @@
 
 A text is admitted for a cited set of one or two catalogue sentences when it holds no digit or
 symbol and every word of it is a function word or a word of a cited sentence that is FREE under
-the view in use (no loaded word, no marker). The words of a cited sentence that is not free add
-nothing. The checker tests each word alone, so it cannot tell sense from word salad: the
-enumeration shows how many texts that is. Harm is not computed here or anywhere in the study.
+the view in use (no loaded token under it). The words of a cited sentence that is not free add
+nothing, and neither do the digit and symbol tokens of a free one, which no text may hold. The
+checker tests each word alone, so it cannot tell sense from word salad: the enumeration shows how
+many texts that is. Harm is not computed here or anywhere in the study.
 """
 
 from collections import Counter
@@ -22,11 +23,21 @@ def vocabulary(cited, catalogue: dict[str, str], view: str) -> set[str]:
     words = set(FUNCTION_WORDS)
     for sentence_id in cited:
         if is_free(catalogue[sentence_id], view):
-            words.update(tokens(catalogue[sentence_id]))
+            words.update(t for t in tokens(catalogue[sentence_id]) if not is_marker(t))
     return words
 
 
-def check(text: str, cited, catalogue: dict[str, str], view: str = "full") -> str | None:
+def longest_within(size: int, max_texts: int) -> tuple[int, int]:
+    """The largest L for which the texts of 1 to L words over `size` words number `max_texts` or
+    fewer in all, and that number."""
+    length, texts = 0, 0
+    while texts + size ** (length + 1) <= max_texts:
+        length += 1
+        texts += size**length
+    return length, texts
+
+
+def check(text: str, cited, catalogue: dict[str, str], view: str) -> str | None:
     """None when the text is admitted for the cited sentences, else the reason it is not."""
     if not 1 <= len(set(cited)) <= MAX_CITED:
         return "cites no sentence or more than two"
@@ -56,10 +67,7 @@ def enumerate_texts(catalogue: dict[str, str], view: str, max_texts: int = MAX_T
     allowed = [vocabulary(cited, catalogue, view) for cited in cited_sets]
     content = sorted(set().union(*allowed) - set(FUNCTION_WORDS))
     size = len(FUNCTION_WORDS) + len(content)
-    length, texts = 0, 0
-    while cited_sets and texts + size ** (length + 1) <= max_texts:
-        length += 1
-        texts += size**length
+    length, texts = longest_within(size, max_texts) if cited_sets else (0, 0)
     masks = [-1] * len(FUNCTION_WORDS)
     masks += [sum(1 << k for k, words in enumerate(allowed) if w in words) for w in content]
     function_only, alone, anyone = [], {i: [] for i in free}, []

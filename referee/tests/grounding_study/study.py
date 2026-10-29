@@ -9,7 +9,7 @@ from functools import cache
 from pathlib import Path
 
 from grounding_study.catalogue import FROZEN_SHA256, load_frozen
-from grounding_study.checker import MAX_CITED, MAX_TEXTS, check, enumerate_texts
+from grounding_study.checker import MAX_CITED, MAX_TEXTS, check, enumerate_texts, longest_within
 from grounding_study.lexicon import (
     FUNCTION_WORDS,
     LOADED,
@@ -27,8 +27,8 @@ PROVENANCE = (
 )
 VIEW_NAMES = {
     "full": "the full list",
-    "qualifiers": "qualifiers and markers",
-    "digits": "markers only",
+    "qualifiers": "qualifiers and digits",
+    "digits": "digits only",
 }
 LISTED_ALONE = 12  # a view with more free sentences gets its per-sentence counts in the JSON only
 
@@ -48,7 +48,9 @@ def study(sentences: dict[str, str], as_of: str) -> dict:
         f"{len(free['full'])} of the {len(sentences)} catalogue sentences contain none of the "
         f"study's loaded words under its full list and {len(free['digits'])} under the "
         f"digits-only ablation, and the checker admitted {admitted['full']} of {len(PROBES)} "
-        "hand-written harmful probes (docs/grounding-study.md)."
+        "hand-written harmful probes under the full list "
+        f"({admitted['qualifiers']} and {admitted['digits']} of {len(PROBES)} under the "
+        "qualifiers-and-digits and digits-only ablations) (docs/grounding-study.md)."
     )
     return {
         "what": "a closed-vocabulary checker over bounded enumerations of short texts, and how "
@@ -100,10 +102,16 @@ def _enumeration(name: str, found: dict) -> list[str]:
     free, size, length = found["free"], found["vocabulary"], found["max_length"]
     lines = [f"### {name}: {len(free)} free sentences", ""]
     if not free:
+        longest, total = longest_within(size, MAX_TEXTS)
+        counts = ", ".join(f"{size**n:,}" for n in range(1, longest))
+        counts += f" and {size**longest:,}"
         return lines + [
             "No sentence is free, so no cited sentence adds a word to the vocabulary: whatever is "
-            "cited, the checker admits only texts of function words, which hold no word of a "
-            "sentence, and none was enumerated.",
+            f"cited, the checker admits exactly the texts made of the {size} function words, which "
+            f"hold no word of a sentence. There are {size}^n of them with n words, for every n; "
+            f"for 1 to {longest} words, the longest within the bound of {MAX_TEXTS:,} texts in "
+            f"all, they number {counts} ({total:,} in all). The rule gives these counts; no text "
+            "was enumerated.",
             "",
         ]
     lines += [
@@ -160,23 +168,29 @@ def render_markdown(result: dict, sentences: dict[str, str]) -> str:
         f"- Bound of the first two figures: the {total} sentences, frozen as of "
         f"{result['catalogue']['as_of']} (SHA-256 `{result['catalogue']['sha256']}`), against "
         f"the loaded-word list of {lexicon['words']} words (SHA-256 `{lexicon['sha256']}`), "
-        "and against markers only. Under the full list every sentence holds at least "
+        "and, for the second figure, against the tokens that hold a digit. Under the full list "
+        "every sentence holds at least "
         f"{result['fewest_loaded']['count']} distinct loaded tokens, so the first figure would "
         "not move if one word were taken off the list.",
         f"- Bound of the third: {probes['total']} probes written by hand, put to the checker with "
-        f"the full list. With the list cut to qualifiers and markers it admits "
-        f"{admitted['qualifiers']} of {probes['total']}, and with markers only "
+        "the full list. With the list cut to qualifiers and digits it admits "
+        f"{admitted['qualifiers']} of {probes['total']}, and with digits only "
         f"{admitted['digits']} of {probes['total']}. Under the full list {free['full']['count']} "
-        "sentences are free, and a probe can use only the words of a free sentence; that it "
-        "admits "
-        f"{admitted['full']} is therefore not a finding that the checker catches harm.",
+        "sentences are free, so no cited sentence adds a word and only texts of function words "
+        f"are admitted: that the checker admitted {admitted['full']} follows from that, by "
+        "construction, and is not a finding that it catches harm, and the probes are not "
+        "independent of the list.",
         "",
         "## The loaded words",
         "",
         "A sentence is free under a view when none of its tokens is loaded under it. A token is a "
-        "chunk between spaces and hyphens, in lower case, without the punctuation at its ends; "
-        "one that holds a digit or a symbol (`5%`, the `007` of `RES-007`, `min_duration_days`) is "
-        "a marker and is loaded under every view. The list holds the words that carry a "
+        "chunk between spaces and hyphens, in lower case, without the punctuation at its ends. "
+        "A token that holds a digit (`5%`, the `007` of `RES-007`) is loaded under every view. One "
+        "that holds a symbol and no digit (`min_duration_days`, the inner dot of "
+        "`design.start_utc`) is loaded under the full list, where every sentence is loaded anyway "
+        "and the count is 0 whichever way a symbol is treated, and not under the two ablations, "
+        "so that the digits-only ablation loads digits and nothing else. The list holds the words "
+        "that carry a "
         "decision, a condition, a negation, a modal, a quantity, a comparison, a certainty, a "
         "cause, a severity or verdict, a unit, a position, an arm or an ordinal, in the folded "
         "form of the tokeniser (a trailing plural s off). It is one agent's judgement, made with "
@@ -204,18 +218,20 @@ def render_markdown(result: dict, sentences: dict[str, str]) -> str:
         + ", ".join(f"`{i}`" for i in result["fewest_loaded"]["ids"])
         + ".",
         "",
-        "Free under qualifiers and markers:",
+        "Free under qualifiers and digits:",
         "",
         *(f"- `{i}`: {sentences[i]}" for i in free["qualifiers"]["ids"]),
         "",
-        "Free under markers only (the text is in the last table): "
+        "Free under digits only (the text is in the last table): "
         + ", ".join(f"`{i}`" for i in free["digits"]["ids"]),
         "",
         "## The checker",
         "",
         "A text is admitted for a cited set of one or two sentences when it holds no digit or "
-        "symbol and each of its words is a function word or a word of a cited sentence that is "
-        "free under the view; the words of a cited sentence that is not free add nothing. The "
+        "symbol (neither can be typed into model text in this design) and each of its words is a "
+        "function word or a word of a cited sentence that is free under the view; the words of a "
+        "cited sentence that is not free add nothing, and neither do the digit and symbol tokens "
+        "of one that is. The "
         f"{len(FUNCTION_WORDS)} function words: "
         + ", ".join(f"`{w}`" for w in FUNCTION_WORDS)
         + ".",
@@ -223,7 +239,11 @@ def render_markdown(result: dict, sentences: dict[str, str]) -> str:
         "## What it admits, enumerated",
         "",
         "The checker tests each word alone, so what it admits is every sequence of the permitted "
-        "words, sense or nonsense. The counts say how many; they do not reach what a model writes.",
+        "words, sense or nonsense. The counts say how many; they do not reach what a model writes. "
+        "The vocabularies are in the folded form of the tokeniser, and the digits-only one holds "
+        "artefacts of the trailing-s fold (`does`, `passes`, `reaches` and `re-check` become "
+        "`doe`, `passe`, `reache` and `re`): a text is folded the same way, so the checker takes "
+        "`does` for `doe`, and the sizes count folded forms.",
         "",
     ]
     for v in VIEWS:
@@ -255,7 +275,7 @@ def render_markdown(result: dict, sentences: dict[str, str]) -> str:
         "## The sentences",
         "",
         "Free under: the views under which the sentence holds no loaded token (`qualifiers` is "
-        "qualifiers and markers, `digits` is markers only). Loaded: its distinct loaded tokens "
+        "qualifiers and digits, `digits` is digits only). Loaded: its distinct loaded tokens "
         "under the full list, in order.",
         "",
     ]

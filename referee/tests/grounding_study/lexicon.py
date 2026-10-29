@@ -3,9 +3,14 @@
 A token is a chunk of the text between spaces and hyphens, lower-cased, with the punctuation
 `. , ; : ! ? ( ) [ ] "` taken off both ends. A chunk of letters and apostrophes is a word and is
 folded (`fold`); a chunk that holds anything else, a digit or a symbol (`%`, `_`, an inner `.`,
-any character outside a to z), is a MARKER token and is left as it is. A marker token is loaded
-under every view, whatever the list says: a number, a rate, a rule ID or a field name is a claim
-of its own.
+any character outside a to z), is a MARKER token and is left as it is. The checker rejects every
+text that holds a marker, under every view: neither a digit nor a symbol can be typed into model
+text in this design. What a view decides is whether a marker in a catalogue sentence loads it.
+A token that holds a digit (0 to 9) is loaded under every view, whatever the list says: a number,
+a rate or a rule ID is a claim of its own. A token that holds a symbol and no digit (a field name
+such as `min_duration_days`, an inner `.`) is loaded under the full list only, where every
+sentence is loaded anyway (the count is 0 whichever way a symbol is treated); under the two
+ablations it is not, so that "digits only" means what it says.
 
 The loaded words are the words that carry a decision, a condition, a negation, a modal, a
 quantity, a comparison, a certainty, a cause, a severity or verdict, a unit, a position, an arm
@@ -18,9 +23,9 @@ from 11 to 8. The contractions and four degree words were added then for coverag
 count. A phrase such as `up to` or `at least` is not recognised, only its words. A view is a set
 of categories:
 
-  full        every category, and the markers
-  qualifiers  negation, condition, limiter and modal, and the markers
-  digits      the markers only
+  full        every category, and the markers (digits and symbols)
+  qualifiers  negation, condition, limiter and modal, and the digit tokens
+  digits      the digit tokens only
 """
 
 import hashlib
@@ -113,6 +118,7 @@ FUNCTION_WORDS: tuple[str, ...] = tuple(
 
 _CHUNK_EDGE = '.,;:!?()[]"'
 _WORD = re.compile(r"[a-z']+")
+_DIGIT = re.compile(r"[0-9]")
 
 
 def fold(word: str) -> str:
@@ -128,6 +134,10 @@ def fold(word: str) -> str:
 def is_marker(token: str) -> bool:
     """A token that holds a digit or a symbol, that is, anything but letters and apostrophes."""
     return _WORD.fullmatch(token) is None
+
+
+def has_digit(token: str) -> bool:
+    return _DIGIT.search(token) is not None
 
 
 def tokens(text: str) -> list[str]:
@@ -147,7 +157,8 @@ def loaded_words(view: str) -> frozenset[str]:
 def loaded_tokens(text: str, view: str) -> list[str]:
     """The tokens of `text` that are loaded under `view`, in order."""
     words = loaded_words(view)
-    return [t for t in tokens(text) if is_marker(t) or t in words]
+    marked = is_marker if view == "full" else has_digit  # a symbol alone loads under "full" only
+    return [t for t in tokens(text) if marked(t) or t in words]
 
 
 def is_free(text: str, view: str) -> bool:

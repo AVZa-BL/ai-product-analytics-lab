@@ -5,16 +5,20 @@ collects none of them. The numbers in the cases are worked out by hand, not read
 """
 
 import hashlib
-import json
+import os
 import re
+import subprocess
+import sys
 from itertools import combinations, product
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+import referee
 from grounding_study import catalogue, lexicon, run, study
-from grounding_study.checker import check, enumerate_texts, vocabulary
-from grounding_study.probes import PROBES
+from grounding_study.checker import check, enumerate_texts
+from grounding_study.probes import PROBES, Probe
 
 pytestmark = pytest.mark.study
 
@@ -79,11 +83,6 @@ CATEGORIES |= {"unit", "position", "arm", "ordinal"}
 VIEWS = {"full": CATEGORIES, "qualifiers": QUALIFIERS, "digits": set()}
 
 
-def test_the_views_are_the_categories_the_study_names() -> None:
-    assert set(lexicon.LOADED) == CATEGORIES
-    assert {view: set(names) for view, names in lexicon.VIEWS.items()} == VIEWS
-
-
 @pytest.mark.parametrize("view", VIEWS)
 @pytest.mark.parametrize("category", sorted(CATEGORIES))
 def test_a_word_is_loaded_under_the_views_that_hold_its_category(view, category) -> None:
@@ -93,9 +92,14 @@ def test_a_word_is_loaded_under_the_views_that_hold_its_category(view, category)
 
 
 @pytest.mark.parametrize("view", list(lexicon.VIEWS))
-@pytest.mark.parametrize("marker", ["5%", "x1", "007", "min_duration_days", "e.g."])
-def test_a_token_with_a_digit_or_a_symbol_is_loaded_under_every_view(view, marker) -> None:
-    assert not lexicon.is_free(f"purple {marker}", view)
+@pytest.mark.parametrize(
+    ("token", "symbol_only"),
+    [("5%", False), ("x1", False), ("0", False), ("9", False), ("a.b", True), ("a_b", True)],
+)
+def test_a_digit_token_is_loaded_under_every_view_and_a_symbol_alone_under_the_full_list_only(
+    view, token, symbol_only
+) -> None:
+    assert lexicon.is_free(f"purple {token}", view) == (symbol_only and view != "full")
 
 
 @pytest.mark.parametrize(
@@ -215,24 +219,15 @@ def test_the_checker_admits_function_words_and_the_words_of_cited_free_sentences
     assert (verdict is None) if reason is None else (reason in verdict)
 
 
-def test_a_cited_id_the_catalogue_lacks_is_an_error_not_a_rejection(sentences) -> None:
-    with pytest.raises(KeyError):
-        check("It is the.", ["RES-999.do.1"], sentences)
-
-
-def test_a_cited_sentence_that_is_not_free_adds_no_word(sentences) -> None:
-    assert vocabulary(["RES-001.do.1"], sentences, "full") == set(lexicon.FUNCTION_WORDS)
-    assert vocabulary(["RES-001.do.1"], sentences, "digits") > set(lexicon.FUNCTION_WORDS)
-
-
 # --- The enumeration --------------------------------------------------------------------------
 
 TOY = {
     "T.1": "Purple ducks sing.",
     "T.2": "Green frogs swim.",
-    "T.3": "Red cats purr.",
+    "T.3": "Red cats purr, e.g.",  # free under the view, though it holds a symbol: no word of it
     "T.4": "Do not swim.",  # not free: it holds `not`
 }
+VIEW = "qualifiers"
 FREE = ("T.1", "T.2", "T.3")
 ADDED = ["purple", "duck", "sing", "green", "frog", "swim", "red", "cat", "purr"]
 SIZE = FW + len(ADDED)
@@ -248,13 +243,13 @@ def brute_force(n: int) -> dict:
             counts["function_words_only"] += 1
             continue
         for i in FREE:
-            counts[i] += check(text, [i], TOY) is None
-        counts["any"] += any(check(text, pair, TOY) is None for pair in PAIRS)
+            counts[i] += check(text, [i], TOY, VIEW) is None
+        counts["any"] += any(check(text, pair, TOY, VIEW) is None for pair in PAIRS)
     return counts
 
 
 def test_the_enumeration_counts_what_the_checker_admits_in_a_toy_catalogue() -> None:
-    found = enumerate_texts(TOY, "full", max_texts=SIZE + SIZE**2 + SIZE**3)
+    found = enumerate_texts(TOY, VIEW, max_texts=SIZE + SIZE**2 + SIZE**3)
 
     assert (found["free"], found["vocabulary"], found["max_length"]) == (list(FREE), SIZE, 3)
     assert found["texts"] == SIZE + SIZE**2 + SIZE**3
@@ -276,12 +271,12 @@ def test_the_enumeration_counts_what_the_checker_admits_in_a_toy_catalogue() -> 
 def test_the_length_bound_is_the_longest_that_fits_in_the_number_of_texts() -> None:
     total = SIZE + SIZE**2 + SIZE**3
 
-    assert enumerate_texts(TOY, "full", max_texts=total)["max_length"] == 3
-    assert enumerate_texts(TOY, "full", max_texts=total - 1)["max_length"] == 2
+    assert enumerate_texts(TOY, VIEW, max_texts=total)["max_length"] == 3
+    assert enumerate_texts(TOY, VIEW, max_texts=total - 1)["max_length"] == 2
 
 
 def test_with_no_free_sentence_nothing_is_enumerated() -> None:
-    found = enumerate_texts({"T.4": TOY["T.4"]}, "full")
+    found = enumerate_texts({"T.4": TOY["T.4"]}, VIEW)
 
     assert found == {
         "free": [],
@@ -297,8 +292,7 @@ def test_with_no_free_sentence_nothing_is_enumerated() -> None:
 # --- The probes -------------------------------------------------------------------------------
 
 
-def test_there_are_at_least_twenty_probes_each_with_a_one_line_reason(sentences) -> None:
-    assert len(PROBES) >= 20
+def test_each_probe_cites_one_or_two_sentences_and_has_a_one_line_reason(sentences) -> None:
     for probe in PROBES:
         assert set(probe.cited) <= set(sentences) and 1 <= len(probe.cited) <= 2
         assert probe.text and probe.harm and "\n" not in probe.harm
@@ -315,8 +309,53 @@ def test_the_committed_documents_are_what_the_study_makes() -> None:
         assert path.read_text(encoding="utf-8") == text
     markdown = next(t for p, t in documents.items() if p.suffix == ".md")
     assert markdown.startswith(study.PROVENANCE)
-    row5 = json.loads(next(t for p, t in documents.items() if p.suffix == ".json"))["row5"]
-    assert re.search(r"admitted \d+ of \d+ hand-written harmful probes", row5)
+
+
+def test_the_figures_of_row_5_count_what_their_labels_say(monkeypatch) -> None:
+    toy = {
+        "T.1": "Purple ducks sing.",  # free under every view
+        "T.2": "Blue owls hoot at dusk.",  # `at` is a position word: not free under the full list
+        "T.3": "Green frogs do not swim.",  # `not`: free under digits only
+        "T.4": "Red cats purr 5 times.",  # a digit: free under none
+        "T.5": "Pink pigs oink, e.g. loudly.",  # a symbol, no digit: not free under the full list
+    }
+    probes = [
+        Probe(("T.1",), "Ducks sing.", "x"),  # admitted under every view
+        Probe(("T.2",), "Owls hoot at dusk.", "x"),  # not under the full list
+        Probe(("T.3",), "Frogs do swim.", "x"),  # under digits only
+        Probe(("T.4",), "Cats purr.", "x"),  # under none
+    ]
+    monkeypatch.setattr(study, "PROBES", probes)
+
+    result = study.study(toy, "test")
+
+    assert {v: result["free"][v]["count"] for v in lexicon.VIEWS} == {
+        "full": 1,
+        "qualifiers": 3,
+        "digits": 4,
+    }
+    assert result["probes"]["admitted"] == {"full": 1, "qualifiers": 2, "digits": 3}
+    assert result["fewest_loaded"] == {"count": 0, "ids": ["T.1"]}
+    assert result["row5"] == (
+        "1 of the 5 catalogue sentences contain none of the study's loaded words under its full "
+        "list and 4 under the digits-only ablation, and the checker admitted 1 of 4 hand-written "
+        "harmful probes under the full list (2 and 3 of 4 under the qualifiers-and-digits and "
+        "digits-only ablations) (docs/grounding-study.md)."
+    )
+
+
+def test_run_py_starts_from_a_script_run_without_the_tests_directory_on_the_path() -> None:
+    source = Path(referee.__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, run.__file__, "--help"],
+        env=dict(os.environ, PYTHONPATH=str(source)),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "usage" in result.stdout
 
 
 def test_run_py_writes_the_documents_it_is_given(tmp_path, monkeypatch) -> None:

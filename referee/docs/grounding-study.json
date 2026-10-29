@@ -524,7 +524,7 @@
    ]
   },
   "digits": {
-   "count": 65,
+   "count": 69,
    "ids": [
     "RES-001.title",
     "RES-001.why.1",
@@ -541,11 +541,14 @@
     "RES-002.do.1",
     "RES-002.do.2",
     "RES-002.do.3",
+    "RES-002.do.4",
     "RES-003.title",
     "RES-003.why.1",
     "RES-003.why.2",
+    "RES-003.do.1",
     "RES-003.do.2",
     "RES-003.do.3",
+    "RES-003.do.4",
     "RES-004.title",
     "RES-004.why.1",
     "RES-004.why.2",
@@ -565,6 +568,7 @@
     "RES-007.do.1",
     "RES-007.do.3",
     "RES-007.do.4",
+    "RES-007.do.6",
     "RES-008.why.1",
     "RES-008.why.4",
     "RES-008.why.5",
@@ -876,7 +880,9 @@
     "correct",
     "register"
    ],
-   "free_under": []
+   "free_under": [
+    "digits"
+   ]
   },
   {
    "id": "RES-003.title",
@@ -940,7 +946,9 @@
     "where",
     "can"
    ],
-   "free_under": []
+   "free_under": [
+    "digits"
+   ]
   },
   {
    "id": "RES-003.do.2",
@@ -989,7 +997,9 @@
     "can",
     "finding"
    ],
-   "free_under": []
+   "free_under": [
+    "digits"
+   ]
   },
   {
    "id": "RES-004.title",
@@ -1506,7 +1516,9 @@
     "why",
     "more"
    ],
-   "free_under": []
+   "free_under": [
+    "digits"
+   ]
   },
   {
    "id": "RES-008.title",
@@ -2256,11 +2268,14 @@
     "RES-002.do.1",
     "RES-002.do.2",
     "RES-002.do.3",
+    "RES-002.do.4",
     "RES-003.title",
     "RES-003.why.1",
     "RES-003.why.2",
+    "RES-003.do.1",
     "RES-003.do.2",
     "RES-003.do.3",
+    "RES-003.do.4",
     "RES-004.title",
     "RES-004.why.1",
     "RES-004.why.2",
@@ -2280,6 +2295,7 @@
     "RES-007.do.1",
     "RES-007.do.3",
     "RES-007.do.4",
+    "RES-007.do.6",
     "RES-008.why.1",
     "RES-008.why.4",
     "RES-008.why.5",
@@ -2307,9 +2323,9 @@
     "RES-013.do.2",
     "RES-013.do.3"
    ],
-   "vocabulary": 413,
+   "vocabulary": 435,
    "max_length": 2,
-   "texts": 170982,
+   "texts": 189660,
    "function_words_only": [
     36,
     1296
@@ -2375,6 +2391,10 @@
      7,
      553
     ],
+    "RES-002.do.4": [
+     24,
+     2304
+    ],
     "RES-003.title": [
      6,
      468
@@ -2387,6 +2407,10 @@
      14,
      1204
     ],
+    "RES-003.do.1": [
+     9,
+     729
+    ],
     "RES-003.do.2": [
      7,
      553
@@ -2394,6 +2418,10 @@
     "RES-003.do.3": [
      10,
      820
+    ],
+    "RES-003.do.4": [
+     19,
+     1729
     ],
     "RES-004.title": [
      7,
@@ -2470,6 +2498,10 @@
     "RES-007.do.4": [
      15,
      1305
+    ],
+    "RES-007.do.6": [
+     26,
+     2548
     ],
     "RES-008.why.1": [
      12,
@@ -2577,8 +2609,8 @@
     ]
    },
    "any": [
-    377,
-    169273
+    399,
+    187929
    ]
   }
  },
@@ -2908,7 +2940,7 @@
      "RES-008.do.1"
     ],
     "text": "The interval is wrong in 10 percent of experiments.",
-    "harm": "adds a number the sentence does not give",
+    "harm": "states a rate as a general fact; the sentence offers 10% and 90% only as an example of a simulated entry",
     "verdict": {
      "full": "holds a digit or a symbol",
      "qualifiers": "holds a digit or a symbol",
@@ -2929,5 +2961,5 @@
    }
   ]
  },
- "row5": "0 of the 81 catalogue sentences contain none of the study's loaded words under its full list and 65 under the digits-only ablation, and the checker admitted 0 of 28 hand-written harmful probes (docs/grounding-study.md)."
+ "row5": "0 of the 81 catalogue sentences contain none of the study's loaded words under its full list and 69 under the digits-only ablation, and the checker admitted 0 of 28 hand-written harmful probes under the full list (9 and 26 of 28 under the qualifiers-and-digits and digits-only ablations) (docs/grounding-study.md)."
 }
