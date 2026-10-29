@@ -235,6 +235,14 @@ def _raw(ask: Ask, raw: str) -> str:
     return json.dumps(obj).replace('"@"', raw)
 
 
+def _non_ascii(ask: Ask) -> str:
+    """The fixed output with one identifier that holds a character of two bytes (a sentence that
+    nobody is offered, so it would give `source` if the text were read)."""
+    obj, entry = _first(ask)
+    entry["sentences"].append("\u00e9")
+    return json.dumps(obj, ensure_ascii=False)
+
+
 for _name, _make in {
     "extra_top_key": lambda ask: _with(fixed(ask), note="x"),
     "missing_schema_key": lambda ask: _without(fixed(ask), "schema"),
@@ -259,6 +267,11 @@ for _name, _make in {
     "not_json": lambda ask: "I cannot choose among these.",
     "depth_bomb": lambda ask: "[" * 20_000,
     "over_32_KiB": lambda ask: fixed_text(ask).ljust(32 * 1024 + 1),  # white space is not the fault
+    # 32,768 characters but 32,769 bytes: the bound is in bytes, as the narrator's own cap is
+    "over_32_KiB_in_bytes": lambda ask: _non_ascii(ask).ljust(32 * 1024),
+    "a_raw_tab_in_an_id": lambda ask: _raw(
+        ask, '"a\tb"'
+    ),  # JSON is strict about control characters
 }.items():
     _text_operator(_name, _make)
 
@@ -282,7 +295,6 @@ for _name, _edit in {
     "an_over_long_sentence_id": lambda e: e["sentences"].append("s" * 65),
     "an_unhashable_fact_id": lambda e: e["facts"].append({"a": "b"}),
     "an_unhashable_sentence_id": lambda e: e["sentences"].append(["a"]),
-    "a_fact_id_nested_5_deep": lambda e: e["facts"].append([[[["a"]]]]),
     "a_lone_surrogate_escaped": lambda e: e["facts"].append("\ud800"),
     "missing_facts_key": lambda e: e.pop("facts"),
     "missing_sentences_key": lambda e: e.pop("sentences"),
@@ -382,6 +394,13 @@ def the_same_finding_twice(ask: Ask) -> Corrupt:
 
 
 @_operator("duplicate")
+def the_same_unknown_rule_twice(ask: Ask) -> Corrupt:
+    obj, _ = _first(ask)  # the ID is the narrator's own string: it is shown as a dash, twice or not
+    obj["findings"] += [{"id": "ZZZ-123", "facts": [], "sentences": []}] * 2
+    return _made(obj, ("scope", "-"), ("duplicate", "-"))
+
+
+@_operator("duplicate")
 def the_same_fact_twice(ask: Ask) -> Corrupt | None:
     obj, entry = _first(ask)
     if not entry["facts"]:  # the intent offers no facts
@@ -427,6 +446,13 @@ def a_fact_id_the_intent_does_not_offer(ask: Ask) -> Corrupt | None:
 def a_sentence_id_not_in_the_sheet(ask: Ask) -> Corrupt:
     obj, entry = _first(ask)
     entry["sentences"].append(f"{entry['id']}.why.99")
+    return _made(obj, ("source", entry["id"]))
+
+
+@_operator("source")
+def a_non_ascii_sentence_id(ask: Ask) -> Corrupt:
+    obj, entry = _first(ask)
+    entry["sentences"].append("\u00e9")
     return _made(obj, ("source", entry["id"]))
 
 

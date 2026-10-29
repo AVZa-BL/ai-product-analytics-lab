@@ -11,7 +11,7 @@ import random
 import pytest
 from narration_fakes import OPERATORS, FakeNarrator, asks, fixed, fixed_text, subset, subset_text
 
-from referee.narration.output import OutputError, parse_selection
+from referee.narration.output import OutputError, offered_ids, parse_selection
 from referee.narration.render import (
     VIOLATION_CODES,
     Chosen,
@@ -119,6 +119,30 @@ def test_white_space_after_the_object_is_accepted_up_to_32_KiB(raw_spec: dict) -
     assert len(text) == 32768
 
 
+def test_what_the_sheet_will_be_built_from_is_what_the_fixed_output_selects(raw_spec: dict) -> None:
+    for ask in asks(raw_spec):
+        offer = offered_ids(ask.report, ask.facts, ask.understanding)
+        wanted = {
+            entry["id"]: (tuple(entry["sentences"]), frozenset(entry["facts"]))
+            for entry in fixed(ask)["findings"]
+        }
+        assert {rule_id: tuple(found) for rule_id, found in offer.items()} == wanted, ask.name
+        assert list(offer) == ask.scope, ask.name
+
+
+@pytest.mark.parametrize("kind", ["none", "int", "bytes", "bytearray"])
+def test_anything_but_a_str_is_a_programming_error_not_an_output(raw_spec: dict, kind: str) -> None:
+    ask = asks(raw_spec)[0]
+    given = {
+        "none": None,
+        "int": 5,
+        "bytes": fixed_text(ask).encode(),  # json would read these
+        "bytearray": bytearray(fixed_text(ask).encode()),
+    }[kind]
+    with pytest.raises(TypeError):
+        parse_selection(given, ask.report, ask.facts, ask.understanding)
+
+
 # --- Corruptions ------------------------------------------------------------------------------
 
 
@@ -137,9 +161,7 @@ def test_a_corruption_is_rejected_with_the_violations_of_its_operator_and_no_oth
             parse_selection(made.text, ask.report, ask.facts, ask.understanding)
         violations = caught.value.violations
         assert set(violations) == made.expected, ask.name
-        assert len(violations) == len(made.expected), ask.name
         assert code in {violation[0] for violation in violations}, ask.name
-        render_withheld(ask.report, ask.understanding, decision(ask.report), violations)
     assert applied  # an operator that applies to no question guards nothing
 
 

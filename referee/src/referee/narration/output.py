@@ -2,6 +2,7 @@
 coverage, never relevance.
 
     parse_selection(text, report, facts, understanding) -> Selection    # or raises OutputError
+    offered_ids(report, facts, understanding) -> {finding ID: Offered(sentences, facts)}
 
 `text` is the decoded `str` a narrator returned; `report`, `facts` and `understanding` are those of
 the page it will be printed on (a report that passed the check and its fact list). The result is
@@ -15,8 +16,11 @@ The text is one JSON object, `{"schema": "referee-narration-output/1", "findings
 "facts": [...], "sentences": [...]}]}`, of identifiers only; its depth of 4 is that shape, so a
 deeper value is a value of the wrong type. A violation of the shape (`schema`) is all that is
 reported then, since no entry can be read; the entries of a text of the right shape are judged
-against what the intent offers (`offered`, `sentence_ids`, `findings_in_scope` of `render` and the
-fact list; nothing is restated here), and all the violations found are reported:
+against `offered_ids`, which says what each finding in scope is offered and which the sheet of the
+model path (N7b) is built from, so that the sheet and this check cannot disagree (it takes
+`offered`, `sentence_ids` and `findings_in_scope` of `render` and the fact list; the only thing
+restated here is the kind of a sentence ID, the middle part of `RES-001.why.1`). All the
+violations found are reported:
 
     scope       an entry for a rule that is not a finding in scope (judged by that alone)
     duplicate   a finding ID twice, or a fact or sentence ID twice in an entry
@@ -33,7 +37,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from typing import Any
+from typing import Any, NamedTuple
 
 from referee.narration.facts import FactList
 from referee.narration.render import (
@@ -47,7 +51,7 @@ from referee.narration.render import (
 )
 
 SCHEMA = "referee-narration-output/1"
-MAX_CHARS = 32 * 1024  # of the whole text
+MAX_BYTES = 32 * 1024  # of the whole text, encoded as UTF-8
 MAX_FACTS = 64  # fact IDs in an entry
 MAX_SENTENCES = 16  # sentence IDs in an entry
 MAX_ID_CHARS = 64  # in an identifier
@@ -75,7 +79,8 @@ def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 def _decode(text: str) -> object:
     """The JSON value of `text`, or None, which is no output either, for a text that is too long,
     is not JSON, repeats a key, holds a number, or is nested beyond the parser's limit."""
-    if len(text) > MAX_CHARS:
+    # a text of more characters is over; only a shorter one is encoded to count its bytes
+    if len(text) > MAX_BYTES or len(text.encode("utf-8", "surrogatepass")) > MAX_BYTES:
         return None
     try:
         return json.loads(
@@ -119,6 +124,29 @@ def _shown(rule_id: object, severity: dict[str, str]) -> str:
     return rule_id if isinstance(rule_id, str) and rule_id in severity else "-"
 
 
+class Offered(NamedTuple):
+    """What the intent offers for one finding in scope: its sentence IDs in catalogue order and its
+    fact IDs (none unless the intent offers facts, which is the explanation of one finding)."""
+
+    sentences: tuple[str, ...]
+    facts: frozenset[str]
+
+
+def offered_ids(
+    report: dict[str, Any], facts: FactList, understanding: Understanding
+) -> dict[str, Offered]:
+    """For every finding in scope (`findings_in_scope`), what a narrator may select."""
+    intent = understanding.answered_as
+    fact_ids = {found.rule_id: {fact.id for fact in found.facts} for found in facts.findings}
+    return {
+        rule_id: Offered(
+            tuple(sentence_ids(rule_id, intent)),
+            frozenset(fact_ids[rule_id] if offered(intent).facts else ()),
+        )
+        for rule_id in findings_in_scope(report, understanding)
+    }
+
+
 def _judge(
     entries: list[dict[str, Any]],
     report: dict[str, Any],
@@ -127,8 +155,8 @@ def _judge(
     understanding: Understanding,
 ) -> set[tuple[str, str]]:
     """Scope, duplicates, facts, sources and coverage of entries of the right shape."""
-    fact_ids = {found.rule_id: {fact.id for fact in found.facts} for found in facts.findings}
-    scope, intent = findings_in_scope(report, understanding), understanding.answered_as
+    offer, intent = offered_ids(report, facts, understanding), understanding.answered_as
+    scope = list(offer)
     ids = [entry["id"] for entry in entries]
     found = {
         ("duplicate", _shown(rule_id, severity)) for rule_id, n in Counter(ids).items() if n > 1
@@ -145,8 +173,7 @@ def _judge(
             found.add(("scope", shown))
             continue
         sentences, chosen_facts = entry["sentences"], entry["facts"]
-        wanted = sentence_ids(rule_id, intent)
-        allowed = fact_ids[rule_id] if offered(intent).facts else set()
+        wanted, allowed = offer[rule_id].sentences, offer[rule_id].facts
         if not allowed.issuperset(chosen_facts):
             found.add(("fact", shown))
         if not set(wanted).issuperset(sentences):
@@ -166,7 +193,11 @@ def parse_selection(
     understanding: Understanding,
 ) -> Selection:
     """The selection `text` makes, or `OutputError` listing every violation found. Never any other
-    exception, whatever the `str`; the arguments must be those of one page, as `render_answer`'s."""
+    exception, whatever the `str`; the arguments must be those of one page, as `render_answer`'s.
+    White space after the object is whatever JSON allows (space, tab, CR, LF); the size bound is
+    32 KiB of UTF-8. Anything but a `str` is a programming error (`TypeError`), not an output."""
+    if not isinstance(text, str):
+        raise TypeError("the output of a narrator is a decoded str")
     data = _decode(text)
     severity = {finding["rule_id"]: finding["severity"] for finding in report["findings"]}
     if not (
