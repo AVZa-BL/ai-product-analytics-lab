@@ -373,6 +373,103 @@ def welch_difference(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class CupedDifference:
+    """The difference of means adjusted for a pre-period covariate (CUPED), and what it rests on."""
+
+    n_treatment: int
+    n_control: int
+    difference: float
+    std_error: float
+    degrees_of_freedom: int
+    t_statistic: float
+    p_value: float
+    ci_low: float
+    ci_high: float
+    confidence: float
+    theta: float  # the slope of the outcome on the covariate, within the arms, pooled
+    correlation: float  # the correlation of the two within the arms
+    covariate_difference: float  # mean covariate in treatment minus control
+    balance_p_value: float  # Welch's test of that difference
+
+
+def cuped_difference(
+    treatment: Sequence[float],
+    treatment_covariate: Sequence[float],
+    control: Sequence[float],
+    control_covariate: Sequence[float],
+    *,
+    alpha: float = 0.05,
+) -> CupedDifference:
+    """The effect on `treatment` against `control`, adjusted for a covariate measured before
+    the experiment (Deng, Xu, Kohavi and Walker, WSDM 2013; design section 29).
+
+    It is the coefficient of the arm in the least-squares regression of the outcome on a constant,
+    the arm and the centred covariate. That equals (mean difference) - theta x (covariate mean
+    difference), with one theta for both arms: the slope within the arms, with each arm's own
+    means removed, pooled. The standard error is the heteroskedasticity-robust HC2 one, which
+    allows unequal variances in the arms as Welch's interval does and includes the estimation of
+    theta; the interval is the t distribution on n - 3 degrees of freedom. Raises `StatsError`
+    when a group has fewer than 2 players, the covariate does not vary, or the regression cannot
+    be solved.
+    """
+    _check_alpha(alpha)
+    y1, x1 = _finite(treatment, "treatment"), _finite(treatment_covariate, "treatment covariate")
+    y0, x0 = _finite(control, "control"), _finite(control_covariate, "control covariate")
+    if len(y1) != len(x1) or len(y0) != len(x0):
+        raise StatsError("each outcome needs a covariate value")
+    n1, n0 = len(y1), len(y0)
+    if n1 < 2 or n0 < 2 or n1 + n0 < 5:
+        raise StatsError("the adjustment needs at least 2 players in each group and 5 in all")
+    covariate = np.asarray(x1 + x0, dtype=float)
+    if _is_constant(list(covariate)):
+        raise NoVariationError("the covariate does not vary, so nothing can be adjusted for")
+    outcome = np.asarray(y1 + y0, dtype=float)
+    arm = np.r_[np.ones(n1), np.zeros(n0)]
+    design = np.column_stack([np.ones(n1 + n0), arm, covariate - covariate.mean()])
+    try:
+        inverse = np.linalg.inv(design.T @ design)
+    except np.linalg.LinAlgError as error:
+        raise StatsError("the regression cannot be solved") from error
+    beta = inverse @ design.T @ outcome
+    residual = outcome - design @ beta
+    leverage = np.einsum("ij,jk,ik->i", design, inverse, design)
+    if np.any(leverage >= 1 - 1e-12):
+        raise StatsError(
+            "a player alone decides the fit, so the robust standard error is undefined"
+        )
+    weight = residual**2 / (1 - leverage)  # HC2
+    covariance = inverse @ ((design * weight[:, None]).T @ design) @ inverse
+    std_error = float(math.sqrt(covariance[1, 1]))
+    if not std_error > 0:
+        raise NoVariationError("the adjusted outcome does not vary, so nothing can be tested")
+    degrees = n1 + n0 - 3
+    difference = float(beta[1])
+    t_statistic = difference / std_error
+    margin = float(stats.t.ppf(1 - alpha / 2, degrees)) * std_error
+    # within the arms: the slope and the correlation with each arm's means removed
+    cy = np.r_[np.asarray(y1) - np.mean(y1), np.asarray(y0) - np.mean(y0)]
+    cx = np.r_[np.asarray(x1) - np.mean(x1), np.asarray(x0) - np.mean(x0)]
+    sxx, syy, sxy = float(cx @ cx), float(cy @ cy), float(cx @ cy)
+    balance = welch_difference(x1, x0)
+    return CupedDifference(
+        n_treatment=n1,
+        n_control=n0,
+        difference=difference,
+        std_error=std_error,
+        degrees_of_freedom=degrees,
+        t_statistic=t_statistic,
+        p_value=float(2 * stats.t.sf(abs(t_statistic), degrees)),
+        ci_low=difference - margin,
+        ci_high=difference + margin,
+        confidence=1 - alpha,
+        theta=sxy / sxx,
+        correlation=sxy / math.sqrt(sxx * syy) if syy > 0 else 0.0,
+        covariate_difference=balance.difference,
+        balance_p_value=balance.p_value,
+    )
+
+
 def welch_correction(degrees_of_freedom: float) -> float:
     """The factor sqrt(nu / (nu - 2)) by which a standard error estimated on nu degrees of
     freedom is multiplied when it is used as if it were known.

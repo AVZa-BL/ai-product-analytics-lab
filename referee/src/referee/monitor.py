@@ -124,9 +124,17 @@ def _progress(
     }
 
 
+def _without_p(row: dict[str, Any]) -> dict[str, Any]:
+    """An effect row without its p values, the adjusted estimate's included."""
+    kept = {k: v for k, v in row.items() if k not in _P_VALUE_KEYS}
+    if isinstance(kept.get("adjusted"), dict):
+        kept["adjusted"] = {k: v for k, v in kept["adjusted"].items() if k not in _P_VALUE_KEYS}
+    return kept
+
+
 def _primary(context: ResultsContext, findings: dict[str, Finding]) -> dict[str, Any]:
     table = effect_table(context)
-    arms = [{k: v for k, v in row.items() if k not in _P_VALUE_KEYS} for row in table["arms"]]
+    arms = [_without_p(row) for row in table["arms"]]
     unreadable = sorted(
         rule
         for rule in ("RES-001", "RES-012")
@@ -144,6 +152,7 @@ def _primary(context: ResultsContext, findings: dict[str, Finding]) -> dict[str,
         "readable": not unreadable,
         "unreadable_because": unreadable,
         "arms": arms,
+        **({"covariate": table["covariate"]} if "covariate" in table else {}),
     }
 
 
@@ -380,14 +389,37 @@ def render_monitor_text(report: dict[str, Any]) -> str:
     lines.append("  " + primary["label"])
     if not primary["readable"]:
         lines.append("  NOT TO BE READ: " + ", ".join(primary["unreadable_because"]) + " blocks.")
+    covariate = primary.get("covariate")
+    if covariate is not None:
+        lines.append(
+            f"  pre-period covariate {covariate['column']}: "
+            + (
+                "adjusted estimate shown beside the unadjusted one."
+                if covariate["applied"]
+                else f"NOT applied ({covariate['reason']}); unadjusted only."
+            )
+        )
+        if covariate["balance_flagged_arms"]:
+            lines.append(
+                "  NOT TO BE READ (adjusted): the covariate differs between the arms: "
+                + ", ".join(covariate["balance_flagged_arms"])
+            )
     for row in primary["arms"]:
         if "error" in row:
             lines.append(f"  {row['arm']}: no estimate ({row['error']})")
-        else:
+            continue
+        lines.append(
+            f"  {row['arm']}: n {row['n_treatment']} vs {row['n_control']}, difference "
+            f"{row['difference']} [{row['ci_low']}, {row['ci_high']}]"
+        )
+        adjusted = row.get("adjusted")
+        if adjusted and "error" not in adjusted:
             lines.append(
-                f"  {row['arm']}: n {row['n_treatment']} vs {row['n_control']}, difference "
-                f"{row['difference']} [{row['ci_low']}, {row['ci_high']}]"
+                f"    adjusted {adjusted['difference']} [{adjusted['ci_low']}, "
+                f"{adjusted['ci_high']}], {adjusted['variance_ratio']:.0%} of the variance left"
             )
+        elif adjusted:
+            lines.append(f"    not adjusted: {adjusted['error']}")
     for block in report["secondary_metrics"]:
         lines += ["", f"Secondary metric {block['metric']} (so far, {block['population']})"]
         for row in block["arms"]:

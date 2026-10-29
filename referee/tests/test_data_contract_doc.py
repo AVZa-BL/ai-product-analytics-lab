@@ -6,7 +6,7 @@ from pathlib import Path
 
 from referee.data import _REQUIRED
 from referee.data_contract import OPTIONAL_COLUMNS, render_data_contract_markdown
-from referee.results import METRICS, REASONS
+from referee.results import COVARIATE_REASONS, METRICS, REASONS
 
 ROOT = Path(__file__).resolve().parent.parent
 DOC = ROOT / "docs" / "data-contract.md"
@@ -30,5 +30,5 @@ def test_every_column_metric_and_reason_the_loader_knows_is_in_the_contract() ->
 
     named = [c for columns in _REQUIRED.values() for c in columns]
     named += [c for columns in OPTIONAL_COLUMNS.values() for c in columns]
-    named += list(METRICS) + list(REASONS)
+    named += list(METRICS) + list(REASONS) + list(COVARIATE_REASONS)
     assert [name for name in named if f"`{name}`" not in text] == []
