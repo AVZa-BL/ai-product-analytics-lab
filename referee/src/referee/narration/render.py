@@ -30,6 +30,7 @@ these and writes no copy.
     The scope, in one place: what the page prints is what these say, so the checker (N7a), the
     sheet (N7b) and the command's decision to start a narrator (N6) call them and do not restate it.
     offered(intent)                         # an Offer: the sentence kinds and whether facts
+    sentence_ids(rule_id, intent)           # the sentence IDs of a finding the intent offers
     findings_in_scope(report, understanding)    # the rule IDs the page narrates
     needs_narrator(report, understanding)       # whether a narrator has anything to choose
 
@@ -215,7 +216,7 @@ Selection = Mapping[str, Chosen]
 
 def findings_in_scope(report: dict[str, Any], understanding: Understanding) -> list[str]:
     """The rule IDs of the findings the page narrates, in report order (24.7): all of them, or for
-    an explanation its target if the target is a finding. None for `checked`, a refusal, an
+    an explanation its target if the target is a finding. Empty for `checked`, a refusal, an
     unreadable question, the explanation of a rule that raised nothing or is not one of the nine."""
     raised = [finding["rule_id"] for finding in report["findings"]]
     if understanding.kind != "answer" or not offered(understanding.answered_as).kinds:
@@ -312,7 +313,7 @@ def quiet_lines(rule_ids: Sequence[str]) -> list[str]:
 
 
 @cache
-def _sentence_ids(rule_id: str, intent: str) -> tuple[str, ...]:
+def sentence_ids(rule_id: str, intent: str) -> tuple[str, ...]:
     """The sentences of `rule_id` that `intent` offers, in catalogue order."""
     kinds = offered(intent).kinds
     return tuple(
@@ -335,8 +336,9 @@ def _blocks(*blocks: Sequence[str]) -> list[str]:
 
 def _understood(understanding: Understanding) -> str:
     if understanding.kind == "refusal":
-        categories = ", ".join(understanding.categories)
-        what = f"a question this layer does not answer (categories matched: {categories})"
+        what = "a question this layer does not answer"
+        if understanding.categories:
+            what += f" (categories matched: {', '.join(understanding.categories)})"
     elif understanding.kind == "unreadable":
         what = f"a question it could not read (reason: {understanding.reason})"
     elif understanding.intent != "explain_finding":
@@ -400,13 +402,15 @@ def render_withheld(
 ) -> str:
     """The page of a withheld narration: the frame with the codes and finding IDs of the failed
     checks before the Decision block (24.6: the ID only if the report holds it, `-` otherwise).
-    An ID that is not a finding of the report, a quiet rule's included, prints as `-` and never
-    raises; a code outside `VIOLATION_CODES`, or no violation at all, raises `ValueError`."""
+    An ID that is not a finding of the report, a quiet rule's included, or not even a string,
+    prints as `-` and never raises; a code outside `VIOLATION_CODES`, or no violation at all,
+    raises `ValueError`."""
     if not violations or any(code not in VIOLATION_CODES for code, _ in violations):
         raise ValueError("a withheld page names failed checks, each one of the six codes")
     held = {finding["rule_id"] for finding in report["findings"]}
     shown = ", ".join(
-        f"{code} {rule_id if rule_id in held else '-'}" for code, rule_id in violations
+        f"{code} {rule_id if isinstance(rule_id, str) and rule_id in held else '-'}"
+        for code, rule_id in violations
     )
     withheld = f"Narration withheld: the output of --llm-command failed these checks: {shown}"
     return _page(report, understanding, decision, [withheld], [])
@@ -434,7 +438,7 @@ def _finding_block(
     rule_id, offer = finding["rule_id"], offered(intent)
     items = [
         (chosen is None or sid in chosen.sentences, sentence_line(sid))
-        for sid in _sentence_ids(rule_id, intent)
+        for sid in sentence_ids(rule_id, intent)
     ]
     if offer.facts:
         items += [

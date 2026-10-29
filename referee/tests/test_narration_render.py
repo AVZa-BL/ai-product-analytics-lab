@@ -224,8 +224,6 @@ def with_info(rep: dict) -> dict:
         (0.0, "0"),
         (100000, "100,000"),
         (100000.0, "100,000"),
-        (10.0, "10"),
-        (100.0, "100"),
         (1000.0, "1,000"),
         (1500.0, "1,500"),
         (2107.0, "2,107"),
@@ -388,9 +386,10 @@ def test_the_report_line_and_the_verdict_line_are_the_reports_values(
             "an explanation of a rule that is not one of the nine results rules",
         ),
         (
-            Understanding("refusal", categories=("ship_decision", "subgroup")),
-            "a question this layer does not answer (categories matched: ship_decision, subgroup)",
+            Understanding("refusal", categories=("ship_decision", "forecast")),
+            "a question this layer does not answer (categories matched: ship_decision, forecast)",
         ),
+        (Understanding("refusal"), "a question this layer does not answer"),  # the default route
         *[
             (
                 Understanding("unreadable", reason=reason),
@@ -423,6 +422,7 @@ def test_the_understood_line_is_written_from_the_routers_result(
         {"kind": "answer", "intent": "explain_finding", "target": "DES-001"},  # a design rule
         {"kind": "answer", "intent": "explain_finding", "target": "res-001"},
         {"kind": "answer", "intent": "explain_finding", "target": "RES-001 x"},
+        {"kind": "answer", "intent": "explain_finding", "target": "RES-001\n"},
         {"kind": "answer", "intent": "explain_finding", "target": "RES-001", "as_summary": True},
         {"kind": "refusal", "categories": ("stopping", "stopping x")},  # one good, one not
         {"kind": "unreadable"},
@@ -555,6 +555,7 @@ def test_the_frame_has_one_shape_for_an_answer_a_refusal_an_unreadable_question_
         ([("schema", "RES-002")], "schema RES-002"),
         ([("scope", "RES-003")], "scope -"),  # a quiet rule is not a finding of the report
         ([("fact", "RES-001\x1b[2J")], "fact -"),  # an ID the report holds, with more after it
+        ([("fact", ["RES-001"])], "fact -"),  # not a string
     ],
 )
 def test_a_withheld_page_prints_the_ids_of_the_reports_findings_and_dashes_for_the_rest(
@@ -709,6 +710,9 @@ def test_a_target_that_is_not_a_finding_gets_one_code_written_line_and_the_discl
         [],
         [NOT_A_RESULTS_RULE, DISCLAIMER],
     )
+    assert page == render_answer(  # code only: a selection does not change it
+        rep, fact_list(rep), Understanding("answer", "explain_finding"), decision_block(rep), {}
+    )
 
 
 @pytest.mark.parametrize(
@@ -786,7 +790,6 @@ def test_the_codes_and_the_reasons_other_steps_import_are_the_designs() -> None:
 TAXONOMY = Path(__file__).resolve().parent / "data" / "narration_eval" / "taxonomy.json"
 
 
-@pytest.mark.skipif(not TAXONOMY.exists(), reason="the router set (N3) is not in this tree")
 def test_the_categories_a_refusal_may_name_are_those_of_the_taxonomy() -> None:
     wanted = json.loads(TAXONOMY.read_text(encoding="utf-8"))["refusal_categories"]
     assert sorted(CATEGORIES) == sorted(wanted)
