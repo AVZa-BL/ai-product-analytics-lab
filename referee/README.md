@@ -38,6 +38,7 @@ Referee is advisory. `proceed` means the design raised none of the objections of
 
 Things to know when writing a spec:
 
+- A spec names the columns that hold its metrics: `column:` on the primary metric and on each guardrail, and `secondary_metrics:` for ones that are neither (only `--mode monitor` analyses them; a results review lists each, says whether it could be read, and is not affected by it). The contract, what a column may hold and why a metric cannot be read, is in [`docs/data-contract.md`](docs/data-contract.md), with a worked example in `examples/custom-metrics/`.
 - Quote the hypothesis key: `"null": ...`. An unquoted `null:` is read by YAML as an empty key, and Referee refuses it with a message that says so.
 - Repeated keys, aliases (`*x`) and merge keys (`<<`) are refused, because YAML would resolve them silently.
 - Write numbers with a dot: `5e-2` is read as text by YAML 1.1, while `0.05` and `5.0e-2` are numbers.
@@ -85,7 +86,7 @@ python -m referee review-results examples/offer-page-results.yaml \
 | `attention` | A warning from a data-health rule (RES-011, RES-012, RES-013), a guardrail beyond its tolerance, or a declared metric that could not be read | 0 |
 | `stop_for_cause` | A sample ratio mismatch (RES-001) or a late-exposure imbalance (RES-012 at blocker level): find the cause before reading anything | 1 |
 
-These words are the monitor's own, not the verdicts of `review-results`. The report lists progress (players against the registered n and days against the registered minimum, which are numbers, never a status), every metric the spec declares with its role and whether it could be read and why not (a metric is never skipped silently), the primary metric's interval so far with no p value, and each guardrail with its interval and number of players. A guardrail beyond its tolerance is `attention` at an interim look, never a stop: an unadjusted 95% interval read at several looks raises false blockers (design section 25), and Referee has no error budget over looks yet. The cohort test (RES-007) and the heavy-tail note (RES-008) are not run. `--format text` or `json`; no memo. A primary metric the export reader does not hold is refused (status 2) with the reason.
+These words are the monitor's own, not the verdicts of `review-results`. The report lists progress (players against the registered n and days against the registered minimum, which are numbers, never a status), every metric the spec declares with its role and whether it could be read and why not (a metric is never skipped silently), the primary metric's interval so far with no p value, and each guardrail with its interval and number of players. A guardrail beyond its tolerance is `attention` at an interim look, never a stop: an unadjusted 95% interval read at several looks raises false blockers (design section 25), and Referee has no error budget over looks yet. The cohort test (RES-007) and the heavy-tail note (RES-008) are not run. `--format text` or `json`; no memo. A primary metric whose column the export does not hold is refused (status 2) with the reason; any other declared metric that cannot be read is a line of the ledger.
 
 ## Working on it
 

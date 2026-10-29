@@ -1,0 +1,37 @@
+# Not a valid spec: the stated fields so far, and what is still to be answered.
+# QUESTION population.daily_eligible_units: The brief says "A few thousand players open it every day". How many players, as a number, enter the garage each day?
+# QUESTION design.mde_relative: The brief hopes for "roughly a 10% relative lift". What relative lift is the smallest worth detecting?
+# QUESTION design.planned_duration_days: The brief says "about two weeks". How many days will the test run?
+referee_spec_version: 1
+id: comet_racers_upgrade_prompt
+title: Garage upgrade prompt
+owner: racing-live
+hypothesis:
+  'null': The new prompt does not change the share of players who upgrade a car in the first week.
+  alternative: The new prompt makes more players upgrade a car
+  direction: increase
+population:
+  randomization_unit: player
+  analysis_unit: player
+  eligibility: Existing players who open the garage.
+  exposure_trigger: first opening of the garage
+  kind: existing_users
+primary_metric:
+  name: car_upgrade_7d
+  kind: binary
+  baseline: 0.22
+design:
+  alpha: 0.05
+  power: 0.8
+  sided: two_sided
+  min_duration_days: 7
+procedure:
+  stopping_rule: fixed_horizon
+  srm_check_cadence: daily
+arms:
+- name: control
+  allocation: 0.5
+  is_control: true
+- name: variant_a
+  allocation: 0.5
+  is_control: false

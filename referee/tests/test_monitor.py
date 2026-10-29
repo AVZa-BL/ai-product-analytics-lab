@@ -95,7 +95,7 @@ def test_a_guardrail_breach_at_an_interim_look_is_attention_never_a_stop(raw_spe
 @pytest.mark.parametrize(
     ("name", "kind", "code"),
     [
-        ("retention_d7", "binary", "not_in_export"),
+        ("retention_d7", "binary", "column_missing"),
         ("sessions_7d", "ratio", "kind_unsupported"),
         ("sessions_7d", "binary", "kind_mismatch"),
     ],
@@ -211,4 +211,4 @@ def test_the_command_refuses_a_memo_and_an_unreadable_primary_metric(capsys, tmp
     code, out, err = run(
         capsys, "review-results", bad, str(LAB_EXPORT), *COMMON, "--mode", "monitor"
     )
-    assert (code, out) == (2, "") and "retention_d7" in err and "not_in_export" in err
+    assert (code, out) == (2, "") and "retention_d7" in err and "column_missing" in err

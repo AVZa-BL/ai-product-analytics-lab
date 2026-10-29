@@ -50,7 +50,7 @@ from referee.pooled_rates import (
     SimulatedRange,
     percent,
 )
-from referee.results import METRIC_FAMILIES, ExportMetric, ResultsContext
+from referee.results import ExportMetric, ResultsContext
 from referee.rules.text import join_and, sig
 
 CONFIDENCE = 0.95
@@ -147,18 +147,16 @@ def _plural(number: int, noun: str) -> str:
     return f"{number:,} {noun}" + ("" if number == 1 else "s")
 
 
-def _count_who(number: int, metric: str) -> str:
+def _count_who(number: int, family: str) -> str:
     """`number` players who spend (money) or have a value other than 0 (anything else)."""
-    if METRIC_FAMILIES.get(metric) == "revenue_like":
+    if family == "revenue_like":
         return f"{_plural(number, 'player')} who {'spends' if number == 1 else 'spend'}"
     return f"{_plural(number, 'player')} with a value other than 0"
 
 
-def _who(metric: str) -> str:
+def _who(family: str) -> str:
     return (
-        "players who spend"
-        if METRIC_FAMILIES.get(metric) == "revenue_like"
-        else ("players with a value other than 0")
+        "players who spend" if family == "revenue_like" else ("players with a value other than 0")
     )
 
 
@@ -249,7 +247,7 @@ def _entry(context: ResultsContext, metric: ExportMetric, pair: Pair) -> dict[st
         "arm": pair.arm.arm,
         "metric": metric.name,
         "kind": metric.kind,
-        "family": METRIC_FAMILIES.get(metric.name),
+        "family": metric.family,
         "status": pair.status,
         "signs": list(pair.limbs),
         "groups": {pair.arm.arm: _group(pair.arm), pair.control.arm: _group(pair.control)},
@@ -343,8 +341,8 @@ def _settings(context: ResultsContext) -> dict[str, Any]:
 # --- Sentences --------------------------------------------------------------------------------
 
 
-def _group_sentence(name: str, shape: GroupShape, metric: str) -> str:
-    head = f"{name}: {_plural(shape.n, 'analysed player')}, {_count_who(shape.payers, metric)}"
+def _group_sentence(name: str, shape: GroupShape, family: str) -> str:
+    head = f"{name}: {_plural(shape.n, 'analysed player')}, {_count_who(shape.payers, family)}"
     skewness, kurtosis_, share_, count = (
         shape.skewness,
         shape.excess_kurtosis,
@@ -552,7 +550,7 @@ def _direction_text(entry: dict[str, Any]) -> list[str]:
 
 def _payers_clause(entry: dict[str, Any]) -> str:
     comparison = entry["comparison"]
-    count = _count_who(comparison["payers_in_smaller"], entry["metric"])
+    count = _count_who(comparison["payers_in_smaller"], entry["family"])
     if comparison["larger"] == "equal":
         if comparison["payers_in_larger"] == comparison["payers_in_smaller"]:
             return f"with {count} in each group"
@@ -708,12 +706,12 @@ def _tripped_note(entry: dict[str, Any], pair: Pair, settings: dict[str, Any]) -
     else:
         parts.append(_bottom_line(entry))
     for name, shape in ((pair.arm.arm, pair.arm), (pair.control.arm, pair.control)):
-        parts.append(_group_sentence(name, shape, entry["metric"]))
+        parts.append(_group_sentence(name, shape, entry["family"]))
     if simulated_["reason"] is None:
         parts.extend(_rates_sentences(entry))
         larger_payers = comparison["payers_in_larger"]
         if larger_payers < comparison["payers_in_smaller"]:
-            who = _who(entry["metric"])
+            who = _who(entry["family"])
             fewer = f"The larger group has fewer {who} ({larger_payers:,}) than the smaller one"
             if comparison["placed_as_equal"]:
                 parts.append(f"{fewer}.")  # the simulated groups were of one size
@@ -739,7 +737,7 @@ def _quiet_note(entry: dict[str, Any], pair: Pair) -> str:
         rest = "; the other group shows no sign" if len(unread) == 1 else ""
         return f"{label}: not evaluated: {_list(unread)}{rest}."
     groups = " ".join(
-        _group_sentence(name, shape, entry["metric"])
+        _group_sentence(name, shape, entry["family"])
         for name, shape in ((pair.arm.arm, pair.arm), (pair.control.arm, pair.control))
     )
     return (

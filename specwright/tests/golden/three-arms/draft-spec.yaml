@@ -1,0 +1,62 @@
+# A draft. Every value is the model's reading of the documents: check each one
+# against report.md, and confirm the values it lists as inferred, before registering this.
+referee_spec_version: 1
+id: emberfall_bundle_offer
+title: 'Ember Bundle: discount and bundle variants'
+owner: economy-analytics
+hypothesis:
+  'null': Neither variant changes the share of players who buy the Ember Bundle within 7 days of seeing
+    it.
+  alternative: Either variant raises the share of players who buy the Ember Bundle
+  direction: increase
+population:
+  randomization_unit: player
+  analysis_unit: player
+  eligibility: Existing players who open the store page.
+  exposure_trigger: first opening of the store page
+  interference: none_expected
+  kind: existing_users
+  daily_eligible_units: 9000
+primary_metric:
+  name: bundle_purchase_7d
+  kind: binary
+  baseline: 0.03
+design:
+  mde_relative: 0.2
+  alpha: 0.05
+  power: 0.8
+  sided: two_sided
+  planned_duration_days: 28
+  min_duration_days: 21
+  alpha_adjustment: bonferroni
+  pre_period_covariate: player_spend_28d
+procedure:
+  stopping_rule: fixed_horizon
+  srm_check_cadence: daily
+  bucketing_salt: emberfall_bundle_2026_q4
+arms:
+- name: control
+  allocation: 0.3333333333333333
+  is_control: true
+- name: variant_b
+  allocation: 0.3333333333333333
+  is_control: false
+- name: variant_c
+  allocation: 0.3333333333333333
+  is_control: false
+guardrails:
+- name: bundle_refund_rate
+  kind: binary
+  baseline: 0.015
+  harmful_direction: increase
+  tolerance_relative: 0.1
+- name: session_minutes
+  kind: continuous
+  baseline: 18
+  baseline_std: 11
+  harmful_direction: decrease
+  tolerance_relative: 0.05
+secondary_metrics:
+- name: items_per_player
+  kind: continuous
+  family: count

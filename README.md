@@ -9,13 +9,14 @@ A home for portfolio projects in product analytics. Each project lives in its ow
 | [`analytics-lab/`](analytics-lab/) | AI Product Analytics Lab: governed, reproducible product analytics across three synthetic business scenarios, with metric contracts, decision memos and trusted evaluation cases for AI-assisted analysis | Complete (100%) |
 | [`referee/`](referee/) | Referee: a deterministic, rule-based reviewer for A/B/n experiment designs and readouts ("ruff for experiments") | In development, about 80%: milestones 1 to 4 of 5 built; milestone 5, the optional narration layer, not started |
 | [`tracewright/`](tracewright/) | Tracewright: proposes the tracking a new feature needs (events, properties, data types and the reasons) from its design documents and the current tracking plan, and reviews tracking plans with deterministic rules | About 50%. Proposer, reviewer and Google Sheets input built and tested offline; not yet run against a live model or a real sheet. Next: a trial on a real document and a real sheet |
+| [`specwright/`](specwright/) | Specwright: drafts an experiment spec from a brief or a design document with a model; Referee's design rules and power plan check the draft, and a quote that is not in the document, a number without evidence, or approximate wording never becomes a value | Built and tested offline only: hand-written replays and a mocked transport; never run against a live model or a real plan |
 
 The percentages are approximate, give or take 10 points: the share of each project's own milestones that are built, counting a milestone that is built but not yet verified (Tracewright's Google Sheets input) as half. They say nothing about effort or quality, and they move when a project's plan changes.
 
-Start with the lab's [README](analytics-lab/README.md), or go straight to its [getting-started guide](analytics-lab/docs/getting_started.md). The [Referee](referee/README.md) and [Tracewright](tracewright/README.md) READMEs show their status and how to run them.
+Start with the lab's [README](analytics-lab/README.md), or go straight to its [getting-started guide](analytics-lab/docs/getting_started.md). The [Referee](referee/README.md), [Tracewright](tracewright/README.md) and [Specwright](specwright/README.md) READMEs show their status and how to run them.
 
 ## How the repository is organised
 
-- `analytics-lab/`, `referee/` and `tracewright/` are independent projects, each with its own `pyproject.toml`, tests and virtual environment. The lab also keeps its own scripts and `.gitignore`.
+- `analytics-lab/`, `referee/` and `tracewright/` are independent projects, each with its own `pyproject.toml`, tests and virtual environment. `specwright/` builds on `referee/` (through a few pinned names) and `tracewright/` (its document reader and quote check), which are installed from their folders first. The lab also keeps its own scripts and `.gitignore`.
 - `.github/workflows/ci.yml` is the single CI workflow. GitHub reads workflows only from the repository root, so each job's steps start inside its project's folder.
 - `SECURITY.md` is the reporting policy for the whole repository.

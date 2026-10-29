@@ -59,7 +59,7 @@ from referee.methods import (
     proportion_interval,
     values_are_constant,
 )
-from referee.results import METRIC_FAMILIES, ResultsContext, window_is_open
+from referee.results import ResultsContext, window_is_open
 from referee.spec import Guardrail
 
 ALPHA = 0.05
@@ -502,7 +502,7 @@ def _tests_of(context: ResultsContext, guardrail: Guardrail) -> list[GuardrailTe
         **options,
         "baseline": guardrail.baseline,
         "kind": guardrail.kind,
-        "right_skewed": METRIC_FAMILIES.get(guardrail.name) == "revenue_like",
+        "right_skewed": metric.family == "revenue_like",
     }
     # The comparison group for control's own place against the baseline is the arms taken
     # together: what control would be drawn from had no arm differed.

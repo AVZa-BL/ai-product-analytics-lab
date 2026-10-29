@@ -205,7 +205,27 @@ def results_report(
         "effect": _effect(context, review),
         "rules_run": list(review.rules_run),
         "findings": _finding_dicts(review.findings),
+        **({"secondary_metrics": _secondary_ledger(context)} if context.secondary else {}),
     }
+
+
+def _secondary_ledger(context: ResultsContext) -> list[dict[str, Any]]:
+    """A line for each secondary metric the spec declares: a results review does not analyse
+    them, and says whether each could be read and why not. Present only when the spec declares
+    any (design section 28)."""
+    return [
+        {
+            "role": found.role,
+            "name": found.name,
+            "kind": found.kind,
+            "column": found.column,
+            "family": found.family,
+            "read": found.metric is not None,
+            "reason": found.reason,
+            "detail": found.detail,
+        }
+        for found in context.secondary
+    ]
 
 
 def render_json(report: dict[str, Any]) -> str:
@@ -542,6 +562,18 @@ def _blocking_text(groups: dict[str, list[str]]) -> str:
     return "; ".join(f"{label} {', '.join(groups[key])}" for key, label in names if groups[key])
 
 
+def _secondary_lines(ledger: list[dict[str, Any]]) -> list[str]:
+    """The secondary metrics a results review does not analyse, each with whether it was read."""
+    if not ledger:
+        return []
+    lines = ["", "Secondary metrics (not analysed in a results review; --mode monitor reads them):"]
+    for entry in ledger:
+        said = "read" if entry["read"] else f"NOT read: {entry['reason']} - {entry['detail']}"
+        family = "" if entry["family"] is None else f", {entry['family']}"
+        lines += _wrapped(f"{entry['name']} ({entry['column']}{family}): {said}", "  ", "  ")
+    return lines
+
+
 def render_results_text(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMIT) -> str:
     """The results report as plain text for a person to read.
 
@@ -599,6 +631,7 @@ def render_results_text(report: dict[str, Any], *, limit: int = DISPLAY_ROW_LIMI
     for line in report["summary_lines"]:
         lines += _paragraph(line, "  ")
     lines += ["", *_effect_lines(report["effect"], _short_arms(report, str))]
+    lines += _secondary_lines(report.get("secondary_metrics", []))
 
     for finding in report["findings"]:
         heading = f"[{finding['severity'].upper()}] {finding['rule_id']}: {finding['title']}"
@@ -883,6 +916,15 @@ def _assumption_sentences(report: dict[str, Any]) -> list[str]:
     headline, *shifts = _sensitivity_sentences(report["origin_sensitivity"])
     said.append(" ".join([headline, *(f"{sentence}." for sentence in shifts)]))
     said.append(describe_first_seen(population["first_seen"], population["kind_declared"]))
+    if report.get("secondary_metrics"):
+        listed = ", ".join(
+            f"{_md_code(m['name'])} ({'read' if m['read'] else 'not read: ' + m['reason']})"
+            for m in report["secondary_metrics"]
+        )
+        said.append(
+            "The spec declares secondary metrics, which a results review does not analyse and "
+            f"which have no part in the verdict: {listed}."
+        )
     said.append(
         "The verdict words: clear says that the rules which ran found nothing that blocks or "
         "warns, caution that at least one warned, invalid that at least one blocked. A verdict "

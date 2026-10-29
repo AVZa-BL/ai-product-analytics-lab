@@ -1,0 +1,38 @@
+# Not a valid spec: the stated fields so far, and what is still to be answered.
+# QUESTION primary_metric.baseline: What share of new players finish the old tutorial today? The brief says it has never been measured: a baseline from any earlier cohort or a pilot is needed to size the test.
+referee_spec_version: 1
+id: harbor_tales_tutorial
+title: New Harbor Tales tutorial
+owner: onboarding
+hypothesis:
+  'null': The new tutorial does not change the share of new players who finish it.
+  alternative: More new players finish the new tutorial than the old one.
+  direction: increase
+population:
+  randomization_unit: player
+  analysis_unit: player
+  eligibility: New players.
+  exposure_trigger: tutorial screen shown
+  exposure_timing: pre_treatment
+  kind: new_users
+  daily_eligible_units: 2500
+primary_metric:
+  name: tutorial_completion
+  kind: binary
+design:
+  mde_relative: 0.08
+  alpha: 0.05
+  power: 0.8
+  sided: two_sided
+  planned_duration_days: 14
+  min_duration_days: 7
+procedure:
+  stopping_rule: fixed_horizon
+  srm_check_cadence: daily
+arms:
+- name: control
+  allocation: 0.5
+  is_control: true
+- name: variant_a
+  allocation: 0.5
+  is_control: false
