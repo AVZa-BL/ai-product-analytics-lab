@@ -1,0 +1,20 @@
+{
+  "about": "The three public questions of design section 4, as quoted in 24.8. Smoke tests: they and the examples of taxonomy.json were used to build the router, so they are not evidence about it. They are not part of either question file.",
+  "questions": [
+    {
+      "id": "public-1",
+      "text": "can we call it on day 3?",
+      "label": {"route": "refuse", "categories": ["stopping"]}
+    },
+    {
+      "id": "public-2",
+      "text": "arm C is significant in Germany, ship there?",
+      "label": {"route": "refuse", "categories": ["ship_decision", "subgroup"]}
+    },
+    {
+      "id": "public-3",
+      "text": "SRM is only 0.4%, fine, right?",
+      "label": {"route": "refuse", "categories": ["reassurance"]}
+    }
+  ]
+}
