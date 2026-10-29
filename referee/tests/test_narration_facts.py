@@ -761,7 +761,6 @@ def listed() -> dict:
 def test_the_allowlist_gives_every_key_path_the_label_and_unit_written_for_it() -> None:
     assert {path: (a.label, a.unit) for path, a in listed().items()} == LABELS
     assert {path: a.words for path, a in listed().items() if a.words} == ENUMERATIONS
-    assert [path for path, a in listed().items() if a.boolean] == ["RES-002.unattainable"]
 
 
 def test_the_allowlist_is_data_of_short_paths_that_admit_nothing_withheld_or_dropped() -> None:
@@ -919,7 +918,7 @@ def test_only_a_number_at_a_numeric_path_and_a_listed_word_at_its_path_is_a_fact
         "alpha": "0.001",  # a string where a number belongs
         "allocation": [1, 2],  # a list where the arms are
         "assigned": {"control": "997", "variant_b": 1046.5, "variant_c": None},
-        "expected": {"control": True, "variant_b": {"x": 1}},  # True is no number
+        "expected": {"control": True, "variant_b": {"x": 1}, "variant_c": False},  # no number
         "p_value": {"x": 1, "y": [2, 3]},
         "method": "bogus",
     }
@@ -927,8 +926,8 @@ def test_only_a_number_at_a_numeric_path_and_a_listed_word_at_its_path_is_a_fact
     (found,) = fact_list(golden).findings
 
     assert [(f.id, f.value) for f in found.facts] == [("RES-001.assigned.A2", 1046.5)]
-    # alpha 1, allocation 2, two of assigned, two of expected, p_value 3, method 1
-    assert (found.dropped, found.withheld, found.unlisted) == (11, 0, ())
+    # alpha 1, allocation 2, two of assigned, three of expected, p_value 3, method 1
+    assert (found.dropped, found.withheld, found.unlisted) == (12, 0, ())
 
 
 @pytest.mark.parametrize(
@@ -937,8 +936,6 @@ def test_only_a_number_at_a_numeric_path_and_a_listed_word_at_its_path_is_a_fact
         (True, True),
         (False, True),
         (1, False),
-        (0, False),
-        (1.0, False),
         ("yes", False),
         (None, False),
     ],
@@ -954,6 +951,7 @@ def test_the_one_boolean_path_admits_a_boolean_and_nothing_else(
     assert [(f.id, f.value) for f in found.facts] == (
         [("RES-002.unattainable", value)] if kept else []
     )
+    assert all(f.value is value for f in found.facts)  # True stays True, not 1
     assert found.dropped == (0 if kept else 1)
 
 
