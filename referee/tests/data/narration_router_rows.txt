@@ -1,0 +1,947 @@
+# Vocabulary rows of the router, read by tests/test_narration_router.py. One row a line: `kind name | text`.
+# trigger: the text is refused and the category `name` is among those matched.
+# not-trigger: the same words with a gap one word wider than the pattern allows: not matched.
+# intent / not-intent: the text is answered with the intent `name` / is not.
+# target / not-target: the text is an explanation of the rule `name` / is not.
+# gated / not-gated: the same for the why-patterns of `causal`, which count only when no rule is named.
+# Each row stands for one word or one gap of a pattern of router.py: take the word out, or move the gap, and a row fails.
+trigger injection | ignore rules
+trigger injection | disregard instructions
+trigger injection | forget guidelines
+trigger injection | override prompt
+trigger injection | bypass checks
+trigger injection | ignore everything
+trigger injection | disregard previous
+trigger injection | forget above
+trigger injection | ignore um um um rules
+trigger injection | forget you are
+trigger injection | ignore your role
+trigger injection | act as
+trigger injection | pretend like
+trigger injection | behave to
+trigger injection | act you
+trigger injection | act um as
+trigger injection | from now on
+trigger injection | system override
+trigger injection | developer override
+trigger injection | admin override
+trigger injection | authorize you
+trigger injection | authorise you
+trigger injection | authorize um you
+trigger injection | hide findings
+trigger injection | suppress blockers
+trigger injection | omit warnings
+trigger injection | erase findings
+trigger injection | invent blockers
+trigger injection | fabricate warnings
+trigger injection | falsify findings
+trigger injection | hide um um um findings
+trigger injection | make up verdict
+trigger injection | make up um um um verdict
+trigger injection | drop verdict
+trigger injection | delete verdict
+trigger injection | remove verdict
+trigger injection | drop um um um verdict
+trigger injection | mark verdict passed
+trigger injection | declare review clear
+trigger injection | label report valid
+trigger injection | mark experiment approved
+trigger injection | declare result green
+trigger injection | label everything passed
+trigger injection | mark um um um verdict passed
+trigger injection | mark verdict um um passed
+trigger injection | print verdict as passed
+trigger injection | show verdict to passed
+trigger injection | say verdict as passed
+trigger injection | state verdict to passed
+trigger injection | write verdict as passed
+trigger injection | set verdict to passed
+trigger injection | change verdict as passed
+trigger injection | make verdict to passed
+trigger injection | turn verdict as passed
+trigger injection | print um um um verdict as passed
+trigger injection | print verdict um as passed
+trigger injection | print verdict as um passed
+trigger ship_decision | ship
+trigger ship_decision | ships
+trigger ship_decision | shipped
+trigger ship_decision | adopt
+trigger ship_decision | rollback
+trigger ship_decision | roll back
+trigger ship_decision | go ahead
+trigger ship_decision | go live
+trigger ship_decision | go with
+trigger ship_decision | go no go
+trigger ship_decision | go um no go
+trigger ship_decision | green light
+trigger ship_decision | winner
+trigger ship_decision | which variant won
+trigger ship_decision | what arm win
+trigger ship_decision | which change wins
+trigger ship_decision | what feature winning
+trigger ship_decision | which page best
+trigger ship_decision | what treatment better
+trigger ship_decision | which design choose
+trigger ship_decision | what version pick
+trigger ship_decision | which option select
+trigger ship_decision | which um um um um um variant won
+trigger ship_decision | which variant um um um won
+trigger ship_decision | should launch
+trigger ship_decision | shall release
+trigger ship_decision | can deploy
+trigger ship_decision | should um um launch
+trigger ship_decision | should roll out
+trigger ship_decision | shall roll out
+trigger ship_decision | can roll out
+trigger ship_decision | should um um roll out
+trigger ship_decision | should roll um um um out
+trigger ship_decision | recommend launch
+trigger ship_decision | advise launch
+trigger ship_decision | suggest launch
+trigger ship_decision | recommend um um um launch
+trigger ship_decision | ok shipping
+trigger ship_decision | okay shipping
+trigger ship_decision | ready shipping
+trigger ship_decision | safe shipping
+trigger ship_decision | good shipping
+trigger ship_decision | begin shipping
+trigger ship_decision | start shipping
+trigger ship_decision | proceed shipping
+trigger ship_decision | cleared shipping
+trigger ship_decision | ok um um um shipping
+trigger ship_decision | keep variant
+trigger ship_decision | scrap variant
+trigger ship_decision | drop variant
+trigger ship_decision | abandon variant
+trigger ship_decision | ditch variant
+trigger ship_decision | revert variant
+trigger ship_decision | retire variant
+trigger ship_decision | discard variant
+trigger ship_decision | keep um um um um um variant
+trigger ship_decision | approve launch
+trigger ship_decision | decide release
+trigger ship_decision | decision deploy
+trigger ship_decision | approve shipping
+trigger ship_decision | decide rollout
+trigger ship_decision | approve um um um um um launch
+trigger stopping | call it
+trigger stopping | declare this
+trigger stopping | call test
+trigger stopping | declare experiment
+trigger stopping | call run
+trigger stopping | declare result
+trigger stopping | call results
+trigger stopping | declare early
+trigger stopping | call finished
+trigger stopping | declare done
+trigger stopping | call complete
+trigger stopping | declare over
+trigger stopping | call um um it
+trigger stopping | enough players
+trigger stopping | enough data
+trigger stopping | enough time
+trigger stopping | enough days
+trigger stopping | enough weeks
+trigger stopping | enough sample
+trigger stopping | enough traffic
+trigger stopping | enough users
+trigger stopping | enough long
+trigger stopping | enough run
+trigger stopping | enough read
+trigger stopping | enough conclude
+trigger stopping | enough um um um players
+trigger stopping | players enough
+trigger stopping | players um um um enough
+trigger stopping | sufficient
+trigger stopping | adequate
+trigger stopping | too early
+trigger stopping | too soon
+trigger stopping | too um early
+trigger stopping | premature
+trigger stopping | stop
+trigger stopping | halt
+trigger stopping | extend
+trigger stopping | prolong
+trigger stopping | longer
+trigger stopping | wait
+trigger stopping | peek
+trigger stopping | another weeks
+trigger stopping | more days
+trigger stopping | additional months
+trigger stopping | another players
+trigger stopping | more data
+trigger stopping | another um weeks
+trigger stopping | continue running
+trigger stopping | continue collecting
+trigger stopping | continue um um running
+trigger stopping | end test
+trigger stopping | finish experiment
+trigger stopping | wrap trial
+trigger stopping | end run
+trigger stopping | finish study
+trigger stopping | wrap here
+trigger stopping | end now
+trigger stopping | finish today
+trigger stopping | wrap up
+trigger stopping | end it
+trigger stopping | finish this
+trigger stopping | end um um test
+trigger stopping | we done
+trigger stopping | we finished
+trigger stopping | we conclude
+trigger stopping | allowed look
+trigger stopping | permitted read
+trigger stopping | allowed see
+trigger stopping | permitted view
+trigger stopping | allowed analyse
+trigger stopping | permitted analyze
+trigger stopping | allowed interpret
+trigger stopping | allowed um um um look
+trigger reassurance | confirm
+trigger reassurance | reassure
+trigger reassurance | right
+trigger reassurance | correct
+trigger reassurance | agreed
+trigger reassurance | yes
+trigger reassurance | yeah
+trigger reassurance | no
+trigger reassurance | ok
+trigger reassurance | okay
+trigger reassurance | right um
+trigger reassurance | doesnt it
+trigger reassurance | isnt they
+trigger reassurance | arent that
+trigger reassurance | wasnt this
+trigger reassurance | werent it
+trigger reassurance | doesnt it um
+trigger reassurance | is fine
+trigger reassurance | , are valid
+trigger reassurance | or was ok um um
+trigger reassurance | and were okay um um
+trigger reassurance | but can safe
+trigger reassurance | could trust
+trigger reassurance | , is reliable
+trigger reassurance | or are rely
+trigger reassurance | and was sound
+trigger reassurance | but were legitimate
+trigger reassurance | can acceptable
+trigger reassurance | is um um um um um um um um fine
+trigger reassurance | does look fine
+trigger reassurance | , do seem fine
+trigger reassurance | or does look fine
+trigger reassurance | and do seem fine
+trigger reassurance | but does look fine
+trigger reassurance | does um um look fine
+trigger reassurance | does look um um um fine
+trigger reassurance | nothing worry
+trigger reassurance | nothing wrong
+trigger reassurance | nothing broken
+trigger reassurance | nothing concern
+trigger reassurance | nothing um um worry
+trigger reassurance | worth worrying
+trigger reassurance | worth worry
+trigger reassurance | worth bother
+trigger reassurance | worth um um worrying
+trigger reassurance | enough ignore
+trigger reassurance | small ignore
+trigger reassurance | tiny ignore
+trigger reassurance | minor ignore
+trigger reassurance | safe ignore
+trigger reassurance | fine ignore
+trigger reassurance | enough um um um ignore
+trigger reassurance | ignorable
+trigger reassurance | negligible
+trigger reassurance | harmless
+trigger reassurance | trustworthy
+trigger reassurance | all good
+trigger reassurance | all fine
+trigger reassurance | all clear
+trigger reassurance | all ok um um
+trigger reassurance | all okay um um
+trigger reassurance | all um um good
+trigger reassurance | say fine
+trigger reassurance | tell ok um um
+trigger reassurance | assure okay um um
+trigger reassurance | promise good
+trigger reassurance | say safe
+trigger reassurance | tell valid
+trigger reassurance | say um um um fine
+trigger effect_reality | is real
+trigger effect_reality | , are genuine
+trigger effect_reality | or was significant
+trigger effect_reality | and were chance
+trigger effect_reality | but does noise
+trigger effect_reality | do random
+trigger effect_reality | , did fluke
+trigger effect_reality | or can luck
+trigger effect_reality | and could exist
+trigger effect_reality | but will variation
+trigger effect_reality | would real
+trigger effect_reality | is um um um um um um real
+trigger effect_reality | whether real
+trigger effect_reality | if real
+trigger effect_reality | whether um um um um um real
+trigger effect_reality | effect real
+trigger effect_reality | lift real
+trigger effect_reality | uplift real
+trigger effect_reality | difference real
+trigger effect_reality | gain real
+trigger effect_reality | impact real
+trigger effect_reality | improvement real
+trigger effect_reality | increase real
+trigger effect_reality | effect um um um real
+trigger effect_reality | is there effect
+trigger effect_reality | are there difference
+trigger effect_reality | was there lift
+trigger effect_reality | were there uplift
+trigger effect_reality | is there impact
+trigger effect_reality | is there um um um effect
+trigger effect_reality | had an effect
+trigger effect_reality | has any impact
+trigger effect_reality | have no difference
+trigger effect_reality | had a effect
+trigger effect_reality | had um an effect
+trigger effect_reality | statistically
+trigger effect_reality | insignificant
+trigger effect_numbers | what estimate
+trigger effect_numbers | whats estimate
+trigger effect_numbers | how estimate
+trigger effect_numbers | give estimate
+trigger effect_numbers | show estimate
+trigger effect_numbers | tell estimate
+trigger effect_numbers | report estimate
+trigger effect_numbers | print estimate
+trigger effect_numbers | list estimate
+trigger effect_numbers | state estimate
+trigger effect_numbers | provide estimate
+trigger effect_numbers | what um um um um um estimate
+trigger effect_numbers | point estimate
+trigger effect_numbers | p value
+trigger effect_numbers | confidence interval
+trigger effect_numbers | confidence um interval
+trigger effect_numbers | ci
+trigger effect_numbers | how big
+trigger effect_numbers | how large
+trigger effect_numbers | how strong
+trigger effect_numbers | how high
+trigger effect_numbers | how much lift
+trigger effect_numbers | how much uplift
+trigger effect_numbers | how much effect
+trigger effect_numbers | how much difference
+trigger effect_numbers | how much gain
+trigger effect_numbers | how much improvement
+trigger effect_numbers | how much increase
+trigger effect_numbers | how much better
+trigger effect_numbers | how much worse
+trigger effect_numbers | how much more
+trigger effect_numbers | how much less
+trigger effect_numbers | how much um um um lift
+trigger effect_numbers | by how much
+trigger effect_numbers | what percent
+trigger effect_numbers | average control
+trigger effect_numbers | mean treatment
+trigger effect_numbers | means arm
+trigger effect_numbers | median arms
+trigger effect_numbers | average variant
+trigger effect_numbers | mean group
+trigger effect_numbers | average um um um um control
+trigger effect_numbers | control average
+trigger effect_numbers | control um um um um average
+trigger effect_numbers | effect size
+trigger effect_numbers | absolute terms
+trigger effect_numbers | relative points
+trigger effect_numbers | percent difference
+trigger effect_numbers | absolute lift
+trigger effect_numbers | absolute um terms
+trigger effect_numbers | standard error
+trigger effect_numbers | standard deviation
+trigger effect_numbers | results table
+trigger effect_numbers | effect table
+trigger effect_numbers | results um table
+trigger effect_numbers | variant lift
+trigger effect_numbers | treatment uplift
+trigger effect_numbers | arm lift
+trigger effect_numbers | control uplift
+trigger effect_numbers | variant um um um lift
+trigger effect_numbers | magnitude
+trigger causal | caused
+trigger causal | drove
+trigger causal | driven
+trigger causal | novelty
+trigger causal | seasonality
+trigger causal | down to
+trigger causal | explain effect
+trigger causal | account lift
+trigger causal | explain uplift
+trigger causal | account difference
+trigger causal | explain gap
+trigger causal | account change
+trigger causal | explain increase
+trigger causal | account decrease
+trigger causal | explain rise
+trigger causal | account drop
+trigger causal | explain decline
+trigger causal | account gain
+trigger causal | explain um um um um effect
+trigger causal | made effect
+trigger causal | make effect
+trigger causal | made um um um effect
+trigger causal | behind effect
+trigger causal | behind um um effect
+trigger causal | attributed
+trigger causal | responsible
+trigger forecast | expect
+trigger forecast | expecting
+trigger forecast | expects
+trigger forecast | forecast
+trigger forecast | predict
+trigger forecast | project
+trigger forecast | extrapolate
+trigger forecast | anticipate
+trigger forecast | future
+trigger forecast | rollout
+trigger forecast | eventually
+trigger forecast | tomorrow
+trigger forecast | long run
+trigger forecast | long term
+trigger forecast | full scale
+trigger forecast | at scale
+trigger forecast | to scale
+trigger forecast | will impact
+trigger forecast | happens result
+trigger forecast | happen revenue
+trigger forecast | will conversion
+trigger forecast | happens improvement
+trigger forecast | happen growth
+trigger forecast | will metric
+trigger forecast | will um um um um impact
+trigger forecast | holiday
+trigger forecast | season
+trigger forecast | seasons
+trigger forecast | months
+trigger forecast | year
+trigger forecast | quarter
+trigger forecast | next weeks
+trigger forecast | coming weeks
+trigger forecast | upcoming weeks
+trigger forecast | following weeks
+trigger forecast | later weeks
+trigger forecast | next um weeks
+trigger forecast | fade
+trigger forecast | decay
+trigger forecast | wane
+trigger forecast | persist
+trigger forecast | still be
+trigger forecast | still hold
+trigger forecast | still there
+trigger forecast | still um be
+trigger forecast | generalise
+trigger forecast | generalize
+trigger forecast | replicate
+trigger subgroup | android
+trigger subgroup | ios
+trigger subgroup | iphone
+trigger subgroup | ipad
+trigger subgroup | mobile
+trigger subgroup | desktop
+trigger subgroup | tablets
+trigger subgroup | console
+trigger subgroup | laptop
+trigger subgroup | platform
+trigger subgroup | device
+trigger subgroup | country
+trigger subgroup | region
+trigger subgroup | segment
+trigger subgroup | demographic
+trigger subgroup | geography
+trigger subgroup | locale
+trigger subgroup | spenders
+trigger subgroup | payers
+trigger subgroup | whale
+trigger subgroup | returning
+trigger subgroup | new players
+trigger subgroup | new users
+trigger subgroup | new customers
+trigger subgroup | germany
+trigger subgroup | japan
+trigger subgroup | brazil
+trigger subgroup | india
+trigger subgroup | china
+trigger subgroup | canada
+trigger subgroup | france
+trigger subgroup | italy
+trigger subgroup | spain
+trigger subgroup | mexico
+trigger subgroup | australia
+trigger subgroup | korea
+trigger subgroup | russia
+trigger subgroup | britain
+trigger subgroup | uk
+trigger subgroup | usa
+trigger subgroup | europe
+trigger subgroup | asia
+trigger subgroup | africa
+trigger subgroup | america
+trigger other_analysis | what if
+trigger other_analysis | rerun analysis
+trigger other_analysis | redo comparison
+trigger other_analysis | recompute tests
+trigger other_analysis | recalculate calculation
+trigger other_analysis | reanalyse model
+trigger other_analysis | reanalyze estimates
+trigger other_analysis | repeat numbers
+trigger other_analysis | rerun interval
+trigger other_analysis | redo data
+trigger other_analysis | rerun um um um analysis
+trigger other_analysis | instead of
+trigger other_analysis | winsorize
+trigger other_analysis | trim
+trigger other_analysis | bootstrap
+trigger other_analysis | wilcoxon
+trigger other_analysis | bonferroni
+trigger other_analysis | ttest
+trigger other_analysis | anova
+trigger other_analysis | ancova
+trigger other_analysis | cuped
+trigger other_analysis | regression
+trigger other_analysis | bayesian
+trigger other_analysis | covariates
+trigger other_analysis | outliers
+trigger other_analysis | permutation
+trigger other_analysis | t test
+trigger other_analysis | one sided
+trigger other_analysis | two sided
+trigger other_analysis | apply correction
+trigger other_analysis | applying adjustment
+trigger other_analysis | add filter
+trigger other_analysis | use exclusion
+trigger other_analysis | try window
+trigger other_analysis | apply method
+trigger other_analysis | applying model
+trigger other_analysis | add metric
+trigger other_analysis | apply um um um correction
+trigger other_analysis | exclude players
+trigger other_analysis | omit users
+trigger other_analysis | remove days
+trigger other_analysis | filter weeks
+trigger other_analysis | drop data
+trigger other_analysis | exclude rows
+trigger other_analysis | omit cohort
+trigger other_analysis | exclude um um um um players
+trigger other_analysis | different metric
+trigger other_analysis | another test
+trigger other_analysis | alternative method
+trigger other_analysis | other window
+trigger other_analysis | different period
+trigger other_analysis | another threshold
+trigger other_analysis | alternative model
+trigger other_analysis | other analysis
+trigger other_analysis | different approach
+trigger other_analysis | another definition
+trigger other_analysis | different um um metric
+trigger other_analysis | assuming
+trigger other_analysis | suppose
+trigger other_analysis | imagine
+trigger other_analysis | hypothetical
+trigger other_analysis | simulate
+trigger data_access | players id
+trigger data_access | users ids
+trigger data_access | players identifiers
+trigger data_access | players um id
+trigger data_access | which players
+trigger data_access | which users
+trigger data_access | raw data
+trigger data_access | raw events
+trigger data_access | raw export
+trigger data_access | raw tables
+trigger data_access | raw files
+trigger data_access | raw logs
+trigger data_access | raw um um um data
+trigger data_access | rows
+trigger data_access | download
+trigger data_access | csv
+trigger data_access | records
+trigger data_access | dataset
+trigger data_access | export files
+trigger data_access | export folder
+trigger data_access | export um files
+trigger data_access | exposure logs
+trigger data_access | assignment tables
+trigger data_access | events logs
+trigger data_access | outcomes tables
+trigger data_access | purchases logs
+trigger data_access | exposure um logs
+trigger data_access | who was
+trigger data_access | who were
+trigger data_access | who exposed
+trigger data_access | who assigned
+trigger data_access | who bought
+trigger data_access | who purchased
+trigger data_access | who um um um was
+trigger data_access | where data
+trigger data_access | where files
+trigger data_access | where export
+trigger data_access | where um um um um data
+trigger rewording | plain
+trigger rewording | simple
+trigger rewording | shorter
+trigger rewording | shorten
+trigger rewording | jargon
+trigger rewording | layman
+trigger rewording | layperson
+trigger rewording | eli5
+trigger rewording | tldr
+trigger rewording | tl dr
+trigger rewording | tl um dr
+trigger rewording | like im five
+trigger rewording | rephrase
+trigger rewording | reword
+trigger rewording | rewrite
+trigger rewording | paraphrase
+trigger rewording | restate
+trigger rewording | translate
+trigger rewording | tone
+trigger rewording | casual
+trigger rewording | friendly
+trigger rewording | formal
+trigger rewording | bullets
+trigger rewording | for boss
+trigger rewording | for manager
+trigger rewording | for director
+trigger rewording | for executive
+trigger rewording | for ceo
+trigger rewording | for stakeholders
+trigger rewording | for audience
+trigger rewording | for kids
+trigger rewording | for colleagues
+trigger rewording | for partners
+trigger rewording | for clients
+trigger rewording | for investors
+trigger rewording | for board
+trigger rewording | for standup
+trigger rewording | for team
+trigger rewording | for um um boss
+trigger rewording | in sentences
+trigger rewording | in paragraph
+trigger rewording | in words
+trigger rewording | in um um sentences
+trigger rewording | as list
+trigger rewording | as table
+trigger rewording | as email
+trigger rewording | as slides
+trigger rewording | as json
+trigger rewording | as csv
+trigger rewording | as markdown
+trigger rewording | as um list
+trigger rewording | put email
+trigger rewording | turn slides
+trigger rewording | convert table
+trigger rewording | reformat list
+trigger rewording | format json
+trigger rewording | put pdf
+trigger rewording | put um um um email
+not-trigger injection | ignore um um um um rules
+not-trigger injection | forget um you are
+not-trigger injection | act um um as
+not-trigger injection | from um now on
+not-trigger injection | system um override
+not-trigger injection | authorize um um you
+not-trigger injection | hide um um um um findings
+not-trigger injection | make um up verdict
+not-trigger injection | make up um um um um verdict
+not-trigger injection | drop um um um um verdict
+not-trigger injection | mark um um um um verdict passed
+not-trigger injection | mark verdict um um um passed
+not-trigger injection | print um um um um verdict as passed
+not-trigger injection | print verdict um um as passed
+not-trigger injection | print verdict as um um passed
+not-trigger ship_decision | roll um back
+not-trigger ship_decision | go um ahead
+not-trigger ship_decision | go um um no go
+not-trigger ship_decision | green um light
+not-trigger ship_decision | which um um um um um um variant won
+not-trigger ship_decision | which variant um um um um won
+not-trigger ship_decision | should um um um launch
+not-trigger ship_decision | should um um um roll out
+not-trigger ship_decision | should roll um um um um out
+not-trigger ship_decision | recommend um um um um launch
+not-trigger ship_decision | ok um um um um shipping
+not-trigger ship_decision | keep um um um um um um variant
+not-trigger ship_decision | approve um um um um um um launch
+not-trigger stopping | call um um um it
+not-trigger stopping | enough um um um um players
+not-trigger stopping | players um um um um enough
+not-trigger stopping | too um um early
+not-trigger stopping | another um um weeks
+not-trigger stopping | continue um um um running
+not-trigger stopping | end um um um test
+not-trigger stopping | we um done
+not-trigger stopping | allowed um um um um look
+not-trigger reassurance | right um um
+not-trigger reassurance | doesnt um it
+not-trigger reassurance | doesnt it um um
+not-trigger reassurance | um is fine
+not-trigger reassurance | is um um um um um um um um um fine
+not-trigger reassurance | um does look fine
+not-trigger reassurance | does um um um look fine
+not-trigger reassurance | does look um um um um fine
+not-trigger reassurance | nothing um um um worry
+not-trigger reassurance | worth um um um worrying
+not-trigger reassurance | enough um um um um ignore
+not-trigger reassurance | all um um um good
+not-trigger reassurance | say um um um um fine
+not-trigger effect_reality | um is real
+not-trigger effect_reality | is um um um um um um um real
+not-trigger effect_reality | whether um um um um um um real
+not-trigger effect_reality | effect um um um um real
+not-trigger effect_reality | is um there effect
+not-trigger effect_reality | is there um um um um effect
+not-trigger effect_reality | had um um an effect
+not-trigger effect_numbers | what um um um um um um estimate
+not-trigger effect_numbers | point um estimate
+not-trigger effect_numbers | p um value
+not-trigger effect_numbers | confidence um um interval
+not-trigger effect_numbers | how um big
+not-trigger effect_numbers | how um much lift
+not-trigger effect_numbers | how much um um um um lift
+not-trigger effect_numbers | by um how much
+not-trigger effect_numbers | what um percent
+not-trigger effect_numbers | average um um um um um control
+not-trigger effect_numbers | control um um um um um average
+not-trigger effect_numbers | effect um size
+not-trigger effect_numbers | absolute um um terms
+not-trigger effect_numbers | standard um error
+not-trigger effect_numbers | results um um table
+not-trigger effect_numbers | variant um um um um lift
+not-trigger causal | down um to
+not-trigger causal | explain um um um um um effect
+not-trigger causal | made um um um um effect
+not-trigger causal | behind um um um effect
+not-trigger forecast | long um run
+not-trigger forecast | full um scale
+not-trigger forecast | will um um um um um impact
+not-trigger forecast | next um um weeks
+not-trigger forecast | still um um be
+not-trigger subgroup | new um players
+not-trigger other_analysis | what um if
+not-trigger other_analysis | rerun um um um um analysis
+not-trigger other_analysis | instead um of
+not-trigger other_analysis | t um test
+not-trigger other_analysis | one um sided
+not-trigger other_analysis | apply um um um um correction
+not-trigger other_analysis | exclude um um um um um players
+not-trigger other_analysis | different um um um metric
+not-trigger data_access | players um um id
+not-trigger data_access | which um players
+not-trigger data_access | raw um um um um data
+not-trigger data_access | export um um files
+not-trigger data_access | exposure um um logs
+not-trigger data_access | who um um um um was
+not-trigger data_access | where um um um um um data
+not-trigger rewording | tl um um dr
+not-trigger rewording | like um im five
+not-trigger rewording | for um um um boss
+not-trigger rewording | in um um um sentences
+not-trigger rewording | as um um list
+not-trigger rewording | put um um um um email
+intent checked | which checks ran
+intent checked | what rules run
+intent checked | how tests made
+intent checked | which checks performed
+intent checked | what rules executed
+intent checked | how tests covered
+intent checked | which checks included
+intent checked | what rules applied
+intent checked | how tests done
+intent checked | which checks missing
+intent checked | what rules used
+intent checked | how tests passed
+intent checked | which checks failed
+intent checked | which um um um checks ran
+intent checked | did review tests
+intent checked | does referee checks
+intent checked | has report look
+intent checked | have you covered
+intent checked | did review verified
+intent checked | does referee examined
+intent checked | has report inspected
+intent checked | have you assessed
+intent checked | did review included
+intent checked | did um um um review tests
+intent checked | did review run rules
+intent checked | does referee ran analyse
+intent checked | has report run guardrails
+intent checked | have you ran everything
+intent checked | did review run all
+intent checked | did um um um review run rules
+intent checked | did review um run rules
+intent checked | did review run um um um rules
+intent checked | skipped
+intent checked | never ran
+intent checked | never run
+intent checked | never checked
+intent checked | never tested
+intent checked | never covered
+intent checked | never performed
+intent checked | never um ran
+intent checked | what checked
+intent checked | what tested
+intent checked | what covered
+intent checked | what examined
+intent checked | what um um checked
+intent checked | was checked
+intent checked | were tested
+intent checked | was covered
+intent checked | were examined
+intent checked | was verified
+intent checked | were included
+intent checked | was run
+intent checked | were ran
+intent checked | was applied
+intent checked | were performed
+intent checked | was done
+intent checked | was um um um um checked
+intent next_steps | fix
+intent next_steps | repair
+intent next_steps | remediate
+intent next_steps | resolve
+intent next_steps | address
+intent next_steps | steps
+intent next_steps | what order
+intent next_steps | next step
+intent next_steps | should do
+intent next_steps | must change
+intent next_steps | need do
+intent next_steps | needs change
+intent next_steps | should um um um do
+intent next_steps | advise
+intent next_steps | advice
+intent next_steps | recommend
+intent next_steps | suggest
+intent next_steps | actions
+intent next_steps | rerun
+intent next_steps | retest
+intent next_steps | run again
+intent next_steps | running again
+intent next_steps | run um um again
+intent next_steps | before run
+intent next_steps | before running
+intent next_steps | before repeat
+intent next_steps | before again
+intent next_steps | before um um um run
+intent summary | findings
+intent summary | blockers
+intent summary | warnings
+intent summary | overview
+intent summary | summary
+intent summary | overall
+intent summary | verdict
+intent summary | picture
+intent summary | severe
+intent summary | serious
+intent summary | problems
+intent summary | issues
+intent summary | wrong
+intent summary | review find
+intent summary | report found
+intent summary | experiment say
+intent summary | review says
+intent summary | report show
+intent summary | experiment shows
+intent summary | review contain
+intent summary | report contains
+intent summary | experiment conclude
+intent summary | review concluded
+intent summary | review um um um find
+intent summary | tell review
+intent summary | describe report
+intent summary | walk experiment
+intent summary | give review
+intent summary | tell um um um review
+not-intent checked | which um um um um checks ran
+not-intent checked | did um um um um review tests
+not-intent checked | did um um um um review run rules
+not-intent checked | did review um um run rules
+not-intent checked | did review run um um um um rules
+not-intent checked | never um um ran
+not-intent checked | what um um um checked
+not-intent checked | was um um um um um checked
+not-intent next_steps | what um order
+not-intent next_steps | next um step
+not-intent next_steps | should um um um um do
+not-intent next_steps | run um um um again
+not-intent next_steps | before um um um um run
+not-intent summary | review um um um um find
+not-intent summary | tell um um um um review
+target RES-001 | srm
+target RES-001 | sample ratio mismatch
+target RES-001 | allocation
+target RES-002 | fewer players than
+target RES-002 | fewer um um players than
+target RES-002 | sample sizes
+target RES-002 | underpowered
+target RES-002 | too few
+target RES-003 | duration
+target RES-003 | run length
+target RES-003 | too short
+target RES-003 | ran less
+target RES-003 | ran um um um less
+target RES-004 | guardrails
+target RES-004 | tolerance
+target RES-007 | cohort
+target RES-007 | first exposure
+target RES-008 | skewed
+target RES-008 | heavy tail
+target RES-008 | heavy tails
+target RES-008 | heavy tailed
+target RES-008 | heavy um tail
+target RES-008 | revenue like
+target RES-011 | drift
+target RES-011 | weekly
+target RES-011 | week by week
+target RES-011 | week to week
+target RES-012 | late exposed
+target RES-012 | late exposure
+target RES-012 | late um exposed
+target RES-012 | first purchase
+target RES-013 | configuration
+not-target RES-001 | sample um ratio mismatch
+not-target RES-002 | fewer um um um players than
+not-target RES-002 | sample um sizes
+not-target RES-002 | too um few
+not-target RES-003 | run um length
+not-target RES-003 | too um short
+not-target RES-003 | ran um um um um less
+not-target RES-007 | first um exposure
+not-target RES-008 | heavy um um tail
+not-target RES-008 | revenue um like
+not-target RES-011 | week um by week
+not-target RES-012 | late um um exposed
+not-target RES-012 | first um purchase
+gated causal | why effect
+gated causal | because lift
+gated causal | why uplift
+gated causal | because difference
+gated causal | why gap
+gated causal | because change
+gated causal | why increase
+gated causal | because decrease
+gated causal | why rise
+gated causal | because drop
+gated causal | why decline
+gated causal | because gain
+gated causal | why up
+gated causal | because down
+gated causal | why revenue
+gated causal | because purchases
+gated causal | why spend
+gated causal | because conversion
+gated causal | why sessions
+gated causal | because retention
+gated causal | why metric
+gated causal | why um um um um um um effect
+gated causal | effect because
+gated causal | effect due
+gated causal | effect um um um um um um because
+not-gated causal | why um um um um um um um effect
+not-gated causal | effect um um um um um um um because
