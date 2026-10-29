@@ -14,13 +14,36 @@
       ],
       "maturity_rule": "eligible_d7_players > 0 in governed cohort mart"
     },
-    "code_version": "683ff9d581913949de6c5356bf43b743d4f7a8ea",
-    "executed_at_utc": "2026-09-24T05:04:47.677706Z",
+    "code_version": "ba82c6cb3501140d668646a0ea254dfc541efe28",
+    "executed_at_utc": "2026-10-29T05:00:01.235324Z",
     "package_versions": {
       "python": "3.12.14",
       "pandas": "2.3.3",
-      "duckdb": "1.5.5",
-      "numpy": "2.5.2"
+      "duckdb": "1.5.6",
+      "numpy": "2.5.3",
+      "pyarrow": "21.0.0"
+    },
+    "execution_platform": {
+      "system": "Darwin",
+      "machine": "arm64"
+    },
+    "input_fingerprint": {
+      "sha256": "ef3b9be6e7e8a218579f2c2b2c45ecaccc442b1bcd0c810a0448f2c73a69bf5f",
+      "row_count": 1618,
+      "columns": [
+        "install_date_utc",
+        "period",
+        "platform",
+        "country_code",
+        "acquisition_channel",
+        "config_version_id",
+        "retention_signal",
+        "eligible_players",
+        "retained_players",
+        "retention_rate",
+        "median_upgrade_attempts",
+        "median_progression_velocity"
+      ]
     },
     "bootstrap_seed": 42,
     "bootstrap_draws": 2000,
