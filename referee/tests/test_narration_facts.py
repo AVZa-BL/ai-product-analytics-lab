@@ -1,6 +1,7 @@
 """The report check and the fact list of the narration layer (design sections 24.4 and 24.11)."""
 
 import copy
+import dataclasses
 import itertools
 import json
 import os
@@ -814,6 +815,19 @@ def test_the_facts_of_the_golden_are_the_allowed_values_under_aliases_and_the_re
     assert [(f.dropped, f.withheld) for f in facts.findings[:2]] == [(18, 0), (3, 0)]
     # two arms, each with and without the late players, of six values, and the metric's name
     assert [(f.dropped, f.withheld) for f in facts.findings if f.rule_id == "RES-012"] == [(0, 25)]
+
+
+def test_the_allowlist_and_the_fact_list_are_values_that_cannot_be_changed(golden: dict) -> None:
+    facts = fact_list(golden)
+
+    for value in (
+        ALLOWLIST["RES-001"]["alpha"],
+        facts,
+        facts.findings[0],
+        facts.findings[0].facts[0],
+    ):
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            setattr(value, dataclasses.fields(value)[0].name, None)
 
 
 def test_the_order_of_the_facts_is_the_allowlists_and_the_aliases_whatever_the_report_does(
