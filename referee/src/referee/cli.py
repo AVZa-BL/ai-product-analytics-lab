@@ -27,6 +27,11 @@ from referee.data import (
 )
 from referee.display import cap_listing, for_line
 from referee.loader import LoadError, load_spec
+from referee.monitor import (
+    metric_ledger,
+    monitor_report,
+    render_monitor_text,
+)
 from referee.report import (
     design_report,
     render_json,
@@ -97,6 +102,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     results.add_argument(
+        "--mode",
+        choices=("review", "monitor"),
+        default="review",
+        help=(
+            "review (default) judges the experiment as finished; monitor reads one that is still "
+            "running and says on_track, attention or stop_for_cause (no memo; exit status 1 only "
+            "for stop_for_cause)"
+        ),
+    )
+    results.add_argument(
         "--format",
         choices=("text", "json", "memo"),
         default="text",
@@ -160,6 +175,8 @@ def _review_results(args: argparse.Namespace) -> int:
     spec = _read_spec(args.spec)
     if spec is None:
         return EXIT_UNREADABLE
+    if args.mode == "monitor":
+        return _monitor_results(args, spec)
 
     as_of: datetime | None = None
     if args.as_of is not None:
@@ -204,6 +221,59 @@ def _review_results(args: argparse.Namespace) -> int:
     renderers = {"json": render_json, "memo": render_results_memo, "text": render_results_text}
     sys.stdout.write(renderers[args.format](report))
     return EXIT_BLOCKED if report["blocking_rule_ids"] else EXIT_OK
+
+
+def _monitor_results(args: argparse.Namespace, spec: ExperimentSpec) -> int:
+    """`review-results --mode monitor` (design section 27)."""
+    if args.format == "memo":
+        _complain(
+            "referee: error: --format memo is a review format; use text or json with --mode monitor"
+        )
+        return EXIT_UNREADABLE
+    as_of: datetime | None = None
+    if args.as_of is not None:
+        try:
+            as_of = parse_utc(args.as_of)
+        except ValueError as problem:
+            _complain(f"referee: error: --as-of {problem}")
+            return EXIT_UNREADABLE
+    ledger = metric_ledger(spec)
+    primary = next(entry for entry in ledger if entry["role"] == "primary")
+    if not primary["evaluated"]:
+        _complain(
+            f"referee: error: the primary metric {primary['name']!r} cannot be read "
+            f"({primary['reason']}: {primary['detail']}); the monitor needs it"
+        )
+        return EXIT_UNREADABLE
+    try:
+        if args.experiment_id is None:
+            ids = ", ".join(list_experiment_ids(args.data)) or "none"
+            _complain(f"referee: error: --experiment-id is required; the export holds: {ids}")
+            return EXIT_UNREADABLE
+        data = load_export(args.data, args.experiment_id)
+        hashes = export_file_hashes(args.data)
+        if as_of is not None:
+            data = replace(data, exported_at=as_of)
+        report = monitor_report(
+            spec,
+            data,
+            file_hashes=hashes,
+            as_of_source="command line" if as_of is not None else "manifest",
+        )
+    except DataError as error:
+        _complain(*_data_error(error))
+        return EXIT_UNREADABLE
+    except ResultsError as error:
+        _complain(
+            f"referee: error: {error.header}", *(f"  - {problem}" for problem in error.problems)
+        )
+        return EXIT_UNREADABLE
+    except OSError as error:
+        _complain(f"referee: error: {error}")
+        return EXIT_UNREADABLE
+    renderers = {"json": render_json, "text": render_monitor_text}
+    sys.stdout.write(renderers[args.format](report))
+    return EXIT_BLOCKED if report["status"] == "stop_for_cause" else EXIT_OK
 
 
 def main(argv: Sequence[str] | None = None) -> int:
