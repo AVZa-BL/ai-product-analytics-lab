@@ -54,7 +54,8 @@ questions) and one per intent; no brief holds the third public question or a que
 this process. The held-out brief holds no taxonomy example, no public question and no development
 question (checked by script: none of the 116 reference texts of the lint occurs in it, and none in
 the labeller brief). Its one illustration, "for example a question about a guardrail breach names
-harm_blocker", shows how to choose a fixture. The labeller brief holds no example, no stated
+harm_blocker", shows how to choose a fixture. The labeller brief holds no example question (one
+rule-ID illustration, "for example RES-004", in the format of a target), no stated
 precedence (it lists the twelve categories in the order of precedence without saying so), no fixture
 and no stratum assignment; its `unreadable` definition does say that "the strata of the evaluation
 hold no question of this kind". The pins hash the briefs, which are the bodies of the prompts; the
@@ -140,6 +141,48 @@ nothing else. The comparison (a script that printed counts only):
 than the disagreement of the resolution below. B2's wording is not reproduced here beyond what the
 operator reported: its input was the differently shuffled copy and it was told to read nothing else.
 
+## The audit labelling
+
+Because A and B2 agreed on every question, and B2's folder had held A's file, a third labeller C was
+started afterwards, to measure what the byte comparison could not. It is an audit, not a vote: its
+labels are in no label of the set and the resolution above did not use them. A script
+(`n3_audit.py`, not in the repository) wrote, for each half, a folder that held only
+`brief_labeller.md` (the same brief, SHA-256 `db645a87...`) and `label_input.json`, the committed
+questions as `{id, text}` in a third order (a generator seeded by the half's name and "audit-c").
+The instruction of C, with `<half>` for `dev` or `heldout` and `<dir>` for that folder:
+
+> You are a question labeller. Work ONLY with the two files in `<dir>`: brief_labeller.md (your
+> instructions) and label_input.json (a JSON list of {id, text}). Do not list, open, search or read
+> anything else on this machine: no other directory, no parent directory, no other file of any kind;
+> you have no need of them and nobody else's work is relevant to yours. [...] Label EVERY question as
+> the brief says, deciding from the brief's definitions and the question text alone, with your own
+> judgement, and write the JSON list [{"id": ..., "label": ...}, ...] in the order given to
+> `<dir>/labels_c.json` (Write tool; create no other file). Then run: sha256sum on it and count the
+> elements. Reply with the path, the count and the sha256 only; never quote a question or a label in
+> your reply.
+
+The comparison with the committed labels (a script that printed counts and indices only):
+
+| Half | Questions | C's label equals the committed one as written | C agrees with it under the resolution rule | Same route | Disagreeing |
+| --- | --- | --- | --- | --- | --- |
+| development | 96 | 96 | 96 | 96 | none |
+| held out | 64 | 63 | 64 | 64 | none |
+
+The one label of the held-out half that differs as written (index 42) is a compound question with
+the same two categories, written in the same order by A, B2 and C, which is not the order of
+precedence; the committed label has them in that order, as the resolution rule says. C wrote the
+route `none` for no question and gave two categories to the same two held-out questions as the
+committed labels do.
+
+What this shows and what it does not. A labeller that could see no other label file reproduced every
+label of both halves under the resolution rule, so the agreement of A and B2 is not explained by a
+copy: it fits questions written to be unambiguous to a reader of the definitions (the writers were
+asked for that) and labellers of one kind applying the same definitions the same way. It does not
+make C independent of A and B2 in a human sense: the same kind of agent, the same brief, and the
+instruction not to read other files is again an instruction (C's folder held nothing else, but the
+machine did, and nothing audits what C read). C's agreement says nothing about real users' phrasing.
+The third-labeller path and the exclusion still never ran on real data.
+
 ## Resolution
 
 Resolution (24.10, and `resolve` in `tests/narration_scoring.py`, which hand-computed cases pin):
@@ -162,8 +205,9 @@ Resolution (24.10, and `resolve` in `tests/narration_scoring.py`, which hand-com
 
 Both question files were written from these labels (lint problems 0 in each half), `pins.json` was
 written again for its five files and `check_pins` reported none. No question of either half needed a
-third labeller and none was excluded, so no third labeller was started and neither the
-third-labeller path nor the exclusion was exercised on this data (hand-made labels pin both). For
+third labeller and none was excluded, so no third labeller of the resolution was started (the audit
+labeller C took no part in it) and neither the third-labeller path nor the exclusion was exercised
+on this data (hand-made labels pin both). For
 the development half, which may be read: A and B2 wrote the same label on all 96 questions, and the
 resolved label agrees with the writer's stratum on all 96 (the stratum's category is in a single
 refusal's label, a compound is a refusal, an answerable has its intent). The development labels are
@@ -214,9 +258,10 @@ copy. The scorer reports the headline also without the questions above the thres
   session, handled the half by script and saw the lint's numbers (each question's largest
   similarity, by index), the counts and indices of the summary and the pinned SHA-256, no text and
   no label. Of necessity, each held-out writer saw the 16 questions it wrote and no other (each of
-  the 64 by exactly one writer), and each of the three held-out labeller agents (A, the first
-  run's B whose output was discarded, and B2, which read a second order) saw all 64, with ids and
-  without strata. No third labeller was started. Their instruction not to read anything else is an
+  the 64 by exactly one writer), and each of the four held-out labeller agents (A, the first
+  run's B whose output was discarded, B2, which read a second order, and the audit labeller C, which
+  read a third) saw all 64, with ids and without strata. No third labeller of the resolution was
+  started. Their instruction not to read anything else is an
   instruction, not a barrier, and was not audited. The fixture counts above and the count of
   why-explanations come from a script that printed numbers only.
 - Label aggregates. A reviewer of stage B printed aggregates of the held-out labels: counts only,
@@ -239,18 +284,19 @@ so here the variant equals the headline.
 
 - One kind of agent, from one family of prompts, wrote and labelled everything: the taxonomy, the
   definitions, the 160 questions, the labels and the reviews. Agreement among them is not
-  independence in a human sense, and no human labelled a question. Nor are A and B2 shown to be two
-  independent judgements: B2 labelled a differently shuffled copy and was told to read nothing
-  else, but whether B2 saw A's file was not audited beyond the byte comparison (the files differ)
-  and the different order (a copy could have been re-sorted). That 0 of 160 labels differ exactly
-  fits clear definitions and fits a labeller that saw the other file; nothing here tells them apart.
+  independence in a human sense, and no human labelled a question. A and B2 alone are not
+  shown to be two independent judgements: B2 labelled a differently shuffled copy and was told to
+  read nothing else, but its folder held A's file and nothing audits what it read. The audit
+  labelling above (C, in a folder with no other label file) reproduced all 160 labels under the
+  resolution rule, which makes a copy an unlikely reason for the 0 of 160 differences; it does not
+  make three agents of one kind independent in a human sense.
 - The definitions leak vocabulary. Writers and labellers read the same words ("release", "roll
   back", "genuine", "significant") and the questions echo them, so a router built from the same
   definitions meets an easier task than real phrasing. Agreement with an agent-authored taxonomy is
   not recall on real users' questions.
 - A and B2 agreed on every question of both halves, and on the development half also with the
-  writer on all 96. That shows the definitions are applied consistently by this kind of agent (or
-  that B2 saw A's file, see the first limit), not that they are unambiguous: the writers were asked
+  writer on all 96. That shows the definitions are applied consistently by this kind of agent (the audit
+  labelling above agrees), not that they are unambiguous: the writers were asked
   for questions unambiguous to a reader of the definitions, the labelling added no signal beyond
   the writers' intent, and the third labeller and the exclusion never ran.
 - Three questions per category (held out) and five (development) rest on nothing: a perfect 3 of 3

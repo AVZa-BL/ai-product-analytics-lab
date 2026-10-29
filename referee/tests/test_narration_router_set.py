@@ -334,6 +334,7 @@ def test_the_largest_similarity_is_taken_over_the_reference():
         ("\uff21\uff22", "ab"),
         ("Stra\u00dfe", "strasse"),
         ("\u0390", "\u0390"),  # casefolding gives three characters, which NFKC joins again
+        ("\u3392", "mhz"),  # the compatibility form is folded after the first NFKC, not before
     ],
 )
 def test_normalisation_is_the_routers(text, normalised):
