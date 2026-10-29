@@ -14,9 +14,10 @@ and everything below is a function of the report and of that.
 A compound question gets the paragraph and the pointers of every category matched, in the order
 given (the router's, which is the order of precedence), at most three; any beyond are named. A
 refusal that keeps the intent of an answerable part says that no part of the question was
-answered. `CLAIMS` names, for each category, the keys of the report that its pointers read: a
-test walks them on the committed report. `QUOTES` holds each quoted sentence with the first five
-words of its text, so that a rule edit that moves the numbering fails a test (24.15).
+answered. `CLAIMS` names, for each category, the keys of the report that its claims rest on: a
+test walks them on the committed report and another records the keys that the pointers read.
+`QUOTES` holds each quoted sentence with the first five words of its text, so that a rule edit
+that moves the numbering fails a test (24.15).
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ from referee.report import MEMO_HEADINGS
 
 MAX_SHOWN = 3  # categories a refusal prints in full; any beyond are named
 
-# The keys of the report that the pointers read (dotted paths).
+# The keys of the report that the claims rest on (dotted paths).
 BLOCKING = "blocking_rule_ids"
 FINDINGS = "findings"
 RULES_RUN = "rules_run"
@@ -53,7 +54,7 @@ IGNORED = "population.ignored_before_start"
 
 CLAIMS: dict[str, tuple[str, ...]] = {
     "ship_decision": (BLOCKING,),
-    "stopping": (FINDINGS, DAYS_OBSERVED, DAYS_PLANNED),
+    "stopping": (FINDINGS, RULES_RUN, DAYS_OBSERVED, DAYS_PLANNED),
     "reassurance": (FINDINGS, RULES_RUN),
     "effect_reality": (READABLE, UNREADABLE_BECAUSE, UNDERPOWERED),
     "effect_numbers": (EFFECT_TABLE, READABLE, UNREADABLE_BECAUSE, UNDERPOWERED),
@@ -123,8 +124,8 @@ UNREADABLE: dict[str, str] = {
         "which can hide or split a word."
     ),
     "mixed scripts": (
-        "The question could not be read: a word of it mixes Latin letters with Cyrillic or "
-        "Greek ones."
+        "The question could not be read: a word of it mixes Latin letters with Cyrillic, Greek, "
+        "Armenian, Coptic or Cherokee ones, which can pass for Latin letters."
     ),
 }
 ANSWERABLE_PART = (
@@ -148,11 +149,12 @@ NOTES: dict[str, tuple[str, ...]] = {  # fixed pointers, with the keys of CLAIMS
     "other_analysis": ("The rules not built are listed under 'Not yet' in docs/rules.md.",),
     "data_access": (
         "The report holds the number of players assigned and analysed in each arm and, if a "
-        "start was registered, the ids of the players assigned before it; this layer prints "
-        "neither.",
+        "start was registered, the ids of the players assigned before it; this layer prints no "
+        "player id.",
     ),
 }
 
+NO_SINGLE_RULE = "The question names no single rule of the nine results rules."
 COHORT_LEAD = "The catalogue says of the cohort test, for when it flags a difference:"
 RATES_LEAD = (
     "The catalogue says of the simulated error rates that RES-008 quotes, for when it raises "
@@ -167,8 +169,8 @@ QUOTES: dict[str, tuple[tuple[str, str, str], ...]] = {
     ),
     "subgroup": (
         (
-            "The report divides the players only by arm and, in the cohort test, by cohort of "
-            "first exposure. The catalogue says of that test, for when it flags a difference:",
+            "The report counts players by arm; its cohort test divides them by cohort of first "
+            "exposure. The catalogue says of that test, for when it flags a difference:",
             "RES-007.why.2",
             "If the effect differs between",
         ),
@@ -232,13 +234,13 @@ def _reassurance(report: dict[str, Any], facts: FactList, target: str | None) ->
         ]
     if raised:
         return [
-            "The question names no rule. The findings of the report, with their severity:",
+            f"{NO_SINGLE_RULE} The findings of the report, with their severity:",
             *(
                 f"  {rule_id} {severity}: {catalogue_sentences()[f'{rule_id}.title']}"
                 for rule_id, severity in raised.items()
             ),
         ]
-    return ["The question names no rule.", *quiet_lines(value(report, RULES_RUN))]
+    return [NO_SINGLE_RULE, *quiet_lines(value(report, RULES_RUN))]
 
 
 def _category(

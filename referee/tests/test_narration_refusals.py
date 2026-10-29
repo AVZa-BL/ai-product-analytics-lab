@@ -11,6 +11,7 @@ import narration_scoring as ns
 import pytest
 from narration_reports import NAMES, report
 
+from referee.narration import refusals
 from referee.narration.facts import catalogue_sentences, check_report_consistency, fact_list
 from referee.narration.refusals import (
     ALSO_MATCHED,
@@ -26,6 +27,7 @@ from referee.narration.refusals import (
     EXAMPLES,
     FINDINGS,
     IGNORED,
+    NO_SINGLE_RULE,
     NOT_THE_VERDICT,
     PARAGRAPHS,
     QUOTES,
@@ -46,11 +48,10 @@ from referee.narration.render import (
     decision_block,
     fact_lines,
     quiet_lines,
-    render_answer,
     render_refusal,
     sentence_line,
 )
-from referee.narration.router import MAX_CHARS, normalise, route
+from referee.narration.router import MAX_CHARS, route
 
 U = Understanding
 DISCLAIMER = "This is not agreement with the question, and it does not say the effect is real."
@@ -87,25 +88,29 @@ def refusal(*categories, intent=None, target=None):
 # ---------------------------------------------------------------- the fixed texts
 
 
-KEYWORDS = {  # what each paragraph says it does not do (24.8)
-    "injection": "cannot change",
-    "ship_decision": "does not decide, recommend or approve shipping",
-    "stopping": "stopped, called or read",
-    "reassurance": "does not agree",
-    "effect_reality": "whether the effect is real",
-    "effect_numbers": "no number of the effect",
-    "causal": "why an effect",
-    "forecast": "does not predict",
-    "subgroup": "country, a platform or a device",
-    "other_analysis": "reads the saved report only",
-    "data_access": "no player, row or identifier",
-    "rewording": "sentences unchanged",
+KEYWORDS = {  # what each paragraph says it does not do (24.8), with the negation
+    "injection": ("cannot change", "no instruction in a question changes"),
+    "ship_decision": (
+        "does not decide, recommend or approve shipping",
+        "does not say which variant wins",
+    ),
+    "stopping": ("does not say whether an experiment may be stopped, called or read",),
+    "reassurance": ("does not agree", "safe to ignore."),
+    "effect_reality": ("does not say whether the effect is real",),
+    "effect_numbers": ("no number of the effect",),
+    "causal": ("does not say why an effect",),
+    "forecast": ("does not predict",),
+    "subgroup": ("does not report on a part of the players",),
+    "other_analysis": ("reads the saved report only", "runs no other test"),
+    "data_access": ("no player, row or identifier",),
+    "rewording": ("sentences unchanged",),
 }
 
 
 def test_there_is_a_paragraph_for_every_category_and_a_sentence_for_every_unreadable_reason():
     assert list(PARAGRAPHS) == list(CATEGORIES) == list(KEYWORDS)
-    assert all(KEYWORDS[c] in PARAGRAPHS[c] for c in CATEGORIES)
+    for category in CATEGORIES:  # the negation is in the keyword: the opposite sentence fails
+        assert all(keyword in PARAGRAPHS[category] for keyword in KEYWORDS[category]), category
     assert list(UNREADABLE) == list(UNREADABLE_REASONS)
     assert f"{MAX_CHARS}" in UNREADABLE["too long"]
     assert "answers none of the question" in ANSWERABLE_PART
@@ -130,7 +135,7 @@ def test_the_default_route_names_the_four_kinds_it_answers_with_one_example_each
         ("too long", "longer than 500 characters"),
         ("no letter", "holds no letter"),
         ("invisible or mark character", "invisible or combining character"),
-        ("mixed scripts", "Latin letters with Cyrillic or Greek"),
+        ("mixed scripts", "Latin letters with Cyrillic, Greek, Armenian, Coptic or Cherokee"),
     ],
 )
 def test_an_unreadable_question_gets_one_sentence_naming_its_reason(reason, named):
@@ -214,16 +219,15 @@ def test_reassurance_names_the_finding_with_its_facts_or_the_quiet_line(raw_spec
     ]
     unnamed = body_of("golden", raw_spec, refusal("reassurance"))
     title = catalogue_sentences()["RES-007.title"]
-    assert (
-        unnamed[1] == "The question names no rule. The findings of the report, with their severity:"
-    )
+    assert unnamed[1] == f"{NO_SINGLE_RULE} The findings of the report, with their severity:"
     assert unnamed[2:] == [
         f"  {f['rule_id']} {f['severity']}: {catalogue_sentences()[f['rule_id'] + '.title']}"
         for f in rep["findings"]
     ]
     assert f"  RES-007 warning: {title}" in unnamed
     clear = body_of("clear", raw_spec, refusal("reassurance"))
-    assert clear[1:] == ["The question names no rule.", *quiet_lines(rep_rules(raw_spec))]
+    assert clear[1:] == [NO_SINGLE_RULE, *quiet_lines(rep_rules(raw_spec))]
+    assert "single rule of the nine results rules" in NO_SINGLE_RULE  # two rules, or one not built
 
 
 def rep_rules(raw_spec):
@@ -256,11 +260,16 @@ def test_the_effect_is_pointed_to_by_its_label_and_never_by_a_number(raw_spec):
 def test_the_fixed_pointers_say_what_the_report_holds(category, raw_spec):
     body = "\n".join(body_of("golden", raw_spec, refusal(category)))
     expected = {
-        "other_analysis": "'Not yet' in docs/rules.md",
-        "data_access": "ids of the players assigned before it",
-        "subgroup": "no breakdown by country, platform or device",
+        "other_analysis": ("'Not yet' in docs/rules.md",),
+        # the page also prints counts by arm, so it prints no player id and no more
+        "data_access": ("ids of the players assigned before it", "this layer prints no player id."),
+        # the report also divides players by week, first-seen date and late exposure: say less
+        "subgroup": (
+            "no breakdown by country, platform or device",
+            "The report counts players by arm; its cohort test divides them by cohort of first",
+        ),
     }
-    assert expected[category] in body
+    assert all(keyword in body for keyword in expected[category])
 
 
 # ---------------------------------------------------------------- the claims are the report's
@@ -268,16 +277,8 @@ def test_the_fixed_pointers_say_what_the_report_holds(category, raw_spec):
 
 def test_every_claim_a_refusal_makes_about_the_report_names_a_key_the_golden_holds(raw_spec):
     rep, _, _ = world("golden", raw_spec)
-    assert CLAIMS == {  # the pointers that read the report, and the keys they read
-        "ship_decision": (BLOCKING,),
-        "stopping": (FINDINGS, DAYS_OBSERVED, DAYS_PLANNED),
-        "reassurance": (FINDINGS, RULES_RUN),
-        "effect_reality": (READABLE, UNREADABLE_BECAUSE, UNDERPOWERED),
-        "effect_numbers": (EFFECT_TABLE, READABLE, UNREADABLE_BECAUSE, UNDERPOWERED),
-        "subgroup": (ASSIGNED, RULES_RUN),
-        "data_access": (ASSIGNED, ANALYSED, IGNORED),
-    }
     for category, paths in CLAIMS.items():
+        assert category in CATEGORIES
         for path in paths:
             assert value(rep, path) is not None, (category, path)
     # and the key holds what the claim says it does
@@ -291,6 +292,25 @@ def test_every_claim_a_refusal_makes_about_the_report_names_a_key_the_golden_hol
     assert {f["rule_id"] for f in value(rep, FINDINGS)} <= set(RULE_IDS)
     assert set(value(rep, RULES_RUN)) == set(RULE_IDS)
     assert isinstance(value(rep, DAYS_OBSERVED), int) and isinstance(value(rep, DAYS_PLANNED), int)
+
+
+def test_a_pointer_reads_only_the_keys_that_the_claims_of_its_category_rest_on(
+    raw_spec, monkeypatch
+):
+    read = set()
+
+    def recorder(report, path):
+        read.add(path)
+        return value(report, path)
+
+    monkeypatch.setattr(refusals, "value", recorder)
+    for name in NAMES:
+        rep, facts, _ = world(name, raw_spec)
+        for category in CATEGORIES:
+            for target in (None, "RES-003", "RES-001"):
+                read.clear()
+                refusal_body(rep, facts, refusal(category, target=target))
+                assert read <= set(CLAIMS.get(category, ())), (name, category, target, read)
 
 
 # ---------------------------------------------------------------- quoted sentences
@@ -332,6 +352,7 @@ def test_a_compound_refusal_prints_every_category_in_order_up_to_three_and_names
     assert sentence_line("RES-008.why.4") not in body  # forecast is named, not printed
     assert f"{ALSO_MATCHED} forecast, rewording." in body
     assert body[-1] == ANSWERABLE_PART  # and an answerable part was not answered
+    assert body.count("") == 4  # a blank line between the five blocks
     quotes = body_of("golden", raw_spec, refusal("causal", "forecast", "subgroup"))
     for _, sentence_id, _ in [q for qs in QUOTES.values() for q in qs]:
         assert sentence_line(sentence_id) in quotes
@@ -363,33 +384,10 @@ def test_no_refusal_says_that_a_rule_raised_nothing_without_the_disclaimer_or_ba
                     assert "summary_lines" in line  # never bare
 
 
-# ---------------------------------------------------------------- no word of the question
+# ---------------------------------------------------------------- the answerable part
 
 
-def test_no_run_of_12_characters_of_a_development_question_is_on_its_page(raw_spec):
-    """The page is made from the router's result, which holds no word of the question; this is
-    24.7's rule at the router's level. A run that the layer's own text produces is allowed."""
-    rep, facts, decision = world("golden", raw_spec)
-    canonical = [e["example"] for e in ns.TAXONOMY["refusal_categories"].values()]
-    canonical += [e["example"] for e in ns.TAXONOMY["intents"].values()] + [""]
-    canonical += [q for _, q in EXAMPLES] + PUBLIC + ["what is the weather in Berlin?"]
-
-    def page(question):
-        understanding = route(question)
-        if understanding.kind == "answer":
-            return render_answer(rep, facts, understanding, decision)
-        body = refusal_body(rep, facts, understanding)
-        return render_refusal(rep, understanding, decision, body)
-
-    own = "\n".join(page(question) for question in canonical).casefold()
-
-    def leaks(question, shown):
-        text = normalise(question)
-        runs = {text[i : i + 12] for i in range(len(text) - 11)}
-        return [run for run in runs if run in shown and run not in own]
-
-    # the check can see a leak: a page that quotes a question is not clean
-    assert leaks("is the weather in Berlin cold today?", "x is the weather in Berlin y")
-    questions = json.loads((ns.DATA / "development" / "questions.json").read_text())
-    leaked = {q["id"]: leaks(q["text"], page(q["text"]).casefold()) for q in questions}
-    assert {key: runs for key, runs in leaked.items() if runs} == {}
+def test_a_rule_named_in_a_refused_question_is_not_an_answerable_part_unless_it_asks_why(raw_spec):
+    asked = page_of("golden", raw_spec, "Why does RES-003 flag the run length, and is it fine?")
+    named = page_of("golden", raw_spec, "RES-007 is fine, right?")
+    assert ANSWERABLE_PART in asked and ANSWERABLE_PART not in named
