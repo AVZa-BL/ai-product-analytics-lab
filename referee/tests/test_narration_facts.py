@@ -48,21 +48,17 @@ def evidence_of(candidate: dict, rule_id: str) -> dict:
     return next(f for f in candidate["findings"] if f["rule_id"] == rule_id)["evidence"]
 
 
-def finding_of(candidate: dict, rule_id: str) -> dict:
-    return next(f for f in candidate["findings"] if f["rule_id"] == rule_id)
-
-
 # --- The fixtures -----------------------------------------------------------------------------
 
 FIXTURES = {
-    "golden": ("invalid", ["RES-001", "RES-002", "RES-007", "RES-008", "RES-012", "RES-013"]),
-    "clear": ("clear", []),
-    "warnings_only": ("caution", ["RES-012", "RES-013"]),
-    "harm_blocker": ("invalid", ["RES-004"]),
-    "unattainable_design": ("invalid", ["RES-002", "RES-007"]),
-    "short_arms": ("invalid", ["RES-002", "RES-007"]),
-    "short_run": ("invalid", ["RES-002", "RES-003", "RES-007"]),
-    "weekly_drift": ("invalid", ["RES-002", "RES-011"]),
+    "golden": ("invalid", ["RES-001", "RES-002", "RES-007", "RES-008", "RES-012", "RES-013"], 21),
+    "clear": ("clear", [], 28),
+    "warnings_only": ("caution", ["RES-012", "RES-013"], 28),
+    "harm_blocker": ("invalid", ["RES-004"], 28),
+    "unattainable_design": ("invalid", ["RES-002", "RES-007"], 14),
+    "short_arms": ("invalid", ["RES-002", "RES-007"], 14),
+    "short_run": ("invalid", ["RES-002", "RES-003", "RES-007"], 5),
+    "weekly_drift": ("invalid", ["RES-002", "RES-011"], 28),
 }
 
 
@@ -70,9 +66,11 @@ def test_the_eight_fixtures_are_the_eight_names_and_each_has_the_findings_it_exi
     raw_spec: dict,
 ) -> None:
     assert list(FIXTURES) == list(NAMES)
-    for name, (verdict, rule_ids) in FIXTURES.items():
+    for name, (verdict, rule_ids, days) in FIXTURES.items():
         built = report(name, raw_spec)
         assert (built["verdict"], [f["rule_id"] for f in built["findings"]]) == (verdict, rule_ids)
+        assert built["population"]["observed_days"] == days, name
+        assert len(built["population"]["ignored_before_start"]) == (name == "short_run") * 4, name
 
 
 def test_harm_blocks_alone_in_one_fixture_and_a_design_that_cannot_be_sized_is_not_underpowered(
@@ -86,6 +84,17 @@ def test_harm_blocks_alone_in_one_fixture_and_a_design_that_cannot_be_sized_is_n
         built = report(name, raw_spec)
         assert evidence_of(built, "RES-002").get("unattainable", False) is unattainable
         assert built["effect"]["underpowered"] is not unattainable
+
+
+def test_short_run_names_its_four_early_players_and_weekly_drift_fails_two_weeks_of_four(
+    raw_spec: dict,
+) -> None:
+    run = report("short_run", raw_spec)
+    drift = evidence_of(report("weekly_drift", raw_spec), "RES-011")
+
+    assert len(evidence_of(run, "RES-003")["ignored_before_start"]) == 4
+    assert (drift["failing_weeks"], drift["weeks_tested"]) == ([1, 2], 4)
+    assert drift["total"]["p_value"] > 0.5
 
 
 def test_clear_carries_the_lines_of_the_rules_that_compared_nothing(raw_spec: dict) -> None:
@@ -725,9 +734,7 @@ def test_the_allowlist_gives_every_key_path_the_label_and_unit_written_for_it() 
     assert {path: a.words for path, a in listed().items() if a.words} == ENUMERATIONS
 
 
-def test_the_allowlist_is_data_of_short_paths_that_never_admit_what_is_withheld_or_dropped() -> (
-    None
-):
+def test_the_allowlist_is_data_of_short_paths_that_admit_nothing_withheld_or_dropped() -> None:
     assert set(ALLOWLIST) <= {rule.id for rule in RESULTS_RULES}
     assert EFFECT_KEYS == {
         "estimate",
@@ -843,8 +850,18 @@ def test_the_control_is_the_first_alias_and_the_others_follow_population_assigne
     ]
 
 
-def test_a_fact_list_is_refused_for_a_report_whose_arm_tables_disagree(golden: dict) -> None:
-    del golden["population"]["analysed"]["control"]
+@pytest.mark.parametrize(
+    "corrupt",
+    [
+        lambda r: r["population"]["analysed"].pop("control"),
+        lambda r: put(r, "population", "analysed", value=[926, 969, 731]),
+    ],
+    ids=["an arm missing", "no table"],
+)
+def test_a_fact_list_is_refused_for_a_report_whose_arm_tables_disagree(
+    golden: dict, corrupt
+) -> None:
+    corrupt(golden)
 
     with pytest.raises(ReportError) as raised:
         fact_list(golden)
@@ -888,7 +905,7 @@ def test_a_value_is_counted_as_dropped_for_each_value_in_a_subtree_or_list_and_u
 ) -> None:
     golden["findings"] = golden["findings"][:1]
     golden["findings"][0]["evidence"] = {
-        "tests": [{"a": 1, "b": [2, 3]}],
+        "tests": {"a": 1, "b": [2, 3]},
         "notes": {"k": "x"},
         "settings": {},
         "plans": {"v": {"k": None}},
