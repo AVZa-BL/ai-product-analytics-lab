@@ -63,7 +63,7 @@ RULE_FAMILIES = ("res", "des")  # a rule ID may be written with a space only for
 LOOKALIKES = frozenset({"CYRILLIC", "GREEK", "ARMENIAN", "COPTIC", "CHEROKEE"})
 # Letters that show nothing and are in no category C or M: the Hangul choseong and jungseong
 # fillers and the braille blank. NFKC maps the fillers U+3164 and U+FFA0 to U+1160.
-INVISIBLE = "ᅟᅠ⠀"
+INVISIBLE = "\u115f\u1160\u2800"
 
 Pattern = tuple[int | str, ...]
 
@@ -1188,8 +1188,8 @@ def normalise(question: str) -> str:
 
 def fold(text: str) -> str:
     """The text with its diacritics folded: NFD, then the marks of category Mn dropped. NFKC has
-    composed a letter and a mark into one letter (`shíp`); this gives the plain letter back. The
-    result is matched, never shown, so it is not composed again."""
+    composed a letter and a mark into one letter (an i with an acute accent in `ship`); this gives
+    the plain letter back. The result is matched, never shown, so it is not composed again."""
     return "".join(
         char for char in unicodedata.normalize("NFD", text) if unicodedata.category(char) != "Mn"
     )
@@ -1198,7 +1198,7 @@ def fold(text: str) -> str:
 def _mixes_scripts(text: str) -> bool:
     scripts: set[str] = set()
     for char in text + " ":
-        if char in "'’":  # `read` removes it and joins the letters on either side
+        if char in "'\u2019":  # `read` removes it and joins the letters on either side
             continue
         if char.isalpha():
             scripts.add(unicodedata.name(char, "?").split(" ", 1)[0])
@@ -1248,7 +1248,7 @@ def read(text: str) -> tuple[list[str], list[str]]:
     word: list[str] = []
     start = 0
     for i, char in enumerate(text + " "):
-        if char in "'’":  # joins its neighbours
+        if char in "'\u2019":  # joins its neighbours
             continue
         if char.isalnum():
             start = start if word else i
@@ -1301,10 +1301,12 @@ def hush(words: list[str]) -> list[str]:
     hushed = list(words)
     for steps in _QUIET:
         for i, opened in enumerate(ends(words, steps)):
+            if not opened:
+                continue
             for j in range(i + 1, min(i + 1 + STRETCH, len(words))):
-                if opened and _at(words[j], _STRETCH_ENDS):
+                if _at(words[j], _STRETCH_ENDS):
                     break
-                if opened and _at(words[j], _SOFT):
+                if _at(words[j], _SOFT):
                     hushed[j] = "_"
     return hushed
 
