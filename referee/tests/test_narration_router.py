@@ -351,6 +351,7 @@ def test_a_stretch_ends_at_a_comma_or_a_joining_word(end):
         ("did you test whether it ran long enough", ["enough"]),
         ("which rule looks at whether the sample is large enough", ["enough"]),
         ("why does res-002 say the sample is not large enough", ["enough"]),
+        ("is there anything i should worry about", ["worry"]),
         ("did you check ship", ["ship"]),
         ("did the review check ship", ["ship"]),
         ("did you ship", []),  # the review did not check it
@@ -377,6 +378,7 @@ def test_a_stretch_is_eight_words_long():
         ("Did you test whether the experiment ran long enough?", "checked"),
         ("Did the review look at whether the effect is real?", "checked"),
         ("Why does RES-002 say the sample is not large enough?", "explain_finding"),
+        ("Is there anything in this report I should be worried about?", "summary"),
     ],
 )
 def test_a_question_that_only_describes_what_must_hold_or_what_was_checked_is_answered(
@@ -542,6 +544,15 @@ def test_a_refusal_of_each_category_beats_the_others_in_the_order_of_precedence(
         ("Why does RES-001 block, and the drift?", U("answer", "explain_finding", as_summary=True)),
         ("Why does RES-005 block?", U("answer", "explain_finding")),
         ("Why does ZZZ-123 matter", U("answer", "explain_finding")),
+        # a word of a refusal in a question about the report is no refusal (the precision pins)
+        ("Tell me which checks raised no findings.", U("answer", "checked")),
+        ("List the rule IDs that ran.", U("answer", "checked")),
+        (
+            "What does it mean that the arms are unbalanced?",
+            U("answer", "explain_finding", target="RES-001"),
+        ),
+        ("What is the advice for players who were exposed late?", U("answer", "next_steps")),
+        ("What is the mean of the control arm?", U("refusal", categories=("effect_numbers",))),
         # the default route
         ("What is the weather in Berlin?", U("refusal")),
         ("What happened on day 100?", U("refusal")),

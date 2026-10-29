@@ -94,7 +94,7 @@ STEERED = (
 QUALITY = (
     "fine valid ok okay safe trust* reliab* rely sound acceptable clean solid robust credible "
     "accurate normal reasonable sensible appropriate wise healthy legit* kosher correct right "
-    "proper"
+    "proper tolerable relied"
 )
 REAL = (
     "real genuine* significant significantly chance nois* random* fluke* luck* "
@@ -113,7 +113,9 @@ CAUSES = (
 )
 GROUP = "control treatment arm arms variant group"
 AVERAGES = "average* median"
-AMOUNTS = "player* data time day* week* month* sample traffic users long run observation* events"
+AMOUNTS = (
+    "player* data time day* week* month* sample traffic users long run observation* events runtime"
+)
 PEOPLE = "player* user* customer* account* buyer* gamer* member* people"
 ANALYSES = (
     "median mean average* revenue conversion retention metric* test* model* method* window* "
@@ -166,7 +168,7 @@ BEHIND = MOVES + " up down more less better worse numbers results"
 TRIGGERS: dict[str, tuple[Pattern, ...]] = {
     "injection": (
         # set the rules aside
-        (3, "forget* override* bypass* circumvent* reset* flush* wipe*", STEERED),
+        (3, "forget* override* overrul* bypass* circumvent* reset* flush* wipe*", STEERED),
         (3, "forget* ignor* disregard*", "told said instructed taught programmed trained"),
         (0, "forget* ignor*", "you your", "are role"),
         (3, "stop* cease* quit*", "follow* obey* observ*"),
@@ -181,6 +183,29 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "asked told instructed ordered requested wants want need needs require requires", 2,
          "us me you him her them", "to", 1, HIDE, 4, STEERED),
         (0, "whatever", "it", "takes"),
+        (START_YOU, 1, "correct* updat* amend*", 2, "that it this them", 1, "to into as", 2,
+         "warning* info informational minor note valid clear pass*"),
+        (5, "output answer summary reply response page", "not never", 3,
+         "contain include show mention list have", 3, FINDINGS + " issue* problem* flag*"),
+        (3, SUBJECTS + " output summary", "must should needs need", 2,
+         "say show state read report", 4, VERDICTS),
+        (START_YOU, 1, "replac* swap* substitut*", 4, "invalid", 1, "with by",
+         1, VERDICTS + " warning* info"),
+        (START, 1, SAY, 6, "except excluding besides", 2, FINDINGS),
+        (0, "correct right real true", "verdict conclusion outcome", 2, "is should be", 2,
+         VERDICTS),
+        (2, "dont not never without", 4, "take taking", 4, STEERED),
+        (START, 1, "switch* turn* shut*", 4, STEERED, 1, "off"),
+        (3, "only", "what", 1, "support* favor* favour* help*"),
+        ("lenient lenience leniency",),
+        (0, "read reads look looks appear appears", "as", 2,
+         "warning* info informational minor note"),
+        (0, "you", "work works", "for", "me us"),
+        (0, "i we", "decide determine set choose", 4, "verdict conclusion outcome"),
+        (START, 1, "take pull", 1, "out away off", 4, STEERED),
+        (START, 1, "leav* left", 3, "that this it them those these one ones", 1, "out"),
+        (START_YOU, 1, "call* label* rate* mark* classif* regard* treat*", 5, TARGETS, 1,
+         "a an the", 1, "minor trivial negligible irrelevant informational note"),
         (3, "set put lay push cast brush", "aside"),
         (0, "stop quit", "being"),
         (0, "let", "this it that them", "through slide pass go"),
@@ -250,6 +275,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (START, 1, "do", "not", 1, "apply* use* enforc* run* check* consider*", 4, STEERED),
         (START, 1, "do", "not", 1, SAY, 4, STEERED),
         (START, 1, "dont never", 1, "let", 6, STEERED),
+        (START, 1, "do", "not", 1, "let", 6, STEERED),
         (0, "without", "mentioning showing listing including printing reporting flagging", 4,
          STEERED),
         (4, "show print give display output report summar*", "without", 2, TARGETS),
@@ -323,6 +349,8 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (START, 1, "roll rolls rolling", 4, "out"),
         (3, READY, "roll rolls rolling", 4, "out"),
         (0, "go", "with"),
+        (1, "go", "or", "hold"),
+        (0, "the", "call", "on", 2, OBJECTS),
         (0, "go", "ahead", "with"),
         (0, "the", "go", "ahead"),
         ("productioniz* productionis*",),
@@ -350,7 +378,8 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
          "everyone everybody all players customers markets production live default"),
         (3, "be become", "default permanent baseline standard"),
         (0, "a", "yes no"),
-        (0, "sign", "off", 2, LAUNCH + " shipping rollout"),
+        (0, "sign", "off", 3, LAUNCH + " shipping rollout " + OBJECTS + " it this"),
+        (0, "one", "to", LAUNCH + " pick choose keep"),
         (3, "make", OBJECTS + " it this", 2, "default standard"),
         ("winner*",),
         (5, "which what", OBJECTS, 3,
@@ -380,7 +409,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "replac* swap* supersed*", "a c"),
         (1, LAUNCH, "tomorrow tonight"),
         (3, READY, LAUNCH + " shipping"),
-        (1, "moment time", "to", 0, LAUNCH),
+        (1, "moment time", "to", 0, LAUNCH + " roll rolling"),
         (5, "keep* scrap* drop* abandon* ditch* retire* discard* pick* choos* select* prefer* axe* "
             "shelve* nix*", OBJECTS),
         (4, "replac* swap* substitut* supersed*",
@@ -455,6 +484,8 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "its full", "course"),
         ("stabili* converg* plateau*",),
         (0, "mature matured", "enough"),
+        (0, "enough", "yet"),
+        (2, "is are was", "test experiment trial study", 0, "done"),
         (0, "to", "completion"),
         (0, "early", "look read glance"),
         (2, "far", "along enough"),
@@ -468,11 +499,11 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
     "reassurance": (
         (8, "confirm* reassur* assur*",
          QUALITY + " properly correctly wrong problem* issue* worry worried concern* nothing "
-         "quality enough small tiny minor inconsequential"),
+         "quality enough small tiny minor"),
         ("surely",),
         (0, ",", "right correct agreed yes yeah no ok okay true fair", 1, "$"),
         (0, "non", "issue"),
-        (0, "as", 1, "noise irrelevant unimportant minor fluke"),
+        (0, "as", 1, "noise minor fluke"),
         (0, "doesnt isnt arent wasnt werent", "it they that this", 1, "$"),
         (0, "cant couldnt shouldnt wont wouldnt dont", "i we you", 1, "$"),
         (0, "i", "assume presume guess suppose hope", 0, ", $"),
@@ -511,7 +542,10 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "too", "small tiny minor little", 3, "matter ignore worry"),
         (0, "no", "impact effect bearing influence", "on", 1,
          "validity results conclusion* data verdict quality"),
-        (0, ",", "should shall do does can could is are was", "we i you it they", 1, "$"),
+        (0, ",", "should shall do does can could is are was would will", "we i you", 1, "$"),
+        (0, "count counting", "on", 1, "these those the", "numbers results data figures"),
+        (0, "of", "no", "consequence importance concern"),
+        ("irrelevant unimportant inconsequential",),
         (2, "worth", "worrying worry bother sleep"),
         (4, "should shouldnt shall do dont does doesnt need must",
          "worry worried concerned alarmed bothered panic worrying"),
@@ -523,6 +557,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (3, "small tiny minor low little", "enough", 3, "matter"),
         (2, "it they that this", "doesnt dont wont", "matter"),
         (0, "feel", "confident comfortable reassured safe good okay"),
+        (0, "no", "reason", "to", 1, "be", "concerned worried worry alarmed"),
         (3, "can could may might should shall",
          "ignor* disregard* dismiss* overlook* brush* shrug* skip*"),
         ("ignorable negligible harmless benign immaterial",),
@@ -555,11 +590,12 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "statistical*", "signific* differ* distinguish* meaning* speaking"),
         (3, "effect lift uplift difference gain impact improvement result", "significance"),
         (3, "really actually truly genuinely", "make makes made", 2, "difference impact"),
-        (0, "genuinely truly really actually", "better superior worse improved effective"),
+        (0, "genuinely truly really actually", "better superior worse improved"),
         (2, "evidence data results", "show* suggest* indicat* support* prove*", 1, "that", 3,
          "better beat* outperform* improv* higher increas*"),
         (0, "work works", "or", "not"),
-        (1, "true truly genuinely really",
+        (0, "beyond", "doubt"),
+        (1, "true truly genuinely really actually",
          "effect* improvement* difference* lift* uplift* impact* gain* mov* increas* help* chang* "
          "affect* outperform* beat*"),
         (3, "show* suggest* indicat* reveal* support*", "any a an", 2,
@@ -592,6 +628,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "how", "much", 3, "did does was were has have is are", 4, EFFECT_WORDS),
         (0, "how", "much", 2, "more less higher lower better worse"),
         (0, "by", "how", "much"),
+        (0, "by", "what", "amount margin factor"),
         (0, "what", "percent*"),
         (4, AVERAGES, GROUP),
         (0, "the", "mean", "of for in"),
@@ -618,7 +655,9 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (1, "results effect", "table"),
         (3, "variant treatment arm control", "lift uplift"),
         ("magnitude",),
-        (0, "what", "is was are were", 3, "lift* uplift* delta*"),
+        (1, "what", "is was are were", 3, "lift* uplift* delta*"),
+        (0, "how", "far", "apart"),
+        (0, "how", "different far", 6, GROUP),
         (3, "whats", "lift* uplift* delta* effect*"),
         (0, "what", "is was are were", 3,
          "observed measured overall total net actual headline primary final", 1,
@@ -631,6 +670,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (8, "caus*", EFFECT_WORDS),
         (8, EFFECT_WORDS, "caus*"),
         (4, "drove driv*", EFFECT_WORDS),
+        (4, EFFECT_WORDS, "driven", "by"),
         ("novelty seasonality",),
         ("curiosity honeymoon hype primacy shiny confound*",),
         (0, "down", "to"),
@@ -654,7 +694,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (6, EFFECT_WORDS, "attribut* responsible"),
     ),
     "forecast": (
-        ("expect expecting expects",),
+        ("expect expected expecting expects",),
         ("forecast* predict* projected projecting projection* extrapolat* anticipat*",),
         (START_YOU, 1, "project", 4, EFFECT_WORDS),
         ("future rollout* eventually",),
@@ -687,7 +727,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (2, "will would", "last remain continue"),
         (0, "steady", "state"),
         ("maturity",),
-        ("shrink* disappear* vanish*",),
+        ("shrink* disappear* vanish* diminish*",),
         (0, "going", "forward"),
         (0, "going", "to", 1, "last hold stay continue wear grow"),
         (1, "next coming upcoming following later", "week*"),
@@ -744,6 +784,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (5, "rerun* redo repeat* rebuild* rework* recreat*",
          "analys* comparison* calculation* model* estimate* numbers interval* stats"),
         (2, "run running rerun redo", "again", 1, "but excluding without only using"),
+        (3, "rerun* redo repeat*", "without excluding dropping removing"),
         (0, "using use with", "only"),
         (0, "only", "count counts counted counting consider* keep*"),
         (1, "day* week* month*", "only alone"),
@@ -793,7 +834,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "^ ,", "who", "are is was were", 2, PEOPLE),
         (3, "raw underlying actual individual source original",
          "data events export table* file* logs transactions orders purchases numbers values "
-         "figures"),
+         "observation* figures"),
         (3, "random sample* example* individual specific particular ten twenty", PEOPLE),
         (3, "pull fetch get give send dump extract share email hand provide attach",
          "log logs logged logging event* file* table* export transactions"),
@@ -802,6 +843,8 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "sample* subset* extract* copy", "of", 2, "data events players users"),
         (0, "event* transaction* log logs", "data stream* feed*"),
         (0, "table", "of", "assignment* exposure* event* player* user* purchase*"),
+        (0, "player user customer account", "list lists"),
+        (0, "id identifier*", "of for", 1, PEOPLE),
         (0, "!rule rules finding findings check checks", "ids"),
         ("row* download* csv record records dataset* timestamp* spreadsheet* sql parquet",),
         (0, "player user", "level"),
@@ -816,7 +859,8 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         ("plain* simpl* jargon layman* layperson eli5 tldr dumb* nontechnical understandable "
          "digestible diplomatic* politely tactful* gentl* softer kinder nicer polite tweet*",),
         (3, "say put phrase word explain write", "differently"),
-        (0, "non", "technical"),
+        (0, "non", "technical expert*"),
+        (0, "in", 1, "a an", LATER),
         (0, "different", "words wording terms way"),
         (2, "make keep but bit little more much give write say", LATER),
         (1, "keep make be", "it this them that", 1, "short brief concise clear quick"),
@@ -937,7 +981,7 @@ INTENT_PATTERNS: dict[str, tuple[Pattern, ...]] = {
         ("finding* block* warning* overview summar* overall verdict* picture sever* serious* "
          "problem* issue* wrong rundown gist takeaway* highlight* headline* recap concern* risk* "
          "critical* urgent*",),
-        (3, "review* report* experiment*",
+        (3, "review* report* experiment* you",
          "find found say says show shows contain contains conclude concluded flagged raised noted "
          "report reports reported identified raise raises rate rates rating decide decided flag "
          "flags decision mention mentions note notes judge judged look looks give gives think "
@@ -954,7 +998,7 @@ INTENT_PATTERNS: dict[str, tuple[Pattern, ...]] = {
         (0, "according", "to", 1, "review report"),
         (0, "red", "flag*"),
         (0, "stand stands stood", "out"),
-        (3, "anything something", "know noting notable important worrying"),
+        (8, "anything something", "know noting notable important worrying worried worry"),
         (0, "should must", "i we", "know aware"),
         (0, "aware", "of"),
         (0, "why", "is are does do", 3, "important matter matters"),
@@ -1000,14 +1044,15 @@ PHRASES: dict[str, tuple[Pattern, ...]] = {
 # block?" is an explanation and not `causal` (24.8).
 WHEN_NO_RULE_NAMED: dict[str, tuple[Pattern, ...]] = {
     "effect_numbers": (
-        (5, "what whats how give show tell report print list state provide need want get see know",
-         "estimat*"),
+        (5, "what whats how give show tell report print list state provide need want get see know "
+            "quote", "estimat*"),
         (0, "point", "estimat*"),
         (0, "p", "value*"),
         ("pvalue*",),
         (1, "confidence credible", "interval* bound* limit* range* band*"),
         (0, "interval*", "around for on of", 3, "difference lift effect uplift estimate*"),
         ("ci uncertainty",),
+        (0, "what which", "interval*"),
         (0, "lower upper", "and or", "upper lower"),
         (0, "error", "bar bars"),
         (0, "standard", "error deviation"),
@@ -1026,6 +1071,7 @@ WHEN_NO_RULE_NAMED: dict[str, tuple[Pattern, ...]] = {
         (0, "lead leads leading", "to", 4, EFFECT_WORDS),
         (3, EFFECT_WORDS, "result resulted", "of from"),
         (0, "something", "else", 1, "happening going"),
+        (2, "influenc* impact*", "result* metric* numbers outcome* lift effect difference"),
         (0, "resulted resulting stem stems stemmed originat* aris* arose", "from"),
         (0, "how", "did does do", 6, "increas* improv* rais* boost* reduc* decreas* affect*"),
     ),
@@ -1046,16 +1092,18 @@ UNLESS_NAMED: dict[str, dict[str, tuple[Pattern, ...]]] = {
 }
 
 # Where a clause only says what must hold first ("fix it before we ship"), what the review did
-# ("did you check whether it ran long enough") or why a rule says so ("why does RES-003 say it
-# ran too short"), the words of SOFT in the rest of the clause (to a comma, `and`, `but`, `then`,
-# `so` or `or`, at most STRETCH words) ask for nothing. Injection is not hushed.
+# ("did you check whether it ran long enough"), why a rule says so ("why does RES-003 say it ran
+# too short") or what there is to know ("is there anything to worry about"), the words of SOFT in
+# the rest of the clause (to a comma, `and`, `but`, `then`, `so` or `or`, at most STRETCH words)
+# ask for nothing. Injection is not hushed.
 QUIET: tuple[Pattern, ...] = (
     ("before until",),
     (CLAUSE, "did does do has have", 3, SUBJECT, 2, CHECKING),
     (CLAUSE, "which what", 2, "check* rule* test* analys*", 2, CHECKING),
     (CLAUSE, "why", 3, "#"),
+    ("anything something",),
 )
-SOFT = "ship* launch* releas* deploy* call* stop* trust* safe real enough"
+SOFT = "ship* launch* releas* deploy* call* stop* trust* safe real enough worr* concern*"
 STRETCH = 8
 STRETCH_ENDS = ", and but then so or $"
 # fmt: on
