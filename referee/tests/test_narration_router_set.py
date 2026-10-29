@@ -1,4 +1,5 @@
-"""The scoring, label resolution, lint and taxonomy of the router's evaluation set (design 24.10).
+"""The scoring, label resolution, lint and taxonomy of the router's evaluation set (design 24.10),
+and the committed question files and pins.
 
 Every expected number below was worked out by hand, not by running the code under test.
 """
@@ -734,3 +735,36 @@ def test_the_public_questions_have_the_labels_of_the_design():
         "ship_decision",
         "reassurance",
     ]
+
+
+# ---------------------------------------------------------------- the committed data
+
+PINNED = {
+    "development/questions.json",
+    "heldout/questions.json",
+    "briefs/brief_dev.md",
+    "briefs/brief_heldout.md",
+    "briefs/brief_labeller.md",
+}
+
+
+def test_the_pins_cover_the_five_files_of_the_pre_registration_and_match_them():
+    assert set(json.loads(ns.PINS.read_text(encoding="utf-8"))) == PINNED
+    assert ns.check_pins() == []
+
+
+def lint_problems(half):
+    """The lint's problems for a committed half: question ids and counts, never a question.
+
+    The held-out file is read here by the scorer's side. Only the list of problems leaves this
+    function, so a failure shows ids and counts and nothing the questions say.
+    """
+    questions = json.loads((ns.DATA / half / "questions.json").read_text(encoding="utf-8"))
+    development = json.loads((ns.DATA / "development" / "questions.json").read_text("utf-8"))
+    reference = ns.reference_texts(development) if half == "heldout" else None
+    return ns.lint(questions, half, reference)["problems"]
+
+
+@pytest.mark.parametrize("half", ["development", "heldout"])
+def test_a_committed_half_passes_the_lint_of_its_half(half):
+    assert lint_problems(half) == []
