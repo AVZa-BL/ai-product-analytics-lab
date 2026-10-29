@@ -278,6 +278,9 @@ class ResultsContext:
     players: tuple[PlayerRecord, ...]
     ignored_before_start: tuple[str, ...]
     metrics: Mapping[str, ExportMetric]
+    secondary: tuple[MetricResolution, ...] = ()
+    """The secondary metrics the spec declares and whether each could be read: a results review
+    lists them and never refuses, or changes its verdict, because of one (design section 28)."""
     analysed: tuple[PlayerRecord, ...] = field(init=False)
     """Assigned, exposed, and not first exposed after the first purchase (section 21.3)."""
 
@@ -298,7 +301,7 @@ class ResultsContext:
             )
         resolved = resolve_metrics(spec, data)
         metrics = {r.name: r.metric for r in resolved if r.metric is not None}
-        problems += [problem_text(r) for r in resolved if r.metric is None]
+        problems += [problem_text(r) for r in resolved if r.metric is None and r.role != "other"]
 
         if not data.assignments:
             problems.append("the export has no assignments")
@@ -362,6 +365,7 @@ class ResultsContext:
                 sorted(a.player_id for a in data.assignments if a.assigned_at < origin)
             ),
             metrics=metrics,
+            secondary=tuple(r for r in resolved if r.role == "other"),
         )
 
     @property

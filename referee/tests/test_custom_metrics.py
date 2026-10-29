@@ -173,3 +173,66 @@ def test_the_spec_refuses_a_metric_declared_badly(change, fragment: str) -> None
     change(raw)
     with pytest.raises(SpecError, match=fragment):
         ExperimentSpec.from_dict(raw)
+
+
+def review_json(capsys, spec_path: Path, folder: Path) -> tuple[int, dict, str]:
+    code, out, err = run(
+        capsys, "review-results", str(spec_path), str(folder), *ARGS, "--format", "json"
+    )
+    return code, json.loads(out) if out else {}, err
+
+
+def test_an_unreadable_secondary_metric_is_listed_and_never_refuses_or_changes_the_verdict(
+    capsys, tmp_path: Path
+) -> None:
+    def spec(raw: dict) -> dict:
+        raw["secondary_metrics"].append({"name": "retention_d7", "kind": "binary"})
+        return raw
+
+    spec_path, folder = copy_with(tmp_path, spec=spec)
+    code, report, err = review_json(capsys, spec_path, folder)
+    base_code, base, _ = review_json(capsys, FOLDER / "spec.yaml", FOLDER)
+
+    assert code == base_code == 1 and report  # RES-002 and RES-003 block this unfinished export
+    assert [(m["name"], m["read"], m["reason"]) for m in report["secondary_metrics"]] == [
+        ("levels_cleared", True, None),
+        ("retention_d7", False, "column_missing"),
+    ]
+    # the verdict, the findings and the effect are those of the review without the metric
+    for key in ("verdict", "blocking_rule_ids", "counts", "findings", "effect", "rules_run"):
+        assert report[key] == base[key], key
+    assert "retention_d7 (not read: column_missing)" in err
+    text = run(capsys, "review-results", str(spec_path), str(folder), *ARGS)[1]
+    assert "retention_d7 (retention_d7): NOT read: column_missing" in text
+    memo = run(capsys, "review-results", str(spec_path), str(folder), *ARGS, "--format", "memo")[1]
+    assert "`retention_d7` (not read: column_missing)" in memo
+
+
+def test_a_review_of_a_spec_without_secondary_metrics_has_no_such_key(capsys) -> None:
+    _, report, _ = review_json(
+        capsys,
+        Path(__file__).parents[1] / "examples" / "offer-page-results.yaml",
+        Path(__file__).parent / "data" / "hybrid_offer_page_5000",
+    )
+    assert "secondary_metrics" not in report
+
+
+def test_an_unreadable_guardrail_still_refuses_a_review(capsys, tmp_path: Path) -> None:
+    spec_path, folder = copy_with(
+        tmp_path,
+        spec=lambda raw: {
+            **raw,
+            "guardrails": [{**raw["guardrails"][0], "column": "minutes_playd"}],
+        },
+    )
+
+    code, out, err = run(capsys, "review-results", str(spec_path), str(folder), *ARGS)
+
+    assert (code, out) == (2, "") and "guardrails[0]" in err and "column_missing" in err
+
+
+def test_the_report_with_secondary_metrics_passes_the_narration_check(capsys) -> None:
+    from referee.narration.facts import check_report_consistency
+
+    _, report, _ = review_json(capsys, FOLDER / "spec.yaml", FOLDER)
+    check_report_consistency(report)

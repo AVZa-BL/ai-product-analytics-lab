@@ -38,7 +38,7 @@ Referee is advisory. `proceed` means the design raised none of the objections of
 
 Things to know when writing a spec:
 
-- A spec names the columns that hold its metrics: `column:` on the primary metric and on each guardrail, and `secondary_metrics:` for ones that are neither (read by `--mode monitor`). The contract, what a column may hold and why a metric cannot be read, is in [`docs/data-contract.md`](docs/data-contract.md), with a worked example in `examples/custom-metrics/`.
+- A spec names the columns that hold its metrics: `column:` on the primary metric and on each guardrail, and `secondary_metrics:` for ones that are neither (only `--mode monitor` analyses them; a results review lists each, says whether it could be read, and is not affected by it). The contract, what a column may hold and why a metric cannot be read, is in [`docs/data-contract.md`](docs/data-contract.md), with a worked example in `examples/custom-metrics/`.
 - Quote the hypothesis key: `"null": ...`. An unquoted `null:` is read by YAML as an empty key, and Referee refuses it with a message that says so.
 - Repeated keys, aliases (`*x`) and merge keys (`<<`) are refused, because YAML would resolve them silently.
 - Write numbers with a dot: `5e-2` is read as text by YAML 1.1, while `0.05` and `5.0e-2` are numbers.

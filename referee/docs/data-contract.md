@@ -66,7 +66,7 @@ A metric's `family` says what its values look like, and so which simulated error
 
 ### When a metric cannot be read
 
-A results review refuses to run and lists the problem. The monitor (`--mode monitor`) refuses only when the primary metric cannot be read; for any other declared metric it lists the reason in its ledger and goes on.
+A results review refuses to run, and lists the problem, when the primary metric or a guardrail cannot be read. A secondary metric that cannot be read is listed with its reason (a review analyses no secondary metric) and never refuses a review or changes its verdict. The monitor (`--mode monitor`) refuses only when the primary metric cannot be read; for any other declared metric it lists the reason in its ledger and goes on.
 
 | Reason | Meaning |
 | --- | --- |

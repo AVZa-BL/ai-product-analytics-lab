@@ -173,13 +173,6 @@ def _review_results(args: argparse.Namespace) -> int:
         return EXIT_UNREADABLE
     if args.mode == "monitor":
         return _monitor_results(args, spec)
-    if spec.secondary_metrics:
-        names = ", ".join(for_line(m.name) for m in spec.secondary_metrics)
-        _complain(
-            f"referee: note: the secondary metrics ({names}) are not analysed in a results "
-            "review; --mode monitor reads them"
-        )
-
     as_of: datetime | None = None
     if args.as_of is not None:
         try:
@@ -200,6 +193,15 @@ def _review_results(args: argparse.Namespace) -> int:
         context = ResultsContext.of(spec, data)
         review = review_context(context)
         sensitivity = origin_sensitivity(spec, data, review)
+        if context.secondary:
+            listed = ", ".join(
+                for_line(m.name) + ("" if m.metric is not None else f" (not read: {m.reason})")
+                for m in context.secondary
+            )
+            _complain(
+                f"referee: note: the secondary metrics ({listed}) are not analysed in a "
+                "results review; --mode monitor reads them"
+            )
     except DataError as error:
         _complain(*_data_error(error))
         return EXIT_UNREADABLE

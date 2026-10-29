@@ -190,9 +190,12 @@ def render_data_contract_markdown() -> str:
         "metric. The monitor's ledger prints the family each metric was read as.\n\n"
         + _table(["Family", "Values", "Effect"], [[f"`{a}`", b, c] for a, b, c in _FAMILY_MEANING]),
         "### When a metric cannot be read\n\n"
-        "A results review refuses to run and lists the problem. The monitor "
-        "(`--mode monitor`) refuses only when the primary metric cannot be read; for any other "
-        "declared metric it lists the reason in its ledger and goes on.\n\n"
+        "A results review refuses to run, and lists the problem, when the primary metric or a "
+        "guardrail cannot be read. A secondary metric that cannot be read is listed with its "
+        "reason (a review analyses no secondary metric) and never refuses a review or changes "
+        "its verdict. The monitor (`--mode monitor`) refuses only when the primary metric cannot "
+        "be read; for any other declared metric it lists the reason in its ledger and goes "
+        "on.\n\n"
         + _table(["Reason", "Meaning"], [[f"`{r}`", _REASON_MEANING[r]] for r in REASONS])
         + "\n\nThe monitor adds `window_not_matured` (every analysed player's outcome window is "
         "still open) and `no_estimate` (the data allow no estimate; the statistics' reason is "
