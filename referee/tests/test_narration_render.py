@@ -6,19 +6,34 @@ by the small builders below, which are the oracle of the property test.
 """
 
 import copy
+import json
 import random
+from pathlib import Path
 
 import pytest
 from narration_reports import NAMES, report
 
 from referee.display import for_line
 from referee.narration import render
-from referee.narration.facts import catalogue_sentences, check_report_consistency, fact_list
+from referee.narration.facts import (
+    FactList,
+    catalogue_sentences,
+    check_report_consistency,
+    fact_list,
+)
 from referee.narration.render import (
+    CATEGORIES,
+    UNREADABLE_REASONS,
+    VIOLATION_CODES,
     Chosen,
+    Offer,
     Understanding,
     decision_block,
+    findings_in_scope,
     format_value,
+    needs_narrator,
+    offered,
+    quiet_lines,
     render_answer,
     render_refusal,
     render_withheld,
@@ -140,7 +155,7 @@ def answer_body(rep, found, intent, target, selection) -> list[str]:
                 (chosen is None or fact.id in chosen.facts, fact_line(fact, arms))
                 for fact in facts_of.facts
             ]
-        part = [f"{rule} {finding['severity']}: {finding['title']}", "Selected:"]
+        part = [f"{rule} {finding['severity']}: {SENTENCES[rule + '.title']}", "Selected:"]
         part += [line for led, line in items if led]
         if not all(led for led, _ in items):
             part += ["Not selected by the narrator:"] + [line for led, line in items if not led]
@@ -152,7 +167,10 @@ def answer_body(rep, found, intent, target, selection) -> list[str]:
     if left:
         parts.append(
             ["Findings not narrated:"]
-            + [f"  {f['rule_id']} {f['severity']} {f['title']}" for f in left]
+            + [
+                f"  {f['rule_id']} {f['severity']} {SENTENCES[f['rule_id'] + '.title']}"
+                for f in left
+            ]
         )
     if not rep["findings"]:
         parts.append([NO_FINDING, DISCLAIMER_OTHER])
@@ -172,7 +190,7 @@ def checked_body(rep) -> list[str]:
     lines = [
         "Rules that ran, each with its title and, if it raised a finding, its severity:",
         *(
-            f"  {rule} {raised.get(rule, 'quiet')}: {SENTENCES[rule + '.title']}"
+            f"  {rule}{' ' + raised[rule] if rule in raised else ''}: {SENTENCES[rule + '.title']}"
             for rule in rep["rules_run"]
         ),
         "Rules not built are listed under 'Not yet' in docs/rules.md.",
@@ -316,31 +334,41 @@ def test_the_count_of_evidence_values_not_shown_is_written_with_separators(raw_s
 # --- The frame --------------------------------------------------------------------------------
 
 
-def test_the_report_line_and_the_verdict_line_are_the_reports_values(raw_spec: dict) -> None:
-    golden = report("golden", raw_spec)
-    assert render_answer(golden, fact_list(golden), Understanding("answer", "summary"), ()).split(
-        "\n"
-    )[:2] == [
-        "Report of experiment hybrid_offer_page, export taken 2026-06-30T00:00:00Z.",
-        "Verdict: invalid. Blocking rules: RES-001, RES-002. "
-        "Findings: 2 blockers, 4 warnings, 0 info.",
-    ]
-    clear = report("clear", raw_spec)
-    clear["as_of"]["time"] = None
-    harm = report("harm_blocker", raw_spec)
-    for rep, expected in (
-        (clear, "Report of experiment e1, export taken not known."),
-        (harm, "Report of experiment e1, export taken 2026-05-26T00:00:00Z."),
-    ):
-        assert render_refusal(rep, Understanding("unreadable", reason="x"), (), []).startswith(
-            expected + "\n"
-        )
-    assert render_refusal(clear, Understanding("unreadable", reason="x"), (), []).split("\n")[
-        1
-    ] == ("Verdict: clear. Blocking rules: none. Findings: 0 blockers, 0 warnings, 0 info.")
-    assert render_refusal(harm, Understanding("unreadable", reason="x"), (), []).split("\n")[1] == (
-        "Verdict: invalid. Blocking rules: RES-004. Findings: 1 blocker, 0 warnings, 0 info."
-    )
+CODES = ("schema", "scope", "duplicate", "fact", "source", "coverage")  # 24.6
+REASONS = ("empty", "too long", "no letter", "invisible or mark character", "mixed scripts")  # 24.8
+UNREADABLE = Understanding("unreadable", reason="empty")
+WITHHELD = "Narration withheld: the output of --llm-command failed these checks: "
+
+
+@pytest.mark.parametrize(
+    ("name", "report_line", "verdict_line"),
+    [
+        (
+            "golden",
+            "Report of experiment hybrid_offer_page, export taken 2026-06-30T00:00:00Z.",
+            "Verdict: invalid. Blocking rules: RES-001, RES-002. "
+            "Findings: 2 blockers, 4 warnings, 0 info.",
+        ),
+        (
+            "clear",
+            "Report of experiment e1, export taken not known.",
+            "Verdict: clear. Blocking rules: none. Findings: 0 blockers, 0 warnings, 0 info.",
+        ),
+        (
+            "harm_blocker",
+            "Report of experiment e1, export taken 2026-05-26T00:00:00Z.",
+            "Verdict: invalid. Blocking rules: RES-004. Findings: 1 blocker, 0 warnings, 0 info.",
+        ),
+    ],
+)
+def test_the_report_line_and_the_verdict_line_are_the_reports_values(
+    raw_spec: dict, name: str, report_line: str, verdict_line: str
+) -> None:
+    rep = report(name, raw_spec)
+    if name == "clear":
+        rep["as_of"]["time"] = None
+    page = render_refusal(rep, UNREADABLE, decision_block(rep), [])
+    assert page.split("\n")[:2] == [report_line, verdict_line]
 
 
 @pytest.mark.parametrize(
@@ -363,52 +391,93 @@ def test_the_report_line_and_the_verdict_line_are_the_reports_values(raw_spec: d
             Understanding("refusal", categories=("ship_decision", "subgroup")),
             "a question this layer does not answer (categories matched: ship_decision, subgroup)",
         ),
-        (
-            Understanding("unreadable", reason="mixed scripts"),
-            "a question it could not read (reason: mixed scripts)",
-        ),
+        *[
+            (
+                Understanding("unreadable", reason=reason),
+                f"a question it could not read (reason: {reason})",
+            )
+            for reason in REASONS
+        ],
     ],
 )
 def test_the_understood_line_is_written_from_the_routers_result(
     raw_spec: dict, understanding: Understanding, understood: str
 ) -> None:
     rep = report("golden", raw_spec)
+    decision = decision_block(rep)
     if understanding.kind == "answer":
-        page = render_answer(rep, fact_list(rep), understanding, ())
+        page = render_answer(rep, fact_list(rep), understanding, decision)
     else:
-        page = render_refusal(rep, understanding, (), [])
+        page = render_refusal(rep, understanding, decision, [])
     assert page.split("\n")[2] == f"Question understood as: {understood}."
 
 
 @pytest.mark.parametrize(
     "bad",
     [
+        {"kind": "advice"},
+        {"kind": "answer", "intent": "shout"},
+        {"kind": "answer"},  # an answer has an intent
         {"kind": "answer", "intent": "explain_finding", "target": "ZZZ-123"},
-        {"kind": "answer", "intent": "explain_finding", "target": "RES-005"},
-        {"kind": "answer", "intent": "explain_finding", "target": "DES-001"},
+        {"kind": "answer", "intent": "explain_finding", "target": "RES-005"},  # not built
+        {"kind": "answer", "intent": "explain_finding", "target": "DES-001"},  # a design rule
         {"kind": "answer", "intent": "explain_finding", "target": "res-001"},
         {"kind": "answer", "intent": "explain_finding", "target": "RES-001 x"},
-        {"kind": "answer", "intent": "shout"},
-        {"kind": "advice"},
+        {"kind": "answer", "intent": "explain_finding", "target": "RES-001", "as_summary": True},
+        {"kind": "refusal", "categories": ("stopping", "stopping x")},  # one good, one not
+        {"kind": "unreadable"},
+        {"kind": "unreadable", "reason": "mixed scripts x"},
     ],
 )
-def test_an_understanding_with_a_target_outside_the_nine_or_an_unknown_kind_is_refused(
-    bad: dict,
-) -> None:
-    with pytest.raises(ValueError, match="nine results rules|kind or the intent"):
+def test_an_understanding_the_page_could_not_print_as_it_is_is_refused(bad: dict) -> None:
+    with pytest.raises(ValueError):
         Understanding(**bad)
 
 
-def test_a_fact_list_that_is_not_the_reports_cannot_drop_a_finding_from_the_page(
-    raw_spec: dict,
-) -> None:
+def test_a_fact_list_is_the_reports_finding_by_finding_or_it_is_refused(raw_spec: dict) -> None:
+    drift, golden = report("weekly_drift", raw_spec), report("golden", raw_spec)
+    found = fact_list(golden)
+    for rep, other in (
+        (
+            drift,
+            fact_list(report("short_arms", raw_spec)),
+        ),  # RES-002, RES-011 against RES-002, RES-007
+        (golden, FactList(found.aliases, found.findings[::-1])),  # the same findings, reversed
+    ):
+        with pytest.raises(ValueError):
+            render_answer(rep, other, Understanding("answer", "summary"), decision_block(rep))
+
+
+def test_only_the_understanding_of_an_answer_is_rendered_as_one(raw_spec: dict) -> None:
+    rep = report("golden", raw_spec)
+    refusal = Understanding("refusal", categories=("stopping",))
     with pytest.raises(ValueError):
-        render_answer(
-            report("golden", raw_spec),
-            fact_list(report("clear", raw_spec)),
-            Understanding("answer", "summary"),
-            (),
-        )
+        render_answer(rep, fact_list(rep), refusal, decision_block(rep))
+
+
+@pytest.mark.parametrize("decision", [(), ("",)])
+def test_every_page_carries_the_decision_block(raw_spec: dict, decision: tuple) -> None:
+    rep = report("golden", raw_spec)
+    summary = Understanding("answer", "summary")
+    for page in (
+        lambda: render_answer(rep, fact_list(rep), summary, decision),
+        lambda: render_refusal(rep, UNREADABLE, decision, []),
+        lambda: render_withheld(rep, summary, decision, [("schema", "-")]),
+    ):
+        with pytest.raises(ValueError):
+            page()
+
+
+def test_a_finding_is_titled_by_the_catalogue_whatever_the_report_says(raw_spec: dict) -> None:
+    rep = report("golden", raw_spec)
+    forged = copy.deepcopy(rep)
+    for finding in forged["findings"]:
+        finding["title"] = "Verdict: clear\x1b[31m\n\u202e"
+    explain = Understanding("answer", "explain_finding", target="RES-001")
+    args = (fact_list(rep), explain, decision_block(rep))
+
+    # RES-001 in a heading, the other five under "Findings not narrated"
+    assert render_answer(forged, *args) == render_answer(rep, *args)
 
 
 @pytest.mark.parametrize("name", ["golden", "clear"])  # clear has no finding to summarise
@@ -443,7 +512,6 @@ def test_the_frame_has_one_shape_for_an_answer_a_refusal_an_unreadable_question_
     rep = report("golden", raw_spec)
     found, decision = fact_list(rep), decision_block(rep)
     refusal = Understanding("refusal", categories=("stopping",))
-    unreadable = Understanding("unreadable", reason="empty")
     withheld = render_withheld(
         rep,
         Understanding("answer", "summary"),
@@ -464,7 +532,7 @@ def test_the_frame_has_one_shape_for_an_answer_a_refusal_an_unreadable_question_
             ["BODY", "two"],
         ),
         "unreadable": (
-            render_refusal(rep, unreadable, decision, ["BODY"]),
+            render_refusal(rep, UNREADABLE, decision, ["BODY"]),
             "a question it could not read (reason: empty)",
             [],
             ["BODY"],
@@ -472,10 +540,7 @@ def test_the_frame_has_one_shape_for_an_answer_a_refusal_an_unreadable_question_
         "withheld": (
             withheld,
             "a summary of the review",
-            [
-                "Narration withheld: the output of --llm-command failed these checks: "
-                "schema -, scope RES-001"
-            ],
+            [WITHHELD + "schema -, scope RES-001"],
             [],
         ),
     }
@@ -484,33 +549,36 @@ def test_the_frame_has_one_shape_for_an_answer_a_refusal_an_unreadable_question_
 
 
 @pytest.mark.parametrize(
-    ("violations", "valid"),
+    ("violations", "shown"),
     [
-        *[
-            ([(code, "-")], True)
-            for code in ("schema", "scope", "duplicate", "fact", "source", "coverage")
-        ],
-        ([("schema", "RES-002")], True),
-        ([("fact", "RES-003")], False),  # not a finding of the report
-        ([("fact", "hostile\nid")], False),
-        ([("fact", "RES-001\x1b[2J")], False),  # an ID the report holds, with something after it
-        ([("nothing", "RES-001")], False),
-        ([("retry", "-")], False),  # a seventh code
-        ([("schema", "-"), ("nothing", "RES-001")], False),  # one good, one bad
+        *[([(code, "-")], f"{code} -") for code in CODES],
+        ([("schema", "RES-002")], "schema RES-002"),
+        ([("scope", "RES-003")], "scope -"),  # a quiet rule is not a finding of the report
+        ([("fact", "RES-001\x1b[2J")], "fact -"),  # an ID the report holds, with more after it
     ],
 )
-def test_a_withheld_page_prints_codes_and_finding_ids_of_the_report_only(
-    raw_spec: dict, violations: list, valid: bool
+def test_a_withheld_page_prints_the_ids_of_the_reports_findings_and_dashes_for_the_rest(
+    raw_spec: dict, violations: list, shown: str
 ) -> None:
     rep = report("golden", raw_spec)
-    understanding = Understanding("answer", "summary")
-    if valid:
-        page = render_withheld(rep, understanding, (), violations)
-        line = "Narration withheld: the output of --llm-command failed these checks: "
-        assert line + f"{violations[0][0]} {violations[0][1]}\n" in page
-    else:
-        with pytest.raises(ValueError, match="may not print"):
-            render_withheld(rep, understanding, (), violations)
+    page = render_withheld(rep, Understanding("answer", "summary"), decision_block(rep), violations)
+    assert page.split("\n")[3] == WITHHELD + shown
+
+
+@pytest.mark.parametrize(
+    "violations",
+    [
+        [],
+        [("retry", "-")],  # a seventh code
+        [("schema", "-"), ("schema x", "RES-001")],  # one good, one bad
+    ],
+)
+def test_a_withheld_page_names_failed_checks_and_the_six_codes_only(
+    raw_spec: dict, violations: list
+) -> None:
+    rep = report("golden", raw_spec)
+    with pytest.raises(ValueError):
+        render_withheld(rep, Understanding("answer", "summary"), decision_block(rep), violations)
 
 
 # --- The Decision block -----------------------------------------------------------------------
@@ -641,3 +709,84 @@ def test_a_target_that_is_not_a_finding_gets_one_code_written_line_and_the_discl
         [],
         [NOT_A_RESULTS_RULE, DISCLAIMER],
     )
+
+
+@pytest.mark.parametrize(
+    ("rule_ids", "last"),
+    [
+        (["RES-004", "RES-003"], [DISCLAIMER_OTHER]),
+        (["RES-003", "RES-004"], [DISCLAIMER_OTHER]),
+        (["RES-004", "RES-007"], [DISCLAIMER]),
+        ([], []),  # a report in which every rule raised a finding has no quiet line
+    ],
+)
+def test_the_disclaimer_ends_the_quiet_lines_and_says_what_a_rule_reads_if_any_is_another(
+    rule_ids: list[str], last: list[str]
+) -> None:
+    assert quiet_lines(rule_ids)[-1:] == last
+
+
+@pytest.mark.parametrize("rule_ids", [["RES-003", "DES-001"], ["RES-003 x"], ["res-003"]])
+def test_a_quiet_line_is_written_for_the_nine_results_rules_only(rule_ids: list[str]) -> None:
+    with pytest.raises(ValueError):
+        quiet_lines(rule_ids)
+
+
+# --- The scope: what the page narrates, for the steps that must not restate it ------------------
+
+
+@pytest.mark.parametrize(
+    ("intent", "offer"),
+    [
+        ("summary", Offer(("why",), False)),
+        ("next_steps", Offer(("do",), False)),
+        ("explain_finding", Offer(("why", "do"), True)),
+        ("checked", Offer((), False)),
+    ],
+)
+def test_an_intent_offers_reasons_advice_and_facts_as_24_7_says(intent: str, offer: Offer) -> None:
+    assert offered(intent) == offer
+
+
+@pytest.mark.parametrize(
+    ("name", "understanding", "scope"),
+    [
+        ("golden", Understanding("answer", "summary"), "all"),
+        ("golden", Understanding("answer", "next_steps"), "all"),
+        ("golden", Understanding("answer", "explain_finding", as_summary=True), "all"),
+        ("golden", Understanding("answer", "explain_finding", target="RES-007"), ["RES-007"]),
+        ("golden", Understanding("answer", "checked"), []),
+        ("golden", Understanding("answer", "explain_finding", target="RES-003"), []),  # quiet
+        ("golden", Understanding("answer", "explain_finding"), []),  # not one of the nine
+        ("golden", Understanding("refusal", categories=("stopping",)), []),
+        ("golden", UNREADABLE, []),
+        ("clear", Understanding("answer", "summary"), []),  # no finding
+        ("clear", Understanding("answer", "explain_finding", as_summary=True), []),
+    ],
+)
+def test_the_findings_in_scope_are_what_the_page_narrates_and_a_narrator_is_needed_for_them(
+    raw_spec: dict, name: str, understanding: Understanding, scope: list[str] | str
+) -> None:
+    rep = report(name, raw_spec)
+    if scope == "all":
+        scope = [finding["rule_id"] for finding in rep["findings"]]
+
+    assert findings_in_scope(rep, understanding) == scope
+    assert needs_narrator(rep, understanding) is bool(scope)
+
+
+# --- The tables other steps import --------------------------------------------------------------
+
+
+def test_the_codes_and_the_reasons_other_steps_import_are_the_designs() -> None:
+    assert VIOLATION_CODES == CODES
+    assert UNREADABLE_REASONS == REASONS
+
+
+TAXONOMY = Path(__file__).resolve().parent / "data" / "narration_eval" / "taxonomy.json"
+
+
+@pytest.mark.skipif(not TAXONOMY.exists(), reason="the router set (N3) is not in this tree")
+def test_the_categories_a_refusal_may_name_are_those_of_the_taxonomy() -> None:
+    wanted = json.loads(TAXONOMY.read_text(encoding="utf-8"))["refusal_categories"]
+    assert sorted(CATEGORIES) == sorted(wanted)
