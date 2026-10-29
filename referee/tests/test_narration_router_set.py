@@ -753,18 +753,57 @@ def test_the_pins_cover_the_five_files_of_the_pre_registration_and_match_them():
     assert ns.check_pins() == []
 
 
-def lint_problems(half):
+def read_half(data, half):
+    return json.loads((data / half / "questions.json").read_text(encoding="utf-8"))
+
+
+def lint_problems(half, data=ns.DATA):
     """The lint's problems for a committed half: question ids and counts, never a question.
 
     The held-out file is read here by the scorer's side. Only the list of problems leaves this
-    function, so a failure shows ids and counts and nothing the questions say.
+    function, so a failure shows ids and counts and nothing the questions say. An exception
+    (whose message may hold a value of a record) becomes one problem that names its type only.
     """
-    questions = json.loads((ns.DATA / half / "questions.json").read_text(encoding="utf-8"))
-    development = json.loads((ns.DATA / "development" / "questions.json").read_text("utf-8"))
-    reference = ns.reference_texts(development) if half == "heldout" else None
-    return ns.lint(questions, half, reference)["problems"]
+    try:
+        questions = read_half(data, half)
+        reference = (
+            ns.reference_texts(read_half(data, "development")) if half == "heldout" else None
+        )
+        problems = ns.lint(questions, half, reference)["problems"]
+        # the lint accepts a file before labelling; a committed half must be labelled
+        return problems + [
+            f"label: {q['id']} has no label" for q in questions if q["label"] is None
+        ]
+    except Exception as error:
+        return [f"the lint raised {type(error).__name__}"]
 
 
 @pytest.mark.parametrize("half", ["development", "heldout"])
-def test_a_committed_half_passes_the_lint_of_its_half(half):
+def test_a_committed_half_is_labelled_and_passes_the_lint_of_its_half(half):
     assert lint_problems(half) == []
+
+
+def one_unlabelled():
+    questions = synthetic("development")
+    questions[7]["label"] = None
+    return json.dumps(questions)
+
+
+@pytest.mark.parametrize(
+    ("file", "problems"),
+    [
+        # a record without its stratum, and a file cut short: an exception names its type only
+        (
+            '[{"id": "x", "text": "SECRET text", "fixture": "golden", "label": null}]',
+            ["the lint raised KeyError"],
+        ),
+        ('[{"id": "x", "text": "SECRET text", "fix', ["the lint raised JSONDecodeError"]),
+        # the lint accepts a file before labelling; a committed half is a problem if one is left
+        (one_unlabelled(), ["label: development-7 has no label"]),
+    ],
+    ids=["record without a stratum", "truncated file", "unlabelled question"],
+)
+def test_a_flawed_committed_half_gives_ids_and_exception_types_only(tmp_path, file, problems):
+    (tmp_path / "development").mkdir()
+    (tmp_path / "development" / "questions.json").write_text(file, encoding="utf-8")
+    assert lint_problems("development", tmp_path) == problems
