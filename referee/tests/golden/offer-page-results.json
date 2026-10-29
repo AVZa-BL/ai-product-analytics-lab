@@ -17,7 +17,7 @@
         "sha256": "2f8e9ea1fb3bf574ff2a0521b24408e44640deca95456b7dfed0e6c93d834757"
       },
       "experiment_outcomes.csv": {
-        "sha256": "4f813f3a333841c27262b8764acc02c795c67c25c723ba8e1da568076d8f7259"
+        "sha256": "1bf49d08698ce39c7a1bb0ef6dd43ef1ef4d237e14052370b4e7053a2f70246b"
       }
     }
   },
@@ -1671,6 +1671,32 @@
           "method": "exact",
           "smallest_expected": 54.76
         },
+        "purchasers": {
+          "control": 195,
+          "variant_b": 224,
+          "variant_c": 140
+        },
+        "late_share_of_purchasers": {
+          "control": 0.3641,
+          "variant_b": 0.3438,
+          "variant_c": 0.3571
+        },
+        "purchaser_homogeneity": {
+          "chi_square": 0.1958,
+          "degrees_of_freedom": 2,
+          "p_value": 0.9053529078923718,
+          "alpha": 0.001,
+          "method": "exact",
+          "smallest_expected": 49.59
+        },
+        "exposure_delay": {
+          "median_seconds": {
+            "control": 268.0,
+            "variant_b": 251.5,
+            "variant_c": 263.0
+          },
+          "kruskal_wallis_p_value": 0.34447383125100245
+        },
         "estimate": {
           "metric": "revenue_usd_7d",
           "by_arm": {
@@ -1713,8 +1739,8 @@
           }
         }
       },
-      "why_it_matters": "A purchase made before the player first saw the change cannot be an effect of it. These players are left out of the effect analysis, but they are in the arms, so a different share of the exposed players being late in different arms means the change reached the arms differently. It is the results-time counterpart of DES-007.",
-      "remediation": "Check how exposure is triggered. If it can follow a purchase, say so in the design and analyse from first exposure. Compare the estimates with and without these players in the evidence, and say which one the conclusion rests on. If the late share differs between arms, find out why before reading the effect.",
+      "why_it_matters": "A purchase made before the player first saw the change cannot be an effect of it. These players are left out of the effect analysis, but they are in the arms, so a different share of the players who bought being late in different arms means the change reached the arms differently. It is the results-time counterpart of DES-007. The share of all exposed players is not the test, because it is the purchase rate times the late share of those who bought, so an arm in which the change makes players buy more shows more late players whatever the exposure did; the evidence gives it, and the seconds from assignment to first exposure in each arm, as description only.",
+      "remediation": "Check how exposure is triggered. If it can follow a purchase, say so in the design and analyse from first exposure. Compare the estimates with and without these players in the evidence, and say which one the conclusion rests on. If the late share of the purchasers differs between arms, find out why before reading the effect; if only the delay to first exposure differs, check the exposure trigger of each arm.",
       "references": [
         "Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020."
       ]

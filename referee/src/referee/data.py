@@ -33,8 +33,8 @@ import csv
 import hashlib
 import json
 import math
-from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -56,15 +56,16 @@ _REQUIRED: dict[str, tuple[str, ...]] = {
         "arm_config_version",
     ),
     EXPOSURES_FILE: ("experiment_id", "player_id", "exposed_at_utc"),
-    OUTCOMES_FILE: (
-        "experiment_id",
-        "player_id",
-        "sessions_7d",
-        "purchases_7d",
-        "revenue_usd_7d",
-        "first_purchase_at_utc",
-    ),
+    OUTCOMES_FILE: ("experiment_id", "player_id", "first_purchase_at_utc"),
 }
+
+# The columns of the outcomes file that Referee knew before a spec could name its own: read, and
+# checked, when they are there; a spec that declares a metric on one of them needs it.
+BUILT_IN_COLUMNS = ("sessions_7d", "purchases_7d", "revenue_usd_7d")
+# Every other column of the outcomes file is a candidate for a metric the spec declares (design
+# section 28): it is kept as a number for each player when every row holds a finite number, and
+# otherwise listed in `ExperimentData.non_numeric_columns`.
+_KNOWN_OUTCOME_COLUMNS = frozenset({*_REQUIRED[OUTCOMES_FILE], *BUILT_IN_COLUMNS, "window_end_utc"})
 
 # Problems are listed, not counted away: a listing stops here, and the total is still exact.
 _MAX_PROBLEMS_KEPT = 10_000
@@ -99,11 +100,13 @@ class Exposure:
 @dataclass(frozen=True, slots=True)
 class Outcome:
     player_id: str
-    sessions_7d: int
-    purchases_7d: int
-    revenue_usd_7d: float
+    sessions_7d: int  # 0 when the outcomes file has no such column (see `outcome_columns`)
+    purchases_7d: int  # likewise
+    revenue_usd_7d: float  # likewise
     first_purchase_at: datetime | None
     window_end: datetime | None = None  # None when the outcomes file has no such column
+    extra: Mapping[str, float] = field(default_factory=dict)
+    """The other columns of the file in which this row held a finite number."""
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -115,6 +118,12 @@ class ExperimentData:
     exposures: tuple[Exposure, ...]
     outcomes: tuple[Outcome, ...]
     exported_at: datetime | None = None  # None when no manifest.json gives it
+    outcome_columns: frozenset[str] | None = None
+    """The columns of the outcomes file; None when not known (a built-in column is then taken to
+    be there)."""
+    non_numeric_columns: frozenset[str] = frozenset()
+    """Columns of the outcomes file other than the known ones in which some row did not hold a
+    finite number: they cannot be a metric."""
 
 
 class _Problems:
@@ -250,6 +259,17 @@ def parse_utc(value: str) -> datetime:
     if moment is None:
         raise ValueError(problem)
     return moment
+
+
+def _finite_number(text: str | None) -> float | None:
+    """The number in a cell, or None when it is empty, not a number, or not finite."""
+    if not text:
+        return None
+    try:
+        number = float(text)
+    except ValueError:
+        return None
+    return number if math.isfinite(number) else None
 
 
 class _Reader:
@@ -466,11 +486,16 @@ def load_export(directory: str | Path, experiment_id: str) -> ExperimentData:
             return None
         return Exposure(player, moment, version)
 
+    outcome_columns: set[str] = set()
+    non_numeric: set[str] = set()
+
     def outcome(cells: _Reader) -> Outcome | None:
+        columns = {column for column in cells.row if not column.startswith("\0")}
+        outcome_columns.update(columns)
         player = cells.text("player_id")
-        sessions = cells.integer("sessions_7d", minimum=0)
-        purchases = cells.integer("purchases_7d", minimum=0)
-        revenue = cells.real("revenue_usd_7d", minimum=0.0)
+        sessions = cells.integer("sessions_7d", minimum=0) if "sessions_7d" in columns else 0
+        purchases = cells.integer("purchases_7d", minimum=0) if "purchases_7d" in columns else 0
+        revenue = cells.real("revenue_usd_7d", minimum=0.0) if "revenue_usd_7d" in columns else 0.0
         first = cells.timestamp("first_purchase_at_utc", optional=True)
         has_window_end = "window_end_utc" in cells.row
         window_end = cells.timestamp("window_end_utc") if has_window_end else None
@@ -478,13 +503,20 @@ def load_export(directory: str | Path, experiment_id: str) -> ExperimentData:
             return None
         if has_window_end and window_end is None:
             return None
-        if (purchases > 0) != (first is not None):
+        if "purchases_7d" in columns and (purchases > 0) != (first is not None):
             cells.fail(
                 "first_purchase_at_utc",
                 f"must be present exactly when purchases_7d is above 0 (it is {purchases})",
             )
             return None
-        return Outcome(player, sessions, purchases, revenue, first, window_end)
+        extra: dict[str, float] = {}
+        for column in sorted(columns - _KNOWN_OUTCOME_COLUMNS):
+            number = _finite_number(cells.row.get(column))
+            if number is None:
+                non_numeric.add(column)
+            else:
+                extra[column] = number
+        return Outcome(player, sessions, purchases, revenue, first, window_end, extra)
 
     assigned = _read(folder, ASSIGNMENTS_FILE, experiment_id, problems, assignment)
     exposed = _read(folder, EXPOSURES_FILE, experiment_id, problems, exposure)
@@ -544,4 +576,6 @@ def load_export(directory: str | Path, experiment_id: str) -> ExperimentData:
         exposures=tuple(sorted((seen for _, seen in exposed), key=exposure_order)),
         outcomes=tuple(sorted((result for _, result in measured), key=lambda r: r.player_id)),
         exported_at=exported_at,
+        outcome_columns=frozenset(outcome_columns),
+        non_numeric_columns=frozenset(non_numeric),
     )

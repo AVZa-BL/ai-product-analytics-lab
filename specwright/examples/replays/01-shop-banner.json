@@ -1,0 +1,366 @@
+{
+ "claims": [
+  {
+   "path": "id",
+   "value": "shop_banner_starter_pack",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "title",
+   "value": "Starter Pack banner first in the shop",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "owner",
+   "value": "monetisation-analytics",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "The test belongs to the monetisation-analytics team.",
+    "note": ""
+   }
+  },
+  {
+   "path": "hypothesis.null",
+   "value": "Showing the Starter Pack banner first does not change the share of players who buy within 7 days of opening the shop.",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "hypothesis.alternative",
+   "value": "The Starter Pack banner first makes more players buy within 7 days.",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "more players make a purchase within 7 days of first opening the shop",
+    "note": ""
+   }
+  },
+  {
+   "path": "hypothesis.direction",
+   "value": "increase",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.randomization_unit",
+   "value": "player",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "Assignment is per player, 50/50",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.analysis_unit",
+   "value": "player",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.eligibility",
+   "value": "Existing players who open the shop.",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "Existing players who open the shop.",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.exposure_trigger",
+   "value": "first opening of the shop",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "A player is counted when they first open the shop",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.exposure_timing",
+   "value": "pre_treatment",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "before they see either banner",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.interference",
+   "value": "none_expected",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "Players do not affect each other's banners.",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.kind",
+   "value": "existing_users",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "Existing players who open the shop.",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.daily_eligible_units",
+   "value": 12000,
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "12,000 players a day open the shop for the first time",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[0].name",
+   "value": "control",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "The current banner is the control.",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[0].allocation",
+   "value": 0.5,
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "Assignment is per player, 50/50",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[0].is_control",
+   "value": true,
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "The current banner is the control.",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[1].name",
+   "value": "variant_a",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "one variant, called variant_a",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[1].allocation",
+   "value": 0.5,
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "Assignment is per player, 50/50",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[1].is_control",
+   "value": false,
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "primary_metric.name",
+   "value": "purchase_conversion_7d",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "primary_metric.kind",
+   "value": "binary",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "the share of players who make at least one purchase in",
+    "note": ""
+   }
+  },
+  {
+   "path": "primary_metric.baseline",
+   "value": 0.042,
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "Today it is 4.2%.",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[0].name",
+   "value": "day1_retention",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[0].kind",
+   "value": "binary",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "Day-1 retention (38% today)",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[0].baseline",
+   "value": 0.38,
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "Day-1 retention (38% today)",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[0].harmful_direction",
+   "value": "decrease",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "must not fall by more than 5% relative",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[0].tolerance_relative",
+   "value": 0.05,
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "must not fall by more than 5% relative",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.mde_relative",
+   "value": 0.1,
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "We care about a 10% relative lift",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.alpha",
+   "value": 0.05,
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "Alpha 0.05, power 80%, two-sided test",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.power",
+   "value": 0.8,
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "Alpha 0.05, power 80%, two-sided test",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.sided",
+   "value": "two_sided",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "two-sided test",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.planned_duration_days",
+   "value": 21,
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "The test runs for 3 weeks (21 days)",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.min_duration_days",
+   "value": 14,
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "not less than 14 days in any case",
+    "note": ""
+   }
+  },
+  {
+   "path": "procedure.stopping_rule",
+   "value": "fixed_horizon",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "The result is read once, at the end of the 21 days.",
+    "note": ""
+   }
+  },
+  {
+   "path": "procedure.srm_check_cadence",
+   "value": "daily",
+   "evidence": {
+    "kind": "document",
+    "document": "01-shop-banner.md",
+    "quote": "The sample ratio is checked",
+    "note": ""
+   }
+  }
+ ],
+ "open_questions": [],
+ "assumptions": []
+}

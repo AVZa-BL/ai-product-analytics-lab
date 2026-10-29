@@ -31,7 +31,7 @@ from typing import Any, Literal
 from referee.cohorts import units_independent
 from referee.methods import NoVariationError, StatsError, heavy_tail_measures
 from referee.pooled_rates import Case, Effects, Larger, SimulatedRange, hull, lookup
-from referee.results import METRIC_FAMILIES, ExportMetric, ResultsContext, difference_summary
+from referee.results import ExportMetric, ResultsContext, difference_summary
 
 KOHAVI_MULTIPLE = 355  # players wanted per unit of squared skewness
 SKEWNESS_OVER = 1  # the rule applies to a skewness above this in size
@@ -327,7 +327,7 @@ def not_simulated(
     units that are not independent players, or when a group is empty or nobody spends in the
     smaller one.
     """
-    if METRIC_FAMILIES.get(metric.name) != "revenue_like":
+    if metric.family != "revenue_like":
         return "metric_not_simulated"
     if not units_independent(context):
         return "unit_not_independent"

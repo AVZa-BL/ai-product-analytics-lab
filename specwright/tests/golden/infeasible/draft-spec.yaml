@@ -1,0 +1,40 @@
+# A draft. Every value is the model's reading of the documents: check each one
+# against report.md, and confirm the values it lists as inferred, before registering this.
+referee_spec_version: 1
+id: lantern_festival_reward
+title: Larger Lantern Festival reward for guild leaders
+owner: community-design
+hypothesis:
+  'null': A larger reward does not change how many guild leaders complete the event.
+  alternative: A larger reward makes more guild leaders complete the event.
+  direction: increase
+population:
+  randomization_unit: player
+  analysis_unit: player
+  eligibility: Guild leaders who open the event page.
+  exposure_trigger: first opening of the event page
+  exposure_timing: pre_treatment
+  interference: none_expected
+  kind: existing_users
+  daily_eligible_units: 300
+primary_metric:
+  name: event_completion_7d
+  kind: binary
+  baseline: 0.02
+design:
+  mde_relative: 0.05
+  alpha: 0.05
+  power: 0.8
+  sided: two_sided
+  planned_duration_days: 14
+  min_duration_days: 7
+procedure:
+  stopping_rule: fixed_horizon
+  srm_check_cadence: daily
+arms:
+- name: control
+  allocation: 0.5
+  is_control: true
+- name: variant_a
+  allocation: 0.5
+  is_control: false

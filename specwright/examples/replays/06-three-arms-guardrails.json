@@ -1,0 +1,506 @@
+{
+ "claims": [
+  {
+   "path": "id",
+   "value": "emberfall_bundle_offer",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "title",
+   "value": "Ember Bundle: discount and bundle variants",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "owner",
+   "value": "economy-analytics",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Owner: economy-analytics.",
+    "note": ""
+   }
+  },
+  {
+   "path": "hypothesis.null",
+   "value": "Neither variant changes the share of players who buy the Ember Bundle within 7 days of seeing it.",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "hypothesis.alternative",
+   "value": "Either variant raises the share of players who buy the Ember Bundle",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Either variant raises the share of players who buy the Ember Bundle",
+    "note": ""
+   }
+  },
+  {
+   "path": "hypothesis.direction",
+   "value": "increase",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.randomization_unit",
+   "value": "player",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Players are assigned individually",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.analysis_unit",
+   "value": "player",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.eligibility",
+   "value": "Existing players who open the store page.",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Existing players only.",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.exposure_trigger",
+   "value": "first opening of the store page",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "when they first open the store page",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.interference",
+   "value": "none_expected",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Players do not influence each other's store pages.",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.kind",
+   "value": "existing_users",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Existing players only.",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.daily_eligible_units",
+   "value": 9000,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "9,000 players a day open the store page",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[0].name",
+   "value": "control",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "control (the plain listing)",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[0].allocation",
+   "value": 0.3333333333333333,
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": "The brief says thirds (33.3% each); Referee needs the three shares to sum to 1."
+   }
+  },
+  {
+   "path": "arms[0].is_control",
+   "value": true,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "control (the plain listing)",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[1].name",
+   "value": "variant_b",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "variant_b (20% discount)",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[1].allocation",
+   "value": 0.3333333333333333,
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": "thirds"
+   }
+  },
+  {
+   "path": "arms[1].is_control",
+   "value": false,
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[2].name",
+   "value": "variant_c",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "variant_c (three-item bundle)",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[2].allocation",
+   "value": 0.3333333333333333,
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": "thirds"
+   }
+  },
+  {
+   "path": "arms[2].is_control",
+   "value": false,
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "primary_metric.name",
+   "value": "bundle_purchase_7d",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "primary_metric.kind",
+   "value": "binary",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Bundle purchase rate within 7 days",
+    "note": ""
+   }
+  },
+  {
+   "path": "primary_metric.baseline",
+   "value": 0.03,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "3.0% today",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[0].name",
+   "value": "bundle_refund_rate",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[0].kind",
+   "value": "binary",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Refund rate of bundle purchases (1.5% today)",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[0].baseline",
+   "value": 0.015,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Refund rate of bundle purchases (1.5% today)",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[0].harmful_direction",
+   "value": "increase",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "must not rise by more than 10%",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[0].tolerance_relative",
+   "value": 0.1,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "must not rise by more than 10%",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[1].name",
+   "value": "session_minutes",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[1].kind",
+   "value": "continuous",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Average session length (18 minutes today, standard deviation 11)",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[1].baseline",
+   "value": 18,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Average session length (18 minutes today, standard deviation 11)",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[1].baseline_std",
+   "value": 11,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Average session length (18 minutes today, standard deviation 11)",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[1].harmful_direction",
+   "value": "decrease",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "must not fall by more than 5% relative",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[1].tolerance_relative",
+   "value": 0.05,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "must not fall by more than 5% relative",
+    "note": ""
+   }
+  },
+  {
+   "path": "secondary_metrics[0].name",
+   "value": "items_per_player",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "items bought per player (a count)",
+    "note": ""
+   }
+  },
+  {
+   "path": "secondary_metrics[0].kind",
+   "value": "continuous",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": "a count per player"
+   }
+  },
+  {
+   "path": "secondary_metrics[0].family",
+   "value": "count",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "items bought per player (a count)",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.mde_relative",
+   "value": 0.2,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "detect a 20%",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.alpha",
+   "value": 0.05,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Alpha 0.05, power 80%, two-sided",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.power",
+   "value": 0.8,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Alpha 0.05, power 80%, two-sided",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.sided",
+   "value": "two_sided",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "two-sided",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.planned_duration_days",
+   "value": 28,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "28 days, and no less than 21 days",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.min_duration_days",
+   "value": 21,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "no less than 21 days",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.alpha_adjustment",
+   "value": "bonferroni",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "with a Bonferroni correction",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.pre_period_covariate",
+   "value": "player_spend_28d",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "spend in the 28 days before they first see the page as a pre-period covariate",
+    "note": ""
+   }
+  },
+  {
+   "path": "procedure.stopping_rule",
+   "value": "fixed_horizon",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Fixed horizon: read once at the end.",
+    "note": ""
+   }
+  },
+  {
+   "path": "procedure.srm_check_cadence",
+   "value": "daily",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Check the sample ratio every day.",
+    "note": ""
+   }
+  },
+  {
+   "path": "procedure.bucketing_salt",
+   "value": "emberfall_bundle_2026_q4",
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "emberfall_bundle_2026_q4",
+    "note": ""
+   }
+  }
+ ],
+ "open_questions": [],
+ "assumptions": []
+}

@@ -38,6 +38,8 @@ Referee is advisory. `proceed` means the design raised none of the objections of
 
 Things to know when writing a spec:
 
+- `design.pre_period_covariate` names a column of the outcomes file measured before each player's first exposure; the results review then shows the adjusted estimate (CUPED, design section 29) beside the unadjusted one, and says so when the covariate cannot be used. See [`docs/data-contract.md`](docs/data-contract.md).
+- A spec names the columns that hold its metrics: `column:` on the primary metric and on each guardrail, and `secondary_metrics:` for ones that are neither (only `--mode monitor` analyses them; a results review lists each, says whether it could be read, and is not affected by it). The contract, what a column may hold and why a metric cannot be read, is in [`docs/data-contract.md`](docs/data-contract.md), with a worked example in `examples/custom-metrics/`.
 - Quote the hypothesis key: `"null": ...`. An unquoted `null:` is read by YAML as an empty key, and Referee refuses it with a message that says so.
 - Repeated keys, aliases (`*x`) and merge keys (`<<`) are refused, because YAML would resolve them silently.
 - Write numbers with a dot: `5e-2` is read as text by YAML 1.1, while `0.05` and `5.0e-2` are numbers.
@@ -68,6 +70,24 @@ Status 2 means the spec or the data cannot be read or reviewed (the problems are
 `--format memo` writes the same review as a decision memo in markdown, in the analytics lab's template: Decision, Observed facts, Assumptions and uncertainty, Data-quality qualification and Reproducibility, in that order. It is advisory like the report (its Decision says what the blocking rules advise and that shipping, stopping or continuing is not decided here), it is built from the report and from nothing else, and the same inputs give the same bytes on one machine with the same output encoding (a title or an arm that is not ASCII is written differently by a stdout that cannot hold it). When the assignments carry `first_seen_at_utc`, the JSON report, the memo and RES-007's note (when RES-007 has a finding; the default text report says nothing of it otherwise) say whether the declared `population.kind` agrees with it: a player first seen before the origin is an existing user, one first seen at or after it a new user, and the population is what more than half of its players are (at exactly half it is neither, and the report says so).
 
 The report states the spec's fingerprint and the SHA-256 of each CSV file, the origin the weeks were counted from, the first and last assignment, the players assigned, analysed and ignored, whether the run is an interim one (the memo instead states how the time of the export and the span of the assignments compare with the planned end and the planned days), whether the same rules fire at the same severity if the origin is 1 to 6 days earlier (not run when `design.start_utc` is registered; it costs six more reviews, about 4 s on the example on the development machine and about twice that on a slower one), one line for each of RES-004, RES-007 and RES-008 even when it found nothing, the effect of the primary metric among the players whose outcome window had closed (labelled not to be read when RES-001, RES-003 or RES-012 blocks, and as underpowered when RES-002 does), and every finding with its evidence. `--format json` holds every row; the text lists at most 1,000 rows of a list and says so. Anything in the text that could move a terminal or forge a line (a control character or a newline in a title, an experiment or a player id) is written as an escape. The same spec and data reviewed by the same Referee on one machine give the same bytes. Between machines a float may differ in its last digits.
+
+## Monitoring a running experiment
+
+`review-results` judges an experiment as finished, so an unfinished one is `invalid` at once: RES-002 (too few players) and RES-003 (too short) block until it ends. `--mode monitor` asks other questions of the same spec and export: how far has it got, is the data healthy, are the guardrails holding, and what does the primary metric look like so far.
+
+```bash
+python -m referee review-results examples/offer-page-results.yaml \
+    tests/data/hybrid_offer_page_5000 --experiment-id hybrid_offer_page \
+    --as-of 2026-06-30T00:00:00Z --mode monitor
+```
+
+| Status | Meaning | Exit status |
+| --- | --- | --- |
+| `on_track` | Nothing needs attention | 0 |
+| `attention` | A warning from a data-health rule (RES-011, RES-012, RES-013), a guardrail beyond its tolerance, or a declared metric that could not be read | 0 |
+| `stop_for_cause` | A sample ratio mismatch (RES-001) or a late-exposure imbalance (RES-012 at blocker level): find the cause before reading anything | 1 |
+
+These words are the monitor's own, not the verdicts of `review-results`. The report lists progress (players against the registered n and days against the registered minimum, which are numbers, never a status), every metric the spec declares with its role and whether it could be read and why not (a metric is never skipped silently), the primary metric's interval so far with no p value, and each guardrail with its interval and number of players. A guardrail beyond its tolerance is `attention` at an interim look, never a stop: an unadjusted 95% interval read at several looks raises false blockers (design section 25), and Referee has no error budget over looks yet. The cohort test (RES-007) and the heavy-tail note (RES-008) are not run. `--format text` or `json`; no memo. A primary metric whose column the export does not hold is refused (status 2) with the reason; any other declared metric that cannot be read is a line of the ledger.
 
 ## Working on it
 

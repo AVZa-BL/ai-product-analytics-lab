@@ -907,17 +907,17 @@ def test_the_small_formatters_print_what_the_notes_rely_on() -> None:
         "2 players",
         "1,234 players",
     ]
-    assert [_count_who(n, "revenue_usd_7d") for n in (0, 1, 2)] == [
+    assert [_count_who(n, "revenue_like") for n in (0, 1, 2)] == [
         "0 players who spend",
         "1 player who spends",
         "2 players who spend",
     ]
-    assert [_count_who(n, "sessions_7d") for n in (1, 3)] == [
+    assert [_count_who(n, "count") for n in (1, 3)] == [
         "1 player with a value other than 0",
         "3 players with a value other than 0",
     ]
-    assert _who("revenue_usd_7d") == "players who spend"
-    assert _who("sessions_7d") == "players with a value other than 0"
+    assert _who("revenue_like") == "players who spend"
+    assert _who("count") == "players with a value other than 0"
     cases = {
         "cases": [
             {"split": 1.0, "payers": 130},

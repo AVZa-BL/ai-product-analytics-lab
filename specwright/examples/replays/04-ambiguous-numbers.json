@@ -1,0 +1,296 @@
+{
+ "claims": [
+  {
+   "path": "id",
+   "value": "comet_racers_upgrade_prompt",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "title",
+   "value": "Garage upgrade prompt",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "owner",
+   "value": "racing-live",
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "Owner: racing-live.",
+    "note": ""
+   }
+  },
+  {
+   "path": "hypothesis.null",
+   "value": "The new prompt does not change the share of players who upgrade a car in the first week.",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "hypothesis.alternative",
+   "value": "The new prompt makes more players upgrade a car",
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "The new prompt makes more players upgrade a car",
+    "note": ""
+   }
+  },
+  {
+   "path": "hypothesis.direction",
+   "value": "increase",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.randomization_unit",
+   "value": "player",
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "Assignment is per player",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.analysis_unit",
+   "value": "player",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.eligibility",
+   "value": "Existing players who open the garage.",
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "Existing players who open the garage.",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.exposure_trigger",
+   "value": "first opening of the garage",
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "at the moment a player first opens the garage",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.kind",
+   "value": "existing_users",
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "Existing players who open the garage.",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.daily_eligible_units",
+   "value": null,
+   "evidence": {
+    "kind": "ambiguous",
+    "document": "",
+    "quote": "",
+    "note": "The brief says \"A few thousand players open it every day\". How many players, as a number, enter the garage each day?"
+   }
+  },
+  {
+   "path": "arms[0].name",
+   "value": "control",
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "The old prompt is the control",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[0].allocation",
+   "value": 0.5,
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "50/50, at the moment",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[0].is_control",
+   "value": true,
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "The old prompt is the control",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[1].name",
+   "value": "variant_a",
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "the new one is variant_a",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[1].allocation",
+   "value": 0.5,
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "50/50, at the moment",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[1].is_control",
+   "value": false,
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "primary_metric.name",
+   "value": "car_upgrade_7d",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "primary_metric.kind",
+   "value": "binary",
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "Share of players who upgrade a car within 7 days",
+    "note": ""
+   }
+  },
+  {
+   "path": "primary_metric.baseline",
+   "value": 0.22,
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "22% today",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.mde_relative",
+   "value": null,
+   "evidence": {
+    "kind": "ambiguous",
+    "document": "",
+    "quote": "",
+    "note": "The brief hopes for \"roughly a 10% relative lift\". What relative lift is the smallest worth detecting?"
+   }
+  },
+  {
+   "path": "design.alpha",
+   "value": 0.05,
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "Alpha 0.05, power 80%, two-sided.",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.power",
+   "value": 0.8,
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "Alpha 0.05, power 80%, two-sided.",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.sided",
+   "value": "two_sided",
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "Alpha 0.05, power 80%, two-sided.",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.planned_duration_days",
+   "value": null,
+   "evidence": {
+    "kind": "ambiguous",
+    "document": "",
+    "quote": "",
+    "note": "The brief says \"about two weeks\". How many days will the test run?"
+   }
+  },
+  {
+   "path": "design.min_duration_days",
+   "value": 7,
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": "The brief says \"certainly not less than a week\"; a week is taken as 7 days. Confirm."
+   }
+  },
+  {
+   "path": "procedure.stopping_rule",
+   "value": "fixed_horizon",
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "We will look at it when it is done.",
+    "note": ""
+   }
+  },
+  {
+   "path": "procedure.srm_check_cadence",
+   "value": "daily",
+   "evidence": {
+    "kind": "document",
+    "document": "04-ambiguous-numbers.md",
+    "quote": "Check the sample ratio daily.",
+    "note": ""
+   }
+  }
+ ],
+ "open_questions": [],
+ "assumptions": []
+}

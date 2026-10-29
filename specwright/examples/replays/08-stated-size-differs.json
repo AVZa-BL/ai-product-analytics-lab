@@ -1,0 +1,306 @@
+{
+ "claims": [
+  {
+   "path": "id",
+   "value": "gloomwood_boss_damage",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "title",
+   "value": "Lower first-dungeon boss damage",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "owner",
+   "value": "dungeon-design",
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "Owner: dungeon-design.",
+    "note": ""
+   }
+  },
+  {
+   "path": "hypothesis.null",
+   "value": "The lower damage does not change how many players clear the first dungeon within 7 days.",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "hypothesis.alternative",
+   "value": "The lower damage makes more players clear the first dungeon",
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "The lower damage makes more players clear the first dungeon",
+    "note": ""
+   }
+  },
+  {
+   "path": "hypothesis.direction",
+   "value": "increase",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.randomization_unit",
+   "value": "player",
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "Assignment is per player, 50/50",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.analysis_unit",
+   "value": "player",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.eligibility",
+   "value": "Existing players who enter the first dungeon.",
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "Existing players.",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.exposure_trigger",
+   "value": "first entry into the dungeon",
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "when a player first enters the dungeon",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.kind",
+   "value": "existing_users",
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "Existing players.",
+    "note": ""
+   }
+  },
+  {
+   "path": "population.daily_eligible_units",
+   "value": 4000,
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "4,000 players enter the dungeon for the first time each day",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[0].name",
+   "value": "control",
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "Control keeps the old damage",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[0].allocation",
+   "value": 0.5,
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "Assignment is per player, 50/50",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[0].is_control",
+   "value": true,
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "Control keeps the old damage",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[1].name",
+   "value": "variant_a",
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "variant_a has the lower damage",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[1].allocation",
+   "value": 0.5,
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "Assignment is per player, 50/50",
+    "note": ""
+   }
+  },
+  {
+   "path": "arms[1].is_control",
+   "value": false,
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "primary_metric.name",
+   "value": "dungeon_clear_7d",
+   "evidence": {
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": ""
+   }
+  },
+  {
+   "path": "primary_metric.kind",
+   "value": "binary",
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "Dungeon clear rate within 7 days",
+    "note": ""
+   }
+  },
+  {
+   "path": "primary_metric.baseline",
+   "value": 0.35,
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "35% today",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.mde_relative",
+   "value": 0.06,
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "detect a 6% relative lift",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.alpha",
+   "value": 0.05,
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "Alpha 0.05, power 80%, two-sided.",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.power",
+   "value": 0.8,
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "Alpha 0.05, power 80%, two-sided.",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.sided",
+   "value": "two_sided",
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "two-sided",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.planned_duration_days",
+   "value": 14,
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "14 days, and no less than 14 days",
+    "note": ""
+   }
+  },
+  {
+   "path": "design.min_duration_days",
+   "value": 14,
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "no less than 14 days",
+    "note": ""
+   }
+  },
+  {
+   "path": "procedure.stopping_rule",
+   "value": "fixed_horizon",
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "Read once at the end.",
+    "note": ""
+   }
+  },
+  {
+   "path": "procedure.srm_check_cadence",
+   "value": "daily",
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "Check the sample ratio daily.",
+    "note": ""
+   }
+  },
+  {
+   "path": "stated.required_total_players",
+   "value": 20000,
+   "evidence": {
+    "kind": "document",
+    "document": "08-stated-size-differs.md",
+    "quote": "we need 20,000 players in total",
+    "note": ""
+   }
+  }
+ ],
+ "open_questions": [],
+ "assumptions": []
+}

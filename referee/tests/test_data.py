@@ -206,7 +206,9 @@ def test_a_missing_file_a_missing_column_and_an_empty_file_are_each_named(tmp_pa
 
     assert any(p.startswith("experiment_exposures.csv: the file is missing") for p in problems)
     assert any(
-        p.startswith("experiment_outcomes.csv: missing required columns") and "'purchases_7d'" in p
+        p.startswith("experiment_outcomes.csv: missing required columns")
+        and "'first_purchase_at_utc'" in p
+        and "'purchases_7d'" not in p  # a metric column is needed by a spec, not by the file
         for p in problems
     )
     assert "experiment_assignments.csv: the file is empty; it needs a header row" in problems

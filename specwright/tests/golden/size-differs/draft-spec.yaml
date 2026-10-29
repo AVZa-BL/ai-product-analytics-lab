@@ -1,0 +1,38 @@
+# A draft. Every value is the model's reading of the documents: check each one
+# against report.md, and confirm the values it lists as inferred, before registering this.
+referee_spec_version: 1
+id: gloomwood_boss_damage
+title: Lower first-dungeon boss damage
+owner: dungeon-design
+hypothesis:
+  'null': The lower damage does not change how many players clear the first dungeon within 7 days.
+  alternative: The lower damage makes more players clear the first dungeon
+  direction: increase
+population:
+  randomization_unit: player
+  analysis_unit: player
+  eligibility: Existing players who enter the first dungeon.
+  exposure_trigger: first entry into the dungeon
+  kind: existing_users
+  daily_eligible_units: 4000
+primary_metric:
+  name: dungeon_clear_7d
+  kind: binary
+  baseline: 0.35
+design:
+  mde_relative: 0.06
+  alpha: 0.05
+  power: 0.8
+  sided: two_sided
+  planned_duration_days: 14
+  min_duration_days: 14
+procedure:
+  stopping_rule: fixed_horizon
+  srm_check_cadence: daily
+arms:
+- name: control
+  allocation: 0.5
+  is_control: true
+- name: variant_a
+  allocation: 0.5
+  is_control: false

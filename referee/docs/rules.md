@@ -168,8 +168,8 @@ instead of a review. HYP-001 covers the one case that check cannot see.
 
 - **Severity:** warning
 - **Fires when:** design.pre_period_covariate is absent.
-- **Why it matters:** A covariate measured before the experiment lets the analysis remove variance that has nothing to do with the treatment (CUPED), which can shorten the test or sharpen the estimate.
-- **What to do:** Declare design.pre_period_covariate, for example the primary metric measured for each unit before exposure.
+- **Why it matters:** A covariate measured before the experiment lets the analysis remove variance that has nothing to do with the treatment (CUPED), which can shorten the test or sharpen the estimate. How much depends on how well the covariate predicts the outcome: with a correlation of 0.7 about half of the variance goes, with 0.3 about a tenth, and with none the adjustment changes nothing.
+- **What to do:** Declare design.pre_period_covariate: the name of a column of the experiment's outcomes file that holds, for each player, a measure taken before the player's first exposure, for example the primary metric over the week before. The results review then shows the adjusted estimate, which is the registered analysis, beside the unadjusted one, and checks that the covariate is balanced across the arms. A measure taken after the treatment can act would remove part of the real effect.
 - **References:**
   - Deng, Xu, Kohavi, Walker. Improving the Sensitivity of Online Controlled Experiments by Utilizing Pre-Experiment Data. WSDM 2013.
 
@@ -304,9 +304,9 @@ does not run these rules.
 
 - **Severity:** warning
 - **Fires when:** At least one assigned player was first exposed after their first purchase in the seven-day outcome window.
-- **Escalates to blocker when:** the share of exposed players who were exposed late differs between the arms: the chi-squared test of homogeneity across the arms (the exact test when an expected count is below 100) has p below 0.001.
-- **Why it matters:** A purchase made before the player first saw the change cannot be an effect of it. These players are left out of the effect analysis, but they are in the arms, so a different share of the exposed players being late in different arms means the change reached the arms differently. It is the results-time counterpart of DES-007.
-- **What to do:** Check how exposure is triggered. If it can follow a purchase, say so in the design and analyse from first exposure. Compare the estimates with and without these players in the evidence, and say which one the conclusion rests on. If the late share differs between arms, find out why before reading the effect.
+- **Escalates to blocker when:** the share of the exposed players who bought that were exposed late differs between the arms: the chi-squared test of homogeneity across the arms (the exact test when an expected count is below 100) has p below 0.001. The test has low power at the size of the lab's experiment: with the exposures of one arm delayed by 24 hours it escalated in 22% of simulated runs at 21 days and 4% at 10 days (design section 25), so an escalation is strong evidence and its absence is not evidence that the arms were exposed alike.
+- **Why it matters:** A purchase made before the player first saw the change cannot be an effect of it. These players are left out of the effect analysis, but they are in the arms, so a different share of the players who bought being late in different arms means the change reached the arms differently. It is the results-time counterpart of DES-007. The share of all exposed players is not the test, because it is the purchase rate times the late share of those who bought, so an arm in which the change makes players buy more shows more late players whatever the exposure did; the evidence gives it, and the seconds from assignment to first exposure in each arm, as description only.
+- **What to do:** Check how exposure is triggered. If it can follow a purchase, say so in the design and analyse from first exposure. Compare the estimates with and without these players in the evidence, and say which one the conclusion rests on. If the late share of the purchasers differs between arms, find out why before reading the effect; if only the delay to first exposure differs, check the exposure trigger of each arm.
 - **References:**
   - Kohavi, Tang, Xu. Trustworthy Online Controlled Experiments. Cambridge University Press, 2020.
 
