@@ -349,7 +349,7 @@ Rules run: RES-001, RES-002, RES-003, RES-004, RES-007, RES-008, RES-011, RES-01
 - Data files (SHA-256 of the bytes):
   - experiment_assignments.csv: faaa876d41f79dbc80105f44a7640cc0e826d4aa02b0dbc4a16cf42c9f131d8f
   - experiment_exposures.csv: 2f8e9ea1fb3bf574ff2a0521b24408e44640deca95456b7dfed0e6c93d834757
-  - experiment_outcomes.csv: 4f813f3a333841c27262b8764acc02c795c67c25c723ba8e1da568076d8f7259
+  - experiment_outcomes.csv: 1bf49d08698ce39c7a1bb0ef6dd43ef1ef4d237e14052370b4e7053a2f70246b
 - Export taken: 2026-06-30T00:00:00Z (command line)
 - Referee: 0.1.0, report version 1
 

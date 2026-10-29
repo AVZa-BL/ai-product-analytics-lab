@@ -78,6 +78,17 @@ A results review refuses to run, and lists the problem, when the primary metric 
 
 The monitor adds `window_not_matured` (every analysed player's outcome window is still open) and `no_estimate` (the data allow no estimate; the statistics' reason is given).
 
+## A pre-period covariate
+
+`design.pre_period_covariate` names a column of the outcomes file that holds, for each player, a number measured before the player's first exposure (for example the primary metric over the week before). When the spec names one and the column can be read, the results review adjusts the primary metric's effect for it (CUPED): the adjusted estimate is the registered analysis and the unadjusted one is shown beside it, with the slope, the correlation and the share of variance left. Referee cannot see when the number was measured: that is the analyst's statement, and a covariate that the treatment moved removes part of the real effect. Referee compares the covariate's mean across the arms and flags a difference that chance does not explain. A covariate that cannot be used is reported with its reason and the unadjusted estimate stands; it never refuses a review.
+
+| Reason | Meaning |
+| --- | --- |
+| `column_missing` | the spec names no column of the outcomes file (a description is not one) |
+| `column_not_numeric` | the column holds an empty cell, or a value that is not a number |
+| `is_an_outcome` | the column is one of the outcomes, measured after the experiment started |
+| `is_the_metric_itself` | the column is the primary metric's own column |
+
 ## A worked example
 
 The metrics of `examples/custom-metrics/spec.yaml`:

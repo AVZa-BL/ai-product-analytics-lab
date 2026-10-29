@@ -64,6 +64,15 @@ refused.
 `experiment_outcomes` is an addition to the two tables the design document names. The planted
 effects need arm-dependent outcomes, and the scenario's existing tables must not change.
 
+The outcomes also carry two pre-period columns, `sessions_pre_7d` and `revenue_usd_pre_7d`: the
+player's sessions and revenue in the seven days before the assignment. They follow the same model
+as the outcomes, from the same latent engagement, with none of the planted effects, so they are
+unaffected by the arm. They are there so that a reviewer can test a covariate adjustment (CUPED);
+their correlation with the outcomes follows from the generator's assumption that engagement
+persists (0.58 for sessions at the reference scale, about 0 for revenue, which the heavy-tailed
+amounts dominate), and is not evidence about real players. They are drawn after every older
+column, which is unchanged.
+
 ### Planted problems
 
 The sizes are in `PlantedParameters`, and `ground_truth()` returns the plan as data. At the CI

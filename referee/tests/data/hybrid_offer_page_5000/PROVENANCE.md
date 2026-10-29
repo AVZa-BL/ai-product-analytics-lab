@@ -24,9 +24,13 @@ PY
 ```
 
 The generator is the one on `main` at the merge of pull request 43 (`e8ccac7`), which writes
-`first_seen_at_utc` into the assignments (design 4c-2); the exposures and the outcomes are
-byte-identical to the files first written at the merge of pull request 31 (`15b1aa4`), and
-every other column of the assignments is unchanged row by row. DuckDB 1.5.6 wrote the CSV, in
+`first_seen_at_utc` into the assignments (design 4c-2) and, in the outcomes, two pre-period
+columns, `sessions_pre_7d` and `revenue_usd_pre_7d` (design 29, CUPED). The exposures are
+byte-identical to the files first written at the merge of pull request 31 (`15b1aa4`), every other
+column of the assignments is unchanged row by row, and every other column of the outcomes is
+unchanged row by row (the new columns draw from the random stream after all the old ones).
+Measured on this file: the correlation of `sessions_pre_7d` with `sessions_7d` is 0.576, and of
+`revenue_usd_pre_7d` with `revenue_usd_7d` is -0.01. DuckDB 1.5.6 wrote the CSV, in
 its default format: UTF-8, a header row, timestamps such as `2026-04-26 17:43:48+00`. DuckDB
 writes a timestamp in the session's time zone, so the snippet sets it to UTC: without that line a
 machine in another zone writes other offsets (`+05:30`, `-07`), other bytes, and files that

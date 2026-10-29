@@ -369,11 +369,17 @@ DES_008 = Rule(
     why_it_matters=(
         "A covariate measured before the experiment lets the analysis remove variance that "
         "has nothing to do with the treatment (CUPED), which can shorten the test or sharpen "
-        "the estimate."
+        "the estimate. How much depends on how well the covariate predicts the outcome: with a "
+        "correlation of 0.7 about half of the variance goes, with 0.3 about a tenth, and with "
+        "none the adjustment changes nothing."
     ),
     remediation=(
-        "Declare design.pre_period_covariate, for example the primary metric measured for each "
-        "unit before exposure."
+        "Declare design.pre_period_covariate: the name of a column of the experiment's outcomes "
+        "file that holds, for each player, a measure taken before the player's first exposure, "
+        "for example the primary metric over the week before. The results review then shows the "
+        "adjusted estimate, which is the registered analysis, beside the unadjusted one, and "
+        "checks that the covariate is balanced across the arms. A measure taken after the "
+        "treatment can act would remove part of the real effect."
     ),
     references=(DENG_ET_AL_2013,),
     check=_no_covariate,

@@ -16,7 +16,13 @@ can be judged on finding exactly those and nothing else:
 * a mid-test configuration change in arm B, visible as `arm_config_version`
 
 Three tables are produced, one row per assigned player in assignments and outcomes, and one per
-exposure event in exposures. An assignment also says when its player was first seen by the
+exposure event in exposures. The outcomes also carry two pre-period measures of the same player,
+`sessions_pre_7d` and `revenue_usd_pre_7d`: what the player did in the seven days before the
+assignment, drawn from the same latent engagement as the outcomes and from none of the planted
+effects, so that a reviewer can test a covariate adjustment (CUPED). They are covariates by
+construction, not evidence that real engagement persists as modelled.
+
+An assignment also says when its player was first seen by the
 product (`first_seen_at_utc`, the scenario's `acquired_at_utc`), so a reviewer can tell how long
 the assigned players had existed. Nothing here touches the scenario's existing tables: the
 experiment draws from its own random stream, so those tables are byte-identical with or
@@ -88,6 +94,12 @@ class PlantedParameters:
     purchase_amount_median_usd: float = 2.5
     purchase_amount_sigma: float = 1.7
 
+    # Pre-period: the seven days before the assignment follow the same model as the outcomes
+    # (the same baselines, amounts and latent `engagement`) with no arm, week, version or
+    # novelty effect. Engagement is the player's persistent level, which is the generator's
+    # own assumption; the correlation with the outcomes follows from it and is not tuned.
+    pre_period_days: int = 7
+
     arms: tuple[str, ...] = field(default=ARMS)
 
 
@@ -157,6 +169,11 @@ def ground_truth(
             "to_version": 2,
             "v2_purchase_multiplier": planted.v2_purchase_multiplier,
             "v2_sessions_lift": planted.v2_sessions_lift,
+        },
+        "pre_period": {
+            "columns": ["sessions_pre_7d", "revenue_usd_pre_7d"],
+            "days": planted.pre_period_days,
+            "model": "the outcome model without any planted effect, from the same engagement",
         },
         "true_effect": {"variant_c": "none"},
     }
@@ -264,6 +281,25 @@ def simulate_experiment(
     )
     purchase_fraction = rng.random(len(owner))
     revenue = np.bincount(owner, weights=amounts, minlength=count)
+
+    # The pre-period, drawn after everything above so that no earlier column changes: the same
+    # latent engagement and the same baselines, and none of the arm, week or version effects.
+    days_ratio = planted.pre_period_days / planted.outcome_days
+    pre_sessions = rng.poisson(planted.baseline_sessions_7d * engagement * days_ratio)
+    pre_purchases = rng.poisson(planted.baseline_purchases_7d * engagement * days_ratio)
+    pre_owner = np.repeat(np.arange(count), pre_purchases)
+    pre_amounts = np.maximum(
+        0.99,
+        np.round(
+            rng.lognormal(
+                np.log(planted.purchase_amount_median_usd),
+                planted.purchase_amount_sigma,
+                len(pre_owner),
+            ),
+            2,
+        ),
+    )
+    pre_revenue = np.bincount(pre_owner, weights=pre_amounts, minlength=count)
     first_fraction = (
         pd.Series(purchase_fraction).groupby(owner).min().reindex(range(count)).to_numpy()
     )
@@ -331,6 +367,8 @@ def simulate_experiment(
             "purchases_7d": purchases[kept],
             "revenue_usd_7d": np.round(revenue[kept], 2),
             "first_purchase_at_utc": first_purchase_at[kept],
+            "sessions_pre_7d": pre_sessions[kept],
+            "revenue_usd_pre_7d": np.round(pre_revenue[kept], 2),
         }
     ).sort_values("player_id", kind="stable")
 

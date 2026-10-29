@@ -25,7 +25,12 @@ from referee.data import (
     Outcome,
     exposure_time_key,
 )
-from referee.methods import StatsError, two_proportion_difference, welch_difference
+from referee.methods import (
+    StatsError,
+    cuped_difference,
+    two_proportion_difference,
+    welch_difference,
+)
 from referee.power import PowerError, PowerPlan, plan_power, power_alpha_adjustment
 from referee.spec import ExperimentSpec, MetricFamily
 
@@ -251,6 +256,69 @@ def _resolve(role: str, where: str, declared: Any, data: ExperimentData) -> Metr
     return read(built_in, built_in.family)
 
 
+COVARIATE_REASONS = (
+    "column_missing",
+    "column_not_numeric",
+    "is_an_outcome",
+    "is_the_metric_itself",
+)
+BALANCE_ALPHA = 0.001  # the covariate's mean may differ between arms by chance with p above this
+
+
+@dataclass(frozen=True, slots=True)
+class CovariateResolution:
+    """The pre-period covariate the spec registers, and whether the export holds it.
+
+    `metric` is None when it cannot be used, and `reason` (one of `COVARIATE_REASONS`) and
+    `detail` say why. The adjusted estimate then is not made, and the report says so.
+    """
+
+    declared: str
+    column: str
+    metric: ExportMetric | None
+    reason: str | None = None
+    detail: str | None = None
+
+
+def resolve_covariate(spec: ExperimentSpec, data: ExperimentData) -> CovariateResolution | None:
+    """The covariate of `design.pre_period_covariate`, read as a column of the outcomes file
+    (design section 29), or None if the spec registers none.
+
+    It must be a column in which every row holds a finite number, and not one of the outcome
+    columns (a covariate measured after the exposure is not a covariate), nor the primary
+    metric's own column. That it was measured before the exposure cannot be seen in the data:
+    it is the analyst's statement, and the balance of the covariate across the arms is the check.
+    """
+    declared = spec.design.pre_period_covariate
+    if declared is None:
+        return None
+    column = declared.strip()
+
+    def unread(reason: str, detail: str) -> CovariateResolution:
+        return CovariateResolution(declared, column, None, reason, detail)
+
+    primary = spec.primary_metric
+    if column in BUILT_IN_COLUMNS or column == "purchased_7d":
+        return unread("is_an_outcome", f"{column!r} is an outcome column, measured after the start")
+    if column == (primary.column or primary.name):
+        return unread("is_the_metric_itself", f"{column!r} is the primary metric's own column")
+    if column in data.non_numeric_columns:
+        return unread(
+            "column_not_numeric",
+            f"column {column!r} holds an empty cell or a value that is not a finite number",
+        )
+    if not data.outcomes or any(column not in o.extra for o in data.outcomes):
+        have = sorted({c for o in data.outcomes for c in o.extra})
+        return unread(
+            "column_missing",
+            f"{column!r} is not a column of the outcomes file; its numeric columns are: "
+            f"{', '.join(have) or 'none'}",
+        )
+    return CovariateResolution(
+        declared, column, ExportMetric(column, "continuous", ColumnValue(column))
+    )
+
+
 def problem_text(resolution: MetricResolution) -> str:
     """The line a refused review gives for a metric it cannot read."""
     return (
@@ -278,6 +346,8 @@ class ResultsContext:
     players: tuple[PlayerRecord, ...]
     ignored_before_start: tuple[str, ...]
     metrics: Mapping[str, ExportMetric]
+    covariate: CovariateResolution | None = None
+    """The registered pre-period covariate, if the spec has one (design section 29)."""
     secondary: tuple[MetricResolution, ...] = ()
     """The secondary metrics the spec declares and whether each could be read: a results review
     lists them and never refuses, or changes its verdict, because of one (design section 28)."""
@@ -366,6 +436,7 @@ class ResultsContext:
             ),
             metrics=metrics,
             secondary=tuple(r for r in resolved if r.role == "other"),
+            covariate=resolve_covariate(spec, data),
         )
 
     @property
@@ -461,13 +532,19 @@ def effect_table(context: ResultsContext, metric_name: str | None = None) -> dic
     """
     spec = context.spec
     metric = context.metrics[metric_name or spec.primary_metric.name]
+    # The registered covariate adjusts the primary metric only (design section 29).
+    covariate = context.covariate if metric_name is None else None
+    cov_metric = None if covariate is None else covariate.metric
     values: dict[str, list[float]] = {name: [] for name in context.arm_names}
+    covariates: dict[str, list[float]] = {name: [] for name in context.arm_names}
     left_out = dict.fromkeys(context.arm_names, 0)
     for player in context.analysed:
         if window_is_open(player, context.exported_at):
             left_out[player.arm] += 1
         else:
             values[player.arm].append(metric.value(player))
+            if cov_metric is not None:
+                covariates[player.arm].append(cov_metric.value(player))
     adjustment = power_alpha_adjustment(spec)
     arms = [name for name in context.arm_names if name != context.control]
     control = values[context.control]
@@ -486,22 +563,45 @@ def effect_table(context: ResultsContext, metric_name: str | None = None) -> dic
         mean_treatment, mean_control = found.mean_treatment, found.mean_control
         adjusted = min(1.0, found.p_value * len(arms)) if adjustment == "bonferroni" else None
         relative = found.difference / mean_control if mean_control > 0 else None
-        rows.append(
-            {
-                **row,
-                "mean_treatment": _shown(mean_treatment),
-                "mean_control": _shown(mean_control),
-                "difference": _shown(found.difference),
-                "ci_low": _shown(found.ci_low),
-                "ci_high": _shown(found.ci_high),
-                "confidence": found.confidence,
-                "relative_difference": (
-                    _shown(relative) if relative is not None and math.isfinite(relative) else None
-                ),
-                "p_value": found.p_value,
-                "adjusted_p_value": found.p_value if adjusted is None else adjusted,
+        entry = {
+            **row,
+            "mean_treatment": _shown(mean_treatment),
+            "mean_control": _shown(mean_control),
+            "difference": _shown(found.difference),
+            "ci_low": _shown(found.ci_low),
+            "ci_high": _shown(found.ci_high),
+            "confidence": found.confidence,
+            "relative_difference": (
+                _shown(relative) if relative is not None and math.isfinite(relative) else None
+            ),
+            "p_value": found.p_value,
+            "adjusted_p_value": found.p_value if adjusted is None else adjusted,
+        }
+        if cov_metric is not None:
+            entry["adjusted"] = _adjusted_estimate(
+                (values[arm], covariates[arm]),
+                (control, covariates[context.control]),
+                found,
+                len(arms),
+                adjustment,
+            )
+        rows.append(entry)
+    table_covariate: dict[str, Any] = {}
+    if covariate is not None:
+        flagged = [r["arm"] for r in rows if r.get("adjusted", {}).get("balance_flagged") is True]
+        table_covariate = {
+            "covariate": {
+                "declared": covariate.declared,
+                "column": covariate.column,
+                "applied": cov_metric is not None,
+                "reason": covariate.reason,
+                "detail": covariate.detail,
+                "registered": True,
+                "metric_family": metric.family,
+                "balance_alpha_per_arm": BALANCE_ALPHA / len(arms),
+                "balance_flagged_arms": flagged,
             }
-        )
+        }
     return {
         "metric": metric.name,
         "kind": metric.kind,
@@ -514,6 +614,44 @@ def effect_table(context: ResultsContext, metric_name: str | None = None) -> dic
         "adjustment": adjustment,
         "comparisons": len(arms),
         "arms": rows,
+        **table_covariate,
+    }
+
+
+def _adjusted_estimate(
+    arm: tuple[Sequence[float], Sequence[float]],
+    control: tuple[Sequence[float], Sequence[float]],
+    unadjusted: _Compared,
+    comparisons: int,
+    adjustment: str,
+) -> dict[str, Any]:
+    """The arm against control adjusted for the pre-period covariate (design section 29), beside
+    the unadjusted `unadjusted`. `variance_ratio` is the adjusted standard error squared over the
+    unadjusted one squared: how much of the variance is left. The covariate's mean is compared
+    between the arms, and a difference that chance does not explain is flagged: the covariate
+    may then have been affected by the treatment, and the adjusted estimate is not to be read."""
+    try:
+        got = cuped_difference(arm[0], arm[1], control[0], control[1])
+    except StatsError as error:
+        return {"error": str(error)}
+    relative = got.difference / unadjusted.mean_control if unadjusted.mean_control > 0 else None
+    p_adjusted = min(1.0, got.p_value * comparisons) if adjustment == "bonferroni" else got.p_value
+    return {
+        "difference": _shown(got.difference),
+        "ci_low": _shown(got.ci_low),
+        "ci_high": _shown(got.ci_high),
+        "confidence": got.confidence,
+        "relative_difference": (
+            _shown(relative) if relative is not None and math.isfinite(relative) else None
+        ),
+        "p_value": got.p_value,
+        "adjusted_p_value": p_adjusted,
+        "slope": _shown(got.theta),
+        "correlation": _shown(got.correlation),
+        "variance_ratio": _shown((got.std_error / unadjusted.std_error) ** 2),
+        "covariate_difference": _shown(got.covariate_difference),
+        "balance_p_value": got.balance_p_value,
+        "balance_flagged": got.balance_p_value < BALANCE_ALPHA / comparisons,
     }
 
 
@@ -533,6 +671,7 @@ class _Compared:
     ci_high: float
     confidence: float
     p_value: float
+    std_error: float
 
 
 def _compare(
@@ -561,6 +700,7 @@ def _compare(
             rates.ci_high,
             rates.confidence,
             rates.p_value,
+            rates.std_error,
         )
     means = welch_difference(treatment, control)
     return _Compared(
@@ -571,6 +711,7 @@ def _compare(
         means.ci_high,
         means.confidence,
         means.p_value,
+        means.std_error,
     )
 
 
