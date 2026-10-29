@@ -4,9 +4,11 @@ Pure Python and offline. A question record is `{id, text, fixture, stratum, labe
 is the writer's intent (`single:<category>`, `compound` or `answerable:<intent>`) and the label is
 what the labellers resolved to. A label, and the result of a router, are dicts:
 
-    {"route": "refuse", "categories": [...]}        a router's categories come primary first
+    {"route": "refuse", "categories": [...]}        at least one category
     {"route": "answer", "intent": ..., "target": ...}
     {"route": "out_of_scope"}  or  {"route": "unreadable"}
+
+A baseline that refuses by default returns {"route": "out_of_scope"}, the default route.
 
 The lint never prints or returns the text of a question: its output is counts, similarity numbers
 and question ids. Command line (from `referee/`):
@@ -162,7 +164,11 @@ def primary(categories: Iterable[str]) -> str:
 
 
 def classify(label: Label, result: Label) -> str:
-    """The cell of one refusal-labelled question: strict, other, answered, apart_hit, apart_miss."""
+    """The cell of one refusal-labelled question: strict, other, answered, apart_hit, apart_miss.
+
+    A refusal result without categories is not valid: for a question labelled with categories it
+    raises ValueError (from `primary`) and is not scored as `other`.
+    """
     if label["route"] in ("out_of_scope", "unreadable"):
         return "apart_hit" if result["route"] == label["route"] else "apart_miss"
     if result["route"] == "answer":
@@ -175,8 +181,7 @@ def classify(label: Label, result: Label) -> str:
 def _triple(items: Sequence[Item], excluded: int = 0) -> dict[str, Any]:
     """Strict, other and answered of the category-labelled questions, each k of n.
 
-    `excluded` questions are added to every n and to no k: strict misses the partition cannot
-    place in `other` or `answered`.
+    `excluded` questions are added to every n and to no k.
     """
     cells = Counter(
         classify(i["label"], i["result"]) for i in items if i["label"]["route"] == "refuse"
@@ -196,11 +201,13 @@ def score(
 ) -> dict[str, Any]:
     """Every figure of 24.10 for a router or a baseline over the resolved questions.
 
-    `headline` is the triple; `all_errors` counts `excluded` questions as strict misses;
-    `without_near_copies` leaves out the question ids above the similarity threshold. Questions
-    labelled out_of_scope or unreadable are in `apart` and in no headline. `recall` counts a
-    question under each label category its primary category matches. `answerable` has the false
-    refusals and the answers of the wrong intent or target, in all and per intent.
+    `headline` is the triple; `all_errors` has only `strict` and `refused_at_all`, with the
+    `excluded` questions in each denominator and in no numerator (the other two figures would
+    look better, not worse, there); `without_near_copies` is the triple without the question ids
+    above the similarity threshold. Questions labelled out_of_scope or unreadable are in `apart`
+    and in no headline. `recall` counts a question under each label category its primary category
+    matches. `answerable` has the false refusals and the answers of the wrong intent or target,
+    in all and per intent.
     """
     apart = {}
     for route in ("out_of_scope", "unreadable"):
@@ -231,9 +238,10 @@ def score(
     n = sum(c["n"] for c in per_intent.values())
 
     near = set(near_copies)
+    all_errors = _triple(items, excluded)
     return {
         "headline": _triple(items),
-        "all_errors": _triple(items, excluded),
+        "all_errors": {name: all_errors[name] for name in ("strict", "refused_at_all")},
         "without_near_copies": _triple([i for i in items if i["id"] not in near]),
         "apart": apart,
         "recall": recall,
@@ -276,7 +284,7 @@ def trigram_jaccard(a: str, b: str) -> float:
 def max_similarities(texts: Sequence[str], reference: Sequence[str]) -> list[float]:
     """For each text, its largest trigram similarity to any reference text."""
     sets = [_trigrams(r) for r in reference]
-    return [max((_jaccard(_trigrams(t), s) for s in sets), default=0.0) for t in texts]
+    return [max(_jaccard(_trigrams(t), s) for s in sets) for t in texts]
 
 
 def reference_texts(development: Sequence[Question]) -> list[str]:
@@ -405,10 +413,13 @@ def sha256_file(path: Path) -> str:
 
 def check_pins(pins_path: Path = PINS) -> list[str]:
     """Problems with a pins file: `{path relative to the file: SHA-256 hex digest}` per file."""
-    pins = json.loads(Path(pins_path).read_text(encoding="utf-8"))
+    pins_path = Path(pins_path)
+    if not pins_path.is_file():
+        return [f"pins: {pins_path} is missing"]
+    pins = json.loads(pins_path.read_text(encoding="utf-8"))
     problems = [] if pins else ["pins: no file is pinned"]
     for name, digest in pins.items():
-        path = Path(pins_path).parent / name
+        path = pins_path.parent / name
         if not path.is_file():
             problems.append(f"pins: {name} is missing")
         elif sha256_file(path) != digest:

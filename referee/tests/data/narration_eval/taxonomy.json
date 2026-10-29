@@ -1,5 +1,5 @@
 {
-  "about": "The closed taxonomy of the narration router (design 24.8): twelve refusal categories, a default route, a code route and four intents. Definitions are by meaning and hold no list of trigger words; labellers label from them and nothing else. The examples are the table of 24.8 and one example per intent; held-out writers and labellers never see them.",
+  "about": "The closed taxonomy of the narration router (design 24.8): twelve refusal categories, a default route, a code route and four intents. Definitions are by meaning; enumerations of meanings, not match lists. Labellers label from them and nothing else. The examples are the table of 24.8 and one example per intent; held-out writers and labellers never see them.",
   "precedence": [
     "injection",
     "ship_decision",
@@ -133,7 +133,7 @@
     "clear": "A report of a clean experiment: no blocker and no warning, with several rules that ran and raised nothing.",
     "warnings_only": "A report with warnings and no blocker.",
     "harm_blocker": "A report in which a guardrail metric is worse than its tolerance allows, so that finding blocks the review.",
-    "unattainable_design": "A report of an experiment whose registered design could not be met as planned: the plan, not the data, is the difficulty.",
+    "unattainable_design": "A report of an experiment whose registered design cannot be sized: the planned effect does not fit the metric's range, so the plan, not the data, is the difficulty.",
     "short_arms": "A report in which the arms hold fewer players than the registered sample size.",
     "short_run": "A report of an experiment that ran for less than its registered minimum duration.",
     "weekly_drift": "A report in which the share of players per arm drifts from week to week although the total passes."
