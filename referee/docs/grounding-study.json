@@ -1,6 +1,6 @@
 {
  "what": "a closed-vocabulary checker over bounded enumerations of short texts, and how many catalogue sentences hold none of a list of loaded words",
- "provenance": "Language-model agents wrote the code, tests, loaded-word list, probes and this document, and every harm label; no question is involved and no human labelled a probe.",
+ "provenance": "Language-model agents wrote the code, tests, loaded-word list, probes, this document and the catalogue sentences, and every harm label; no question is involved and no human labelled a probe.",
  "no_model": "No model was run through Referee or for this study; the figures describe a checker's acceptance space, not what a model can or cannot do; harm is not computed.",
  "command": "python tests/grounding_study/run.py",
  "catalogue": {

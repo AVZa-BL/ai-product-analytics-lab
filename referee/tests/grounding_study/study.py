@@ -22,8 +22,9 @@ from grounding_study.probes import PROBES
 
 DOCS = Path(__file__).resolve().parents[2] / "docs"
 PROVENANCE = (
-    "Language-model agents wrote the code, tests, loaded-word list, probes and this document, "
-    "and every harm label; no question is involved and no human labelled a probe."
+    "Language-model agents wrote the code, tests, loaded-word list, probes, this document and "
+    "the catalogue sentences, and every harm label; no question is involved and no human "
+    "labelled a probe."
 )
 VIEW_NAMES = {
     "full": "the full list",
@@ -108,7 +109,8 @@ def _enumeration(name: str, found: dict) -> list[str]:
         return lines + [
             "No sentence is free, so no cited sentence adds a word to the vocabulary: whatever is "
             f"cited, the checker admits exactly the texts made of the {size} function words, which "
-            f"hold no word of a sentence. There are {size}^n of them with n words, for every n; "
+            "hold no word that a sentence adds. "
+            f"There are {size}^n of them with n words, for every n; "
             f"for 1 to {longest} words, the longest within the bound of {MAX_TEXTS:,} texts in "
             f"all, they number {counts} ({total:,} in all). The rule gives these counts; no text "
             "was enumerated.",
@@ -177,27 +179,27 @@ def render_markdown(result: dict, sentences: dict[str, str]) -> str:
         f"{admitted['qualifiers']} of {probes['total']}, and with digits only "
         f"{admitted['digits']} of {probes['total']}. Under the full list {free['full']['count']} "
         "sentences are free, so no cited sentence adds a word and only texts of function words "
-        f"are admitted: that the checker admitted {admitted['full']} follows from that, by "
-        "construction, and is not a finding that it catches harm, and the probes are not "
-        "independent of the list.",
+        f"are admitted: that the checker admitted {admitted['full']} follows from that and from "
+        "each probe holding a word outside the function words, by construction, and is not a "
+        "finding that it catches harm, and the probes are not independent of the list.",
         "",
         "## The loaded words",
         "",
-        "A sentence is free under a view when none of its tokens is loaded under it. A token is a "
-        "chunk between spaces and hyphens, in lower case, without the punctuation at its ends. "
-        "A token that holds a digit (`5%`, the `007` of `RES-007`) is loaded under every view. One "
-        "that holds a symbol and no digit (`min_duration_days`, the inner dot of "
-        "`design.start_utc`) is loaded under the full list, where every sentence is loaded anyway "
-        "and the count is 0 whichever way a symbol is treated, and not under the two ablations, "
-        "so that the digits-only ablation loads digits and nothing else. The list holds the words "
-        "that carry a "
-        "decision, a condition, a negation, a modal, a quantity, a comparison, a certainty, a "
-        "cause, a severity or verdict, a unit, a position, an arm or an ordinal, in the folded "
-        "form of the tokeniser (a trailing plural s off). It is one agent's judgement, made with "
-        "the sentences in view and read once against those that the qualifiers view left free, "
-        "after which two of the words added took that count from 11 to 8. The count of free "
-        "sentences is a property of this list, and the two ablations show how much it moves. A "
-        "phrase such as `up to` or `at least` is not recognised, only its words.",
+        "A sentence is free under a view when none of its tokens is loaded under it. A token "
+        "is a chunk between spaces and hyphens, in lower case, without the punctuation at its"
+        " ends. A token that holds a digit (`5%`, the `007` of `RES-007`) is loaded under "
+        "every view. One that holds a symbol and no digit (`min_duration_days`, the inner dot"
+        " of `design.start_utc`) is loaded under the full list, where every sentence is "
+        "loaded anyway and the count is 0 whichever way a symbol is treated, and not under "
+        "the two ablations, so that the digits-only ablation loads digits and nothing else. "
+        "The list holds the words that carry a decision, a condition, a negation, a modal, a "
+        "limit, a quantity, a comparison, a certainty, a cause, a severity or verdict, a "
+        "unit, a position, an arm or an ordinal, in the folded form of the tokeniser (a "
+        "trailing plural s off). It is one agent's judgement, made with the sentences in view"
+        " and read once against those that the qualifiers view left free, after which two of "
+        "the words added took that count from 11 to 8. The count of free sentences is a "
+        "property of this list, and the two ablations show how much it moves. A phrase such "
+        "as `up to` or `at least` is not recognised, only its words.",
         "",
         *(
             f"- {name} ({len(words)}): {' '.join(words)}"

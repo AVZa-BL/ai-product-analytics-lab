@@ -12,9 +12,9 @@ such as `min_duration_days`, an inner `.`) is loaded under the full list only, w
 sentence is loaded anyway (the count is 0 whichever way a symbol is treated); under the two
 ablations it is not, so that "digits only" means what it says.
 
-The loaded words are the words that carry a decision, a condition, a negation, a modal, a
-quantity, a comparison, a certainty, a cause, a severity or verdict, a unit, a position, an arm
-or an ordinal. They are stored in the folded form the tokeniser produces (a trailing plural s is
+The loaded words are the words that carry a decision, a condition, a negation, a modal, a limit, a
+quantity, a comparison, a certainty, a cause, a severity or verdict, a unit, a position, an arm or
+an ordinal. They are stored in the folded form the tokeniser produces (a trailing plural s is
 folded, so `perhaps` is `perhap`). The list is one agent's judgement, written to be short rather
 than complete: from the categories, cut for length, then read once against the sentences that the
 qualifiers view left free. That read added `minimum`, `maximum`, `limit` and `part` (the last for
