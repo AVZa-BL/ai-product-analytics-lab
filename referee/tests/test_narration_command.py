@@ -440,7 +440,7 @@ def test_a_write_that_fails_in_a_real_process_exits_3_and_does_not_fail_again_at
 # --- Guards (24.11) --------------------------------------------------------------------
 
 # What the modules of the layer import today, by the first part of the name. A module that needs
-# another adds it here, and the pull request shows it; N7b adds narrator.py's to EXTRA.
+# another adds it here, and the pull request shows it; narrator.py's are in EXTRA.
 ALLOWED = {
     "__future__",
     "collections",
@@ -456,7 +456,8 @@ ALLOWED = {
     "typing",
     "unicodedata",
 }
-EXTRA = {"narrator.py": {"subprocess"}}  # the one module that starts a process
+# The one module that starts a process, and what it needs to do so and to wait for it.
+EXTRA = {"narrator.py": {"contextlib", "selectors", "shlex", "signal", "subprocess", "time"}}
 DYNAMIC = {"__import__", "import_module"}  # these reach any module by a name made at run time
 
 
@@ -490,6 +491,7 @@ def test_no_module_of_the_layer_imports_more_than_the_list_allows() -> None:
     assert {"facts.py", "render.py", "router.py", "refusals.py", "output.py", "command.py"} <= set(
         modules
     )
+    assert "narrator.py" in modules
     assert {n: found for n, text in modules.items() if (found := violations(n, text))} == {}
 
 
