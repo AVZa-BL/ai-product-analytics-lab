@@ -30,7 +30,7 @@ Git can show that the router was frozen before it was scored. It does not show t
 
 The first column is the file in git. The second is a fresh run of the router in this tree. A later change to the router is a later pull request and shows as the columns differing. In every figure, the current run equals the first score.
 
-The non-binding expectation of design 24.10, a judgement with no basis beyond the development fit, was a strict recall of at least 80% and a false refusal of at most 25%. By the counts of the first score, strict 42 of 44 (0.845 to 0.994) is met and false refusal 1 of 20 (0.001 to 0.249) is met. The interval of the false refusal ends at 0.249, against the limit of 25%: the data do not exclude a rate as high as that.
+The non-binding expectation of design 24.10, a judgement with no basis beyond the development fit, was a strict recall of at least 80% and a false refusal of at most 25%. By the counts of the first score, strict 42 of 44 (0.845 to 0.994) is met and false refusal 1 of 20 (0.001 to 0.249) is met. The interval of the false refusal ends at 0.249, below the limit of 25%.
 
 ### Questions labelled with refusal categories
 

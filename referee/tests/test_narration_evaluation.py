@@ -312,17 +312,28 @@ def test_a_route_with_no_question_in_either_run_has_no_row_and_the_report_says_s
     assert apart(none, both)[1][0][1:] == ("0 of 0 (0.000 to 1.000)", cell(1, 2))
 
 
+ABOVE = "at or above the limit of 25%: the data do not exclude a rate over the limit."
+
+
 @pytest.mark.parametrize(
-    ("strict", "refusal", "verdicts"),
+    ("strict", "refusal", "verdicts", "ending"),
     [
-        ((4, 5), (1, 4), "strict {} is met and false refusal {} is met."),  # exactly 80% and 25%
-        ((3, 4), (3, 10), "strict {} is not met and false refusal {} is not met."),  # 75%, 30%
-        ((4, 5), (3, 10), "strict {} is met and false refusal {} is not met."),
-        ((3, 4), (1, 4), "strict {} is not met and false refusal {} is met."),
+        # exactly 80% and 25%: the interval of 1 of 4 reaches far above the limit
+        ((4, 5), (1, 4), "strict {} is met and false refusal {} is met.", ABOVE),
+        ((3, 4), (3, 10), "strict {} is not met and false refusal {} is not met.", ABOVE),  # 75, 30
+        ((4, 5), (3, 10), "strict {} is met and false refusal {} is not met.", ABOVE),
+        ((3, 4), (1, 4), "strict {} is not met and false refusal {} is met.", ABOVE),
+        # the first score: the interval of 1 of 20 ends just under the limit
+        (
+            (4, 5),
+            (1, 20),
+            "strict {} is met and false refusal {} is met.",
+            "below the limit of 25%.",
+        ),
     ],
 )
 def test_the_expectation_of_24_10_is_judged_by_the_counts_at_its_boundaries(
-    strict, refusal, verdicts
+    strict, refusal, verdicts, ending
 ):
     first = {
         "headline": {"strict": exact(*strict)},
@@ -331,7 +342,7 @@ def test_the_expectation_of_24_10_is_judged_by_the_counts_at_its_boundaries(
     text = ev.expectation(first)
     assert verdicts.format(cell(*strict), cell(*refusal)) in text
     assert claims(text) == []  # whether met or not, it says none of what 24.14 forbids
-    assert f"ends at {exact(*refusal)['high']:.3f}, against the limit of 25%" in text
+    assert text.endswith(f"ends at {exact(*refusal)['high']:.3f}, {ending}")
 
 
 def test_near_copies_are_the_ids_strictly_above_the_threshold():

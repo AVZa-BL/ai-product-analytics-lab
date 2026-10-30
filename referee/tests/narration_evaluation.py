@@ -583,8 +583,12 @@ def expectation(first: dict[str, Any]) -> str:
         f"By the counts of the first score, strict {rate_cell(strict)} is "
         f"{'met' if met['strict'] else 'not met'} and false refusal {rate_cell(refusal)} is "
         f"{'met' if met['refusal'] else 'not met'}. The interval of the false refusal ends at "
-        f"{refusal['high']:.3f}, against the limit of 25%: the data do not exclude a rate as high "
-        "as that."
+        f"{refusal['high']:.3f}, "
+        + (
+            "below the limit of 25%."
+            if refusal["high"] < 0.25
+            else "at or above the limit of 25%: the data do not exclude a rate over the limit."
+        )
     )
 
 
