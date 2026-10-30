@@ -1106,8 +1106,7 @@ INTENT_PATTERNS: dict[str, tuple[Pattern, ...]] = {
 DOMAIN = (
     FINDINGS + " review* report* experiment* test* rule* check* arm arms variant* control player* "
     "sample verdict result* problem* issue* fix* data metric* effect* risk* concern* flag* run "
-    "runs ran severity evaluat* next step* first anything something gist takeaway* highlight* "
-    "wrong serious* bottom skipped covered stand status"
+    "runs ran severity evaluat* next step* first anything something"
 )
 
 # Phrases that point at one of the nine results rules, from their titles (24.8).

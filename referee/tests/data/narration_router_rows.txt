@@ -6951,16 +6951,6 @@ domain step | overview steps
 domain first | overview first
 domain anything | overview anything
 domain something | overview something
-domain gist | overview gist
-domain takeaway | overview takeaways
-domain highlight | overview highlights
-domain wrong | overview wrong
-domain serious | overview seriouss
-domain bottom | overview bottom
-domain skipped | overview skipped
-domain covered | overview covered
-domain stand | overview stand
-domain status | overview status
 target RES-001 | srm's
 target RES-001 | res-001's
 not-domain summary | overview um

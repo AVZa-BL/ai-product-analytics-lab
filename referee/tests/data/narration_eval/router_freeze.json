@@ -1,7 +1,7 @@
 {
   "note": "SHA-256 of the bytes of each file, path relative to referee/: the router and every narration/ module route() imports, the baselines' trigger words and the held-out files, frozen before the held-out half is routed (design 24.10); N8's scorer checks them.",
   "sha256": {
-    "src/referee/narration/router.py": "c4eaff731009b40018e23374f5dc5950cc4e4e793c809c1bc3579eadf315dac1",
+    "src/referee/narration/router.py": "ce5fe2bfd23d6517fb8e693467764e8eda560a3b518d2393499131723ff7f43d",
     "src/referee/narration/render.py": "d9ae7b1ce756713a9cb50fbf9cc2296baa49a6db1abb1146c509a12b76d36487",
     "src/referee/narration/facts.py": "4db9d3f10f8b8a09810195887329c6c68b1dcbe2984183264df873fc5ea581c0",
     "src/referee/narration/__init__.py": "2a35defe6fea06f3b6cc9070dbdaccdf55ccbb576d63b11b3d2637de937f6c27",
