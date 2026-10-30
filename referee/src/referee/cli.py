@@ -6,6 +6,10 @@ together (an unknown experiment, a metric the export does not hold, a time that 
 instant), and 3 when Referee itself fails. Keeping a crash out of 1 matters: an uncaught Python
 exception exits with 1, which a pipeline would read as "the design has a blocker". A warning
 never changes the exit status; the results verdict `caution` exits 0 and says so in the report.
+
+`narrate` is not a review and not a gate (design section 24.9): 0 when a page was printed, an
+answer or a refusal, whatever the verdict of the report, 2 when the report cannot be read or
+checked or the arguments are unusable, 3 when Referee itself fails.
 """
 
 from __future__ import annotations
@@ -115,6 +119,24 @@ def build_parser() -> argparse.ArgumentParser:
             "output format (default: text); memo is a decision memo in markdown, in the "
             "analytics lab's template"
         ),
+    )
+
+    narrate = commands.add_parser(
+        "narrate",
+        help="answer a question about a saved results report, in the engine's own sentences",
+        description=(
+            "Print a page about a results report (review-results --format json): a summary, or "
+            "the answer to one kind of question, or a refusal. Not a decision and not a gate. "
+            "Exit status: 0 a page was printed (an answer or a refusal, whatever the verdict), "
+            "2 the report cannot be read or checked or the arguments are unusable, "
+            "3 internal error."
+        ),
+    )
+    narrate.add_argument("report", help="path to the report (JSON)")
+    narrate.add_argument(
+        "--question",
+        metavar="TEXT",
+        help="the question (when it is left out, the page is a summary of the review)",
     )
     return parser
 
@@ -272,12 +294,20 @@ def _monitor_results(args: argparse.Namespace, spec: ExperimentSpec) -> int:
     return EXIT_BLOCKED if report["status"] == "stop_for_cause" else EXIT_OK
 
 
+def _narrate(args: argparse.Namespace) -> int:
+    from referee.narration.command import narrate  # not loaded by the other commands
+
+    return narrate(args.report, args.question)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command line and return its exit status. Never raises."""
     try:
         args = build_parser().parse_args(argv)
         if args.command == "review-results":
             return _review_results(args)
+        if args.command == "narrate":
+            return _narrate(args)
         return _review_design(args.spec, args.format)
     except SystemExit as exit_request:  # argparse: usage errors, --help, --version
         return exit_request.code if isinstance(exit_request.code, int) else EXIT_UNREADABLE
