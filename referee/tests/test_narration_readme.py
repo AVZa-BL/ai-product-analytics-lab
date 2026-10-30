@@ -275,7 +275,7 @@ def test_the_figures_the_freeze_commit_and_every_miss_are_read_from_the_score_fi
         f"{cell(base['triggers']['false_refusal'])}; the intent keywords "
         f"{cell(base['keywords']['false_refusal'])}.",
         f"- Wrong intent or target, of the same {answerable['n']}: the router "
-        f"{cell(answerable['wrong'])};",
+        f"{cell(answerable['wrong'])}; it answered something else.",
         f"All {len(first['misses'])} misses of the first score, each with its index in the half, "
         "its kind, its label, what the router returned and the question verbatim as a JSON string:",
     ]
