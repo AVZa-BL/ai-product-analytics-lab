@@ -1,12 +1,13 @@
 """The whole-page test of design 24.7 (N6): the command, on real questions, line by line.
 
-Every development question runs on the fixture it names, with an explanation of each quiet rule of
-that fixture and of a rule that is not one of the nine, and the unreadable questions run on the
-committed report. Every line of every page must match a template (`narration_pages.py`, built
-from the layer's public functions and constants and not from the page under test), and no run of
-12 characters of the question may appear unless the canonical page of the same route holds it. The
-canonical page is the page of the route's `Understanding`, built without the question or the
-command. The held-out half of the evaluation set is not read here.
+Every development question runs on the fixture it names, with the summary (no question), the next
+steps, an explanation of each quiet rule of that fixture and of a rule that is not one of the nine,
+and the unreadable questions run on the committed report. Every line of every page must match a
+template (`narration_pages.py`, built from the layer's public functions and constants and not from
+the page under test), and no run of 12 characters of the question may appear unless the canonical
+page of the same route holds it. The canonical page is the page of the route's `Understanding`,
+built without the question or the command. The held-out half of the evaluation set is not read
+here.
 """
 
 import hashlib
@@ -48,12 +49,16 @@ UNREADABLE = [
 U = Understanding
 
 
-def extra_questions(rep: dict, name: str) -> list[tuple[str, str, Understanding]]:
-    """(id, question, what the router must make of it): an explanation of each quiet rule of the
-    report and of a rule that is not one of the nine, and on the committed report the unreadable."""
+def extra_questions(rep: dict, name: str) -> list[tuple[str, str | None, Understanding]]:
+    """(id, question, what the router must make of it): the summary without a question and the
+    next steps (which, on a report with no finding, are the page of the rules that raised none), an
+    explanation of each quiet rule of the report and of a rule that is not one of the nine, and on
+    the committed report the unreadable."""
     raised = {finding["rule_id"] for finding in rep["findings"]}
     quiet = [rule_id for rule_id in rep["rules_run"] if rule_id not in raised]
     return [
+        ("summary", None, U("answer", "summary")),
+        ("next steps", "What should we fix next?", U("answer", "next_steps")),
         *((f"quiet {r}", f"Explain {r}.", U("answer", "explain_finding", target=r)) for r in quiet),
         ("unbuilt", "Explain RES-005.", U("answer", "explain_finding")),
         *(
@@ -74,9 +79,11 @@ def test_every_line_of_every_page_is_a_template_and_none_holds_the_question(
         templates = table(rep)
         asked = [(q["id"], q["text"], None) for q in DEVELOPMENT if q["fixture"] == name]
         for ident, question, expected in [*asked, *extra_questions(rep, name)]:
-            assert main(["narrate", str(path), "--question", question]) == 0
+            argv = ["narrate", str(path), *([] if question is None else ["--question", question])]
+            assert main(argv) == 0
             captured = capsys.readouterr()
-            page, understanding = captured.out, route(question)
+            page = captured.out
+            understanding = U("answer", "summary") if question is None else route(question)
             where = f"{name} {ident}"
             assert captured.err == "" and expected in (None, understanding), where
 
@@ -90,7 +97,7 @@ def test_every_line_of_every_page_is_a_template_and_none_holds_the_question(
 
             canonical = canonical_page(rep, understanding)
             assert lines[2] == canonical.split("\n")[2], where
-            assert runs_of_the_question(page, question, canonical) == [], where
+            assert runs_of_the_question(page, question or "", canonical) == [], where
             check_quiet_lines(page)
             seen |= set(kinds)
     assert seen == KINDS  # every template is used, so none is a dead letter
@@ -154,10 +161,13 @@ def test_the_check_for_runs_of_the_question_finds_a_leak_and_forgives_the_layers
 
 
 def test_the_fixed_sentences_of_the_refusals_are_the_ones_that_were_read(raw_spec: dict) -> None:
-    """The classifier takes the lines of a refusal from `refusals.py`, so it follows a change of
-    them; these sentences are what a refusal says, so a change is made on purpose: read the pages
-    of the twelve categories, then update the digest. The label of the effect table is a line of a
-    function and not a constant, so the digest holds it as written for the committed report."""
+    """This guards N5's prose (`refusals.py`), and it is the only test that sees most of it: 25 of
+    30 mutants that append a word to one of its sentences are caught by no other narration test.
+    The classifier takes the lines of a refusal from `refusals.py`, so it follows a change of them;
+    these sentences are what a refusal says, so a change is made on purpose: read the pages of the
+    twelve categories, then replace the digest with the new one. The label of the effect table is a
+    line of a function and not a constant, so the digest holds it as written for the committed
+    report."""
     golden = report("golden", raw_spec)
     label = refusals.refusal_body(
         golden, fact_list(golden), U("refusal", categories=("effect_reality",))
@@ -179,4 +189,7 @@ def test_the_fixed_sentences_of_the_refusals_are_the_ones_that_were_read(raw_spe
 
     digest = hashlib.sha256("\n".join(fixed).encode("utf-8")).hexdigest()
 
-    assert digest == "b1aa0300cb52e3a55692b213e649de380060a3ad91f5c9a0ff73fe66f1acd2be"
+    assert digest == "b1aa0300cb52e3a55692b213e649de380060a3ad91f5c9a0ff73fe66f1acd2be", (
+        "a fixed sentence of refusals.py changed: read the pages of the twelve categories, then "
+        "put the new digest here"
+    )
