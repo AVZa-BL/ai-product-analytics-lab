@@ -196,13 +196,14 @@ Not a decision and not a gate. This page advises only; its exit status does not 
 
 ### The router on the held-out half
 
-The router's first score was taken once, on 64 questions that language-model agents wrote and labelled, and that were held out from its construction by procedure and not by a technical barrier. Git shows that the router was frozen before it was scored (freeze commit `386f817c4bed70e61760298ac7a7a8f00a727289`); it does not show that nobody had read the half. The figures are agreement with the agent-authored taxonomy, as k of n with 95% Clopper-Pearson intervals. They say nothing about usefulness, readability, a model's behaviour or real users' phrasing, none of which was measured, and the router is not injection-proof and its twelve categories are not complete. Of the 44 questions labelled with refusal categories:
+The router's first score was taken once, on 64 questions that language-model agents wrote and labelled, and that were held out from its construction by procedure and not by a technical barrier. Git can show that the narration modules the router loads were frozen before it was scored (freeze commit `386f817c4bed70e61760298ac7a7a8f00a727289`); it does not show that nobody had read the half. The figures are agreement with the agent-authored taxonomy, as k of n with 95% Clopper-Pearson intervals. They say nothing about usefulness, readability, a model's behaviour or real users' phrasing, none of which was measured, and the router is not injection-proof and its twelve categories are not complete. Of the 44 questions labelled with refusal categories:
 
 - Strict: 42 of 44 (0.845 to 0.994): the router's first category is in the label.
 - Other: 2 of 44 (0.006 to 0.155): it refused, but its first category is not in the label.
 - Answered: 0 of 44 (0.000 to 0.080): it returned an answer, not a refusal.
 - Refused at all (strict plus other): the router 44 of 44 (0.920 to 1.000); a baseline that refuses on a list of trigger words 32 of 44 (0.572 to 0.850); a baseline that answers when an intent keyword matches 26 of 44 (0.432 to 0.737).
 - False refusal, of the 20 questions labelled with one of the four kinds: the router 1 of 20 (0.001 to 0.249); the trigger words 1 of 20 (0.001 to 0.249); the intent keywords 1 of 20 (0.001 to 0.249).
+- Wrong intent or target, of the same 20: the router 2 of 20 (0.012 to 0.317); it answered something else.
 
 All 5 misses of the first score, each with its index in the half, its kind, its label, what the router returned and the question verbatim as a JSON string:
 
@@ -228,7 +229,7 @@ python -m referee narrate tests/golden/offer-page-results.json --llm-command "ca
 {"max_tokens":4096,"schema":"referee-narration-request/1","system":"You select identifiers from a sheet. The sheet is the user message: JSON that lists, for each finding of the review of an experiment, its sentences and facts, each with an identifier. Answer with ONLY one JSON object of schema referee-narration-output/1 and nothing else: {\"schema\": \"referee-narration-output/1\", \"findings\": [{\"id\": <rule_id>, \"facts\": [<fact id>, ...], \"sentences\": [<sentence id>, ...]}]}. Every value is an identifier copied from the sheet. There is no field for text, and no number, explanation or refusal. Give an entry for every blocker and warning and for the task's target, each with at least one sentence of every kind (why, do) that the sheet lists for it; an info finding may be left out. What you select leads the page and code prints the rest after it.","user":"{\"arms\":[{\"alias\":\"A1\",\"role\":\"control\"},{\"alias\":\"A2\",\"role\":\"variant\"},{\"alias\":\"A3\",\"role\":\"variant\ ...
 ```
 
-A file can stand in for the command: `cat selection.json` reads nothing and prints the file, so the path can be followed with no model. `selection.json` holds one reason for each finding of the report. The page starts like this (its first 20 of 62 lines):
+A file can stand in for the command: `cat selection.json` ignores the request it is sent and prints the file, so the path can be followed with no model. `selection.json` holds one reason for each finding of the report. The page starts like this (its first 20 of 62 lines):
 
 ```bash
 cat > selection.json <<'EOF'
@@ -273,7 +274,7 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
 ruff check src tests
-python -m pytest -q                # the tests (about a minute)
+python -m pytest -q                # the tests (about two minutes)
 python -m pytest -q -m study     # the simulation studies the design rests on (about 3 minutes;
                                  # naming a study file without -m study selects nothing)
 ```

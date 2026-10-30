@@ -70,8 +70,8 @@ PUBLIC = (
 SCORED = (
     "The router's first score was taken once, on {questions} questions that language-model "
     "agents wrote and labelled, and that were held out from its construction by procedure and "
-    "not by a technical barrier. Git shows that the router was frozen before it was scored "
-    "(freeze commit "
+    "not by a technical barrier. Git can show that the narration modules the router loads were "
+    "frozen before it was scored (freeze commit "
     "`{freeze}`); it does not show that nobody had read the half. The figures are agreement with "
     "the agent-authored taxonomy, as k of n with 95% Clopper-Pearson intervals. They say nothing "
     "about usefulness, readability, a model's behaviour or real users' phrasing, none of which "
@@ -105,9 +105,10 @@ COMMAND = (
     "the first {shown} of its {size:,} characters:"
 )
 REPLAY = (
-    "A file can stand in for the command: `cat selection.json` reads nothing and prints the "
-    "file, so the path can be followed with no model. `selection.json` holds one reason for each "
-    "finding of the report. The page starts like this (its first {shown} of {lines} lines):"
+    "A file can stand in for the command: `cat selection.json` ignores the request it is sent "
+    "and prints the file, so the path can be followed with no model. `selection.json` holds one "
+    "reason for each finding of the report. The page starts like this (its first {shown} of "
+    "{lines} lines):"
 )
 NEVER = (
     "**The model path has never been run with a model.** It has met only fake narrators and a "
@@ -162,6 +163,8 @@ def scored(root: Path) -> str:
         f"the router {rate_cell(answerable['false_refusal'])}; the trigger words "
         f"{rate_cell(base['triggers']['false_refusal'])}; the intent keywords "
         f"{rate_cell(base['keywords']['false_refusal'])}.",
+        f"- Wrong intent or target, of the same {answerable['n']}: the router "
+        f"{rate_cell(answerable['wrong'])}; it answered something else.",
     ]
     misses = [
         f"- {miss['index']} ({miss['kind']}): label {describe(miss['label'])}; router "

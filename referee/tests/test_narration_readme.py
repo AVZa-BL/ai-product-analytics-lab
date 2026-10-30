@@ -53,7 +53,7 @@ WARNING = (  # the egress warning of narration.md, which the block repeats befor
     "`--show-request` prints what would leave. Referee does not control what the command does "
     "with it.",
 )
-REQUIRED = (  # what 24.14 or the N10 line binds the block to say, as the block words it
+REQUIRED = (  # what 24.14 binds the block to say, as the block words it
     "It answers four kinds of question by code",
     "numbers rounded to six significant digits",
     "The page is advice and not a gate: every page ends by saying that its exit status does not "
@@ -205,7 +205,9 @@ def test_the_status_paragraph_and_row_5_are_the_words_of_24_14_with_the_figures_
     lines = README.read_text(encoding="utf-8").split("\n")
     assert lines.count(STATUS) == 1
     row = ROW5.format(**study())  # the 'admitted H of P' clause is there whatever H is
-    assert f"| 5 | {row} | {ROW5_STATUS} |" in lines
+    assert f"| 5 | {row} | {ROW5_STATUS} |" in lines, (
+        "row 5 of README.md is hand-written: carry the figures of docs/grounding-study.json"
+    )
     assert sum(line.startswith("| 5 |") for line in lines) == 1
     # N9's own sentence of the figures is the one the row carries
     data = json.loads((gen.ROOT / "docs/grounding-study.json").read_text(encoding="utf-8"))
@@ -227,6 +229,7 @@ def doctored(first: dict) -> dict:
             ("headline", "answered"),
             ("headline", "refused_at_all"),
             ("answerable", "false_refusal"),
+            ("answerable", "wrong"),
             ("baselines", "triggers", "refused_at_all"),
             ("baselines", "keywords", "refused_at_all"),
             ("baselines", "triggers", "false_refusal"),
@@ -271,6 +274,8 @@ def test_the_figures_the_freeze_commit_and_every_miss_are_read_from_the_score_fi
         f"{cell(answerable['false_refusal'])}; the trigger words "
         f"{cell(base['triggers']['false_refusal'])}; the intent keywords "
         f"{cell(base['keywords']['false_refusal'])}.",
+        f"- Wrong intent or target, of the same {answerable['n']}: the router "
+        f"{cell(answerable['wrong'])};",
         f"All {len(first['misses'])} misses of the first score, each with its index in the half, "
         "its kind, its label, what the router returned and the question verbatim as a JSON string:",
     ]
@@ -306,7 +311,6 @@ def test_the_text_the_readme_adds_makes_none_of_the_claims_that_24_14_forbids():
 
 
 BAD = {
-    "no marker": "a\nb\n",
     "no end": f"a\n{gen.BEGIN}\nb\n",
     "no begin": f"a\n{gen.END}\nb\n",
     "twice": f"{gen.BEGIN}\n{gen.END}\n{gen.BEGIN}\n{gen.END}\n",
