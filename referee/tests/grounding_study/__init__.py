@@ -6,7 +6,7 @@ the sentences that hold none, the texts the checker admits among all short ones,
 hand-written harmful probes it admits. No model is run; the figures describe a checker's acceptance
 space. Read docs/grounding-study.md; `python tests/grounding_study/run.py` writes it.
 
-Hard ceilings (24.16): at most 12 files here, the data file included, and 60 KB of code, the
+Hard ceilings: at most 12 files here, the data file included, and 60 KB of code, the
 documents excluded; the study-tier tests (`pytest -m study tests/grounding_study`) take at most
 20 s; no absolute path (everything is found from `__file__`).
 """

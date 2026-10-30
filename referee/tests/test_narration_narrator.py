@@ -1,4 +1,4 @@
-"""The narrator of the model path (design 24.5 and the N7b line of 24.16).
+"""The narrator of the model path (design 24.5).
 
 The request as the command receives it, the closed reasons, and the process: the command is run
 with `narration_stubs`, a Python script run with `sys.executable`, and each call is required to

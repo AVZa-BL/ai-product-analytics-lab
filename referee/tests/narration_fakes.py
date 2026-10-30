@@ -1,4 +1,4 @@
-"""Fake narrators and corrupted outputs for the output contract (design sections 24.6 and 24.16).
+"""Fake narrators and corrupted outputs for the output contract (design section 24.6).
 
 A narrator is a callable from a request to the raw text of a selection. N7b defines the request,
 `ModelRequest`, the type `Narrator` and `NarratorError`; nothing here does, so the fakes ignore what
