@@ -17,13 +17,18 @@ python -m referee narrate report.json
 python -m referee narrate report.json --question "Why does RES-001 block the review?"
 ```
 
-Without `--question` the page is a summary of the review. A question is read by a router, a table of
-words and not a model, into one of four kinds the layer answers about a report, one example each: a
-summary (`What did the review find?`), one finding explained (`Why does RES-001 block the review?`),
-what to do next (`What should we fix before running this again?`) and what was checked
-(`Which checks did this review run?`). Anything else gets a refusal: a request for a decision or for
-agreement, for the effect's numbers, a forecast, a breakdown the report does not hold, or a question
-the router does not recognise. The three questions of the design are refused:
+Without `--question` the page is a summary of the review. An empty `--question ''` is a question,
+not the summary: it gets the page for a question that could not be read (reason: empty), with status
+0. A question that starts with `-` and has no space, such as `-why`, is read by argparse as an
+option, so write it `--question=-why`.
+
+A question is read by a router, a table of words and not a model, into one of four kinds the layer
+answers about a report, one example each: a summary (`What did the review find?`), one finding
+explained (`Why does RES-001 block the review?`), what to do next (`What should we fix before
+running this again?`) and what was checked (`Which checks did this review run?`). Anything else gets
+a refusal: a request for a decision or for agreement, for the effect's numbers, a forecast, a
+breakdown the report does not hold, or a question the router does not recognise. The three questions
+of the design are refused:
 
 ```bash
 python -m referee narrate report.json --question "can we call it on day 3?"
@@ -89,7 +94,7 @@ check below, and an arm's name is text someone chose.
 | --- | --- |
 | 0 | A page was printed: an answer or a refusal, whatever the verdict. A refusal exits 0 on an `invalid` report, where `review-results` exits 1. |
 | 2 | The report cannot be read, parsed or checked, or the arguments are unusable. The problems are on standard error: at most 1,000 are listed, with their exact number, and an arm's name is written as escapes. |
-| 3 | Referee failed while making the page. Standard error names the exception's type; standard output is empty. |
+| 3 | Referee failed while making or writing the page; a write that fails, such as a full disk or a closed pipe, is a failure too. Standard error names the exception's type; a failure while making the page leaves standard output empty. |
 
 Nothing is written to standard output until the page is complete. Statuses 1 and 4 are not used.
 
@@ -98,21 +103,25 @@ that the experiment is valid or approved; every page ends by saying so.
 
 ## What it reads
 
-Only `REPORT`: no other file, no environment variable, no network and no process. `REPORT` must be
+Only `REPORT`: no other file, no network and no process, and the page depends on no environment
+variable (argparse and the numeric libraries read some while the process starts). `REPORT` must be
 a regular file (a directory, a FIFO or a device is refused) of at most 5 MiB (5,242,880 bytes) with
-no repeated key, and must be a report that this build of Referee could have written: its counts, its
-verdict and its blocking rules agree with its findings, and each finding has the catalogue's text.
-A hand-edited report is refused with status 2, so a page never puts someone's words under the
-engine's name.
+no repeated key, and must be a report that this build of Referee could have written. A report whose
+counts, verdict, blocking rules or finding text disagree with its findings is refused with status 2.
+A forged report that is consistent with itself passes (design section 24.13), and the check does not
+type every field: a malformed field that it does not cover, such as an `experiment_id` that is a
+number, ends in status 3, with the type of the exception only.
 
 There is no model path yet: a later step adds an optional `--llm-command`. Until it exists, nothing
 leaves the machine.
 
 ## The 5 MiB bound
 
-A report of 10 arms and 12 weeks is 0.76 MiB (a measurement of the pull request that added the
-check, not repeated here), and the committed one is 80,422 bytes. The one part that grows with the
-players is the list of those assigned before a registered start, `population.ignored_before_start`:
-24 bytes a player for the lab's ids (`player_0002757`), and again in RES-003's evidence when that
-rule raises a finding. About 185,000 such players fit, about half as many with the second copy. A
-larger report is refused with `the report is longer than 5,242,880 bytes`.
+The committed report is 80,422 bytes. The one part that grows with the players is the list of those
+assigned before a registered start, `population.ignored_before_start`: 24 bytes a player for the
+lab's ids (`player_0002757`), and 28 more when RES-003 raises a finding, because its evidence holds
+the list again. Of a report the size of the committed one, (5,242,880 - 80,422) / 24 is about
+215,000 such players, and (5,242,880 - 80,422) / 52 about 99,000 with the second copy. The bytes a
+player were measured on the committed report and on one fixture, not on every report, and a report
+with more arms or findings starts larger. A larger report is refused with `the report is longer
+than 5,242,880 bytes`.
