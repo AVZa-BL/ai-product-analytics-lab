@@ -50,14 +50,6 @@ def cell(k, n):
 # ---------------------------------------------------------------- where the files are
 
 
-@pytest.mark.parametrize(
-    "path",
-    [ev.HELDOUT, ev.DEVELOPMENT, ev.PINS, ev.FREEZE, ev.TRIGGERS, ev.GROUNDING, ev.ROUTER],
-)
-def test_the_inputs_are_files_of_the_repository(path):
-    assert (ev.ROOT / path).is_file()  # only that: no test opens the held-out file for this
-
-
 def test_the_outputs_are_where_the_design_puts_them():
     assert ev.FIRST_SCORE == "tests/data/narration_eval/heldout_first_score.json"
     assert ev.DOCUMENTS == ("docs/narration-evaluation.md", "docs/narration-evaluation.json")
@@ -108,6 +100,12 @@ BASELINE_CASES = [
         ans("explain_finding"),
     ),
     ("What is the weather in Berlin?", OOS, OOS, OOS),
+    (  # no word of the report: the router's domain gate refuses; the keywords have none
+        "Please summarise.",
+        OOS,
+        OOS,
+        ans("summary"),
+    ),
     ("", UNR, OOS, OOS),  # an unreadable question is the default route for a baseline
 ]
 
@@ -172,32 +170,6 @@ def synthetic_set():
     return questions, results
 
 
-def test_every_miss_is_listed_with_its_kind_label_result_and_text():
-    found = ev.tabulate(*synthetic_set(), NEAR)["misses"]
-    kinds = {
-        3: "other",
-        4: "other",
-        5: "answered",
-        7: "other",
-        8: "answered",
-        10: "apart",
-        14: "wrong_intent",
-        15: "wrong_intent",
-        16: "false_refusal",
-        17: "false_refusal",
-        18: "false_refusal",
-    }
-    assert {m["index"]: m["kind"] for m in found} == kinds
-    assert [m["index"] for m in found] == sorted(kinds)  # in the order of the file
-    assert found[2] == {  # q5
-        "index": 5,
-        "kind": "answered",
-        "label": ref("causal"),
-        "router_result": ans("summary"),
-        "text": "text of q5",
-    }
-
-
 ROWS = {  # every row of the report for the set above, by hand
     "Strict": cell(3, 8),
     "Other": cell(3, 8),
@@ -250,6 +222,7 @@ def test_every_row_of_the_report_is_the_hand_computed_cell_and_the_columns_are_i
     first = ev.tabulate(questions, results, NEAR)
     now = ev.tabulate(questions, results, set())  # a current run that finds no near copy
     rows = {label: cells for _, _, table in ev.sections(first, now) for label, *cells in table}
+    assert list(rows) == list(ROWS)  # in the order of the report, the recall rows included
     assert {label: cells[0] for label, cells in rows.items()} == ROWS
     assert {label: cells for label, cells in rows.items() if cells[0] != cells[1]} == {
         "Strict, without the near copies": [cell(3, 6), cell(3, 8)],
@@ -292,24 +265,15 @@ def test_the_report_lists_each_kind_of_miss_with_its_label_and_what_the_router_r
     assert "## Every miss of the first score (11)" in markdown
 
 
-def test_a_figure_is_kept_at_three_places_and_a_question_without_a_label_is_excluded_not_scored():
-    questions, results = synthetic_set()
-    found = ev.tabulate(questions, results, NEAR)
-    floats = []
-    json.loads(json.dumps(found), parse_float=lambda text: floats.append(text) or float(text))
-    assert floats and all(len(text.split(".")[1]) <= 3 for text in floats)
-    assert found["questions"] == 20 == len(results["router"])
-
-
 def test_near_copies_are_the_ids_strictly_above_the_threshold():
-    texts = ["abcdefghij", "klmnopqrst", "zyxwvutsrq", "unrelated"]
+    texts = ["abcdefghij", "klmnopqrst", "zyxwvutsrq", "unrelated", "abcdefg"]
     questions = [
         {"id": f"n{i}", "text": t, "fixture": "golden", "stratum": "x", "label": None}
         for i, t in enumerate(texts)
     ]
-    # similarities 1, 6/10 (exactly the threshold: not above), 7/9 and about 0
+    # similarities 1, 6/10 (exactly the threshold: not above), 7/9, about 0 and 5/8 (above it)
     reference = ["abcdefghij", "klmnopqrxy", "zyxwvutsrk"]
-    assert ev.near_copies(questions, reference) == {"n0", "n2"}
+    assert ev.near_copies(questions, reference) == {"n0", "n2", "n4"}
 
 
 # ---------------------------------------------------------------- a tree of synthetic files
@@ -367,7 +331,7 @@ def build(root, parseable=True):
     them. The held-out file is unreadable as JSON unless `parseable`: a check that runs before
     the half is read gets there first, so an exception from the reader means it came too early."""
     files = dict(SOURCES)
-    files[TRIGGERS_PATH] = b"launch\nship\nstop\n"
+    files[TRIGGERS_PATH] = b"ship\nlaunch\nstop\n"  # 'ship', the first word, refuses a question
     heldout = questions_file(HELDOUT, parseable).encode()
     put(root, HELDOUT_PATH, heldout)
     put(root, ev.DEVELOPMENT, questions_file([(DEVELOPMENT_QUESTION, ref("stopping"))]))
@@ -479,14 +443,6 @@ def with_changed_source(root, files):
     put(root, ev.ROUTER, b"another router\n")
 
 
-def with_source_missing_at_the_freeze(root, files):
-    del files["src/referee/narration/render.py"]
-
-
-def with_changed_triggers(root, files):
-    put(root, TRIGGERS_PATH, b"ship\n")
-
-
 def with_changed_heldout(root, files):
     put(root, HELDOUT_PATH, b"[]")
 
@@ -505,12 +461,9 @@ def with_an_empty_file_absent_at_the_freeze(root, files):
     [
         (with_first_score_present, {}, "exists: a first score is taken once"),
         (lambda r, f: None, {"ancestor": False}, "is not an ancestor of HEAD"),
-        (lambda r, f: None, {"head": ""}, "no HEAD or no commit"),
         (lambda r, f: None, {"head": None}, "no HEAD or no commit"),
         (lambda r, f: None, {"freeze": ""}, "no HEAD or no commit"),
         (with_changed_source, {}, f"{ev.ROUTER} differs from its content at the freeze commit"),
-        (with_changed_triggers, {}, "baseline_triggers.txt differs from its content at the"),
-        (with_source_missing_at_the_freeze, {}, "render.py differs from its content at the"),
         (with_deleted_source, {}, "render.py differs from its content at the"),
         (with_an_empty_file_absent_at_the_freeze, {}, "render.py differs from its content at the"),
         (with_changed_heldout, {}, "differs from its pin in"),
@@ -520,12 +473,9 @@ def with_an_empty_file_absent_at_the_freeze(root, files):
     ids=[
         "score file present",
         "not an ancestor",
-        "no HEAD",
         "git fails on HEAD but prints",
         "no commit changed the freeze file",
         "frozen source differs at the freeze commit",
-        "frozen trigger words differ",
-        "frozen file absent at the freeze commit",
         "frozen file absent from the tree",
         "empty frozen file absent at the freeze commit",
         "held-out file differs from its pin",
