@@ -6,7 +6,8 @@ of them. The frame lines, the headings and the labels are written out here as th
 them; the sentences of the catalogue, the Decision block, the facts, the quiet lines and the lines
 of a refusal are taken from the public functions and constants of `render.py`, `refusals.py` and
 `facts.py`, never from the page under test. A page of the fixed rule has no `Not selected by the
-narrator` line and no model-path `Chosen by` line, so neither is a template here (N7b adds them).
+narrator` line and no model-path `Chosen by` line; the model path's lines and the withheld page's
+line (design 24.7) are written out here as the design gives them, `render.py` keeping them private.
 """
 
 import re
@@ -18,6 +19,8 @@ from referee.narration.render import (
     CATEGORIES,
     RULE_IDS,
     UNREADABLE_REASONS,
+    VIOLATION_CODES,
+    Selection,
     Understanding,
     decision_block,
     fact_lines,
@@ -31,9 +34,17 @@ SENTENCE_LINE = re.compile(r"  \[([^\]]+)\] (.*)")
 UNDERSTOOD = re.compile(r"Question understood as: (.*)\.")
 COMPOUND = re.compile(r"a question this layer does not answer \(categories matched: (.+)\)")
 ALSO = re.compile(re.escape(ALSO_MATCHED) + r" (.+)\.")
+WITHHELD = re.compile(r"Narration withheld: the output of --llm-command failed these checks: (.+)")
 FOOTER = (
     "Not a decision and not a gate. This page advises only; its exit status does not mean the "
     "experiment is valid."
+)
+CHOSEN_MODEL = (
+    "Chosen by: the output of --llm-command (checked for scope, source and coverage, not "
+    "relevance).",
+    "For each finding narrated below, everything this question permits is printed; the narrator "
+    "chose only what leads and which info findings are narrated; the labels are not a ranking of "
+    "relevance.",
 )
 DISCLAIMER = "This is not agreement with the question, and it does not say the effect is real."
 SUMMARISED_TAIL = (
@@ -53,6 +64,7 @@ KINDS = {
     "blank",
     "catalogue",
     "chosen",
+    "chosen_model",
     "decision",
     "disclaimer",
     "fact",
@@ -60,19 +72,24 @@ KINDS = {
     "heading",
     "label",
     "listing",
+    "not_selected",
     "quiet",
     "refusal",
     "report",
     "understood",
     "verdict",
+    "withheld",
 }
 
 
-def canonical_page(rep: dict, understanding: Understanding) -> str:
-    """The page for `understanding` as the layer's functions build it: no question, no command."""
+def canonical_page(
+    rep: dict, understanding: Understanding, selection: Selection | None = None
+) -> str:
+    """The page for `understanding` as the layer's functions build it: no question, no command;
+    `selection` None is the fixed rule."""
     facts, decision = fact_list(rep), decision_block(rep)
     if understanding.kind == "answer":
-        return render_answer(rep, facts, understanding, decision)
+        return render_answer(rep, facts, understanding, decision, selection)
     body = refusal_body(rep, facts, understanding)
     return render_refusal(rep, understanding, decision, body)
 
@@ -107,6 +124,8 @@ def table(rep: dict) -> dict[str, str]:
         f"{counts['info']} info.",
     )
     add("chosen", "Chosen by: a fixed rule in the code (everything this question permits).")
+    add("chosen_model", *CHOSEN_MODEL)
+    add("not_selected", "Not selected by the narrator:")
     add("frame", "The memo's other sections are not part of this page.", FOOTER)
     add("decision", *decision_block(rep))
     add(
@@ -173,6 +192,12 @@ def _understood(what: str) -> bool:
     )
 
 
+def _violation(item: str) -> bool:
+    """A code of the six and, after it, the ID of a rule or `-`."""
+    code, _, rule_id = item.partition(" ")
+    return code in VIOLATION_CODES and rule_id in (*RULE_IDS, "-")
+
+
 def classify(line: str, lines: dict[str, str]) -> str | None:
     """The template of `line` among those of `table`, or None if it is none of them."""
     if not line:
@@ -188,6 +213,9 @@ def classify(line: str, lines: dict[str, str]) -> str | None:
     also = ALSO.fullmatch(line)
     if also and all(category in CATEGORIES for category in also[1].split(", ")):
         return "refusal"
+    withheld = WITHHELD.fullmatch(line)
+    if withheld and all(_violation(item) for item in withheld[1].split(", ")):
+        return "withheld"
     return None
 
 
