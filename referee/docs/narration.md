@@ -111,10 +111,13 @@ that the experiment is valid or approved; every page ends by saying so.
 contacts.** The arms' names become `A1` (the control), `A2`, `A3`, which hides the names and nothing
 else. The experiment's id, the metric names and the other free text of the report are not put in
 what is sent, and a check before each request refuses to make it (status 3) if a word of the report
-that Referee did not write is in it; a word that is also one of the engine's own (an arm named
-`control`) could not be told apart, so the check is no proof. Your question is not sent: the command
-is given the kind of question and the rule it names. `--show-request` prints what would leave.
-Referee does not control what the command does with it.
+that Referee did not write is in it. The check compares whole words (runs of letters, digits and
+underscores), so it cannot see a word the engine also uses (an arm named `control`, `treatment` or
+`variant`, a metric named `revenue`), a name with no letter, digit or underscore, or a name glued
+into a longer word: it is a second guard, not the proof. The proof is a test that puts a unique
+string into every free-text position of a report and looks for it in the request. Your question is
+not sent: the command is given the kind of question and the rule it names. `--show-request` prints
+what would leave. Referee does not control what the command does with it.
 
 The command chooses what leads, never what is said. For a summary, the next steps or the explanation
 of one finding, `--llm-command CMD` runs `CMD` once and reads identifiers from its output; for every
@@ -182,8 +185,12 @@ fake narrators and a stub command, a Python script, so whether a model returns a
 not known.
 
 What is not covered: what `CMD` does with files or the network; a process it starts that leaves its
-session; Referee itself being killed (SIGTERM or SIGKILL), which leaves the command running (Ctrl-C
-stops the command). The command has no controlling terminal, as it has a session of its own.
+process group (`setsid`, `setpgid`); a command that changes its user id, which Referee cannot kill
+(Referee stops waiting for it after 5 seconds and leaves it); Referee itself being killed (SIGTERM
+or SIGKILL), which leaves the command running. Ctrl-C stops the command, except in the first
+millisecond of starting it: an interrupt that lands inside the start leaves it running. A process
+that ignores SIGCHLD cannot run the command, because the exit status would be lost (reason
+`start`). The command has no controlling terminal, as it has a session of its own.
 
 ## What it reads
 

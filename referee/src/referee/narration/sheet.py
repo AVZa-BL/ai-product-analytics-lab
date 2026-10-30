@@ -15,9 +15,11 @@ Before a request is made the egress assertion compares the report with the sheet
 string of the report, a key included (a run of letters, digits and underscores, case folded), that
 is not in the vocabulary of the sheet, which is all that code writes into it (catalogue text, the
 allowlist, the roles, the aliases, the labels), must not be among the tokens of the sheet; if one
-is, the request is not made (`EgressError`, a failure inside Referee). A leak of a word that is
-also in the vocabulary (an arm named `control`) is invisible to this, and the canary test of the
-sheet is the proof for it.
+is, the request is not made (`EgressError`, a failure inside Referee). Whole tokens are compared,
+so the check cannot see a word the engine also uses (an arm named `control`, `treatment` or
+`variant`, a metric named `revenue`: the vocabulary holds hundreds of words), a name with no
+letter, digit or underscore, or a name glued into a longer token (`A2_zebra_arm`). The canary test
+of the sheet is the proof for the free-text positions.
 """
 
 from __future__ import annotations
