@@ -93,6 +93,9 @@ def stub(directory: Path, mode: str, *arguments: str) -> str:
         ("size 40000", "size", False),
         ("encoding", "encoding", False),
         ("tty", "exit", False),
+        (f"emit {VALID.encode().hex()} kill", "exit", False),  # valid output, then killed
+        ("emit - 3", "exit", False),  # no output
+        ("emit ff 3", "exit", False),  # output that is not UTF-8
     ],
     ids=[
         "start",
@@ -105,6 +108,9 @@ def stub(directory: Path, mode: str, *arguments: str) -> str:
         "size",
         "encoding",
         "/dev/tty",
+        "killed after valid output",
+        "exit with no output",
+        "exit with output that is not UTF-8",
     ],
 )
 def test_a_command_that_fails_gives_status_4_with_its_reason_and_no_marker_on_any_stream(

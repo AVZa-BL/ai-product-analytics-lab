@@ -3,11 +3,11 @@
     argv = stub_argv(tmp_path, mode, *arguments)    # [python, script, mode, MARKER, *arguments]
 
 The script is written to the directory. The marker is in its arguments and on its standard error,
-and in the modes that fail on its standard output too, so that a test can require that it is on no
-stream of Referee. A mode that waits waits at most 20 s, so that a fault in the code under test
-leaves nothing running for long. A mode that starts a grandchild, which holds the standard output
-and the input of the command, records `<child pid> <grandchild pid>` in `pids.txt` of the directory
-once the grandchild is running.
+and in the modes exit, sleep, encoding and tty on its standard output too, so that a test can
+require that it is on no stream of Referee. A mode that waits waits at most 20 s, so that a fault
+in the code under test leaves nothing running for long. A mode that starts a grandchild, which
+holds the standard output and the input of the command, records `<child pid> <grandchild pid>` in
+`pids.txt` of the directory once the grandchild is running.
 
     exit            exits 3
     sleep [hold]    waits, ignoring SIGTERM (after starting a grandchild, with `hold`)
@@ -15,6 +15,8 @@ once the grandchild is running.
     size N          writes N bytes (the marker repeated) and exits 0
     encoding        writes bytes that are not UTF-8 and exits 0
     tty             tries to open /dev/tty, records in `tty.txt` whether it could, and exits 1
+    emit HEX CODE   writes the bytes of HEX (`-` for none), then exits with CODE or, if CODE is
+                    `kill`, kills itself with SIGKILL
     leave CODE PATH starts a grandchild, writes the file at PATH, exits with CODE
     interrupt       starts a grandchild, sends SIGINT to its parent (the process under test), waits
     cat PATH        does not read its input; writes the file at PATH and exits 0
@@ -83,6 +85,12 @@ elif mode == "tty":
         opened = "no"
     open(here + "/tty.txt", "w").write(opened)
     sys.exit(1)
+elif mode == "emit":
+    sys.stdout.buffer.write(bytes.fromhex(rest[0].strip("-")))
+    sys.stdout.flush()
+    if rest[1] == "kill":
+        os.kill(os.getpid(), signal.SIGKILL)
+    sys.exit(int(rest[1]))
 elif mode == "leave":
     grandchild()
     sys.stdout.write(open(rest[1]).read())
@@ -148,6 +156,7 @@ def gone(*pids: int, wait_s: float = 5.0) -> bool:
 
 def recorded(directory: Path) -> tuple[int, int]:
     """The pids a mode that starts a grandchild wrote down: the child's and the grandchild's."""
+    assert (directory / "pids.txt").exists(), "the stub wrote no pids.txt before the call returned"
     child, grandchild = (directory / "pids.txt").read_text().split()
     assert child != grandchild  # two processes
     return int(child), int(grandchild)
