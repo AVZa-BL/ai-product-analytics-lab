@@ -238,14 +238,21 @@ def test_every_row_of_the_report_is_the_hand_computed_cell_and_the_columns_are_i
     )
     assert lines[-1] == "Misses: first 11; now 11"
     assert ev.figure_lines(first, {**now, "misses": []})[-1] == "Misses: first 11; now 0"
+    # n counts a question under each category of its label: q2 has two, so 9 slots for 8 questions
+    recall_note = {title: text for title, text, _ in ev.sections(first, now)}["Recall by category"]
+    assert "(9 category slots for 8 questions)" in recall_note
+
+
+def markdown_of(first_record, now_record=None):
+    """The report for a record taken as the first score and a current run (by default the same)."""
+    first = {"schema": ev.SCHEMA, "freeze_sha": "f" * 40, "head_sha": "h" * 40, **first_record}
+    first["router_sha256"] = "r" * 64
+    return ev.render_markdown(ev.build_report(first, now_record or first_record, "r" * 64, "row 5"))
 
 
 def test_the_report_lists_each_kind_of_miss_with_its_label_and_what_the_router_returned():
     questions, results = synthetic_set()
-    record = ev.tabulate(questions, results, NEAR)
-    first = {"schema": ev.SCHEMA, "freeze_sha": "f" * 40, "head_sha": "h" * 40, **record}
-    first["router_sha256"] = "r" * 64
-    markdown = ev.render_markdown(ev.build_report(first, record, "r" * 64, "row 5"))
+    markdown = markdown_of(ev.tabulate(questions, results, NEAR))
     lines = [line for line in markdown.splitlines() if re.match(r"- \d+ \(", line)]
     assert lines == [
         '- 3 (other): label refuse subgroup; router refuse subgroup, ship_decision; "text of q3"',
@@ -263,6 +270,68 @@ def test_the_report_lists_each_kind_of_miss_with_its_label_and_what_the_router_r
         'router unreadable; "text of q18"',
     ]
     assert "## Every miss of the first score (11)" in markdown
+
+
+def test_a_route_with_no_question_in_either_run_has_no_row_and_the_report_says_so():
+    questions, results = synthetic_set()
+
+    def record(routes):  # the set without the questions labelled with the other routes
+        keep = [
+            i
+            for i, q in enumerate(questions)
+            if q["label"] is None or q["label"]["route"] in ("refuse", "answer", *routes)
+        ]
+        chosen = {name: [found[i] for i in keep] for name, found in results.items()}
+        return ev.tabulate([questions[i] for i in keep], chosen, set())
+
+    def apart(first, now):
+        [(_, text, rows)] = [s for s in ev.sections(first, now) if s[0] == "Questions scored apart"]
+        return text, rows
+
+    none, only_unreadable, both = (
+        record([]),
+        record(["unreadable"]),
+        record(["out_of_scope", "unreadable"]),
+    )
+    text, rows = apart(none, none)
+    assert rows == [] and "holds no question labelled `out_of_scope` or `unreadable`" in text
+    assert not any("Labelled" in line for line in ev.figure_lines(none, none))
+    assert markdown_of(none).count("| Figure | First score | Current |") == 5  # no empty table
+    assert claims(markdown_of(none)) == []  # the sentence that explains the missing rows
+    text, rows = apart(only_unreadable, only_unreadable)
+    assert [label for label, *_ in rows] == ["Labelled unreadable: the router returned it"]
+    assert "holds no question labelled `out_of_scope`, so" in text
+    # a run that holds one where the other does not keeps the row: the columns stay comparable
+    for first, now in ((none, both), (both, none)):
+        text, rows = apart(first, now)
+        assert [label for label, *_ in rows] == [
+            "Labelled out_of_scope: the router returned it",
+            "Labelled unreadable: the router returned it",
+        ]
+        assert "holds no question" not in text
+    assert apart(none, both)[1][0][1:] == ("0 of 0 (0.000 to 1.000)", cell(1, 2))
+
+
+@pytest.mark.parametrize(
+    ("strict", "refusal", "verdicts"),
+    [
+        ((4, 5), (1, 4), "strict {} is met and false refusal {} is met."),  # exactly 80% and 25%
+        ((3, 4), (3, 10), "strict {} is not met and false refusal {} is not met."),  # 75%, 30%
+        ((4, 5), (3, 10), "strict {} is met and false refusal {} is not met."),
+        ((3, 4), (1, 4), "strict {} is not met and false refusal {} is met."),
+    ],
+)
+def test_the_expectation_of_24_10_is_judged_by_the_counts_at_its_boundaries(
+    strict, refusal, verdicts
+):
+    first = {
+        "headline": {"strict": exact(*strict)},
+        "answerable": {"false_refusal": exact(*refusal)},
+    }
+    text = ev.expectation(first)
+    assert verdicts.format(cell(*strict), cell(*refusal)) in text
+    assert claims(text) == []  # whether met or not, it says none of what 24.14 forbids
+    assert f"ends at {exact(*refusal)['high']:.3f}, against the limit of 25%" in text
 
 
 def test_near_copies_are_the_ids_strictly_above_the_threshold():
@@ -726,10 +795,12 @@ def test_the_report_states_what_24_14_allows_with_the_numbers_of_the_score(tree)
     report = json.loads(twin)
     assert report["freeze"]["commit"] == FREEZE_SHA
     assert (
-        f"- Freeze commit: `{FREEZE_SHA}`, the last commit reachable from HEAD that changed "
-        f"`{ev.FREEZE}`."
+        f"- Freeze commit: `{FREEZE_SHA}`, recorded as the last commit reachable from HEAD that "
+        f"changed `{ev.FREEZE}`."
     ) in markdown
     assert f"- HEAD when the first score was taken: `{HEAD}`." in markdown
+    assert f"`git merge-base --is-ancestor {FREEZE_SHA} origin/main` exits 0" in markdown
+    assert f"with REV the freeze commit, `{HEAD}` and `origin/main`" in markdown
     assert f"first score `{sha(SOURCES[ev.ROUTER])}`, now `{sha(SOURCES[ev.ROUTER])}`" in markdown
     assert "on 9 agent-authored questions" in markdown
     seconds = ", ".join(f"{s:.1f} s" for s in ev.BUDGET["linux_seconds"])
@@ -746,6 +817,7 @@ def test_the_report_states_what_24_14_allows_with_the_numbers_of_the_score(tree)
     assert "agreement with the agent-authored taxonomy" in markdown
     assert "| Figure | First score | Current |" in markdown
     assert "In every figure, the current run equals the first score." in markdown
+    assert ev.expectation(report["first"]) in markdown
     assert "A figure of the study (docs/grounding-study.md)." in markdown
     assert "macOS: not measured" in markdown
     # the twin holds the same numbers
@@ -793,6 +865,7 @@ def test_a_current_run_that_differs_is_reported_with_its_own_misses(tree, capsys
     assert f"first score `{sha(SOURCES[ev.ROUTER])}`, now `{'c' * 64}`" in markdown
     assert "The current run differs from the first score in at least one figure." in markdown
     assert f"| Strict | {cell(5, 5)} | {cell(2, 5)} |" in markdown
+    assert f"strict {cell(5, 5)} is met" in markdown  # the expectation is judged on the first score
     sections_of_misses = re.split(r"^## ", markdown, flags=re.MULTILINE)
     by_title = {text.splitlines()[0]: text for text in sections_of_misses}
     first_misses = by_title["Every miss of the first score (1)"]

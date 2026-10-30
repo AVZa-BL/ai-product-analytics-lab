@@ -73,6 +73,7 @@ DOCUMENTS = ("docs/narration-evaluation.md", "docs/narration-evaluation.json")
 ROUTER = "src/referee/narration/router.py"
 SCHEMA = "referee-narration-first-score/1"
 FIRST_KEYS = ("schema", "freeze_sha", "head_sha", "router_sha256")  # the rest is `measure`'s
+ORIGIN_MAIN = "67e667b0e5cc881556bb22b90a07e16e73b8f4d2"  # main when the freeze was checked by hand
 TAKEN = f"{FIRST_SCORE} exists: a first score is taken once"
 GIT_LOCATION = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")  # would point git at another tree
 
@@ -445,17 +446,29 @@ def sections(first: dict[str, Any], now: dict[str, Any]) -> list[tuple[str, str,
                     lambda cell, k=key: f"{cell[k]} of {cell['n']}",
                 )
             )
-    apart = [
-        row("Labelled out_of_scope: the router returned it", lambda r: r["apart"]["out_of_scope"]),
-        row("Labelled unreadable: the router returned it", lambda r: r["apart"]["unreadable"]),
-    ]
+    apart, empty = [], []
+    for kind in ("out_of_scope", "unreadable"):
+        if first["apart"][kind]["n"] or now["apart"][kind]["n"]:  # else the row holds nothing
+            apart.append(
+                row(f"Labelled {kind}: the router returned it", lambda r, k=kind: r["apart"][k])
+            )
+        else:
+            empty.append(f"`{kind}`")
+    apart_text = APART_TEXT
+    if empty:
+        apart_text += (
+            f" The half holds no question labelled {' or '.join(empty)}, so what the router does "
+            "with such a question is not measured here, and there is no row for it."
+        )
+    slots = sum(cell["n"] for cell in first["recall"].values())
+    recall_text = RECALL_TEXT.format(slots=slots, n=first["headline"]["n"])
     return [
         ("Questions labelled with refusal categories", REFUSED_TEXT, refused),
         ("The same questions, two variants", VARIANTS_TEXT, variants),
-        ("Recall by category", RECALL_TEXT, recall),
+        ("Recall by category", recall_text, recall),
         ("The router and the two baselines", BASELINES_TEXT, baselines),
         ("Answerable questions", ANSWERABLE_TEXT, answerable),
-        ("Questions scored apart", APART_TEXT, apart),
+        ("Questions scored apart", apart_text, apart),
     ]
 
 
@@ -496,15 +509,23 @@ VARIANTS_TEXT = (
     "questions out."
 )
 RECALL_TEXT = (
-    "A question counts under each category of its label that its primary category matches. "
-    "Counts only: a category rests on a handful of questions."
+    "A question counts under each category of its label that the router's primary category "
+    "matches. n is the number of questions whose label holds the category; a question labelled "
+    "with two categories counts in n under both and in k under the router's primary category "
+    "only, so a category can fall short of its n without a miss in the list below ({slots} "
+    "category slots for {n} questions). Counts only: a category rests on a handful of questions."
 )
 BASELINES_TEXT = (
     "Both baselines refuse by default, so they are compared with the router only on these two "
     "figures, on the same questions. *Trigger words*: the router's intent matcher, with a "
-    "question that holds a word of the committed `baseline_triggers.txt` refused. *Intent "
-    "keywords*: a question is answered if any of the router's intent patterns matches, else "
-    "refused."
+    "question that holds a word of the committed `baseline_triggers.txt` refused. A trigger word "
+    "matches as a whole word after the router's own normalisation and reading of the question: "
+    "no stem, no wildcard, no folding of look-alike letters. The fifteen words were committed "
+    "with the router by step N5, before the half was scored; the repository does not record how "
+    "they were chosen. *Intent keywords*: a question is answered if any of the router's intent "
+    "patterns matches, else refused. Only 2 of the 20 answerable questions of this half hold a "
+    "refusal-sounding word (`PROVENANCE.md`), so the comparison of false refusals says almost "
+    "nothing."
 )
 ANSWERABLE_TEXT = (
     "A question labelled with an intent is a false refusal when the router did not answer it, "
@@ -548,9 +569,28 @@ def _miss_lines(record: dict[str, Any]) -> list[str]:
     ]
 
 
+def expectation(first: dict[str, Any]) -> str:
+    """The non-binding expectation of 24.10 against the first score: met or not by the counts
+    (integers, so a boundary is exact), the false refusal's interval beside its limit."""
+    strict, refusal = first["headline"]["strict"], first["answerable"]["false_refusal"]
+    met = {
+        "strict": 5 * strict["k"] >= 4 * strict["n"],  # at least 80%
+        "refusal": 4 * refusal["k"] <= refusal["n"],  # at most 25%
+    }
+    return (
+        "The non-binding expectation of design 24.10, a judgement with no basis beyond the "
+        "development fit, was a strict recall of at least 80% and a false refusal of at most 25%. "
+        f"By the counts of the first score, strict {rate_cell(strict)} is "
+        f"{'met' if met['strict'] else 'not met'} and false refusal {rate_cell(refusal)} is "
+        f"{'met' if met['refusal'] else 'not met'}. The interval of the false refusal ends at "
+        f"{refusal['high']:.3f}, against the limit of 25%: the data do not exclude a rate as high "
+        "as that."
+    )
+
+
 def render_markdown(report: dict[str, Any]) -> str:
     first, now, freeze, budget = (report[k] for k in ("first", "current", "freeze", "budget"))
-    shas = freeze["router_sha256"]
+    shas, head = freeze["router_sha256"], freeze["head_at_first_score"]
     lines = [
         report["provenance"],
         "",
@@ -559,31 +599,55 @@ def render_markdown(report: dict[str, Any]) -> str:
         "Generated by `python tests/narration_evaluation.py --write` from "
         f"`{FIRST_SCORE}` and a fresh run of the router (design section 24.10); do not edit. "
         "It reports what was built and tested offline: the router of the narration layer "
-        f"(`{ROUTER}`) on {first['questions']} agent-authored questions that were held out of its "
-        "construction by procedure. No model was run through Referee. The counts are agreement "
-        "with the agent-authored taxonomy (`tests/data/narration_eval/taxonomy.json`); they say "
-        "nothing about usefulness, readability, a model's behaviour or real users' phrasing, "
-        "none of which was measured.",
+        f"(`{ROUTER}`) on {first['questions']} agent-authored questions that were held out from "
+        "the router's construction by procedure, not by a technical barrier "
+        "(`tests/data/narration_eval/PROVENANCE.md`). No model was run through Referee. The "
+        "counts are agreement with the agent-authored taxonomy "
+        "(`tests/data/narration_eval/taxonomy.json`); they say nothing about usefulness, "
+        "readability, a model's behaviour or real users' phrasing, none of which was measured.",
         "",
         "## The freeze",
         "",
-        f"- Freeze commit: `{freeze['commit']}`, the last commit reachable from HEAD that "
-        f"changed `{FREEZE}`.",
-        f"- HEAD when the first score was taken: `{freeze['head_at_first_score']}`.",
+        f"- Freeze commit: `{freeze['commit']}`, recorded as the last commit reachable from HEAD "
+        f"that changed `{FREEZE}`.",
+        f"- HEAD when the first score was taken: `{head}`.",
         f"- SHA-256 of `{ROUTER}` in the freeze file: first score `{shas['first']}`, "
-        f"now `{shas['current']}`.",
+        f"now `{shas['current']}`. The score file copies the first from the freeze file.",
         "",
-        "Before it routed the held-out half, `--first-score` checked with `git` that the freeze "
-        "commit is an ancestor of HEAD, that every frozen file equals its content at that "
-        "commit, that the held-out files equal their pins in `pins.json`, that the narration "
-        "modules the router loads are frozen files of this tree and that the worktree was clean. "
-        "It refuses to run when the score file exists, so the first score is taken once.",
+        "What `--first-score` checked before it routed the held-out half:",
+        "",
+        "- That the freeze commit is an ancestor of HEAD. The commit is looked up from HEAD, so "
+        "on a real repository this is true by construction: the test guards a malformed answer "
+        "only, and does not show that the commit is on main.",
+        "- That each frozen file other than the two held-out files equals its content at the "
+        "freeze commit (`git show`).",
+        "- That the two held-out files (the questions and their brief) equal their pins in "
+        "`pins.json` in the working tree. That is not a comparison with git.",
+        "- That every `referee.narration` module the process loaded is a frozen file of this "
+        "tree, that `git status` listed nothing, untracked files included, and that no score "
+        "file existed, so the first score is taken once.",
+        "",
+        "It did not compare the digests inside `router_freeze.json` with the files; the freeze "
+        "test in the default test run does.",
+        "",
+        "Checked by hand, outside the scorer, from `referee/` with `origin/main` at "
+        f"`{ORIGIN_MAIN}` (blob ids only; no content of a held-out file was printed):",
+        "",
+        f"- `git merge-base --is-ancestor {freeze['commit']} origin/main` exits 0, and "
+        f"`git log -1 --format=%H origin/main -- {FREEZE}` prints the freeze commit: it is the "
+        "last commit on main that changed the freeze file.",
+        "- `git rev-parse REV:./PATH` for the seven files the freeze file lists (the two held-out "
+        "files among them), `pins.json` and `router_freeze.json`, with REV the freeze commit, "
+        f"`{head}` and `origin/main`: the three blob ids are equal for each of the nine files.",
         "",
         "Git can show that the router was frozen before it was scored. It does not show that "
         "nobody had read the half: that is a procedure, not a technical barrier. The file is in "
         "an open repository, and the questions, labels and reviews all come from one kind of "
         "agent (`tests/data/narration_eval/PROVENANCE.md` records by count who saw what). The "
-        "first score is a score taken after a freeze, with that limit.",
+        "freeze lists the `narration/` modules the router loads, not all the code it depends on: "
+        "the rule identifiers it accepts as a target come from `referee.rules`, which is not "
+        "listed (nor are `referee.display` and `referee.report`). The first score is a score "
+        "taken after a freeze, with those limits.",
         "",
         "## The first score beside the current score",
         "",
@@ -595,18 +659,14 @@ def render_markdown(report: dict[str, Any]) -> str:
             if report["current_equals_first"]
             else "The current run differs from the first score in at least one figure."
         ),
+        "",
+        expectation(first),
     ]
     for title, text, rows in sections(first, now):
-        lines += [
-            "",
-            f"### {title}",
-            "",
-            text,
-            "",
-            "| Figure | First score | Current |",
-            "| --- | --- | --- |",
-        ]
-        lines += [f"| {label} | {a} | {b} |" for label, a, b in rows]
+        lines += ["", f"### {title}", "", text]
+        if rows:
+            lines += ["", "| Figure | First score | Current |", "| --- | --- | --- |"]
+            lines += [f"| {label} | {a} | {b} |" for label, a, b in rows]
     lines += [
         "",
         f"## Every miss of the first score ({len(first['misses'])})",
@@ -625,8 +685,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         "## The budget of design 24.11",
         "",
-        f"The narration tests (`{budget['command']}`) were timed by hand on Linux when this "
-        "report was written, in separate runs: "
+        f"The narration tests (`{budget['command']}`) were timed by hand on Linux while the "
+        "scorer was built, in separate runs: "
         + ", ".join(f"{seconds:.1f} s" for seconds in budget["linux_seconds"])
         + f". macOS: {budget['macos']}; that figure comes from CI. The budget is about 30 s.",
         "",
@@ -639,14 +699,14 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         "## Known gaps, and what is not verified",
         "",
-        "The known gaps are those of design section 24.13; this report adds none and removes "
-        "none. Those that bear on the figures above:",
+        "The known gaps are those of design section 24.13; this report adds none to the list of "
+        "24.13. Those that bear on the figures above:",
         "",
         "- The held-out half is a procedure, not a technical barrier, and its questions, labels "
         "and reviews come from one kind of agent. The counts are agreement with an "
         "agent-authored taxonomy, not recall on real users' phrasing.",
-        "- Three questions per refusal category and five per intent rest on very little; no "
-        "per-category figure should be read as a rate.",
+        "- Three questions per refusal category and five per intent (the sizes of design 24.10) "
+        "rest on very little; no per-category figure should be read as a rate.",
         "- The router is not injection-proof and its twelve categories are not complete. A "
         "question answered when it should have been refused gets the fixed page, which prints "
         "every finding.",
