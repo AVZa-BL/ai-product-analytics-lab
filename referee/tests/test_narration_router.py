@@ -2,11 +2,11 @@
 
 Three kinds of test. The mechanism (normalising, the unreadable rules, reading a rule ID, matching
 a pattern, precedence) is checked with cases worked out by hand. The vocabulary is checked by
-`data/narration_router_rows.txt`: every word of every pattern of `router.py` (and of `DOMAIN`) has a
-row that is refused or answered only because of that word, and every gap has a row at its width and
-one a word wider, so that taking a word out of the table or moving a gap fails a row. The
-development half is the set the router was fitted to, so its recall is a regression gate and not
-evidence.
+`data/narration_router_rows.txt`: every word of every pattern of `router.py` (and of `DOMAIN` and
+`EFFECT_ANCHOR`) has a row that is refused or answered only because of that word, and every gap has
+a row at its width and one a word wider, so that taking a word out of the table or moving a gap
+fails a row. The development half is the set the router was fitted to, so its recall is a
+regression gate and not evidence.
 """
 
 import hashlib
@@ -24,10 +24,12 @@ import pytest
 from referee.narration.render import CATEGORIES, RULE_IDS, UNREADABLE_REASONS, Understanding
 from referee.narration.router import (
     DOMAIN,
+    EFFECT_ANCHOR,
     INTENT_PATTERNS,
     PHRASES,
     TRIGGERS,
     UNLESS_NAMED,
+    WHEN_NO_EFFECT_WORD,
     WHEN_NO_RULE_NAMED,
     compile_pattern,
     hush,
@@ -220,6 +222,7 @@ def test_a_letter_that_nfkc_composed_from_a_letter_and_a_mark_is_the_plain_lette
             ],
             [],
         ),
+        ("res-001\u02bcs p value", ["^", "#", "p", "value", "$"], ["RES-001"]),  # U+02BC, a letter
         ("is it res-001's?", ["^", "is", "it", "#", ",", "$"], ["RES-001"]),  # a mark after the s
         ("i'd say res-001'd", ["^", "id", "say", "res", "001d", "$"], []),  # only 's is dropped
         ("o'sullivan a's1", ["^", "osullivan", "as1", "$"], []),  # no letter or digit after the s
@@ -474,7 +477,18 @@ def test_the_patterns_that_count_only_when_no_rule_is_named_do_not_when_one_is()
     named = [(c, f"{t} res-001") for c, t in rows_] + [(c, f"{t}, the srm") for c, t in rows_]
     assert [(c, t) for c, t in named if c in route(t).categories] == []
     assert [(c, t) for c, t in rows("not-gated") if c in route(t).categories] == []
-    assert {c for c, _ in rows_} == set(WHEN_NO_RULE_NAMED)
+    assert {c for c, _ in rows_} == set(WHEN_NO_RULE_NAMED) | set(WHEN_NO_EFFECT_WORD)
+
+
+def test_the_patterns_that_count_unless_the_question_holds_a_word_of_the_effect_do_when_it_does():
+    """A rule named, and a word of the effect: "How big is the weekly lift?" (RES-011 is `weekly`)
+    asks for the effect's numbers; "How big is the sample ratio mismatch?" does not."""
+    rows_ = rows("anchored")
+    assert [(c, t) for c, t in rows_ if c not in route(f"{t} res-001").categories] == []
+    anchor = rows("anchor")
+    assert [(w, t) for w, t in anchor if "effect_numbers" not in route(t).categories] == []
+    assert [t for _, t in rows("not-anchor") if "effect_numbers" in route(t).categories] == []
+    assert sorted(w for w, _ in anchor) == sorted(w.rstrip("*") for w in EFFECT_ANCHOR.split())
 
 
 def test_the_patterns_that_count_unless_one_rule_is_named_do_not_when_it_is():
@@ -570,6 +584,8 @@ def test_a_refusal_of_each_category_beats_the_others_in_the_order_of_precedence(
         ("Okay, what did the review find?", U("answer", "summary")),
         ("Fine. What did the review find?", U("answer", "summary")),
         ("Fine?", U("refusal")),
+        # a statement of a few words before it is
+        ("The SRM is fine. Confirm.", U("refusal", None, "RES-001", ("reassurance",))),
         (
             "Which checks did the review run for RES-003, and what should we fix?",
             U("answer", "checked"),

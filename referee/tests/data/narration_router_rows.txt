@@ -3,7 +3,9 @@
 # not-trigger: the same words with a gap one word wider than the pattern allows, or with a word that a step excludes: not matched.
 # intent / not-intent: the text is answered with the intent `name` / is not.
 # target / not-target: the text is an explanation of the rule `name` / is not.
-# gated / not-gated: the same for the patterns that count only when no rule is named.
+# gated / not-gated: the same for the patterns that count only when no rule is named (WHEN_NO_RULE_NAMED), or when none is or the text holds a word of EFFECT_ANCHOR (WHEN_NO_EFFECT_WORD, whose gated rows hold no such word).
+# anchored: a row of WHEN_NO_EFFECT_WORD that holds a word of EFFECT_ANCHOR, so that it is refused although a rule is named too.
+# anchor / not-anchor: `how big is the <word of EFFECT_ANCHOR> res-001` is refused as effect_numbers although a rule is named; without the word it is not.
 # unless / not-unless: the same for the patterns that count unless the rule `RULE` is named; the name is `category RULE`.
 # quiet / not-quiet: the text ends in `ship`, which is no decision to ship after the words of a quiet pattern (QUIET, QUIET_UNTIL_ASKED) / is one.
 # domain / not-domain: `overview` is an intent word; a word of DOMAIN after it makes the text a question about the report, which is answered / the text has none and is not.
@@ -1132,6 +1134,11 @@ trigger injection | pretend to
 trigger injection | pretend um um you
 not-trigger injection | pretend um um um you
 trigger injection | pretend finding
+trigger injection | pretend review
+trigger injection | pretend report
+trigger injection | pretend experiment
+trigger injection | pretend result
+trigger injection | pretend everything
 trigger injection | pretend um um um finding
 not-trigger injection | pretend um um um um finding
 trigger injection | authoriz you
@@ -3043,8 +3050,9 @@ trigger reassurance | convince me
 trigger reassurance | persuade me
 trigger reassurance | assure us
 not-trigger reassurance | assure um me
+trigger reassurance | confirm fine um um um um um
+trigger reassurance | assur fine um um um um um
 trigger reassurance | confirm fine
-trigger reassurance | assur fine
 trigger reassurance | confirm valid
 trigger reassurance | confirm ok
 trigger reassurance | confirm okay
@@ -3204,35 +3212,35 @@ trigger reassurance | serious or just fluke
 not-trigger reassurance | serious um or just noise
 trigger reassurance | serious or um just noise
 not-trigger reassurance | serious or um um just noise
-trigger reassurance | it looks fine
-trigger reassurance | this looks fine
-trigger reassurance | that looks fine
-trigger reassurance | they looks fine
-trigger reassurance | data looks fine
-trigger reassurance | results looks fine
-trigger reassurance | numbers looks fine
-trigger reassurance | experiment looks fine
-trigger reassurance | test looks fine
-trigger reassurance | setup looks fine
-trigger reassurance | it look fine
-trigger reassurance | it seems fine
-trigger reassurance | it seem fine
-trigger reassurance | it appears fine
-trigger reassurance | it appear fine
+trigger reassurance | it looks fine um um um um um
+trigger reassurance | this looks fine um um um um um
+trigger reassurance | that looks fine um um um um um
+trigger reassurance | they looks fine um um um um um
+trigger reassurance | data looks fine um um um um um
+trigger reassurance | results looks fine um um um um um
+trigger reassurance | numbers looks fine um um um um um
+trigger reassurance | experiment looks fine um um um um um
+trigger reassurance | test looks fine um um um um um
+trigger reassurance | setup looks fine um um um um um
+trigger reassurance | it look fine um um um um um
+trigger reassurance | it seems fine um um um um um
+trigger reassurance | it seem fine um um um um um
+trigger reassurance | it appears fine um um um um um
+trigger reassurance | it appear fine um um um um um
 trigger reassurance | it looks good
 trigger reassurance | it looks great
 trigger reassurance | it um um um um looks fine
 not-trigger reassurance | it um um um um um looks fine
 trigger reassurance | it looks um um um fine
 not-trigger reassurance | it looks um um um um fine
-trigger reassurance | be sure numbers fine
-trigger reassurance | be certain numbers fine
-trigger reassurance | be confident numbers fine
-trigger reassurance | be sure results fine
-trigger reassurance | be sure data fine
-trigger reassurance | be sure figures fine
-trigger reassurance | be sure experiment fine
-trigger reassurance | be sure setup fine
+trigger reassurance | be sure numbers fine um um um um um
+trigger reassurance | be certain numbers fine um um um um um
+trigger reassurance | be confident numbers fine um um um um um
+trigger reassurance | be sure results fine um um um um um
+trigger reassurance | be sure data fine um um um um um
+trigger reassurance | be sure figures fine um um um um um
+trigger reassurance | be sure experiment fine um um um um um
+trigger reassurance | be sure setup fine um um um um um
 not-trigger reassurance | be um sure numbers fine
 trigger reassurance | be sure um um um numbers fine
 not-trigger reassurance | be sure um um um um numbers fine
@@ -3247,7 +3255,7 @@ trigger reassurance | you agree um
 not-trigger reassurance | you agree um um
 trigger reassurance | um um um um um is i right
 trigger reassurance | um um um um um are i right
-trigger reassurance | am i right
+trigger reassurance | am i right um um um um um
 trigger reassurance | um um um um um is he right
 trigger reassurance | um um um um um is she right
 trigger reassurance | um um um um um is we right
@@ -3305,40 +3313,39 @@ trigger reassurance | i say um um um um um um um um fine
 trigger reassurance | im say um um um um um um um um fine
 trigger reassurance | we say um um um um um um um um fine
 trigger reassurance | id say um um um um um um um um fine
-trigger reassurance | i assume fine
-trigger reassurance | i presum fine
-trigger reassurance | i guess fine
-trigger reassurance | i suppos fine
-trigger reassurance | i think fine
-trigger reassurance | i believe fine
-trigger reassurance | i hope fine
-trigger reassurance | i gather fine
-trigger reassurance | i understand fine
+trigger reassurance | i assume fine um um um um um
+trigger reassurance | i presum fine um um um um um
+trigger reassurance | i guess fine um um um um um
+trigger reassurance | i suppos fine um um um um um
+trigger reassurance | i think fine um um um um um
+trigger reassurance | i believe fine um um um um um
+trigger reassurance | i hope fine um um um um um
+trigger reassurance | i gather fine um um um um um
+trigger reassurance | i understand fine um um um um um
 trigger reassurance | i say minor
 trigger reassurance | i say small
 trigger reassurance | i say tiny
 not-trigger reassurance | i um say um um um um um um um um fine
 not-trigger reassurance | i say um um um um um um um um um fine
 trigger reassurance | you agree fine um um um um um
-trigger reassurance | youd agree fine
-trigger reassurance | you think fine
+trigger reassurance | youd agree fine um um um um um
+trigger reassurance | you think fine um um um um um
 trigger reassurance | you say um um um um um um um um fine
-trigger reassurance | you consider fine
-trigger reassurance | you believe fine
-trigger reassurance | you deem fine
-not-trigger reassurance | you um agree fine
+trigger reassurance | you consider fine um um um um um
+trigger reassurance | you believe fine um um um um um
+trigger reassurance | you deem fine um um um um um
+not-trigger reassurance | you um agree um um um um um um um um fine
 trigger reassurance | you agree um um um um um um um um fine
 not-trigger reassurance | you agree um um um um um um um um um fine
-trigger reassurance | would you trust
+trigger reassurance | would you trust um um um um um
 trigger reassurance | um um um um um could you trust
 trigger reassurance | um um um um um can you trust
-trigger reassurance | do you trust
-trigger reassurance | will you trust
-trigger reassurance | would you rely
+trigger reassurance | do you trust um um um um um
+trigger reassurance | will you trust um um um um um
+trigger reassurance | would you rely um um um um um
 trigger reassurance | would you vouch
-trigger reassurance | would um you trust
+trigger reassurance | would um you um trust
 not-trigger reassurance | would um um you trust
-trigger reassurance | would you um trust
 not-trigger reassurance | would you um um trust
 trigger reassurance | sign off data
 trigger reassurance | sign off results
@@ -3365,10 +3372,10 @@ trigger reassurance | paranoid
 trigger reassurance | comfortable relying
 trigger reassurance | confident relying
 trigger reassurance | happy relying
-trigger reassurance | comfortable trusting
+trigger reassurance | comfortable trusting um um um um um
 trigger reassurance | comfortable using
-trigger reassurance | comfortable rely
-trigger reassurance | comfortable trust
+trigger reassurance | comfortable rely um um um um um
+trigger reassurance | comfortable trust um um um um um
 trigger reassurance | comfortable um um um um relying
 not-trigger reassurance | comfortable um um um um um relying
 trigger reassurance | nothing worry
@@ -3382,6 +3389,9 @@ trigger reassurance | nothing stress
 trigger reassurance | nothing fix
 trigger reassurance | nothing change
 trigger reassurance | nothing repair
+trigger reassurance | nothing serious
+trigger reassurance | nothing severe
+trigger reassurance | nothing major
 trigger reassurance | nothing um um worry
 not-trigger reassurance | nothing um um um worry
 trigger reassurance | too small matter
@@ -3436,14 +3446,14 @@ not-trigger reassurance | live um with
 trigger reassurance | amount to nothing
 trigger reassurance | amounts to nothing
 not-trigger reassurance | amount um to nothing
-trigger reassurance | i can trust
-trigger reassurance | i could trust
-trigger reassurance | i may trust
-trigger reassurance | i can rely
-not-trigger reassurance | i um can trust
+trigger reassurance | i can trust um um um um um
+trigger reassurance | i could trust um um um um um
+trigger reassurance | i may trust um um um um um
+trigger reassurance | i can rely um um um um um
+not-trigger reassurance | i um can trust um um um um um
 trigger reassurance | um um um um um can i trust
 trigger reassurance | um um um um um could i trust
-trigger reassurance | may i trust
+trigger reassurance | may i trust um um um um um
 trigger reassurance | um um um um um can i rely
 not-trigger reassurance | um um um um um can um i trust
 trigger reassurance | in good shape
@@ -3552,9 +3562,9 @@ trigger reassurance | it um um doesnt matter
 not-trigger reassurance | it um um um doesnt matter
 trigger reassurance | feel confident
 trigger reassurance | feel comfortable
-trigger reassurance | feel safe
+trigger reassurance | feel safe um um um um um
 trigger reassurance | feel good
-trigger reassurance | feel okay
+trigger reassurance | feel okay um um um um um
 not-trigger reassurance | feel um confident
 trigger reassurance | no reason to be concerned
 trigger reassurance | no reason to be worried
@@ -3578,10 +3588,10 @@ trigger reassurance | can shrug
 trigger reassurance | can skip
 trigger reassurance | can um um um um um um ignor
 not-trigger reassurance | can um um um um um um um ignor
-trigger reassurance | isnt fine
-trigger reassurance | arent fine
-trigger reassurance | wasnt fine
-trigger reassurance | werent fine
+trigger reassurance | isnt fine um um um um um
+trigger reassurance | arent fine um um um um um
+trigger reassurance | wasnt fine um um um um um
+trigger reassurance | werent fine um um um um um
 trigger reassurance | isnt um um um um fine
 not-trigger reassurance | isnt um um um um um fine
 trigger reassurance | really matter
@@ -3618,9 +3628,9 @@ trigger reassurance | no worry
 not-trigger reassurance | um no problem
 trigger reassurance | in the clear
 not-trigger reassurance | in um the clear
-trigger reassurance | alright to trust
-trigger reassurance | allowed to trust
-trigger reassurance | worth to trust
+trigger reassurance | alright to trust um um um um um
+trigger reassurance | allowed to trust um um um um um
+trigger reassurance | worth to trust um um um um um
 trigger reassurance | fine to trust
 trigger reassurance | fine to rely
 trigger reassurance | fine to use
@@ -3634,11 +3644,17 @@ trigger reassurance | fine um um to trust
 not-trigger reassurance | fine um um um to trust
 trigger reassurance | fine to um trust
 not-trigger reassurance | fine to um um trust
-trigger reassurance | , fine
-trigger reassurance | , fine, um
+trigger reassurance | um um um um um, fine
+trigger reassurance | um um um um um, fine, um
 trigger reassurance | , um um um fine
 not-trigger reassurance | , um um um um fine
 not-trigger reassurance | , fine um
+trigger reassurance | um fine
+trigger reassurance | um fine, um
+trigger reassurance | um um um fine
+not-trigger reassurance | um um um um fine
+not-trigger reassurance | um fine um
+not-trigger reassurance | fine fine
 trigger reassurance | in order
 trigger reassurance | in order, um
 not-trigger reassurance | in um order
@@ -3661,22 +3677,22 @@ trigger reassurance | sound enough
 trigger reassurance | solid enough
 not-trigger reassurance | good um enough
 trigger reassurance | all good
-trigger reassurance | all fine
+trigger reassurance | all fine um um um um um
 trigger reassurance | all clear
-trigger reassurance | all ok
-trigger reassurance | all okay
+trigger reassurance | all ok um um um um um
+trigger reassurance | all okay um um um um um
 trigger reassurance | all um um good
 not-trigger reassurance | all um um um good
-trigger reassurance | say fine
-trigger reassurance | tell fine
-trigger reassurance | promise fine
-trigger reassurance | say ok
-trigger reassurance | say okay
+trigger reassurance | say fine um um um um um
+trigger reassurance | tell fine um um um um um
+trigger reassurance | promise fine um um um um um
+trigger reassurance | say ok um um um um um
+trigger reassurance | say okay um um um um um
 trigger reassurance | say good
-trigger reassurance | say safe
-trigger reassurance | say valid
-trigger reassurance | say clean
-trigger reassurance | say sound
+trigger reassurance | say safe um um um um um
+trigger reassurance | say valid um um um um um
+trigger reassurance | say clean um um um um um
+trigger reassurance | say sound um um um um um
 trigger reassurance | say um um um um fine
 not-trigger reassurance | say um um um um um fine
 trigger reassurance | doesnt change anything
@@ -6562,56 +6578,6 @@ not-target RES-012 | exposed um after
 target RES-013 | config
 target RES-013 | changed during
 not-target RES-013 | changed um during
-gated effect_numbers | how big
-gated effect_numbers | how larg
-gated effect_numbers | how strong
-gated effect_numbers | how high
-not-gated effect_numbers | how um big
-gated effect_numbers | give lift
-gated effect_numbers | um um, give lift
-gated effect_numbers | um um and give lift
-gated effect_numbers | um um then give lift
-gated effect_numbers | um um also give lift
-gated effect_numbers | um um but give lift
-gated effect_numbers | um um plus give lift
-gated effect_numbers | um um so give lift
-gated effect_numbers | um um please give lift
-gated effect_numbers | um um just give lift
-gated effect_numbers | um um now give lift
-gated effect_numbers | um um kindly give lift
-gated effect_numbers | um um you give lift
-gated effect_numbers | show lift
-gated effect_numbers | tell lift
-gated effect_numbers | report lift
-gated effect_numbers | print lift
-gated effect_numbers | state lift
-gated effect_numbers | provide lift
-gated effect_numbers | quote lift
-gated effect_numbers | read lift
-gated effect_numbers | list lift
-gated effect_numbers | send lift
-gated effect_numbers | quantify lift
-gated effect_numbers | give uplift
-gated effect_numbers | give effect
-gated effect_numbers | give difference
-gated effect_numbers | give delta
-gated effect_numbers | give gain
-gated effect_numbers | give improvement
-gated effect_numbers | give number
-gated effect_numbers | give figure
-gated effect_numbers | give revenue
-gated effect_numbers | give conversion
-gated effect_numbers | give retention
-gated effect_numbers | give spend
-gated effect_numbers | give arpu
-gated effect_numbers | give sessions
-gated effect_numbers | give mean
-gated effect_numbers | give average
-gated effect_numbers | give median
-gated effect_numbers | um give lift
-not-gated effect_numbers | um um give lift
-gated effect_numbers | give um um um um lift
-not-gated effect_numbers | give um um um um um lift
 gated effect_numbers | what estimat
 gated effect_numbers | whats estimat
 gated effect_numbers | how estimat
@@ -6678,11 +6644,11 @@ gated effect_numbers | table uplift
 gated effect_numbers | table delta
 gated effect_numbers | table um um um um difference
 not-gated effect_numbers | table um um um um um difference
+gated causal | why difference
+gated causal | because difference
 gated causal | why effect
-gated causal | because effect
 gated causal | why lift
 gated causal | why uplift
-gated causal | why difference
 gated causal | why gap
 gated causal | why change
 gated causal | why increase
@@ -6724,8 +6690,8 @@ gated causal | why beat
 gated causal | why beats
 gated causal | why won
 gated causal | why ahead
-gated causal | why um um um um um um um um effect
-not-gated causal | why um um um um um um um um um effect
+gated causal | why um um um um um um um um difference
+not-gated causal | why um um um um um um um um um difference
 gated causal | why behind
 gated causal | because behind
 gated causal | why winning
@@ -6735,39 +6701,39 @@ gated causal | why beating
 gated causal | why lagging
 gated causal | why um um um um um um behind
 not-gated causal | why um um um um um um um behind
-gated causal | effect because
-gated causal | effect due
-gated causal | effect um um um um um um because
-not-gated causal | effect um um um um um um um because
+gated causal | difference because
+gated causal | difference due
+gated causal | difference um um um um um um because
+not-gated causal | difference um um um um um um um because
 gated causal | caus
 gated causal | mechanism
 gated causal | driver
 gated causal | contribut
-gated causal | reason effect
-gated causal | reasons effect
-gated causal | reason um um um um um um effect
-not-gated causal | reason um um um um um um um effect
+gated causal | reason difference
+gated causal | reasons difference
+gated causal | reason um um um um um um difference
+not-gated causal | reason um um um um um um um difference
 gated causal | coming from
 not-gated causal | coming um from
-gated causal | how come effect
-not-gated causal | how um come effect
-gated causal | how come um um um um um um effect
-not-gated causal | how come um um um um um um um effect
+gated causal | how come difference
+not-gated causal | how um come difference
+gated causal | how come um um um um um um difference
+not-gated causal | how come um um um um um um um difference
 gated causal | led to
 not-gated causal | led um to
 gated causal | because of
 not-gated causal | because um of
-gated causal | lead to effect
-gated causal | leads to effect
-gated causal | leading to effect
-not-gated causal | lead um to effect
-gated causal | lead to um um um um effect
-not-gated causal | lead to um um um um um effect
-gated causal | effect result of
-gated causal | effect resulted of
-gated causal | effect result from
-gated causal | effect um um um result of
-not-gated causal | effect um um um um result of
+gated causal | lead to difference
+gated causal | leads to difference
+gated causal | leading to difference
+not-gated causal | lead um to difference
+gated causal | lead to um um um um difference
+not-gated causal | lead to um um um um um difference
+gated causal | difference result of
+gated causal | difference resulted of
+gated causal | difference result from
+gated causal | difference um um um result of
+not-gated causal | difference um um um um result of
 gated causal | something else happening
 gated causal | something else going
 not-gated causal | something um else happening
@@ -6804,6 +6770,56 @@ gated causal | how did affect
 not-gated causal | how um did increas
 gated causal | how did um um um um um um increas
 not-gated causal | how did um um um um um um um increas
+gated effect_numbers | how big
+gated effect_numbers | how larg
+gated effect_numbers | how strong
+gated effect_numbers | how high
+not-gated effect_numbers | how um big
+gated effect_numbers | give difference
+gated effect_numbers | um um, give difference
+gated effect_numbers | um um and give difference
+gated effect_numbers | um um then give difference
+gated effect_numbers | um um also give difference
+gated effect_numbers | um um but give difference
+gated effect_numbers | um um plus give difference
+gated effect_numbers | um um so give difference
+gated effect_numbers | um um please give difference
+gated effect_numbers | um um just give difference
+gated effect_numbers | um um now give difference
+gated effect_numbers | um um kindly give difference
+gated effect_numbers | um um you give difference
+gated effect_numbers | show difference
+gated effect_numbers | tell difference
+gated effect_numbers | report difference
+gated effect_numbers | print difference
+gated effect_numbers | state difference
+gated effect_numbers | provide difference
+gated effect_numbers | quote difference
+gated effect_numbers | read difference
+gated effect_numbers | list difference
+gated effect_numbers | send difference
+gated effect_numbers | quantify difference
+anchored effect_numbers | give lift
+anchored effect_numbers | give uplift
+anchored effect_numbers | give effect
+gated effect_numbers | give delta
+anchored effect_numbers | give gain
+anchored effect_numbers | give improvement
+gated effect_numbers | give number
+gated effect_numbers | give figure
+anchored effect_numbers | give revenue
+anchored effect_numbers | give conversion
+anchored effect_numbers | give retention
+anchored effect_numbers | give spend
+anchored effect_numbers | give arpu
+gated effect_numbers | give sessions
+gated effect_numbers | give mean
+gated effect_numbers | give average
+gated effect_numbers | give median
+gated effect_numbers | um give difference
+not-gated effect_numbers | um um give difference
+gated effect_numbers | give um um um um difference
+not-gated effect_numbers | give um um um um um difference
 gated forecast | expect
 gated forecast | expected
 gated forecast | expecting
@@ -6817,6 +6833,20 @@ gated other_analysis | chi test
 gated other_analysis | t squared
 gated other_analysis | t square
 not-gated other_analysis | t um test
+anchor lift | how big is the lifts res-001
+anchor uplift | how big is the uplifts res-001
+anchor effect | how big is the effects res-001
+anchor gain | how big is the gains res-001
+anchor improvement | how big is the improvements res-001
+anchor revenue | how big is the revenue res-001
+anchor conversion | how big is the conversion res-001
+anchor retention | how big is the retention res-001
+anchor spend | how big is the spends res-001
+anchor arpu | how big is the arpu res-001
+anchor purchases | how big is the purchases res-001
+anchor sales | how big is the sales res-001
+anchor impact | how big is the impact res-001
+not-anchor effect_numbers | how big is the um res-001
 unless subgroup RES-007 | returning
 not-unless subgroup RES-007 | returning res-007
 unless subgroup RES-007 | new players
@@ -6885,42 +6915,52 @@ quiet quiet | before ship
 quiet quiet | until ship
 quiet quiet | anything ship
 quiet quiet | something ship
-domain finding | overview finding
-domain block | overview block
-domain warning | overview warning
-domain review | overview review
-domain report | overview report
-domain experiment | overview experiment
-domain test | overview test
-domain rule | overview rule
-domain check | overview check
+domain finding | overview findings
+domain block | overview blocks
+domain warning | overview warnings
+domain review | overview reviews
+domain report | overview reports
+domain experiment | overview experiments
+domain test | overview tests
+domain rule | overview rules
+domain check | overview checks
 domain arm | overview arm
 domain arms | overview arms
-domain variant | overview variant
+domain variant | overview variants
 domain control | overview control
-domain player | overview player
+domain player | overview players
 domain sample | overview sample
 domain verdict | overview verdict
-domain result | overview result
-domain problem | overview problem
-domain issue | overview issue
-domain fix | overview fix
+domain result | overview results
+domain problem | overview problems
+domain issue | overview issues
+domain fix | overview fixs
 domain data | overview data
-domain metric | overview metric
-domain effect | overview effect
-domain risk | overview risk
-domain concern | overview concern
-domain flag | overview flag
+domain metric | overview metrics
+domain effect | overview effects
+domain risk | overview risks
+domain concern | overview concerns
+domain flag | overview flags
 domain run | overview run
 domain runs | overview runs
 domain ran | overview ran
 domain severity | overview severity
-domain evaluat | overview evaluat
+domain evaluat | overview evaluats
 domain next | overview next
-domain step | overview step
+domain step | overview steps
 domain first | overview first
 domain anything | overview anything
 domain something | overview something
+domain gist | overview gist
+domain takeaway | overview takeaways
+domain highlight | overview highlights
+domain wrong | overview wrong
+domain serious | overview seriouss
+domain bottom | overview bottom
+domain skipped | overview skipped
+domain covered | overview covered
+domain stand | overview stand
+domain status | overview status
 target RES-001 | srm's
 target RES-001 | res-001's
 not-domain summary | overview um

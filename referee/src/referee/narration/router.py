@@ -22,12 +22,12 @@ prints that and never the question. Four steps, all linear in the length of the 
    are data. The words of a command are matched only after the start of a clause (`START`), so
    that "Skip the warnings." is steering and "Can we skip the warnings?" is not; a category that
    is about a finding counts only where the question names no rule, or not that one
-   (`WHEN_NO_RULE_NAMED`, `UNLESS_NAMED`): the numbers behind a finding are its explanation. Where a
-   clause only says what must hold first ("fix it before we ship"), what the review did ("did you
-   check whether it ran long enough") or why a rule says so ("why does RES-003 say it ran too
-   short"), the words of `SOFT` in the rest of it are not matched (`QUIET`, `hush`; after "before"
-   or "anything" a `whether` or `say` ends the stretch too, `QUIET_UNTIL_ASKED`); injection is
-   never hushed.
+   (`WHEN_NO_RULE_NAMED`, `UNLESS_NAMED`): the numbers behind a finding are its explanation, unless
+   the question also holds a word of the effect (`WHEN_NO_EFFECT_WORD`). Where a clause only says
+   what must hold first ("fix it before we ship"), what the review did ("did you check whether it
+   ran long enough") or why a rule says so ("why does RES-003 say it ran too short"), the words
+   of `SOFT` in the rest of it are not matched (`QUIET`, `hush`; after "before" or "anything" a
+   `whether` or `say` ends the stretch too, `QUIET_UNTIL_ASKED`); injection is never hushed.
 4. Decide. A refusal category beats an intent, and the categories matched are listed in the order
    of `render.CATEGORIES` (the order of precedence); then the intents (`checked`, `next_steps`,
    an explanation of a rule named, `summary`), but only for a question that names a rule or holds
@@ -68,6 +68,9 @@ LOOKALIKES = frozenset({"CYRILLIC", "GREEK", "ARMENIAN", "COPTIC", "CHEROKEE"})
 # Letters that show nothing and are in no category C or M: the Hangul choseong and jungseong
 # fillers and the braille blank. NFKC maps the fillers U+3164 and U+FFA0 to U+1160.
 INVISIBLE = "\u115f\u1160\u2800"
+# An apostrophe joins its neighbours in a word. U+02BC (modifier letter apostrophe, typed by some
+# phone keyboards) is a letter of category Lm, so it is listed or it would stay inside the word.
+APOSTROPHES = "'\u2019\u02bc"
 # A word before 's that is a contraction of "is" or "us", not a possessive: it keeps its s.
 CLITIC_STEMS = frozenset("what let that there here who how where when why which it he she".split())
 
@@ -616,7 +619,8 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         ("overreact* overthink* paranoid",),
         (4, "comfortable confident happy", "relying trusting using rely trust"),
         (2, "nothing",
-         "worry wrong broken concern* alarming sleep fret* stress* fix change repair"),
+         "worry wrong broken concern* alarming sleep fret* stress* fix change repair serious "
+         "severe major"),
         (0, "too", "small tiny minor little mild slight trivial", 3, "matter ignore worry"),
         (0, "no", "impact effect bearing influence", "on", 1,
          "validity results conclusion* data verdict quality"),
@@ -656,7 +660,10 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "in", "the", "clear"),
         (2, QUALITY + " alright allowed worth", "to", 1,
          "trust* rely use ignor* disregard* dismiss* overlook* skip* proceed"),
+        # a word of quality ends a clause that begins after a comma, or with a statement of up to
+        # three words: "The SRM is fine. Confirm." asks for agreement, "Okay, ..." does not
         (",", 3, QUALITY, 0, ", $"),
+        ("^", "!" + QUALITY, 2, QUALITY, 0, ", $"),
         (0, "in", "order", 0, ", $"),
         (1, "to would could", "doubt"),
         (0, "pass", "muster"),
@@ -1099,7 +1106,8 @@ INTENT_PATTERNS: dict[str, tuple[Pattern, ...]] = {
 DOMAIN = (
     FINDINGS + " review* report* experiment* test* rule* check* arm arms variant* control player* "
     "sample verdict result* problem* issue* fix* data metric* effect* risk* concern* flag* run "
-    "runs ran severity evaluat* next step* first anything something"
+    "runs ran severity evaluat* next step* first anything something gist takeaway* highlight* "
+    "wrong serious* bottom skipped covered stand status"
 )
 
 # Phrases that point at one of the nine results rules, from their titles (24.8).
@@ -1136,10 +1144,6 @@ PHRASES: dict[str, tuple[Pattern, ...]] = {
 # explanation and not `effect_numbers` (24.8).
 WHEN_NO_RULE_NAMED: dict[str, tuple[Pattern, ...]] = {
     "effect_numbers": (
-        (0, "how", "big* larg* strong* high*"),
-        (START_YOU, 1, "give show tell report print state provide quote read list send quantify", 4,
-         "lift* uplift* effect* difference* delta* gain* improvement* number* figure* revenue "
-         "conversion retention spend* arpu sessions mean " + AVERAGES),
         (5, "what whats how give show tell report print list state provide need want get see know "
             "quote", "estimat*"),
         (0, "point", "estimat*"),
@@ -1170,6 +1174,23 @@ WHEN_NO_RULE_NAMED: dict[str, tuple[Pattern, ...]] = {
         (2, "influenc* impact*", "result* metric* numbers outcome* lift effect difference"),
         (0, "resulted resulting stem stems stemmed originat* aris* arose", "from"),
         (0, "how", "did does do", 6, "increas* improv* rais* boost* reduc* decreas* affect*"),
+    ),
+}
+
+# These patterns count when the question names no rule, or holds a word of EFFECT_ANCHOR: "How big
+# is the weekly lift?" asks for the effect's numbers whatever phrase of a rule it uses ("weekly"
+# is RES-011), and "Give me the numbers behind RES-001" and "How big is the sample ratio
+# mismatch?" hold no such word and are explanations. A word of the effect only adds refusals.
+EFFECT_ANCHOR = (
+    "lift* uplift* effect* gain* improvement* revenue conversion retention spend* arpu purchases "
+    "sales impact"
+)
+WHEN_NO_EFFECT_WORD: dict[str, tuple[Pattern, ...]] = {
+    "effect_numbers": (
+        (0, "how", "big* larg* strong* high*"),
+        (START_YOU, 1, "give show tell report print state provide quote read list send quantify", 4,
+         "lift* uplift* effect* difference* delta* gain* improvement* number* figure* revenue "
+         "conversion retention spend* arpu sessions mean " + AVERAGES),
     ),
     "forecast": (("expect expected expecting expects",),),
     "other_analysis": (
@@ -1246,9 +1267,11 @@ _TRIGGERS = _compile(TRIGGERS)
 _INTENT_PATTERNS = _compile(INTENT_PATTERNS)
 _PHRASES = _compile(PHRASES)
 _WHEN_NO_RULE_NAMED = _compile(WHEN_NO_RULE_NAMED)
+_WHEN_NO_EFFECT_WORD = _compile(WHEN_NO_EFFECT_WORD)
 _UNLESS_NAMED = {category: _compile(rules) for category, rules in UNLESS_NAMED.items()}
 _QUIET = tuple(compile_pattern(pattern) for pattern in QUIET)
 _QUIET_UNTIL_ASKED = tuple(compile_pattern(pattern) for pattern in QUIET_UNTIL_ASKED)
+_EFFECT_ANCHOR = compile_pattern((EFFECT_ANCHOR,))
 _SOFT = compile_pattern((SOFT,))[0]
 _DOMAIN = compile_pattern((DOMAIN,))
 _STRETCH_ENDS = compile_pattern((STRETCH_ENDS,))[0]
@@ -1305,7 +1328,7 @@ def fold(text: str) -> str:
 def _mixes_scripts(text: str) -> bool:
     scripts: set[str] = set()
     for char in text + " ":
-        if char in "'\u2019":  # `read` removes it and joins the letters on either side
+        if char in APOSTROPHES:  # `read` removes it and joins the letters on either side
             continue
         if char.isalpha():
             scripts.add(unicodedata.name(char, "?").split(" ", 1)[0])
@@ -1360,7 +1383,7 @@ def read(text: str) -> tuple[list[str], list[str]]:
         if possessive:  # the s of "RES-001's" is dropped
             possessive = False
             continue
-        if char in "'\u2019":  # joins its neighbours
+        if char in APOSTROPHES:  # joins its neighbours
             possessive = (
                 padded[i + 1 : i + 2] == "s"
                 and not padded[i + 2 : i + 3].isalnum()
@@ -1433,11 +1456,14 @@ def hush(words: list[str]) -> list[str]:
 def _categories(all_words: list[str], named: set[str]) -> tuple[str, ...]:
     found = []
     hushed = hush(all_words)
+    effect = matches(all_words, _EFFECT_ANCHOR)
     for category in CATEGORIES:
         words = all_words if category == "injection" else hushed
         patterns = _TRIGGERS[category]
         if not named:
             patterns += _WHEN_NO_RULE_NAMED.get(category, ())
+        if not named or effect:
+            patterns += _WHEN_NO_EFFECT_WORD.get(category, ())
         for rule, extra in _UNLESS_NAMED.get(category, {}).items():
             if rule not in named:
                 patterns += extra
