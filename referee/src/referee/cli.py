@@ -8,8 +8,9 @@ exception exits with 1, which a pipeline would read as "the design has a blocker
 never changes the exit status; the results verdict `caution` exits 0 and says so in the report.
 
 `narrate` is not a review and not a gate (design section 24.9): 0 when a page was printed, an
-answer or a refusal, whatever the verdict of the report, 2 when the report cannot be read or
-checked or the arguments are unusable, 3 when Referee itself fails.
+answer or a refusal, whatever the verdict of the report, 1 when the output of `--llm-command`
+failed a check and the narration was withheld, 2 when the report cannot be read or checked or the
+arguments are unusable, 3 when Referee itself fails, 4 when the command of `--llm-command` failed.
 """
 
 from __future__ import annotations
@@ -128,8 +129,9 @@ def build_parser() -> argparse.ArgumentParser:
             "Print a page about a results report (review-results --format json): a summary, or "
             "the answer to one kind of question, or a refusal. Not a decision and not a gate. "
             "Exit status: 0 a page was printed (an answer or a refusal, whatever the verdict), "
+            "1 the output of --llm-command failed a check and the narration was withheld, "
             "2 the report cannot be read or checked or the arguments are unusable, "
-            "3 internal error."
+            "3 internal error, 4 the command of --llm-command failed."
         ),
     )
     narrate.add_argument("report", help="path to the report (JSON)")
@@ -137,6 +139,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--question",
         metavar="TEXT",
         help="the question (when it is left out, the page is a summary of the review)",
+    )
+    narrate.add_argument(
+        "--llm-command",
+        metavar="CMD",
+        help=(
+            "a command line that chooses what leads on the page of a summary, the next steps or "
+            "one finding: it gets a request on standard input and returns identifiers, never "
+            "words (docs/narration.md). Counts, p values, rates and allocations are sent to "
+            "whatever it contacts. Without it no process is started"
+        ),
+    )
+    narrate.add_argument(
+        "--show-request",
+        action="store_true",
+        help="print the request --llm-command would receive and start nothing",
     )
     return parser
 
@@ -297,7 +314,7 @@ def _monitor_results(args: argparse.Namespace, spec: ExperimentSpec) -> int:
 def _narrate(args: argparse.Namespace) -> int:
     from referee.narration.command import narrate  # not loaded by the other commands
 
-    return narrate(args.report, args.question)
+    return narrate(args.report, args.question, args.llm_command, args.show_request)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
