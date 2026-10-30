@@ -243,17 +243,18 @@ def test_a_command_without_a_report_exits_2(capsys: pytest.CaptureFixture[str]) 
     assert "the following arguments are required: report" in err
 
 
+@pytest.mark.parametrize(("total", "more"), [(1_500, "500"), (2_500, "1,500")])
 def test_the_problems_of_a_report_are_listed_to_a_thousand_and_counted_in_full(
-    capsys: pytest.CaptureFixture[str], tmp_path: Path, raw_spec: dict
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, raw_spec: dict, total: int, more: str
 ) -> None:
     rep = report("golden", raw_spec)
-    rep["history"] = [float("nan")] * 1_500
+    rep["history"] = [float("nan")] * total
 
     code, out, err = run(capsys, "narrate", save(tmp_path, json.dumps(rep)))
 
     lines = err.splitlines()
     assert (code, out) == (2, "")
-    assert lines[0].endswith("(1,500 problems):") and lines[-1] == "  ... and 500 more"
+    assert lines[0].endswith(f"({total:,} problems):") and lines[-1] == f"  ... and {more} more"
     assert len(lines) == 1_002 and all(line.startswith("  - history[") for line in lines[1:-1])
 
 
@@ -414,82 +415,109 @@ def test_a_write_that_fails_in_a_real_process_exits_3_and_does_not_fail_again_at
 
 # --- Guards (24.11) --------------------------------------------------------------------
 
-NETWORK = {
-    "socket",
-    "ssl",
-    "http",
-    "urllib",
-    "requests",
-    "httpx",
-    "aiohttp",
-    "websocket",
-    "websockets",
-    "ftplib",
-    "smtplib",
-    "xmlrpc",
+# What the modules of the layer import today, by the first part of the name. A module that needs
+# another adds it here, and the pull request shows it; N7b adds narrator.py's to EXTRA.
+ALLOWED = {
+    "__future__",
+    "collections",
+    "dataclasses",
+    "functools",
+    "json",
+    "math",
+    "os",
+    "re",
+    "referee",
+    "stat",
+    "sys",
+    "typing",
+    "unicodedata",
 }
-PROVIDER_SDKS = ("anthropic", "openai", "google", "cohere", "mistral", "boto", "litellm", "azure")
+EXTRA = {"narrator.py": {"subprocess"}}  # the one module that starts a process
+DYNAMIC = {"__import__", "import_module"}  # these reach any module by a name made at run time
 
 
-def imports(source: str) -> set[str]:
-    """The modules a source imports, by dotted name (`from a import b` gives `a` and `a.b`), and
+def sources(root: Path) -> dict[str, str]:
+    """The text of every module under `root`, subdirectories included, by path."""
+    return {
+        path.relative_to(root).as_posix(): path.read_text(encoding="utf-8")
+        for path in sorted(root.rglob("*.py"))
+    }
+
+
+def violations(name: str, source: str) -> set[str]:
+    """What the module `name` imports that it may not, by the first part of the name, and
     `<dynamic>` for a use of `__import__` or `import_module`. A relative import stays in the
     package and is not listed."""
     found: set[str] = set()
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
-            found |= {alias.name for alias in node.names}
+            found |= {alias.name.split(".")[0] for alias in node.names}
         elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-            found |= {node.module, *(f"{node.module}.{alias.name}" for alias in node.names)}
-        elif isinstance(node, ast.Name) and node.id in ("__import__", "import_module"):
+            found.add(node.module.split(".")[0])
+        elif isinstance(node, ast.Name) and node.id in DYNAMIC:
             found.add("<dynamic>")
-        elif isinstance(node, ast.Attribute) and node.attr == "import_module":
+        elif isinstance(node, ast.Attribute) and node.attr in DYNAMIC:
             found.add("<dynamic>")
-    return found
+    return found - ALLOWED - EXTRA.get(name, set())
 
 
-def forbidden(names: set[str]) -> set[str]:
-    """Of the names `imports` gives: a network module, a provider's SDK, a dynamic import."""
-    return {
-        name
-        for name in names
-        if name.split(".")[0] in NETWORK
-        or name == "<dynamic>"
-        or any(sdk in name.lower() for sdk in PROVIDER_SDKS)
-    }
-
-
-def test_the_scan_of_imports_sees_every_form_of_import_and_names_what_is_forbidden() -> None:
-    source = (
-        "import os.path\nimport http.client as c\nfrom urllib import request\nfrom . import x\n"
-        "from .render import y\nimport json\nfrom google.cloud import storage\nimport openai\n"
-        "\ndef f():\n    import socket\n    __import__('ssl')\n"
-        "    importlib.import_module('ftplib')\n"
+def test_no_module_of_the_layer_imports_more_than_the_list_allows() -> None:
+    modules = sources(NARRATION)
+    assert {"facts.py", "render.py", "router.py", "refusals.py", "output.py", "command.py"} <= set(
+        modules
     )
+    assert {n: found for n, text in modules.items() if (found := violations(n, text))} == {}
 
-    assert imports(source) >= {"os.path", "json", "urllib.request", "google.cloud.storage"}
-    assert forbidden(imports(source)) == {
-        "http.client",
-        "urllib",
-        "urllib.request",
-        "google.cloud",
-        "google.cloud.storage",
-        "openai",
+
+@pytest.mark.parametrize(
+    ("name", "source", "refused"),
+    [
+        ("a.py", "import socket", {"socket"}),
+        ("a.py", "import urllib3", {"urllib3"}),
+        ("a.py", "import asyncio", {"asyncio"}),
+        ("a.py", "from http import client", {"http"}),
+        ("a.py", "def f():\n    import ssl", {"ssl"}),
+        ("a.py", "import subprocess", {"subprocess"}),
+        ("sub/narrator.py", "import subprocess", {"subprocess"}),
+        ("a.py", "from importlib import import_module as im\nim('socket')", {"importlib"}),
+        ("a.py", "__import__('socket')", {"<dynamic>"}),
+        ("a.py", "def f(import_module):\n    import_module('socket')", {"<dynamic>"}),
+        ("a.py", "def f(m):\n    m.import_module('socket')", {"<dynamic>"}),
+        ("a.py", "def f(b):\n    b.__import__('socket')", {"<dynamic>"}),
+        ("narrator.py", "import subprocess", set()),
+        ("a.py", "import os.path\nfrom collections.abc import Mapping\nfrom . import b", set()),
+        ("a.py", "from .b import c\nfrom referee.display import for_line", set()),
+    ],
+    ids=[
         "socket",
-        "<dynamic>",
-    }
+        "urllib3",
+        "asyncio",
+        "from http import",
+        "inside a function",
+        "subprocess in another module",
+        "subprocess in a subdirectory",
+        "importlib",
+        "__import__ as a name",
+        "import_module as a name",
+        "import_module as an attribute",
+        "__import__ as an attribute",
+        "subprocess in narrator.py",
+        "what the layer uses",
+        "relative and referee imports",
+    ],
+)
+def test_the_scan_of_imports_refuses_what_is_not_on_the_list(
+    name: str, source: str, refused: set[str]
+) -> None:
+    assert violations(name, source) == refused
 
 
-def test_no_module_of_the_layer_reaches_a_network_or_starts_a_process() -> None:
-    modules = sorted(NARRATION.glob("*.py"))
-    assert {"facts.py", "render.py", "router.py", "refusals.py", "output.py", "command.py"} <= {
-        module.name for module in modules
-    }
-    for module in modules:
-        names = imports(module.read_text(encoding="utf-8"))
-        assert forbidden(names) == set(), module.name
-        if module.name != "narrator.py":  # the one module that N7b allows to start a process
-            assert "subprocess" not in {name.split(".")[0] for name in names}, module.name
+def test_the_scan_reads_the_modules_in_subdirectories(tmp_path: Path) -> None:
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "a.py").write_text("import socket\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text("import json\n", encoding="utf-8")
+
+    assert set(sources(tmp_path)) == {"b.py", "sub/a.py"}
 
 
 def test_importing_the_cli_does_not_import_the_narration_layer() -> None:
