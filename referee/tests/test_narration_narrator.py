@@ -57,7 +57,7 @@ def without_waitid(monkeypatch: pytest.MonkeyPatch, how: str) -> None:
     if how == "missing":
         monkeypatch.delattr(os, "waitid", raising=False)
     elif how == "fails":
-        monkeypatch.setattr(os, "waitid", fails)
+        monkeypatch.setattr(os, "waitid", fails, raising=False)  # macOS has none
 
 
 WAITID = pytest.mark.parametrize("how", ["waitid", "missing", "fails"])
