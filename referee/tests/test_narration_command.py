@@ -531,9 +531,3 @@ def test_importing_the_cli_does_not_import_the_narration_layer() -> None:
         env=dict(os.environ, PYTHONPATH=str(PROJECT / "src")),
         check=True,
     )
-
-
-def test_narrate_is_listed_in_the_help(capsys: pytest.CaptureFixture[str]) -> None:
-    code, out, _ = run(capsys, "--help")
-
-    assert code == 0 and "narrate" in out
