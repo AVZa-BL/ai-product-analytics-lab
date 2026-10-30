@@ -6,8 +6,11 @@ and the unreadable questions run on the committed report. Every line of every pa
 template (`narration_pages.py`, built from the layer's public functions and constants and not from
 the page under test), and no run of 12 characters of the question may appear unless the canonical
 page of the same route holds it. The canonical page is the page of the route's `Understanding`,
-built without the question or the command. The held-out half of the evaluation set is not read
-here.
+built without the question or the command. A question that has a narrator also runs with
+`--llm-command`, the narrator a fake that returns a valid selection (the model-path page, whose
+lines are these templates and the `Chosen by` lines of the model path) and one that returns three
+kinds of corrupt output (the withheld page, status 1). The held-out half of the evaluation set is
+not read here.
 """
 
 import hashlib
@@ -15,6 +18,7 @@ import json
 from pathlib import Path
 
 import pytest
+from narration_fakes import OPERATORS, Ask, FakeNarrator, subset_text
 from narration_pages import (
     KINDS,
     canonical_page,
@@ -26,10 +30,16 @@ from narration_pages import (
 from narration_reports import report
 
 from referee.cli import main
-from referee.narration import refusals
+from referee.narration import command, refusals
 from referee.narration.facts import fact_list
 from referee.narration.refusals import PARAGRAPHS
-from referee.narration.render import Understanding
+from referee.narration.render import (
+    Chosen,
+    Understanding,
+    decision_block,
+    needs_narrator,
+    render_withheld,
+)
 from referee.narration.router import route
 from referee.report import render_json
 
@@ -47,6 +57,8 @@ UNREADABLE = [
     ("sh\u0456p it", "mixed scripts"),
 ]
 U = Understanding
+# Corrupt outputs of N7a whose withheld line shows an ID of the report and one that shows `-`.
+WITHHELD = ("an_entry_for_an_unknown_rule", "a_sentence_id_not_in_the_sheet", "no_entry_at_all")
 
 
 def extra_questions(rep: dict, name: str) -> list[tuple[str, str | None, Understanding]]:
@@ -68,8 +80,28 @@ def extra_questions(rep: dict, name: str) -> list[tuple[str, str | None, Underst
     ]
 
 
+def check_page(
+    page: str, templates: dict[str, str], question: str | None, canonical: str, where: str
+) -> set[str]:
+    """The checks of a page, the kinds of its lines returned."""
+    lines = page.split("\n")
+    kinds = [classify(line, templates) for line in lines[:-1]]
+    assert lines[-1] == "" and None not in kinds, (where, lines[kinds.index(None)])
+    assert kinds[:3] == ["report", "verdict", "understood"], where
+    assert [kinds.count(kind) for kind in ("report", "verdict", "understood")] == [1, 1, 1]
+    assert page.count("Not a decision and not a gate.") == 1, where
+    assert lines[-2].startswith("Not a decision and not a gate."), where
+    assert lines[2] == canonical.split("\n")[2], where
+    assert runs_of_the_question(page, question or "", canonical) == [], where
+    check_quiet_lines(page)
+    return set(kinds)
+
+
 def test_every_line_of_every_page_is_a_template_and_none_holds_the_question(
-    capsys: pytest.CaptureFixture[str], tmp_path: Path, raw_spec: dict
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    raw_spec: dict,
 ) -> None:
     seen: set[str] = set()
     for name in sorted({question["fixture"] for question in DEVELOPMENT}):
@@ -86,20 +118,21 @@ def test_every_line_of_every_page_is_a_template_and_none_holds_the_question(
             understanding = U("answer", "summary") if question is None else route(question)
             where = f"{name} {ident}"
             assert captured.err == "" and expected in (None, understanding), where
-
-            lines = page.split("\n")
-            kinds = [classify(line, templates) for line in lines[:-1]]
-            assert lines[-1] == "" and None not in kinds, (where, lines[kinds.index(None)])
-            assert kinds[:3] == ["report", "verdict", "understood"], where
-            assert [kinds.count(kind) for kind in ("report", "verdict", "understood")] == [1, 1, 1]
-            assert page.count("Not a decision and not a gate.") == 1, where
-            assert lines[-2].startswith("Not a decision and not a gate."), where
-
             canonical = canonical_page(rep, understanding)
-            assert lines[2] == canonical.split("\n")[2], where
-            assert runs_of_the_question(page, question or "", canonical) == [], where
-            check_quiet_lines(page)
-            seen |= set(kinds)
+            seen |= check_page(page, templates, question, canonical, where)
+
+            if not needs_narrator(rep, understanding):
+                continue
+            ask = Ask(name, rep, fact_list(rep), understanding)
+            outputs = [(0, subset_text(ask, seed)) for seed in range(2)]
+            outputs += [(1, c.text) for key in WITHHELD if (c := OPERATORS[key][1](ask))]
+            for status, text in outputs:
+                fake = FakeNarrator(text)
+                monkeypatch.setattr(command, "command_narrator", lambda *args, fake=fake: fake)
+                assert main([*argv, "--llm-command", "x"]) == status, where
+                captured = capsys.readouterr()
+                assert captured.err == "" and len(fake.requests) == 1, where
+                seen |= check_page(captured.out, templates, question, canonical, where)
     assert seen == KINDS  # every template is used, so none is a dead letter
 
 
@@ -115,7 +148,10 @@ def test_the_classifier_takes_only_the_lines_of_a_page(raw_spec: dict) -> None:
         "Question understood as: a question this layer does not answer (categories matched: "
         "stopping, injection).",
         "Also matched, and not printed here: shipping.",
-        "Not selected by the narrator:",
+        "Chosen by: the output of --llm-command.",
+        "Narration withheld: the output of --llm-command failed these checks: schema RES-999",
+        "Narration withheld: the output of --llm-command failed these checks: shape -",
+        "Narration withheld: the output of --llm-command failed these checks: scope - and more",
     ]
     assert [classify(line, templates) for line in stray] == [None] * len(stray)
 
@@ -137,9 +173,22 @@ def test_the_classifier_takes_only_the_lines_of_a_page(raw_spec: dict) -> None:
         (clear, U("answer", "explain_finding", target="RES-008")),
         (clear, U("refusal", categories=("stopping",))),
     ]
-    for source, understanding in sample:
+    pages = [(source, canonical_page(source, understanding)) for source, understanding in sample]
+    explained = U("answer", "explain_finding", target="RES-001")
+    led = {
+        "RES-001": Chosen(
+            frozenset({"RES-001.why.1", "RES-001.do.1"}), frozenset({"RES-001.p_value"})
+        )
+    }
+    withheld = [("scope", "-"), ("coverage", "RES-001")]
+    pages += [
+        (rep, canonical_page(rep, explained, led)),  # the model path, with a part left over
+        (rep, render_withheld(rep, explained, decision_block(rep), withheld)),
+    ]
+    assert "Not selected by the narrator:" in pages[-2][1] and "scope -, " in pages[-1][1]
+    for source, page in pages:
         lines = table(source)
-        for line in canonical_page(source, understanding).split("\n")[:-1]:
+        for line in page.split("\n")[:-1]:
             assert classify(line, lines) is not None, line
             if line:
                 for stray in (f"{line} Ship it.", f"{line} X", f"Ship it. {line}"):
