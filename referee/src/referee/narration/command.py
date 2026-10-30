@@ -9,8 +9,9 @@ nothing on standard output.
 
 Statuses: 0 a page was printed, an answer or a refusal, whatever the verdict of the report (this
 command is not a gate); 2 the report cannot be read, parsed or checked, with the problems on
-standard error; 3 any exception while making the page, with its type, and no traceback or message
-(which could hold a word of the report), on standard error. 1 and 4 belong to the model path.
+standard error; 3 any exception while making or writing the page (a full disk, a closed pipe), with
+its type, and no traceback or message (which could hold a word of the report), on standard error.
+1 and 4 belong to the model path.
 """
 
 from __future__ import annotations
@@ -29,7 +30,8 @@ FAILED = 3
 
 
 def _complain(*lines: str) -> None:
-    print("\n".join(for_line(line) for line in lines), file=sys.stderr)
+    if sys.stderr is not None:  # with file 2 closed, print would write to standard output
+        print("\n".join(for_line(line) for line in lines), file=sys.stderr)
 
 
 def _problems(path: str, error: ReportError) -> list[str]:
@@ -53,11 +55,13 @@ def _page(report: dict, question: str | None) -> str:
 
 def _write(page: str) -> None:
     """The page on standard output in one write, a character the stream cannot encode as an
-    escape instead of an error."""
+    escape instead of an error. The flush is here so that a write that fails (a full disk, a closed
+    pipe) fails inside the caller's try and not in the interpreter's flush at exit."""
     encoding = getattr(sys.stdout, "encoding", None)
     if encoding:
         page = page.encode(encoding, errors="backslashreplace").decode(encoding)
     sys.stdout.write(page)
+    sys.stdout.flush()
 
 
 def narrate(report_path: str, question: str | None) -> int:

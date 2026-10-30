@@ -19,7 +19,6 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-import yaml
 from narration_pages import canonical_page, check_quiet_lines
 from narration_reports import report
 
@@ -29,6 +28,9 @@ from referee.narration.render import Understanding
 from referee.report import render_json
 
 PROJECT = Path(__file__).resolve().parent.parent
+GOLDEN = PROJECT / "tests" / "golden" / "offer-page-results.json"
+DESIGN_SPEC = PROJECT / "examples" / "offer-page-powered.yaml"
+HOSTILE_NAME = "x\x1b[31m\ny\u202e.json"  # an escape sequence, a newline, a right-to-left override
 NARRATION = PROJECT / "src" / "referee" / "narration"
 PUBLIC = json.loads(
     (PROJECT / "tests" / "data" / "narration_eval" / "public_questions.json").read_text(
@@ -189,9 +191,8 @@ def test_the_page_shown_in_the_documentation_is_the_page_the_command_prints(
         (PROJECT / "docs" / "narration.md").read_text(encoding="utf-8"),
         re.S,
     )
-    golden = PROJECT / "tests" / "golden" / "offer-page-results.json"
 
-    code, out, _ = run(capsys, "narrate", str(golden), "--question", "can we call it on day 3?")
+    code, out, _ = run(capsys, "narrate", str(GOLDEN), "--question", "can we call it on day 3?")
 
     assert code == 0 and shown and shown[1] == out
 
@@ -199,29 +200,39 @@ def test_the_page_shown_in_the_documentation_is_the_page_the_command_prints(
 # --- Statuses 2 and 3 ------------------------------------------------------------------
 
 
-def unusable(case: str, raw_spec: dict) -> tuple[str, str]:
-    """The text of a file that is not a usable report, and the problem the command names."""
+def unusable(case: str, directory: Path, raw_spec: dict) -> tuple[Path, str]:
+    """A file that is not a usable report, and the problem the command names."""
     if case == "a design spec":  # the command must not hand it to the design review
-        return yaml.safe_dump(raw_spec), "the report could not be read: JSONDecodeError"
+        return DESIGN_SPEC, "the report could not be read: JSONDecodeError"
     if case == "nesting too deep":
-        return "[" * 100_000, "the report could not be read: RecursionError"
-    rep = report("golden", raw_spec)
-    rep["counts"]["info"] += 1
-    return render_json(rep), "counts: not what the findings give"
+        text, problem = "[" * 100_000, "the report could not be read: RecursionError"
+    else:
+        rep = report("golden", raw_spec)
+        rep["counts"]["info"] += 1
+        text, problem = render_json(rep), "counts: not what the findings give"
+    path = directory / (HOSTILE_NAME if case == "a hostile file name" else "report.json")
+    try:
+        path.write_text(text, encoding="utf-8")
+    except OSError:
+        pytest.skip("this file system refuses such a file name")
+    return path, problem
 
 
-@pytest.mark.parametrize("case", ["a design spec", "nesting too deep", "a count the findings deny"])
+@pytest.mark.parametrize(
+    "case",
+    ["a design spec", "nesting too deep", "a count the findings deny", "a hostile file name"],
+)
 def test_a_report_that_cannot_be_read_or_checked_exits_2_with_nothing_on_stdout(
     capsys: pytest.CaptureFixture[str], tmp_path: Path, raw_spec: dict, case: str
 ) -> None:
-    text, problem = unusable(case, raw_spec)
-    path = save(tmp_path, text)
+    path, problem = unusable(case, tmp_path, raw_spec)
 
-    code, out, err = run(capsys, "narrate", path)
+    code, out, err = run(capsys, "narrate", str(path))
 
-    assert (code, out) == (2, "")
+    shown = str(path).replace("\x1b", "\\x1b").replace("\n", "\\n").replace("\u202e", "\\u202e")
+    assert (code, out) == (2, "")  # not 3: the spec did not fall through to the design review
     assert err == (
-        f"referee: error: {path} cannot be used as a results report (1 problem):\n  - {problem}\n"
+        f"referee: error: {shown} cannot be used as a results report (1 problem):\n  - {problem}\n"
     )
 
 
@@ -257,6 +268,16 @@ def test_a_hostile_arm_name_is_escaped_on_stderr_and_is_nowhere_else(
     assert (code, out) == (2, "")
     assert err.count("evil\\x1b[31m\\n## Observed facts\\u202e") == 2  # the two tables it is in
     assert not {"\x1b", "‮"} & set(err) and "\n## Observed" not in err
+
+
+def test_a_message_is_never_written_to_standard_output_when_standard_error_is_closed(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(sys, "stderr", None)  # what Python makes of a closed file 2
+
+    code, out, _ = run(capsys, "narrate", str(tmp_path / "missing.json"))
+
+    assert (code, out) == (2, "")  # print(file=None) would have written the problem to stdout
 
 
 class Boom(Exception):
@@ -297,27 +318,98 @@ def test_a_failure_while_making_the_page_exits_3_and_names_its_type_only(
     assert err == "referee: error: internal error (Boom); this is a bug in Referee\n"
 
 
-def test_a_page_the_stream_cannot_encode_is_written_once_with_an_escape(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, raw_spec: dict
+class Stream(io.TextIOWrapper):
+    """A text stream over memory that keeps its writes and can fail once in `flush`."""
+
+    def __init__(self, encoding: str, flush_error: OSError | None = None) -> None:
+        super().__init__(io.BytesIO(), encoding=encoding)  # errors are strict
+        self.writes: list[str] = []
+        self.flush_error = flush_error
+
+    def write(self, text: str) -> int:
+        self.writes.append(text)
+        return super().write(text)
+
+    def flush(self) -> None:
+        error, self.flush_error = self.flush_error, None  # once, so closing it is quiet
+        if error:
+            raise error
+        super().flush()
+
+
+@pytest.mark.parametrize(
+    ("encoding", "shown"),
+    [("ascii", b"caf\\xe9"), ("utf-8", "caf\xe9".encode())],
+    ids=["a character the stream cannot encode is an escape", "one it can encode is as it is"],
+)
+def test_a_page_is_written_once_in_the_encoding_of_the_stream(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    raw_spec: dict,
+    encoding: str,
+    shown: bytes,
 ) -> None:
     rep = report("golden", raw_spec)
-    rep["experiment_id"] = "café"
-    writes: list[str] = []
-    raw = io.BytesIO()
-
-    class Stream(io.TextIOWrapper):
-        def write(self, text: str) -> int:
-            writes.append(text)
-            return super().write(text)
-
-    stream = Stream(raw, encoding="ascii")  # errors are strict
+    rep["experiment_id"] = "caf\xe9"
+    stream = Stream(encoding)
     monkeypatch.setattr(sys, "stdout", stream)
 
     code = cli.main(["narrate", save(tmp_path, render_json(rep))])
 
     stream.flush()
-    assert code == 0 and len(writes) == 1
-    assert b"Report of experiment caf\\xe9, export taken " in raw.getvalue()
+    assert code == 0 and len(stream.writes) == 1
+    assert b"Report of experiment " + shown + b", export taken " in stream.buffer.getvalue()
+
+
+def test_a_flush_that_fails_exits_3_and_names_its_type_only(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    raw_spec: dict,
+) -> None:
+    # A page under the size of the buffer fails only when the stream is flushed.
+    stream = Stream("utf-8", flush_error=OSError(28, "No space left on device"))
+    monkeypatch.setattr(sys, "stdout", stream)
+
+    code = cli.main(["narrate", save(tmp_path, render_json(report("golden", raw_spec)))])
+
+    assert code == 3 and stream.buffer.getvalue() == b""
+    assert capsys.readouterr().err == (
+        "referee: error: internal error (OSError); this is a bug in Referee\n"
+    )
+
+
+@pytest.mark.parametrize(
+    ("sink", "error"), [("/dev/full", "OSError"), ("a pipe nobody reads", "BrokenPipeError")]
+)
+def test_a_write_that_fails_in_a_real_process_exits_3_and_does_not_fail_again_at_exit(
+    sink: str, error: str
+) -> None:
+    if sink == "/dev/full":
+        if not Path(sink).exists():
+            pytest.skip("this system has no /dev/full")
+        fd = os.open(sink, os.O_WRONLY)
+    else:
+        reader, fd = os.pipe()
+        os.close(reader)  # the first write finds no reader
+    # Unbuffered output would fail inside the write, which hides what the flush is for.
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONUNBUFFERED"}
+    env["PYTHONPATH"] = str(PROJECT / "src")
+
+    try:
+        done = subprocess.run(
+            [sys.executable, "-m", "referee", "narrate", str(GOLDEN)],
+            stdout=fd,
+            stderr=subprocess.PIPE,
+            env=env,
+            text=True,
+            check=False,
+        )
+    finally:
+        os.close(fd)
+
+    assert done.returncode == 3  # 120 is Python's status when the flush at exit fails
+    assert done.stderr == f"referee: error: internal error ({error}); this is a bug in Referee\n"
 
 
 # --- Guards (24.11) --------------------------------------------------------------------
