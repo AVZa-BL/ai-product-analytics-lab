@@ -10,6 +10,7 @@ time. Status 4 with its fixed line, for each way a command can fail, is test_nar
 import errno
 import hashlib
 import os
+import signal
 import subprocess
 from pathlib import Path
 
@@ -146,17 +147,29 @@ def test_the_output_may_be_32_kib_and_not_a_byte_more(
             assert caught.value.reason == reason
 
 
-def test_without_killpg_nothing_is_started_and_the_reason_is_start(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+@pytest.mark.parametrize(
+    "lacks", ["killpg", "exit status"], ids=["no os.killpg", "SIGCHLD ignored: no exit status"]
+)
+def test_where_the_command_cannot_be_run_safely_nothing_is_started_and_the_reason_is_start(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, lacks: str
 ) -> None:
+    """A process that ignores SIGCHLD has its children collected by the kernel: a command that
+    exits 3 would be seen as exiting 0."""
+
     def started(*args: object, **kwargs: object) -> None:
         raise AssertionError("a process was started")
 
-    monkeypatch.delattr(os, "killpg")
+    before = signal.getsignal(signal.SIGCHLD)
     monkeypatch.setattr(subprocess, "Popen", started)
-
-    with pytest.raises(NarratorError) as caught:
-        command_narrator(stub_argv(tmp_path, "exit"), DEADLINE)(REQUEST)
+    if lacks == "killpg":
+        monkeypatch.delattr(os, "killpg")
+    else:
+        signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+    try:
+        with pytest.raises(NarratorError) as caught:
+            command_narrator(stub_argv(tmp_path, "exit"), DEADLINE)(REQUEST)
+    finally:
+        signal.signal(signal.SIGCHLD, before)
 
     assert caught.value.reason == "start"
 
@@ -211,6 +224,76 @@ def test_a_command_that_ignores_its_input_and_exits_does_not_break_the_pipe(
 
     (child,) = started
     assert child.returncode == 0 and child.stdin.closed and child.stdout.closed
+
+
+@pytest.mark.skipif(not hasattr(os, "waitid"), reason="this system has no os.waitid")
+def test_the_group_is_killed_before_a_command_that_has_exited_is_collected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The id of the group is the command's own, and once the command is collected it may be given
+    to another process: the group is killed while the command is still there to be collected."""
+    killpg, uncollected = os.killpg, []
+
+    def watched(pgid: int, sig: int) -> None:
+        exited = os.waitid(os.P_PID, pgid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+        uncollected.append(exited is not None)  # it has exited, and nobody has collected it
+        killpg(pgid, sig)
+
+    monkeypatch.setattr(os, "killpg", watched)
+    command = command_narrator(
+        stub_argv(tmp_path, "leave", "0", valid_file(tmp_path)), DEADLINE + MARGIN
+    )
+
+    with returns_within(DEADLINE + MARGIN):
+        assert command(REQUEST) == VALID
+
+    assert uncollected == [True]
+
+
+def test_a_group_that_answers_permission_denied_after_it_was_killed_changes_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """macOS may answer EPERM for a group that is dead but not yet collected."""
+    killpg = os.killpg
+
+    def denied(pgid: int, sig: int) -> None:
+        killpg(pgid, sig)
+        raise PermissionError(errno.EPERM, "Operation not permitted")
+
+    monkeypatch.setattr(os, "killpg", denied)
+    command = command_narrator(
+        stub_argv(tmp_path, "leave", "0", valid_file(tmp_path)), DEADLINE + MARGIN
+    )
+
+    with returns_within(DEADLINE + MARGIN):
+        assert command(REQUEST) == VALID
+
+    assert gone(*recorded(tmp_path))
+
+
+def test_a_command_that_cannot_be_signalled_is_waited_for_a_while_and_left(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A command that changed its user id: Referee may not signal its group, and nothing else ends
+    it. The call returns with the reason it had; the test collects the command itself."""
+    killpg = os.killpg
+
+    def refused(pgid: int, sig: int) -> None:
+        raise PermissionError(errno.EPERM, "Operation not permitted")
+
+    assert narrator.STOP_WAIT_S == 5  # the 5 seconds of docs/narration.md; a short one for the test
+    monkeypatch.setattr(os, "killpg", refused)
+    monkeypatch.setattr(narrator, "STOP_WAIT_S", 0.2)
+    started = recording(monkeypatch)
+
+    try:
+        with returns_within(MARGIN), pytest.raises(NarratorError) as caught:
+            command_narrator(stub_argv(tmp_path, "sleep"), DEADLINE)(REQUEST)
+        assert caught.value.reason == "timeout"
+        assert started[0].poll() is None  # not killed, and not waited for any longer
+    finally:
+        killpg(started[0].pid, signal.SIGKILL)
+        started[0].wait()
 
 
 @pytest.mark.parametrize("timeout_s", [DEADLINE + MARGIN, 0], ids=["", "the deadline is over"])

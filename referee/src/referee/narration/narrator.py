@@ -20,9 +20,13 @@ and nothing else, no text of the command's output, no argument and no exception 
 nothing of what the command says or what the user typed reaches a message.
 
 Not covered: what the command does with files or the network; a process that leaves the group
-(`setsid`); Referee itself being killed (SIGTERM, SIGKILL), which leaves the group running; an
-interrupt in the few instructions between the start of the child and the `try` that guards it; and,
-on a system without `os.waitid`, the order of the kill and the collection (see `_exited`).
+(`setsid`, `setpgid`); a command that changes its user id, which Referee cannot kill (it stops
+waiting for it after `STOP_WAIT_S` seconds and leaves it); Referee itself being killed (SIGTERM,
+SIGKILL), which leaves the group running; an interrupt (Ctrl-C) that lands inside the call that
+starts the command, the first millisecond, which leaves it running (the signal cannot be blocked
+around that call, since the command would inherit the block); and, on a system without `os.waitid`,
+the order of the kill and the collection (see `_exited`). A process that ignores SIGCHLD cannot run
+the command (reason `start`): the kernel would collect the exit status, and it would be lost.
 """
 
 from __future__ import annotations
@@ -43,6 +47,7 @@ MAX_REQUEST_BYTES = 32 * 1024  # on standard input, newline included
 MAX_OUTPUT_BYTES = 32 * 1024  # on standard output
 REASONS = ("start", "exit", "timeout", "empty", "size", "encoding")
 POLL_S = 0.05  # how long a wait for the pipes lasts before the command is asked whether it exited
+STOP_WAIT_S = 5  # how long a command that was sent SIGKILL is waited for, then left
 CHUNK = 65_536
 
 
@@ -160,11 +165,13 @@ def _exchange(child: subprocess.Popen[bytes], data: bytes, deadline: float) -> b
 def _stop(child: subprocess.Popen[bytes]) -> None:
     """Kill every process of the command's group, then collect the command, then close the pipes.
     The group is killed first, whether the command is running or has exited (a process it left
-    behind is in the group, whose id is the command's own)."""
+    behind is in the group, whose id is the command's own). The collection waits `STOP_WAIT_S`
+    seconds at most: a group that may not be signalled (the command changed its user id) is left."""
     try:
-        with contextlib.suppress(ProcessLookupError, PermissionError):  # no member left to kill
+        with contextlib.suppress(ProcessLookupError, PermissionError):  # none left, or not ours
             os.killpg(child.pid, signal.SIGKILL)
-        child.wait()
+        with contextlib.suppress(subprocess.TimeoutExpired):  # one that cannot be killed is left
+            child.wait(STOP_WAIT_S)
     finally:
         for pipe in (child.stdin, child.stdout):
             if pipe is not None:
@@ -173,6 +180,8 @@ def _stop(child: subprocess.Popen[bytes]) -> None:
 
 def _run(argv: Sequence[str], data: bytes, timeout_s: float, env: Mapping[str, str] | None) -> str:
     if not hasattr(os, "killpg"):
+        raise NarratorError("start")
+    if signal.getsignal(signal.SIGCHLD) == signal.SIG_IGN:  # the kernel would lose the exit status
         raise NarratorError("start")
     deadline = time.monotonic() + timeout_s
     try:
