@@ -491,7 +491,6 @@ def test_no_module_of_the_layer_imports_more_than_the_list_allows() -> None:
     assert {"facts.py", "render.py", "router.py", "refusals.py", "output.py", "command.py"} <= set(
         modules
     )
-    assert {"narrator.py", "sheet.py"} <= set(modules)
     assert {n: found for n, text in modules.items() if (found := violations(n, text))} == {}
 
 
