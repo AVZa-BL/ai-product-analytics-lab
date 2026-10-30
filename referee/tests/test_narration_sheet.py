@@ -1,4 +1,4 @@
-"""The sheet, the request and the egress assertion of the model path (design 24.4 and 24.16).
+"""The sheet, the request and the egress assertion of the model path (design 24.4).
 
 What the narrator is shown for each question that needs one, and the proof that nothing of the
 report that code did not write is in it. The canary test is the proof for what a vocabulary check

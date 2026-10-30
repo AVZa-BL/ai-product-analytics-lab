@@ -1,4 +1,4 @@
-"""The `referee narrate` command (design 24.9, 24.11 and the N6 line of 24.16).
+"""The `referee narrate` command (design 24.9 and 24.11).
 
 Statuses, streams, what the command reads, and its guards. What a page holds is tested in
 test_narration_render.py and test_narration_refusals.py, and line by line on every development

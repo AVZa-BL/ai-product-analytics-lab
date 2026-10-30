@@ -1,4 +1,4 @@
-"""The model path of `referee narrate` (design 24.3 path 3, 24.7, 24.9 and the N7b line of 24.16).
+"""The model path of `referee narrate` (design 24.3 path 3, 24.7 and 24.9).
 
 `--llm-command` and `--show-request`, through the command line, with the stub of `narration_stubs`
 as the user's command (a Python script run with `sys.executable`) and with fake narrators where no
