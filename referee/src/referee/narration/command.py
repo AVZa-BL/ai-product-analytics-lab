@@ -16,6 +16,7 @@ its type, and no traceback or message (which could hold a word of the report), o
 
 from __future__ import annotations
 
+import os
 import sys
 
 from referee.display import for_line
@@ -64,6 +65,15 @@ def _write(page: str) -> None:
     sys.stdout.flush()
 
 
+def _give_up_stdout() -> None:
+    """A write to the real standard output failed. The stream still holds the page, and where the
+    system fails the write again when the interpreter flushes at exit (macOS does), the process
+    ends with a second message and status 120 instead of 3. Standard output is of no use any more,
+    so it becomes a sink. Only the process's own stream: a test's or a caller's is left alone."""
+    if sys.stdout is sys.__stdout__:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+
+
 def narrate(report_path: str, question: str | None) -> int:
     """Print the page for `question` about the report at `report_path`; return the status."""
     try:
@@ -75,6 +85,8 @@ def narrate(report_path: str, question: str | None) -> int:
     try:
         _write(_page(report, question))
     except Exception as error:
+        if isinstance(error, OSError):
+            _give_up_stdout()
         _complain(
             f"referee: error: internal error ({type(error).__name__}); this is a bug in Referee"
         )

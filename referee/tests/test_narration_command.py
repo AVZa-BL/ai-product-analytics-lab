@@ -374,10 +374,34 @@ def test_a_flush_that_fails_exits_3_and_names_its_type_only(
 
     code = cli.main(["narrate", save(tmp_path, render_json(report("golden", raw_spec)))])
 
-    assert code == 3 and stream.buffer.getvalue() == b""
+    assert code == 3 and stream.buffer.getvalue() == b"" and sys.stdout is stream
     assert capsys.readouterr().err == (
         "referee: error: internal error (OSError); this is a bug in Referee\n"
     )
+
+
+@pytest.mark.parametrize(
+    ("error", "sunk"),
+    [(OSError(32, "Broken pipe"), True), (RuntimeError("boom"), False)],
+    ids=["a write that fails turns the real stream into a sink", "another error leaves it"],
+)
+def test_a_failed_write_to_the_real_standard_output_turns_it_into_a_sink(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, raw_spec: dict, error: Exception, sunk: bool
+) -> None:
+    # Where the exit flush fails a second time (macOS) the process would end with status 120.
+    stream = Stream("utf-8", flush_error=error)
+    monkeypatch.setattr(sys, "stdout", stream)
+    monkeypatch.setattr(sys, "__stdout__", stream)
+
+    code = cli.main(["narrate", save(tmp_path, render_json(report("golden", raw_spec)))])
+
+    sink = sys.stdout
+    try:
+        assert code == 3 and (sink is not stream) == sunk
+        assert not sunk or sink.name == os.devnull
+    finally:
+        if sink is not stream:
+            sink.close()
 
 
 @pytest.mark.parametrize(
