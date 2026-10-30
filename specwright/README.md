@@ -90,6 +90,26 @@ distractor numbers (`05`), three arms with two guardrails, a secondary metric an
 (`06`), and one that states a sample size that differs from Referee's (`08`). The owner's real plans
 are meant to be added next to them.
 
+## Evaluating a model
+
+```bash
+python -m specwright.evaluate --out out/eval-self                 # self-test, no model
+python -m specwright.evaluate --out out/eval-live --live          # a real model; ANTHROPIC_API_KEY
+python -m specwright.evaluate --out out/eval-live --live --only 01-shop-banner   # one case first
+```
+
+`examples/evaluation-cases.json` lists the cases: documents, the status a careful reading gives,
+and a reference draft (here, the hand-written replay). A run writes `evaluation.json` and
+`evaluation.md` with, for each case and in total: the status against the expected one, the
+quotes that were still not found after the repairs, the repairs and tokens used, how many stated
+values (numbers, enumerations, booleans) agree with the reference, how many of the gaps the
+documents leave (a missing figure, an approximate one) were left as gaps, and how many values the
+model **invented** for a gap. `--token-budget` (default 400,000) stops new cases once that many
+tokens are spent. To add a real plan, add a case with `"reference": null`: it then gets the scores
+that need no reference (status, quotes not found, repairs, tokens). The self-test is perfect by
+construction and only tests the scorer. The briefs and references are written by an agent, so
+agreement with them is not accuracy on real plans.
+
 ## What is verified, and what is not
 
 - **Verified by tests:** the claim table against Referee's spec (every option of every field is one Referee accepts, and the powered example assembles back to its fingerprint), the number and approximate-wording rules on reference cases, every check, the repair loop (what goes back, the limit of repairs, when it stops), the command, its exit statuses and the golden outputs, the escaping, and the **real Anthropic SDK against a mocked HTTP transport** (request body, streaming parse, a refusal, truncation, HTTP errors, a dropped connection, missing credentials). 21 deliberate faults in the code were each caught by a test.

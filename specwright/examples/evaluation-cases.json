@@ -1,0 +1,61 @@
+{
+ "note": "Synthetic briefs and references written by an agent. Add real plans as cases with \"reference\": null.",
+ "cases": [
+  {
+   "id": "01-shop-banner",
+   "expected_status": "ok",
+   "documents": [
+    "briefs/01-shop-banner.md"
+   ],
+   "reference": "replays/01-shop-banner.json"
+  },
+  {
+   "id": "02-infeasible-niche-event",
+   "expected_status": "infeasible",
+   "documents": [
+    "briefs/02-infeasible-niche-event.md"
+   ],
+   "reference": "replays/02-infeasible-niche-event.json"
+  },
+  {
+   "id": "03-missing-baseline",
+   "expected_status": "needs_answers",
+   "documents": [
+    "briefs/03-missing-baseline.md"
+   ],
+   "reference": "replays/03-missing-baseline.json"
+  },
+  {
+   "id": "04-ambiguous-numbers",
+   "expected_status": "needs_answers",
+   "documents": [
+    "briefs/04-ambiguous-numbers.md"
+   ],
+   "reference": "replays/04-ambiguous-numbers.json"
+  },
+  {
+   "id": "05-buried-in-design-doc",
+   "expected_status": "ok",
+   "documents": [
+    "briefs/05-buried-in-design-doc.md"
+   ],
+   "reference": "replays/05-buried-in-design-doc.json"
+  },
+  {
+   "id": "06-three-arms-guardrails",
+   "expected_status": "ok",
+   "documents": [
+    "briefs/06-three-arms-guardrails.md"
+   ],
+   "reference": "replays/06-three-arms-guardrails.json"
+  },
+  {
+   "id": "08-stated-size-differs",
+   "expected_status": "ok",
+   "documents": [
+    "briefs/08-stated-size-differs.md"
+   ],
+   "reference": "replays/08-stated-size-differs.json"
+  }
+ ]
+}
