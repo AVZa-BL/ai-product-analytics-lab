@@ -101,9 +101,9 @@ KEYWORDS = {  # what each paragraph says it does not do (24.8), with the negatio
     "causal": ("does not say why an effect",),
     "forecast": ("does not predict",),
     "subgroup": ("does not report on a part of the players",),
-    "other_analysis": ("reads the saved report only", "runs no other test"),
+    "other_analysis": ("reads the saved report only", "runs no other test", "recomputes nothing"),
     "data_access": ("no player, row or identifier",),
-    "rewording": ("sentences unchanged",),
+    "rewording": ("sentences unchanged", "does not put them in other words"),
 }
 
 
@@ -114,6 +114,8 @@ def test_there_is_a_paragraph_for_every_category_and_a_sentence_for_every_unread
     assert list(UNREADABLE) == list(UNREADABLE_REASONS)
     assert f"{MAX_CHARS}" in UNREADABLE["too long"]
     assert "answers none of the question" in ANSWERABLE_PART
+    assert "none of the four kinds" in DEFAULT_PARAGRAPH  # and not "one of"
+    assert "none of its numbers" in WHERE_THE_TABLE_IS
 
 
 def test_the_default_route_names_the_four_kinds_it_answers_with_one_example_each():
