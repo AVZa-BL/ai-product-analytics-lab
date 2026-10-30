@@ -10,7 +10,8 @@ prints that and never the question. Four steps, all linear in the length of the 
    or a word that mixes Latin letters with Cyrillic, Greek, Armenian, Coptic or Cherokee ones.
    The reason is one of `render.UNREADABLE_REASONS`.
 3. Match. The words of the question are the runs of letters and digits (an apostrophe joins its
-   neighbours, `re-run` is one word), with `^` before the first, `$` after the last, `,` for a
+   neighbours, but the s of a possessive is dropped: `RES-001's` is `RES-001`, `what's` is `whats`;
+   `re-run` is one word), with `^` before the first, `$` after the last, `,` for a
    clause boundary and `#` for a rule ID (`RES-004`, `res 004`, `ZZZ-123`). A pattern is a short
    sequence of steps: `(2, "call* declare*", "it this test")` is call or declare, or a word that
    begins so, then it, this or test, with at most two words between. A word ending in `*` is a
@@ -20,19 +21,22 @@ prints that and never the question. Four steps, all linear in the length of the 
    pass for each step, so the time is linear in the question and nothing backtracks. The tables
    are data. The words of a command are matched only after the start of a clause (`START`), so
    that "Skip the warnings." is steering and "Can we skip the warnings?" is not; a category that
-   is about a finding counts only where the question names no rule, or not that one (`causal`,
-   `effect_numbers`, `UNLESS_NAMED`): the numbers behind a finding are its explanation. Where a
+   is about a finding counts only where the question names no rule, or not that one
+   (`WHEN_NO_RULE_NAMED`, `UNLESS_NAMED`): the numbers behind a finding are its explanation. Where a
    clause only says what must hold first ("fix it before we ship"), what the review did ("did you
    check whether it ran long enough") or why a rule says so ("why does RES-003 say it ran too
-   short"), the words of `SOFT` in the rest of it are not matched (`QUIET`, `hush`); injection is
+   short"), the words of `SOFT` in the rest of it are not matched (`QUIET`, `hush`; after "before"
+   or "anything" a `whether` or `say` ends the stretch too, `QUIET_UNTIL_ASKED`); injection is
    never hushed.
 4. Decide. A refusal category beats an intent, and the categories matched are listed in the order
    of `render.CATEGORIES` (the order of precedence); then the intents (`checked`, `next_steps`,
-   an explanation of a rule named, `summary`); then the default route. A question that matches a
-   category and an intent is a refusal that keeps the intent, so that the refusal can say that an
-   answerable part was not answered; a refusal keeps an explanation only when a word of
-   `INTENT_PATTERNS["explain_finding"]` (why, explain, mean, matter) is in the question, since a
-   rule named in a refused question is not yet a question about it.
+   an explanation of a rule named, `summary`), but only for a question that names a rule or holds
+   a word of `DOMAIN` ("Do you think it will rain tomorrow?" is none of the four kinds); then the
+   default route. A question that matches a category and an intent is a refusal that keeps the
+   intent, so that the refusal can say that an answerable part was not answered; a refusal keeps an
+   explanation only when a word of `INTENT_PATTERNS["explain_finding"]` (why, explain, mean,
+   matter) is in the question, since a rule named in a refused question is not yet a question
+   about it.
 
 A target is a rule ID in the question or a phrase of `PHRASES`. An ID of the nine results rules
 is printed canonically (`res 004` is RES-004). A string shaped like an ID that is not one of the
@@ -64,6 +68,8 @@ LOOKALIKES = frozenset({"CYRILLIC", "GREEK", "ARMENIAN", "COPTIC", "CHEROKEE"})
 # Letters that show nothing and are in no category C or M: the Hangul choseong and jungseong
 # fillers and the braille blank. NFKC maps the fillers U+3164 and U+FFA0 to U+1160.
 INVISIBLE = "\u115f\u1160\u2800"
+# A word before 's that is a contraction of "is" or "us", not a possessive: it keeps its s.
+CLITIC_STEMS = frozenset("what let that there here who how where when why which it he she".split())
 
 Pattern = tuple[int | str, ...]
 
@@ -214,7 +220,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "my", "authority"),
         (START_YOU + " to must should can will", "consider* assume* treat* regard* deem*", 4,
          TARGETS, 2, "resolved fixed closed cleared fine ok okay minor info informational"),
-        (START_YOU, 1, "assum* suppos* presum*", 3, SUBJECTS + " everything", 2,
+        (START_YOU, 1, "assum* suppos* presum*", 3, SUBJECTS, 2,
          "is are was were be", VERDICTS),
         (START_YOU, 1, "stop quit cease", "checking validating verifying reviewing evaluating "
          "flagging"),
@@ -297,7 +303,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (3, "switch* enter enabl* activat*", "mode"),
         ("persona* jailbreak* unrestricted uncensored unfiltered roleplay*",),
         (2, "pretend*", "you youre to"),
-        (3, "pretend*", TARGETS + " " + SUBJECTS),
+        (3, "pretend*", TARGETS + " review report experiment result everything"),
         # claim an authority, or give new orders
         (1, "authoriz* authoris* telling ordering instructing commanding directing demanding",
          "you"),
@@ -357,7 +363,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
          "show appear display print"),
         (START_YOU, 1, "mak* get", 4, TARGETS, 2, "disappear vanish go"),
         (START_YOU, 1, "say tell state claim declare conclude report write print respond answer",
-         3, "that", 5, SUBJECTS + " everything all it #", 3, VERDICTS),
+         3, "that", 5, SUBJECTS + " all it #", 3, VERDICTS),
         (0, "imagin* suppose", "you youre", 3, "have had are were no without"),
         ("no without", 1, "rules guidelines restrictions instructions constraints limits "
          "filters safeguards"),
@@ -365,7 +371,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
          FINDINGS + " verdict # list result*"),
         # tell Referee what to say, or how to treat a finding
         (START_YOU, 1, TREAT, 8, "to as into", 4,
-         SEVERITIES + " success* positive good great healthy valid clean"),
+         SEVERITIES + " success* positive good great healthy clean"),
         (START_YOU, 1, ALTER, 4, "verdict conclusion* outcome*"),
         (START_YOU, 1, "mak* set turn mark* label*", 3, SUBJECTS, 2,
          VERDICTS + " resolved fixed closed"),
@@ -381,7 +387,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (START, 1, "say tell state claim output print write declar* report* conclude", 4,
          "that there", 6, "no zero none nothing", 4, TARGETS),
         ("asked requested insisted demanded want wants need needs", 2, "that us me you", 8,
-         SUBJECTS + " output answer summary report", 3,
+         SUBJECTS + " output answer summary", 3,
          "show shows say says state states read reads be is has have contain contains", 2,
          "no zero none nothing clear valid passed"),
         ("treat* regard* consider* count* classif* rate* record* log* report* mark* label* "
@@ -478,7 +484,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (5, "keep* scrap* drop* abandon* ditch* retire* discard* pick* choos* select* prefer* axe* "
             "shelve* nix*", OBJECTS),
         (4, "replac* swap* substitut* supersed*",
-         OBJECTS + " old new current existing original one"),
+         OBJECTS + " old new current existing original"),
         (1, "stay stick switch", "with to on", 2, OBJECTS + " old original current existing new"),
         (3, "justify* warrant*",
          LAUNCH + " shipping rollout switch* promote promoted promoting replac*"),
@@ -588,9 +594,9 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "serious bad important critical worrying severe big major", "or", 1,
          "just only merely", "noise minor nothing fluke"),
         (4, "it this that they data results numbers experiment test setup",
-         "looks look seems seem appears appear", 3, QUALITY + " good great healthy"),
+         "looks look seems seem appears appear", 3, QUALITY + " good great"),
         (0, "be", "sure certain confident", 3, "numbers results data figures experiment setup", 3,
-         QUALITY + " correct right"),
+         QUALITY),
         (0, "fair", "to", "say"),
         (0, "you", "agree* concur*", 1, "$"),
         (0, "is are am", "i he she we they it that this", "right correct wrong"),
@@ -648,9 +654,9 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "big", "deal"),
         (0, "^ , so then", "no", "problem* issue* concern* worry"),
         (0, "in", "the", "clear"),
-        (2, QUALITY + " right alright allowed worth", "to", 1,
+        (2, QUALITY + " alright allowed worth", "to", 1,
          "trust* rely use ignor* disregard* dismiss* overlook* skip* proceed"),
-        ("^ ,", 3, QUALITY, 0, ", $"),
+        (",", 3, QUALITY, 0, ", $"),
         (0, "in", "order", 0, ", $"),
         (1, "to would could", "doubt"),
         (0, "pass", "muster"),
@@ -707,7 +713,6 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (2, "believe* trust*", "effect* lift* uplift difference* improvement* gain* impact*"),
     ),
     "effect_numbers": (
-        (0, "how", "big* larg* strong* high*"),
         (0, "how", "much", 3, "did does was were has have is are", 4, EFFECT_WORDS),
         (0, "how", "much", 2, "more less higher lower better worse"),
         (0, "by", "how", "much"),
@@ -727,9 +732,6 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "how", "many", 1, "extra additional more", "purchases sales conversions orders"),
         (0, "what", "is was are were", 4,
          "revenue conversion retention spend* arpu sessions rate*", 4, GROUP),
-        (START_YOU, 1, "give show tell report print state provide quote read list send quantify", 4,
-         "lift* uplift* effect* difference* delta* gain* improvement* number* figure* revenue "
-         "conversion retention spend* arpu sessions mean " + AVERAGES),
         (START_YOU, 1, "show tell give", 5, "statistics result*", 4, GROUP + " metric* kpi*"),
         (0, "i we id wed", "need want like", 4,
          "lift* uplift* effect* difference* delta* gain* improvement* number* figure*"),
@@ -777,7 +779,6 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (6, EFFECT_WORDS, "attribut* responsible"),
     ),
     "forecast": (
-        ("expect expected expecting expects",),
         ("forecast* predict* projected projecting projection* extrapolat* anticipat*",),
         (START_YOU, 1, "project", 4, EFFECT_WORDS),
         ("future rollout* eventually",),
@@ -786,7 +787,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         (0, "scale scaling scaled", "up out"),
         (2, "when once after as if", "scale scaling scaled"),
         (4, "will",
-         CHANGE + " impact result revenue conversion growth metric"),
+         CHANGE + " impact result revenue conversion metric"),
         (0, "what", "happens happen", 3, "when after once next later"),
         ("holiday* season seasons annual* yearly monthly quarterly",),
         (1, "in next every per each over within for coming following another",
@@ -876,11 +877,9 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
          "bayes* covariate* permutation* mann whitney kruskal welch* fisher* "
          "parametric* nonparametric* holm benjamini fdr transform* sensitivity robustness "
          "placebo clustered stratif*",),
-        (0, "t z chi", "test squared square"),
         (0, "one two", "sided"),
         (0, "difference", "in", "differences"),
         (2, "only", "players users customers"),
-        (0, "confidence significance", "level"),
         (0, "as", "the", "metric outcome kpi"),
         (1, "80 90 95 99", "level"),
         (0, "separately", "for by per each"),
@@ -964,7 +963,7 @@ TRIGGERS: dict[str, tuple[Pattern, ...]] = {
         ("without", 2, "technical statistical statistics stats math",
          "terms words language speak lingo"),
         ("rephras* reword* rewrit* paraphras* restat* translat* tone casual* friendl* formal*",),
-        ("poem* haiku* limerick* pirate* rhym* funny humor* humour* sarcastic*",),
+        ("poem* limerick* pirate* rhym* funny humor* humour* sarcastic*",),
         ("bullet*",),
         (2, "for", "boss manager director executive* ceo stakeholder* audience kids colleague* "
                    "partner* client* investor* board standup team"),
@@ -1094,6 +1093,15 @@ INTENT_PATTERNS: dict[str, tuple[Pattern, ...]] = {
     ),
 }
 
+# A question is one of the four kinds only if it is about the report: it names a rule or holds one
+# of these words. "Do you think it will rain tomorrow?" holds a word of the intent patterns and
+# none of these.
+DOMAIN = (
+    FINDINGS + " review* report* experiment* test* rule* check* arm arms variant* control player* "
+    "sample verdict result* problem* issue* fix* data metric* effect* risk* concern* flag* run "
+    "runs ran severity evaluat* next step* first anything something"
+)
+
 # Phrases that point at one of the nine results rules, from their titles (24.8).
 PHRASES: dict[str, tuple[Pattern, ...]] = {
     "RES-001": (
@@ -1124,9 +1132,14 @@ PHRASES: dict[str, tuple[Pattern, ...]] = {
 }
 
 # These patterns of a category count only when the question names no rule: "Why does RES-001
-# block?" is an explanation and not `causal` (24.8).
+# block?" is an explanation and not `causal`, and "Give me the numbers behind RES-001" is an
+# explanation and not `effect_numbers` (24.8).
 WHEN_NO_RULE_NAMED: dict[str, tuple[Pattern, ...]] = {
     "effect_numbers": (
+        (0, "how", "big* larg* strong* high*"),
+        (START_YOU, 1, "give show tell report print state provide quote read list send quantify", 4,
+         "lift* uplift* effect* difference* delta* gain* improvement* number* figure* revenue "
+         "conversion retention spend* arpu sessions mean " + AVERAGES),
         (5, "what whats how give show tell report print list state provide need want get see know "
             "quote", "estimat*"),
         (0, "point", "estimat*"),
@@ -1158,6 +1171,11 @@ WHEN_NO_RULE_NAMED: dict[str, tuple[Pattern, ...]] = {
         (0, "resulted resulting stem stems stemmed originat* aris* arose", "from"),
         (0, "how", "did does do", 6, "increas* improv* rais* boost* reduc* decreas* affect*"),
     ),
+    "forecast": (("expect expected expecting expects",),),
+    "other_analysis": (
+        (0, "confidence significance", "level"),
+        (0, "t z chi", "test squared square"),
+    ),
 }
 
 # These patterns of a category count only when the question does not name the rule: a question
@@ -1180,15 +1198,18 @@ UNLESS_NAMED: dict[str, dict[str, tuple[Pattern, ...]]] = {
 # the rest of the clause (to a comma, `and`, `but`, `then`, `so` or `or`, at most STRETCH words)
 # ask for nothing. Injection is not hushed.
 QUIET: tuple[Pattern, ...] = (
-    ("before until",),
     (CLAUSE, "did does do has have", 3, SUBJECT, 2, CHECKING),
     (CLAUSE, "which what", 2, "check* rule* test* analys*", 2, CHECKING),
     (CLAUSE, "why", 3, "#"),
-    ("anything something",),
 )
-SOFT = "ship* launch* releas* deploy* call* stop* trust* safe real enough worr* concern*"
+# After these a `whether`, `if`, `say` or `says` ends the stretch too: "tell me before the meeting
+# whether to ship" and "is there anything that says we can ship" ask for the decision, and "did you
+# check whether it ran long enough" does not.
+QUIET_UNTIL_ASKED: tuple[Pattern, ...] = (("before until",), ("anything something",))
+SOFT = LAUNCH + " ship* call* stop* trust* safe real enough sufficient* wait* worr* concern*"
 STRETCH = 8
-STRETCH_ENDS = ", and but then so or $"
+STRETCH_ENDS = ", and but then so or"
+ASKED_ENDS = STRETCH_ENDS + " whether if say says"
 # fmt: on
 
 # --- Matching --------------------------------------------------------------------------------
@@ -1227,8 +1248,11 @@ _PHRASES = _compile(PHRASES)
 _WHEN_NO_RULE_NAMED = _compile(WHEN_NO_RULE_NAMED)
 _UNLESS_NAMED = {category: _compile(rules) for category, rules in UNLESS_NAMED.items()}
 _QUIET = tuple(compile_pattern(pattern) for pattern in QUIET)
+_QUIET_UNTIL_ASKED = tuple(compile_pattern(pattern) for pattern in QUIET_UNTIL_ASKED)
 _SOFT = compile_pattern((SOFT,))[0]
+_DOMAIN = compile_pattern((DOMAIN,))
 _STRETCH_ENDS = compile_pattern((STRETCH_ENDS,))[0]
+_ASKED_ENDS = compile_pattern((ASKED_ENDS,))[0]
 
 
 def _at(word: str, step: Step) -> bool:
@@ -1330,8 +1354,19 @@ def read(text: str) -> tuple[list[str], list[str]]:
     pieces: list[tuple[str, int, int]] = []  # (word or ",", start, end)
     word: list[str] = []
     start = 0
-    for i, char in enumerate(text + " "):
+    padded = text + " "
+    possessive = False
+    for i, char in enumerate(padded):
+        if possessive:  # the s of "RES-001's" is dropped
+            possessive = False
+            continue
         if char in "'\u2019":  # joins its neighbours
+            possessive = (
+                padded[i + 1 : i + 2] == "s"
+                and not padded[i + 2 : i + 3].isalnum()
+                and "".join(word) not in CLITIC_STEMS
+                and bool(word)
+            )
             continue
         if char.isalnum():
             start = start if word else i
@@ -1382,15 +1417,16 @@ def _targets(words: list[str], ids: list[str]) -> set[str]:
 def hush(words: list[str]) -> list[str]:
     """The words with those of SOFT replaced by `_` where they only describe (`QUIET`)."""
     hushed = list(words)
-    for steps in _QUIET:
-        for i, opened in enumerate(ends(words, steps)):
-            if not opened:
-                continue
-            for j in range(i + 1, min(i + 1 + STRETCH, len(words))):
-                if _at(words[j], _STRETCH_ENDS):
-                    break
-                if _at(words[j], _SOFT):
-                    hushed[j] = "_"
+    for openers, stop in ((_QUIET, _STRETCH_ENDS), (_QUIET_UNTIL_ASKED, _ASKED_ENDS)):
+        for steps in openers:
+            for i, opened in enumerate(ends(words, steps)):
+                if not opened:
+                    continue
+                for j in range(i + 1, min(i + 1 + STRETCH, len(words))):
+                    if _at(words[j], stop):
+                        break
+                    if _at(words[j], _SOFT):
+                        hushed[j] = "_"
     return hushed
 
 
@@ -1412,6 +1448,8 @@ def _categories(all_words: list[str], named: set[str]) -> tuple[str, ...]:
 
 def _intent(words: list[str], named: set[str]) -> tuple[str, str | None, bool] | None:
     """(intent, target, as_summary) of the answerable part of a question, or None."""
+    if not named and not matches(words, _DOMAIN):
+        return None
     for intent in ("checked", "next_steps"):
         if _any(words, _INTENT_PATTERNS[intent]):
             return intent, None, False

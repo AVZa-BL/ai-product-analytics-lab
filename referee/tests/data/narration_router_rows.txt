@@ -3,10 +3,11 @@
 # not-trigger: the same words with a gap one word wider than the pattern allows, or with a word that a step excludes: not matched.
 # intent / not-intent: the text is answered with the intent `name` / is not.
 # target / not-target: the text is an explanation of the rule `name` / is not.
-# gated / not-gated: the same for the patterns that count only when no rule is named (causal, effect_numbers).
-# unless / not-unless: the same for the patterns that count only when the rule that the name `category.RULE` is not named.
-# quiet / not-quiet: the text ends in `ship`, which is no decision to ship after the words of a quiet pattern / is one.
-# explain: the text is refused and keeps an explanation of a finding as the answerable part / does not (not-explain).
+# gated / not-gated: the same for the patterns that count only when no rule is named.
+# unless / not-unless: the same for the patterns that count unless the rule `RULE` is named; the name is `category RULE`.
+# quiet / not-quiet: the text ends in `ship`, which is no decision to ship after the words of a quiet pattern (QUIET, QUIET_UNTIL_ASKED) / is one.
+# domain / not-domain: `overview` is an intent word; a word of DOMAIN after it makes the text a question about the report, which is answered / the text has none and is not.
+# explain: the text is refused and keeps an explanation of a finding as the answerable part.
 # Each row stands for one word or one gap of a pattern of router.py: take the word out, or move the gap, and a row fails.
 trigger injection | forget res-001
 trigger injection | override check
@@ -3042,9 +3043,8 @@ trigger reassurance | convince me
 trigger reassurance | persuade me
 trigger reassurance | assure us
 not-trigger reassurance | assure um me
-trigger reassurance | confirm fine um um um um um
-trigger reassurance | assur fine um um um um um
 trigger reassurance | confirm fine
+trigger reassurance | assur fine
 trigger reassurance | confirm valid
 trigger reassurance | confirm ok
 trigger reassurance | confirm okay
@@ -3204,35 +3204,35 @@ trigger reassurance | serious or just fluke
 not-trigger reassurance | serious um or just noise
 trigger reassurance | serious or um just noise
 not-trigger reassurance | serious or um um just noise
-trigger reassurance | it looks fine um um um um um
-trigger reassurance | this looks fine um um um um um
-trigger reassurance | that looks fine um um um um um
-trigger reassurance | they looks fine um um um um um
-trigger reassurance | data looks fine um um um um um
-trigger reassurance | results looks fine um um um um um
-trigger reassurance | numbers looks fine um um um um um
-trigger reassurance | experiment looks fine um um um um um
-trigger reassurance | test looks fine um um um um um
-trigger reassurance | setup looks fine um um um um um
-trigger reassurance | it look fine um um um um um
-trigger reassurance | it seems fine um um um um um
-trigger reassurance | it seem fine um um um um um
-trigger reassurance | it appears fine um um um um um
-trigger reassurance | it appear fine um um um um um
+trigger reassurance | it looks fine
+trigger reassurance | this looks fine
+trigger reassurance | that looks fine
+trigger reassurance | they looks fine
+trigger reassurance | data looks fine
+trigger reassurance | results looks fine
+trigger reassurance | numbers looks fine
+trigger reassurance | experiment looks fine
+trigger reassurance | test looks fine
+trigger reassurance | setup looks fine
+trigger reassurance | it look fine
+trigger reassurance | it seems fine
+trigger reassurance | it seem fine
+trigger reassurance | it appears fine
+trigger reassurance | it appear fine
 trigger reassurance | it looks good
 trigger reassurance | it looks great
 trigger reassurance | it um um um um looks fine
 not-trigger reassurance | it um um um um um looks fine
 trigger reassurance | it looks um um um fine
 not-trigger reassurance | it looks um um um um fine
-trigger reassurance | be sure numbers fine um um um um um
-trigger reassurance | be certain numbers fine um um um um um
-trigger reassurance | be confident numbers fine um um um um um
-trigger reassurance | be sure results fine um um um um um
-trigger reassurance | be sure data fine um um um um um
-trigger reassurance | be sure figures fine um um um um um
-trigger reassurance | be sure experiment fine um um um um um
-trigger reassurance | be sure setup fine um um um um um
+trigger reassurance | be sure numbers fine
+trigger reassurance | be certain numbers fine
+trigger reassurance | be confident numbers fine
+trigger reassurance | be sure results fine
+trigger reassurance | be sure data fine
+trigger reassurance | be sure figures fine
+trigger reassurance | be sure experiment fine
+trigger reassurance | be sure setup fine
 not-trigger reassurance | be um sure numbers fine
 trigger reassurance | be sure um um um numbers fine
 not-trigger reassurance | be sure um um um um numbers fine
@@ -3247,7 +3247,7 @@ trigger reassurance | you agree um
 not-trigger reassurance | you agree um um
 trigger reassurance | um um um um um is i right
 trigger reassurance | um um um um um are i right
-trigger reassurance | am i right um um um um um
+trigger reassurance | am i right
 trigger reassurance | um um um um um is he right
 trigger reassurance | um um um um um is she right
 trigger reassurance | um um um um um is we right
@@ -3305,39 +3305,40 @@ trigger reassurance | i say um um um um um um um um fine
 trigger reassurance | im say um um um um um um um um fine
 trigger reassurance | we say um um um um um um um um fine
 trigger reassurance | id say um um um um um um um um fine
-trigger reassurance | i assume fine um um um um um
-trigger reassurance | i presum fine um um um um um
-trigger reassurance | i guess fine um um um um um
-trigger reassurance | i suppos fine um um um um um
-trigger reassurance | i think fine um um um um um
-trigger reassurance | i believe fine um um um um um
-trigger reassurance | i hope fine um um um um um
-trigger reassurance | i gather fine um um um um um
-trigger reassurance | i understand fine um um um um um
+trigger reassurance | i assume fine
+trigger reassurance | i presum fine
+trigger reassurance | i guess fine
+trigger reassurance | i suppos fine
+trigger reassurance | i think fine
+trigger reassurance | i believe fine
+trigger reassurance | i hope fine
+trigger reassurance | i gather fine
+trigger reassurance | i understand fine
 trigger reassurance | i say minor
 trigger reassurance | i say small
 trigger reassurance | i say tiny
 not-trigger reassurance | i um say um um um um um um um um fine
 not-trigger reassurance | i say um um um um um um um um um fine
 trigger reassurance | you agree fine um um um um um
-trigger reassurance | youd agree fine um um um um um
-trigger reassurance | you think fine um um um um um
+trigger reassurance | youd agree fine
+trigger reassurance | you think fine
 trigger reassurance | you say um um um um um um um um fine
-trigger reassurance | you consider fine um um um um um
-trigger reassurance | you believe fine um um um um um
-trigger reassurance | you deem fine um um um um um
-not-trigger reassurance | you um agree um um um um um um um um fine
+trigger reassurance | you consider fine
+trigger reassurance | you believe fine
+trigger reassurance | you deem fine
+not-trigger reassurance | you um agree fine
 trigger reassurance | you agree um um um um um um um um fine
 not-trigger reassurance | you agree um um um um um um um um um fine
-trigger reassurance | would you trust um um um um um
+trigger reassurance | would you trust
 trigger reassurance | um um um um um could you trust
 trigger reassurance | um um um um um can you trust
-trigger reassurance | do you trust um um um um um
-trigger reassurance | will you trust um um um um um
-trigger reassurance | would you rely um um um um um
+trigger reassurance | do you trust
+trigger reassurance | will you trust
+trigger reassurance | would you rely
 trigger reassurance | would you vouch
-trigger reassurance | would um you um trust
+trigger reassurance | would um you trust
 not-trigger reassurance | would um um you trust
+trigger reassurance | would you um trust
 not-trigger reassurance | would you um um trust
 trigger reassurance | sign off data
 trigger reassurance | sign off results
@@ -3364,10 +3365,10 @@ trigger reassurance | paranoid
 trigger reassurance | comfortable relying
 trigger reassurance | confident relying
 trigger reassurance | happy relying
-trigger reassurance | comfortable trusting um um um um um
+trigger reassurance | comfortable trusting
 trigger reassurance | comfortable using
-trigger reassurance | comfortable rely um um um um um
-trigger reassurance | comfortable trust um um um um um
+trigger reassurance | comfortable rely
+trigger reassurance | comfortable trust
 trigger reassurance | comfortable um um um um relying
 not-trigger reassurance | comfortable um um um um um relying
 trigger reassurance | nothing worry
@@ -3435,14 +3436,14 @@ not-trigger reassurance | live um with
 trigger reassurance | amount to nothing
 trigger reassurance | amounts to nothing
 not-trigger reassurance | amount um to nothing
-trigger reassurance | i can trust um um um um um
-trigger reassurance | i could trust um um um um um
-trigger reassurance | i may trust um um um um um
-trigger reassurance | i can rely um um um um um
-not-trigger reassurance | i um can trust um um um um um
+trigger reassurance | i can trust
+trigger reassurance | i could trust
+trigger reassurance | i may trust
+trigger reassurance | i can rely
+not-trigger reassurance | i um can trust
 trigger reassurance | um um um um um can i trust
 trigger reassurance | um um um um um could i trust
-trigger reassurance | may i trust um um um um um
+trigger reassurance | may i trust
 trigger reassurance | um um um um um can i rely
 not-trigger reassurance | um um um um um can um i trust
 trigger reassurance | in good shape
@@ -3551,9 +3552,9 @@ trigger reassurance | it um um doesnt matter
 not-trigger reassurance | it um um um doesnt matter
 trigger reassurance | feel confident
 trigger reassurance | feel comfortable
-trigger reassurance | feel safe um um um um um
+trigger reassurance | feel safe
 trigger reassurance | feel good
-trigger reassurance | feel okay um um um um um
+trigger reassurance | feel okay
 not-trigger reassurance | feel um confident
 trigger reassurance | no reason to be concerned
 trigger reassurance | no reason to be worried
@@ -3577,10 +3578,10 @@ trigger reassurance | can shrug
 trigger reassurance | can skip
 trigger reassurance | can um um um um um um ignor
 not-trigger reassurance | can um um um um um um um ignor
-trigger reassurance | isnt fine um um um um um
-trigger reassurance | arent fine um um um um um
-trigger reassurance | wasnt fine um um um um um
-trigger reassurance | werent fine um um um um um
+trigger reassurance | isnt fine
+trigger reassurance | arent fine
+trigger reassurance | wasnt fine
+trigger reassurance | werent fine
 trigger reassurance | isnt um um um um fine
 not-trigger reassurance | isnt um um um um um fine
 trigger reassurance | really matter
@@ -3617,11 +3618,11 @@ trigger reassurance | no worry
 not-trigger reassurance | um no problem
 trigger reassurance | in the clear
 not-trigger reassurance | in um the clear
-trigger reassurance | alright to trust um um um um um
-trigger reassurance | allowed to trust um um um um um
-trigger reassurance | worth to trust um um um um um
-trigger reassurance | fine to trust um um um um um
-trigger reassurance | fine to rely um um um um um
+trigger reassurance | alright to trust
+trigger reassurance | allowed to trust
+trigger reassurance | worth to trust
+trigger reassurance | fine to trust
+trigger reassurance | fine to rely
 trigger reassurance | fine to use
 trigger reassurance | fine um um to um ignor
 trigger reassurance | fine um um to um disregard
@@ -3631,14 +3632,13 @@ trigger reassurance | fine to skip
 trigger reassurance | fine to proceed
 trigger reassurance | fine um um to trust
 not-trigger reassurance | fine um um um to trust
-trigger reassurance | fine um um to um trust
+trigger reassurance | fine to um trust
 not-trigger reassurance | fine to um um trust
-trigger reassurance | fine
-trigger reassurance | um um um um, fine
-trigger reassurance | fine, um
-trigger reassurance | um um um fine
-not-trigger reassurance | um um um um fine
-not-trigger reassurance | fine um
+trigger reassurance | , fine
+trigger reassurance | , fine, um
+trigger reassurance | , um um um fine
+not-trigger reassurance | , um um um um fine
+not-trigger reassurance | , fine um
 trigger reassurance | in order
 trigger reassurance | in order, um
 not-trigger reassurance | in um order
@@ -3661,22 +3661,22 @@ trigger reassurance | sound enough
 trigger reassurance | solid enough
 not-trigger reassurance | good um enough
 trigger reassurance | all good
-trigger reassurance | all fine um um um um um
+trigger reassurance | all fine
 trigger reassurance | all clear
-trigger reassurance | all ok um um um um um
-trigger reassurance | all okay um um um um um
+trigger reassurance | all ok
+trigger reassurance | all okay
 trigger reassurance | all um um good
 not-trigger reassurance | all um um um good
-trigger reassurance | say fine um um um um um
-trigger reassurance | tell fine um um um um um
-trigger reassurance | promise fine um um um um um
-trigger reassurance | say ok um um um um um
-trigger reassurance | say okay um um um um um
+trigger reassurance | say fine
+trigger reassurance | tell fine
+trigger reassurance | promise fine
+trigger reassurance | say ok
+trigger reassurance | say okay
 trigger reassurance | say good
-trigger reassurance | say safe um um um um um
-trigger reassurance | say valid um um um um um
-trigger reassurance | say clean um um um um um
-trigger reassurance | say sound um um um um um
+trigger reassurance | say safe
+trigger reassurance | say valid
+trigger reassurance | say clean
+trigger reassurance | say sound
 trigger reassurance | say um um um um fine
 not-trigger reassurance | say um um um um um fine
 trigger reassurance | doesnt change anything
@@ -4052,11 +4052,6 @@ trigger effect_reality | believe gain
 trigger effect_reality | believe impact
 trigger effect_reality | believe um um effect
 not-trigger effect_reality | believe um um um effect
-trigger effect_numbers | how big
-trigger effect_numbers | how larg
-trigger effect_numbers | how strong
-trigger effect_numbers | how high
-not-trigger effect_numbers | how um big
 trigger effect_numbers | how much did effect
 trigger effect_numbers | how much does effect
 trigger effect_numbers | how much was effect
@@ -4230,37 +4225,6 @@ trigger effect_numbers | what is um um um um revenue control
 not-trigger effect_numbers | what is um um um um um revenue control
 trigger effect_numbers | what is revenue um um um um control
 not-trigger effect_numbers | what is revenue um um um um um control
-trigger effect_numbers | give lift
-trigger effect_numbers | show lift
-trigger effect_numbers | tell lift
-trigger effect_numbers | report lift
-trigger effect_numbers | print lift
-trigger effect_numbers | state lift
-trigger effect_numbers | provide lift
-trigger effect_numbers | quote lift
-trigger effect_numbers | read lift
-trigger effect_numbers | list lift
-trigger effect_numbers | send lift
-trigger effect_numbers | quantify lift
-trigger effect_numbers | give uplift
-trigger effect_numbers | give effect
-trigger effect_numbers | give difference
-trigger effect_numbers | give delta
-trigger effect_numbers | give gain
-trigger effect_numbers | give improvement
-trigger effect_numbers | give number
-trigger effect_numbers | give figure
-trigger effect_numbers | give revenue
-trigger effect_numbers | give conversion
-trigger effect_numbers | give retention
-trigger effect_numbers | give spend
-trigger effect_numbers | give arpu
-trigger effect_numbers | give sessions
-trigger effect_numbers | give mean
-trigger effect_numbers | um give lift
-not-trigger effect_numbers | um um give lift
-trigger effect_numbers | give um um um um lift
-not-trigger effect_numbers | give um um um um um lift
 trigger effect_numbers | show statistics control
 trigger effect_numbers | tell statistics control
 trigger effect_numbers | give statistics control
@@ -4542,10 +4506,6 @@ trigger causal | effect attribut res-001
 trigger causal | effect responsible res-001
 trigger causal | effect um um um um um um attribut res-001
 not-trigger causal | effect um um um um um um um attribut res-001
-trigger forecast | expect
-trigger forecast | expected
-trigger forecast | expecting
-trigger forecast | expects
 trigger forecast | forecast
 trigger forecast | predict
 trigger forecast | projected
@@ -5172,12 +5132,6 @@ trigger other_analysis | robustness
 trigger other_analysis | placebo
 trigger other_analysis | clustered
 trigger other_analysis | stratif
-trigger other_analysis | t test
-trigger other_analysis | z test
-trigger other_analysis | chi test
-trigger other_analysis | t squared
-trigger other_analysis | t square
-not-trigger other_analysis | t um test
 trigger other_analysis | one sided
 trigger other_analysis | two sided
 not-trigger other_analysis | one um sided
@@ -5188,9 +5142,6 @@ trigger other_analysis | only users
 trigger other_analysis | only customers
 trigger other_analysis | only um um players
 not-trigger other_analysis | only um um um players
-trigger other_analysis | confidence level
-trigger other_analysis | significance level
-not-trigger other_analysis | confidence um level
 trigger other_analysis | as the metric
 trigger other_analysis | as the outcome
 trigger other_analysis | as the kpi
@@ -5758,7 +5709,6 @@ trigger rewording | casual
 trigger rewording | friendl
 trigger rewording | formal
 trigger rewording | poem
-trigger rewording | haiku
 trigger rewording | limerick
 trigger rewording | pirate
 trigger rewording | rhym
@@ -5885,648 +5835,648 @@ trigger rewording | draft slack
 trigger rewording | draft message
 trigger rewording | draft um um um um um email
 not-trigger rewording | draft um um um um um um email
-intent checked | which check made
-intent checked | what check made
-intent checked | how check made
-intent checked | list check made
-intent checked | show check made
-intent checked | name check made
-intent checked | tell check made
-intent checked | give check made
-intent checked | which rule made
-intent checked | which tests ran
-intent checked | which analys made
-intent checked | which check perform
-intent checked | which check execut
-intent checked | which check conduct
-intent checked | which check cover
-intent checked | which check includ
-intent checked | which check appl
-intent checked | which check do
-intent checked | which check did
-intent checked | which check done
-intent checked | which check missing
-intent checked | which check use
-intent checked | which check used
-intent checked | which check uses
-intent checked | which check passed
-intent checked | which check produc
-intent checked | which check yield
-intent checked | which check failed
-intent checked | which um um um check um um um skip
-intent checked | which check fired
-intent checked | which check came
-intent checked | which check come
-intent checked | which check found
-intent checked | which check raised
-intent checked | which check flagged
-intent checked | which check nothing
-intent checked | which check something
-intent checked | which check evaluat
-intent checked | which check assess
-intent checked | which check examin
-intent checked | which check compar
-intent checked | which um um um check made
-not-intent checked | which um um um um check made
-intent checked | not yet built
-not-intent checked | not um yet built
-intent checked | not built
-not-intent checked | not um built
-intent checked | there a check
-intent checked | there an check
-intent checked | there any check
-intent checked | there a rule
-intent checked | there a test
-intent checked | there um a check
-not-intent checked | there um um a check
-intent checked | which rule go through
-intent checked | what rule go through
-intent checked | which check go through
-intent checked | which rule went through
-intent checked | which um um um rule go through
-not-intent checked | which um um um um rule go through
-intent checked | which rule um um um um go through
-not-intent checked | which rule um um um um um go through
-not-intent checked | which rule go um through
-intent checked | check did run
-intent checked | rule did run
-intent checked | tests did run
-intent checked | analys did run
-intent checked | guardrail did run
-intent checked | check do run
-intent checked | check does run
-intent checked | check are run
-intent checked | check um um um um did um um um um ran
-intent checked | check um um um um did run
-not-intent checked | check um um um um um did run
-intent checked | check did um um um um run
-not-intent checked | check did um um um um um run
-intent checked | which test ran
-intent checked | what test ran
-intent checked | which test run
-intent checked | which test made
-intent checked | which test perform
-intent checked | which test execut
-intent checked | which test conduct
-intent checked | which um um um test ran
-not-intent checked | which um um um um test ran
-intent checked | did review check
-intent checked | um, did review check
-intent checked | um or did review check
-intent checked | um and did review check
-intent checked | um but did review check
-intent checked | um so did review check
-intent checked | um what did review check
-intent checked | um which did review check
-intent checked | um how did review check
-intent checked | does review check
-intent checked | has review check
-intent checked | have review check
-intent checked | did referee check
-intent checked | did report check
-intent checked | did you check
-intent checked | did anyone check
-intent checked | did anybody check
-intent checked | did someone check
-intent checked | did it check
-intent checked | did they check
-intent checked | did we check
-intent checked | did review cover
-intent checked | did review verif
-intent checked | did review examin
-intent checked | did review inspect
-intent checked | did review assess
-intent checked | did review includ
-intent checked | did review evaluat
-intent checked | did review consider
-intent checked | did review compar
-intent checked | did um um um review check
-not-intent checked | did um um um um review check
-intent checked | did review test
-intent checked | does review test
-intent checked | has review test
-intent checked | have review test
-intent checked | did review tested
-intent checked | did review testing
-intent checked | did um um um review test
-not-intent checked | did um um um um review test
-intent checked | did review um test
-not-intent checked | did review um um test
-intent checked | did review look at
-intent checked | does review look at
-intent checked | has review look at
-intent checked | have review look at
-intent checked | did review looked at
-intent checked | did review looking at
-intent checked | did review look into
-intent checked | did review look for
-intent checked | did review look over
-intent checked | did um um um review look at
-not-intent checked | did um um um um review look at
-intent checked | did review um um look at
-not-intent checked | did review um um um look at
-not-intent checked | did review look um at
-intent checked | did review run rule
-intent checked | does review run rule
-intent checked | has review run rule
-intent checked | have review run rule
-intent checked | did review ran rule
-intent checked | did review run analys
-intent checked | did review run guardrail
-intent checked | did review run everything
-intent checked | did review run all
-intent checked | did um um um review run rule
-not-intent checked | did um um um um review run rule
-intent checked | did review um run rule
-not-intent checked | did review um um run rule
-intent checked | did review run um um um rule
-not-intent checked | did review run um um um um rule
-intent checked | if review check
-intent checked | whether review check
-intent checked | if review cover
-intent checked | if review verif
-intent checked | if review examin
-intent checked | if review inspect
-intent checked | if review assess
-intent checked | if review includ
-intent checked | if review evaluat
-intent checked | if review consider
-intent checked | if review compar
-intent checked | if um um um review check
-not-intent checked | if um um um um review check
-intent checked | if review test
-intent checked | whether review test
-intent checked | if review tested
-intent checked | if review testing
-intent checked | if um um um review test
-not-intent checked | if um um um um review test
-intent checked | if review um test
-not-intent checked | if review um um test
-intent checked | skipped
-intent checked | unchecked
-intent checked | untested
-intent checked | unevaluated
-intent checked | what checked
-intent checked | what tested
-intent checked | what covered
-intent checked | what examined
-intent checked | what looked
-intent checked | what evaluated
-intent checked | what assessed
-intent checked | what um um checked
-not-intent checked | what um um um checked
-intent checked | what skip
-intent checked | which skip
-intent checked | what omitted
-intent checked | what missed
-intent checked | what left
-intent checked | what um um um skip
-not-intent checked | what um um um um skip
-intent checked | which area check
-intent checked | what area check
-intent checked | which aspect check
-intent checked | which um um part um um um um check
-intent checked | which thing check
-intent checked | which kind check
-intent checked | which type check
-intent checked | which area test
-intent checked | which area verif
-intent checked | which area examin
-intent checked | which area inspect
-intent checked | which area assess
-intent checked | which area evaluat
-intent checked | which area look
-intent checked | which area cover
-intent checked | which um um area check
-not-intent checked | which um um um area check
-intent checked | which area um um um um check
-not-intent checked | which area um um um um um check
-intent checked | anything didnt check
-intent checked | something didnt check
-intent checked | anything hasnt check
-intent checked | anything wasnt check
-intent checked | anything not check
-intent checked | anything never check
-intent checked | anything um um um um didnt check
-not-intent checked | anything um um um um um didnt check
-intent checked | anything didnt um um check
-not-intent checked | anything didnt um um um check
-intent checked | what look at
-intent checked | which look at
-intent checked | what um um um um looked at
-intent checked | what look into
-intent checked | what um um um um look at
-not-intent checked | what um um um um um look at
-not-intent checked | what look um at
-intent checked | was checked
-intent checked | were checked
-intent checked | was tested
-intent checked | was covered
-intent checked | was examined
-intent checked | was verified
-intent checked | was included
-intent checked | was run
-intent checked | was ran
-intent checked | was applied
-intent checked | was performed
-intent checked | was done
-intent checked | was evaluated
-intent checked | was assessed
-intent checked | was considered
-intent checked | was left
-intent checked | was omitted
-intent checked | was missed
-intent checked | was excluded
-intent checked | was um um um um um um um um checked
-not-intent checked | was um um um um um um um um um checked
-intent checked | have been checked
-intent checked | has been checked
-intent checked | have been tested
-intent checked | have been covered
-intent checked | have been examined
-intent checked | have been verified
-intent checked | have been evaluated
-intent checked | have been assessed
-intent checked | have been performed
-intent checked | have been run
-intent checked | have um um been checked
-not-intent checked | have um um um been checked
-intent checked | have been um checked
-not-intent checked | have been um um checked
-intent checked | check ran
-intent checked | rule ran
-intent checked | analys ran
-intent checked | guardrail ran
-intent checked | check performed
-intent checked | check executed
-intent checked | check conducted
-intent checked | check um um um um um ran
-not-intent checked | check um um um um um um ran
-intent checked | wasnt evaluat
-intent checked | werent evaluat
-intent checked | not evaluat
-intent checked | never evaluat
-intent checked | didnt evaluat
-intent checked | wasnt checked
-intent checked | wasnt tested
-intent checked | wasnt covered
-intent checked | wasnt assessed
-intent checked | wasnt performed
-intent checked | wasnt um um um evaluat
-not-intent checked | wasnt um um um um evaluat
-intent checked | wasnt run
-intent checked | werent run
-intent checked | wasnt ran
-intent checked | wasnt done
-intent checked | wasnt um um run
-not-intent checked | wasnt um um um run
-intent checked | part check
-intent checked | part rule
-intent checked | part analys
-intent checked | part review
-intent checked | part um um um check
-not-intent checked | part um um um um check
-intent next_steps | fix
-intent next_steps | repair
-intent next_steps | remediat
-intent next_steps | resolv
-intent next_steps | address
-intent next_steps | steps
-intent next_steps | tackle
-intent next_steps | prioriti
-intent next_steps | unblock
-intent next_steps | what order
-intent next_steps | which order
-not-intent next_steps | what um order
-intent next_steps | next step
-not-intent next_steps | next um step
-intent next_steps | next time
-intent next_steps | next run
-intent next_steps | next attempt
-intent next_steps | next iteration
-not-intent next_steps | next um time
-intent next_steps | have us change
-intent next_steps | has us change
-intent next_steps | have me change
-intent next_steps | have we change
-intent next_steps | have us do
-not-intent next_steps | have um us change
-intent next_steps | what would it take
-intent next_steps | what will it take
-not-intent next_steps | what um would it take
-intent next_steps | should do
-intent next_steps | must do
-intent next_steps | need do
-intent next_steps | needs do
-intent next_steps | shall do
-intent next_steps | should deal
-intent next_steps | should handle
-intent next_steps | should start
-intent next_steps | should begin
-intent next_steps | should um um um do
-not-intent next_steps | should um um um um do
-intent next_steps | should change
-intent next_steps | must change
-intent next_steps | need change
-intent next_steps | needs change
-intent next_steps | shall change
-intent next_steps | should um change
-not-intent next_steps | should um um change
-intent next_steps | plan to
-intent next_steps | plan for
-not-intent next_steps | plan um to
-intent next_steps | where do we start
-intent next_steps | where can we start
-intent next_steps | where do i start
-intent next_steps | where do we begin
-not-intent next_steps | where um do we start
-intent next_steps | how should we proceed um um um um um
-intent next_steps | how would we proceed
-intent next_steps | how do we proceed um um um um um
-intent next_steps | how should i proceed um um um um um
-not-intent next_steps | how um should we proceed um um um um um
-intent next_steps | required before
-intent next_steps | needed before
-intent next_steps | necessary before
-not-intent next_steps | required um before
-intent next_steps | what would do
-intent next_steps | how would do
-intent next_steps | what could do
-intent next_steps | what can do
-intent next_steps | what shall doing
-intent next_steps | what will do
-intent next_steps | what should doing
-intent next_steps | what must doing
-intent next_steps | what would doing
-intent next_steps | what um um would do
-not-intent next_steps | what um um um would do
-intent next_steps | what would um um um do
-not-intent next_steps | what would um um um um do
-intent next_steps | what do i
-intent next_steps | what do we
-intent next_steps | what do you
-not-intent next_steps | what um do i
-intent next_steps | need to happen
-not-intent next_steps | need um to happen
-intent next_steps | tell us to
-intent next_steps | tells us to
-intent next_steps | tell me to
-not-intent next_steps | tell um us to
-intent next_steps | must be done
-intent next_steps | needs be done
-intent next_steps | need be done
-intent next_steps | has be done
-intent next_steps | should be done
-intent next_steps | must be changed
-intent next_steps | must be corrected
-intent next_steps | must um um um be done
-not-intent next_steps | must um um um um be done
-not-intent next_steps | must be um done
-intent next_steps | how can we clear
-intent next_steps | how could we clear
-intent next_steps | how do we clear
-intent next_steps | how should we clear
-intent next_steps | how would we clear
-intent next_steps | how can i clear
-intent next_steps | how can we get
-intent next_steps | how can we make
-intent next_steps | how can we avoid
-intent next_steps | how can we prevent
-intent next_steps | how can we deal
-intent next_steps | how can we handle
-intent next_steps | how can we improve
-intent next_steps | how can we solve
-not-intent next_steps | how um can we clear
-intent next_steps | how can um we clear
-not-intent next_steps | how can um um we clear
-intent next_steps | how can we um um um clear
-not-intent next_steps | how can we um um um um clear
-intent next_steps | what to do
-not-intent next_steps | what um to do
-intent next_steps | what now
-intent next_steps | what next
-not-intent next_steps | what um now
-intent next_steps | advis
-intent next_steps | advice
-intent next_steps | recommend
-intent next_steps | suggest
-intent next_steps | actions
-intent next_steps | rerun
-intent next_steps | retest
-intent next_steps | run again
-intent next_steps | running again
-intent next_steps | run um um again
-not-intent next_steps | run um um um again
-intent next_steps | before run
-intent next_steps | before running
-intent next_steps | before repeat
-intent next_steps | before again
-intent next_steps | before um um um run
-not-intent next_steps | before um um um um run
-intent next_steps | what comes after
-intent next_steps | what comes next
-intent next_steps | what comes first
-not-intent next_steps | what um comes after
-intent next_steps | how get pass
-intent next_steps | how make pass
-intent next_steps | how get clear
-intent next_steps | how get green
-intent next_steps | how get valid um um um um um
-intent next_steps | how um um um um um um get pass
-not-intent next_steps | how um um um um um um um get pass
-intent next_steps | how get um um um um pass
-not-intent next_steps | how get um um um um um pass
-intent summary | finding
-intent summary | block
-intent summary | warning
-intent summary | overview
-intent summary | summar
-intent summary | overall
-intent summary | verdict
-intent summary | picture
-intent summary | sever
-intent summary | serious
-intent summary | problem
-intent summary | issue
-intent summary | wrong
-intent summary | rundown
-intent summary | gist
-intent summary | takeaway
-intent summary | highlight
-intent summary | headline
-intent summary | recap
-intent summary | concern
-intent summary | risk
-intent summary | critical
-intent summary | urgent
-intent summary | review find
-intent summary | report find
-intent summary | experiment find
-intent summary | you find
-intent summary | review found
-intent summary | review say
-intent summary | review says
-intent summary | review show
-intent summary | review shows
-intent summary | review contain
-intent summary | review contains
-intent summary | review conclude
-intent summary | review concluded
-intent summary | review flagged
-intent summary | review raised
-intent summary | review noted
-intent summary | review report
-intent summary | review reports
-intent summary | review reported
-intent summary | review identified
-intent summary | review raise
-intent summary | review raises
-intent summary | review rate
-intent summary | review rates
-intent summary | review rating
-intent summary | review decide
-intent summary | review decided
-intent summary | review flag
-intent summary | review flags
-intent summary | review decision
-intent summary | review mention
-intent summary | review mentions
-intent summary | review note
-intent summary | review notes
-intent summary | review judge
-intent summary | review judged
-intent summary | review look
-intent summary | review looks
-intent summary | review give
-intent summary | review gives
-intent summary | review think
-intent summary | review thinks
-intent summary | review um um um find
-not-intent summary | review um um um um find
-intent summary | what was found
-intent summary | what were found
-intent summary | what was raised
-intent summary | what was flagged
-intent summary | what was identified
-intent summary | what was noted
-not-intent summary | what um was found
-intent summary | where stand
-intent summary | where stands
-intent summary | where standing
-intent summary | where um um um um stand
-not-intent summary | where um um um um um stand
-intent summary | came out review
-intent summary | come out review
-intent summary | comes out review
-intent summary | came out report
-intent summary | came out experiment
-not-intent summary | came um out review
-intent summary | came out um um um review
-not-intent summary | came out um um um um review
-intent summary | brief me
-intent summary | brief us
-not-intent summary | brief um me
-intent summary | tell review
-intent summary | give review
-intent summary | tell report
-intent summary | tell experiment
-intent summary | tell um um um um um review
-not-intent summary | tell um um um um um um review
-intent summary | key result
-intent summary | main result
-intent summary | top result
-intent summary | biggest result
-intent summary | worst result
-intent summary | key point
-intent summary | key um um um result
-not-intent summary | key um um um um result
-intent summary | explain review
-intent summary | describe review
-intent summary | interpret review
-intent summary | walk review
-intent summary | go review
-intent summary | explain report
-intent summary | explain experiment
-intent summary | explain result
-intent summary | explain um um um review
-not-intent summary | explain um um um um review
-intent summary | state experiment
-intent summary | status experiment
-intent summary | condition experiment
-intent summary | health experiment
-intent summary | state review
-intent summary | state report
-intent summary | state test
-intent summary | state um um um um experiment
-not-intent summary | state um um um um um experiment
-intent summary | according to review
-intent summary | according to report
-not-intent summary | according um to review
-intent summary | according to um review
-not-intent summary | according to um um review
-intent summary | red flag
-not-intent summary | red um flag
-intent summary | stand out
-intent summary | stands out
-intent summary | stood out
-not-intent summary | stand um out
-intent summary | anything know
-intent summary | something know
-intent summary | anything noting
-intent summary | anything notable
-intent summary | anything important
-intent summary | anything worrying
-intent summary | anything worried
-intent summary | anything worry
-intent summary | anything um um um um um um um um know
-not-intent summary | anything um um um um um um um um um know
-intent summary | should i know
-intent summary | must i know
-intent summary | should we know
-intent summary | should i aware
-not-intent summary | should um i know
-intent summary | aware of
-not-intent summary | aware um of
-intent summary | why is important
-intent summary | why are important
-intent summary | why does important
-intent summary | why do important
-intent summary | why is matter
-intent summary | why is matters
-not-intent summary | why um is important
-intent summary | why is um um um important
-not-intent summary | why is um um um um important
-intent summary | check reveal
-intent summary | rule reveal
-intent summary | test reveal
-intent summary | analys reveal
-intent summary | check show
-intent summary | check produc
-intent summary | check yield
-intent summary | check come
-intent summary | check came
-intent summary | check found
-intent summary | check find
-intent summary | check um um um reveal
-not-intent summary | check um um um um reveal
-intent summary | worth knowing
-intent summary | worth noting
-intent summary | worth mentioning
-intent summary | worth flagging
-not-intent summary | worth um knowing
-intent summary | how bad
-not-intent summary | how um bad
-intent summary | valid or invalid
-not-intent summary | valid um or invalid
-intent summary | bottom line
-not-intent summary | bottom um line
-intent summary | review pass
-intent summary | experiment pass
-intent summary | report pass
-intent summary | test pass
-intent summary | review fail
-intent summary | review um um um pass
-not-intent summary | review um um um um pass
+intent checked | which check made sample
+intent checked | what check made sample
+intent checked | how check made sample
+intent checked | list check made sample
+intent checked | show check made sample
+intent checked | name check made sample
+intent checked | tell check made sample
+intent checked | give check made sample
+intent checked | which rule made sample
+intent checked | which tests ran sample
+intent checked | which analys made sample
+intent checked | which check perform sample
+intent checked | which check execut sample
+intent checked | which check conduct sample
+intent checked | which check cover sample
+intent checked | which check includ sample
+intent checked | which check appl sample
+intent checked | which check do sample
+intent checked | which check did sample
+intent checked | which check done sample
+intent checked | which check missing sample
+intent checked | which check use sample
+intent checked | which check used sample
+intent checked | which check uses sample
+intent checked | which check passed sample
+intent checked | which check produc sample
+intent checked | which check yield sample
+intent checked | which check failed sample
+intent checked | which um um um check um um um skip sample
+intent checked | which check fired sample
+intent checked | which check came sample
+intent checked | which check come sample
+intent checked | which check found sample
+intent checked | which check raised sample
+intent checked | which check flagged sample
+intent checked | which check nothing sample
+intent checked | which check something sample
+intent checked | which check evaluat sample
+intent checked | which check assess sample
+intent checked | which check examin sample
+intent checked | which check compar sample
+intent checked | which um um um check made sample
+not-intent checked | which um um um um check made sample
+intent checked | not yet built sample
+not-intent checked | not um yet built sample
+intent checked | not built sample
+not-intent checked | not um built sample
+intent checked | there a check sample
+intent checked | there an check sample
+intent checked | there any check sample
+intent checked | there a rule sample
+intent checked | there a test sample
+intent checked | there um a check sample
+not-intent checked | there um um a check sample
+intent checked | which rule go through sample
+intent checked | what rule go through sample
+intent checked | which check go through sample
+intent checked | which rule went through sample
+intent checked | which um um um rule go through sample
+not-intent checked | which um um um um rule go through sample
+intent checked | which rule um um um um go through sample
+not-intent checked | which rule um um um um um go through sample
+not-intent checked | which rule go um through sample
+intent checked | check did run sample
+intent checked | rule did run sample
+intent checked | tests did run sample
+intent checked | analys did run sample
+intent checked | guardrail did run sample
+intent checked | check do run sample
+intent checked | check does run sample
+intent checked | check are run sample
+intent checked | check um um um um did um um um um ran sample
+intent checked | check um um um um did run sample
+not-intent checked | check um um um um um did run sample
+intent checked | check did um um um um run sample
+not-intent checked | check did um um um um um run sample
+intent checked | which test ran sample
+intent checked | what test ran sample
+intent checked | which test run sample
+intent checked | which test made sample
+intent checked | which test perform sample
+intent checked | which test execut sample
+intent checked | which test conduct sample
+intent checked | which um um um test ran sample
+not-intent checked | which um um um um test ran sample
+intent checked | did review check sample
+intent checked | um, did review check sample
+intent checked | um or did review check sample
+intent checked | um and did review check sample
+intent checked | um but did review check sample
+intent checked | um so did review check sample
+intent checked | um what did review check sample
+intent checked | um which did review check sample
+intent checked | um how did review check sample
+intent checked | does review check sample
+intent checked | has review check sample
+intent checked | have review check sample
+intent checked | did referee check sample
+intent checked | did report check sample
+intent checked | did you check sample
+intent checked | did anyone check sample
+intent checked | did anybody check sample
+intent checked | did someone check sample
+intent checked | did it check sample
+intent checked | did they check sample
+intent checked | did we check sample
+intent checked | did review cover sample
+intent checked | did review verif sample
+intent checked | did review examin sample
+intent checked | did review inspect sample
+intent checked | did review assess sample
+intent checked | did review includ sample
+intent checked | did review evaluat sample
+intent checked | did review consider sample
+intent checked | did review compar sample
+intent checked | did um um um review check sample
+not-intent checked | did um um um um review check sample
+intent checked | did review test sample
+intent checked | does review test sample
+intent checked | has review test sample
+intent checked | have review test sample
+intent checked | did review tested sample
+intent checked | did review testing sample
+intent checked | did um um um review test sample
+not-intent checked | did um um um um review test sample
+intent checked | did review um test sample
+not-intent checked | did review um um test sample
+intent checked | did review look at sample
+intent checked | does review look at sample
+intent checked | has review look at sample
+intent checked | have review look at sample
+intent checked | did review looked at sample
+intent checked | did review looking at sample
+intent checked | did review look into sample
+intent checked | did review look for sample
+intent checked | did review look over sample
+intent checked | did um um um review look at sample
+not-intent checked | did um um um um review look at sample
+intent checked | did review um um look at sample
+not-intent checked | did review um um um look at sample
+not-intent checked | did review look um at sample
+intent checked | did review run rule sample
+intent checked | does review run rule sample
+intent checked | has review run rule sample
+intent checked | have review run rule sample
+intent checked | did review ran rule sample
+intent checked | did review run analys sample
+intent checked | did review run guardrail sample
+intent checked | did review run everything sample
+intent checked | did review run all sample
+intent checked | did um um um review run rule sample
+not-intent checked | did um um um um review run rule sample
+intent checked | did review um run rule sample
+not-intent checked | did review um um run rule sample
+intent checked | did review run um um um rule sample
+not-intent checked | did review run um um um um rule sample
+intent checked | if review check sample
+intent checked | whether review check sample
+intent checked | if review cover sample
+intent checked | if review verif sample
+intent checked | if review examin sample
+intent checked | if review inspect sample
+intent checked | if review assess sample
+intent checked | if review includ sample
+intent checked | if review evaluat sample
+intent checked | if review consider sample
+intent checked | if review compar sample
+intent checked | if um um um review check sample
+not-intent checked | if um um um um review check sample
+intent checked | if review test sample
+intent checked | whether review test sample
+intent checked | if review tested sample
+intent checked | if review testing sample
+intent checked | if um um um review test sample
+not-intent checked | if um um um um review test sample
+intent checked | if review um test sample
+not-intent checked | if review um um test sample
+intent checked | skipped sample
+intent checked | unchecked sample
+intent checked | untested sample
+intent checked | unevaluated sample
+intent checked | what checked sample
+intent checked | what tested sample
+intent checked | what covered sample
+intent checked | what examined sample
+intent checked | what looked sample
+intent checked | what evaluated sample
+intent checked | what assessed sample
+intent checked | what um um checked sample
+not-intent checked | what um um um checked sample
+intent checked | what skip sample
+intent checked | which skip sample
+intent checked | what omitted sample
+intent checked | what missed sample
+intent checked | what left sample
+intent checked | what um um um skip sample
+not-intent checked | what um um um um skip sample
+intent checked | which area check sample
+intent checked | what area check sample
+intent checked | which aspect check sample
+intent checked | which um um part um um um um check sample
+intent checked | which thing check sample
+intent checked | which kind check sample
+intent checked | which type check sample
+intent checked | which area test sample
+intent checked | which area verif sample
+intent checked | which area examin sample
+intent checked | which area inspect sample
+intent checked | which area assess sample
+intent checked | which area evaluat sample
+intent checked | which area look sample
+intent checked | which area cover sample
+intent checked | which um um area check sample
+not-intent checked | which um um um area check sample
+intent checked | which area um um um um check sample
+not-intent checked | which area um um um um um check sample
+intent checked | anything didnt check sample
+intent checked | something didnt check sample
+intent checked | anything hasnt check sample
+intent checked | anything wasnt check sample
+intent checked | anything not check sample
+intent checked | anything never check sample
+intent checked | anything um um um um didnt check sample
+not-intent checked | anything um um um um um didnt check sample
+intent checked | anything didnt um um check sample
+not-intent checked | anything didnt um um um check sample
+intent checked | what look at sample
+intent checked | which look at sample
+intent checked | what um um um um looked at sample
+intent checked | what look into sample
+intent checked | what um um um um look at sample
+not-intent checked | what um um um um um look at sample
+not-intent checked | what look um at sample
+intent checked | was checked sample
+intent checked | were checked sample
+intent checked | was tested sample
+intent checked | was covered sample
+intent checked | was examined sample
+intent checked | was verified sample
+intent checked | was included sample
+intent checked | was run sample
+intent checked | was ran sample
+intent checked | was applied sample
+intent checked | was performed sample
+intent checked | was done sample
+intent checked | was evaluated sample
+intent checked | was assessed sample
+intent checked | was considered sample
+intent checked | was left sample
+intent checked | was omitted sample
+intent checked | was missed sample
+intent checked | was excluded sample
+intent checked | was um um um um um um um um checked sample
+not-intent checked | was um um um um um um um um um checked sample
+intent checked | have been checked sample
+intent checked | has been checked sample
+intent checked | have been tested sample
+intent checked | have been covered sample
+intent checked | have been examined sample
+intent checked | have been verified sample
+intent checked | have been evaluated sample
+intent checked | have been assessed sample
+intent checked | have been performed sample
+intent checked | have been run sample
+intent checked | have um um been checked sample
+not-intent checked | have um um um been checked sample
+intent checked | have been um checked sample
+not-intent checked | have been um um checked sample
+intent checked | check ran sample
+intent checked | rule ran sample
+intent checked | analys ran sample
+intent checked | guardrail ran sample
+intent checked | check performed sample
+intent checked | check executed sample
+intent checked | check conducted sample
+intent checked | check um um um um um ran sample
+not-intent checked | check um um um um um um ran sample
+intent checked | wasnt evaluat sample
+intent checked | werent evaluat sample
+intent checked | not evaluat sample
+intent checked | never evaluat sample
+intent checked | didnt evaluat sample
+intent checked | wasnt checked sample
+intent checked | wasnt tested sample
+intent checked | wasnt covered sample
+intent checked | wasnt assessed sample
+intent checked | wasnt performed sample
+intent checked | wasnt um um um evaluat sample
+not-intent checked | wasnt um um um um evaluat sample
+intent checked | wasnt run sample
+intent checked | werent run sample
+intent checked | wasnt ran sample
+intent checked | wasnt done sample
+intent checked | wasnt um um run sample
+not-intent checked | wasnt um um um run sample
+intent checked | part check sample
+intent checked | part rule sample
+intent checked | part analys sample
+intent checked | part review sample
+intent checked | part um um um check sample
+not-intent checked | part um um um um check sample
+intent next_steps | fix sample
+intent next_steps | repair sample
+intent next_steps | remediat sample
+intent next_steps | resolv sample
+intent next_steps | address sample
+intent next_steps | steps sample
+intent next_steps | tackle sample
+intent next_steps | prioriti sample
+intent next_steps | unblock sample
+intent next_steps | what order sample
+intent next_steps | which order sample
+not-intent next_steps | what um order sample
+intent next_steps | next step sample
+not-intent next_steps | next um step sample
+intent next_steps | next time sample
+intent next_steps | next run sample
+intent next_steps | next attempt sample
+intent next_steps | next iteration sample
+not-intent next_steps | next um time sample
+intent next_steps | have us change sample
+intent next_steps | has us change sample
+intent next_steps | have me change sample
+intent next_steps | have we change sample
+intent next_steps | have us do sample
+not-intent next_steps | have um us change sample
+intent next_steps | what would it take sample
+intent next_steps | what will it take sample
+not-intent next_steps | what um would it take sample
+intent next_steps | should do sample
+intent next_steps | must do sample
+intent next_steps | need do sample
+intent next_steps | needs do sample
+intent next_steps | shall do sample
+intent next_steps | should deal sample
+intent next_steps | should handle sample
+intent next_steps | should start sample
+intent next_steps | should begin sample
+intent next_steps | should um um um do sample
+not-intent next_steps | should um um um um do sample
+intent next_steps | should change sample
+intent next_steps | must change sample
+intent next_steps | need change sample
+intent next_steps | needs change sample
+intent next_steps | shall change sample
+intent next_steps | should um change sample
+not-intent next_steps | should um um change sample
+intent next_steps | plan to sample
+intent next_steps | plan for sample
+not-intent next_steps | plan um to sample
+intent next_steps | where do we start sample
+intent next_steps | where can we start sample
+intent next_steps | where do i start sample
+intent next_steps | where do we begin sample
+not-intent next_steps | where um do we start sample
+intent next_steps | how should we proceed sample
+intent next_steps | how would we proceed sample
+intent next_steps | how do we proceed sample
+intent next_steps | how should i proceed sample
+not-intent next_steps | how um should we proceed sample
+intent next_steps | required before sample
+intent next_steps | needed before sample
+intent next_steps | necessary before sample
+not-intent next_steps | required um before sample
+intent next_steps | what would do sample
+intent next_steps | how would do sample
+intent next_steps | what could do sample
+intent next_steps | what can do sample
+intent next_steps | what shall doing sample
+intent next_steps | what will do sample
+intent next_steps | what should doing sample
+intent next_steps | what must doing sample
+intent next_steps | what would doing sample
+intent next_steps | what um um would do sample
+not-intent next_steps | what um um um would do sample
+intent next_steps | what would um um um do sample
+not-intent next_steps | what would um um um um do sample
+intent next_steps | what do i sample
+intent next_steps | what do we sample
+intent next_steps | what do you sample
+not-intent next_steps | what um do i sample
+intent next_steps | need to happen sample
+not-intent next_steps | need um to happen sample
+intent next_steps | tell us to sample
+intent next_steps | tells us to sample
+intent next_steps | tell me to sample
+not-intent next_steps | tell um us to sample
+intent next_steps | must be done sample
+intent next_steps | needs be done sample
+intent next_steps | need be done sample
+intent next_steps | has be done sample
+intent next_steps | should be done sample
+intent next_steps | must be changed sample
+intent next_steps | must be corrected sample
+intent next_steps | must um um um be done sample
+not-intent next_steps | must um um um um be done sample
+not-intent next_steps | must be um done sample
+intent next_steps | how can we clear sample
+intent next_steps | how could we clear sample
+intent next_steps | how do we clear sample
+intent next_steps | how should we clear sample
+intent next_steps | how would we clear sample
+intent next_steps | how can i clear sample
+intent next_steps | how can we get sample
+intent next_steps | how can we make sample
+intent next_steps | how can we avoid sample
+intent next_steps | how can we prevent sample
+intent next_steps | how can we deal sample
+intent next_steps | how can we handle sample
+intent next_steps | how can we improve sample
+intent next_steps | how can we solve sample
+not-intent next_steps | how um can we clear sample
+intent next_steps | how can um we clear sample
+not-intent next_steps | how can um um we clear sample
+intent next_steps | how can we um um um clear sample
+not-intent next_steps | how can we um um um um clear sample
+intent next_steps | what to do sample
+not-intent next_steps | what um to do sample
+intent next_steps | what now sample
+intent next_steps | what next sample
+not-intent next_steps | what um now sample
+intent next_steps | advis sample
+intent next_steps | advice sample
+intent next_steps | recommend sample
+intent next_steps | suggest sample
+intent next_steps | actions sample
+intent next_steps | rerun sample
+intent next_steps | retest sample
+intent next_steps | run again sample
+intent next_steps | running again sample
+intent next_steps | run um um again sample
+not-intent next_steps | run um um um again sample
+intent next_steps | before run sample
+intent next_steps | before running sample
+intent next_steps | before repeat sample
+intent next_steps | before again sample
+intent next_steps | before um um um run sample
+not-intent next_steps | before um um um um run sample
+intent next_steps | what comes after sample
+intent next_steps | what comes next sample
+intent next_steps | what comes first sample
+not-intent next_steps | what um comes after sample
+intent next_steps | how get pass sample
+intent next_steps | how make pass sample
+intent next_steps | how get clear sample
+intent next_steps | how get green sample
+intent next_steps | how get valid sample
+intent next_steps | how um um um um um um get pass sample
+not-intent next_steps | how um um um um um um um get pass sample
+intent next_steps | how get um um um um pass sample
+not-intent next_steps | how get um um um um um pass sample
+intent summary | finding sample
+intent summary | block sample
+intent summary | warning sample
+intent summary | overview sample
+intent summary | summar sample
+intent summary | overall sample
+intent summary | verdict sample
+intent summary | picture sample
+intent summary | sever sample
+intent summary | serious sample
+intent summary | problem sample
+intent summary | issue sample
+intent summary | wrong sample
+intent summary | rundown sample
+intent summary | gist sample
+intent summary | takeaway sample
+intent summary | highlight sample
+intent summary | headline sample
+intent summary | recap sample
+intent summary | concern sample
+intent summary | risk sample
+intent summary | critical sample
+intent summary | urgent sample
+intent summary | review find sample
+intent summary | report find sample
+intent summary | experiment find sample
+intent summary | you find sample
+intent summary | review found sample
+intent summary | review say sample
+intent summary | review says sample
+intent summary | review show sample
+intent summary | review shows sample
+intent summary | review contain sample
+intent summary | review contains sample
+intent summary | review conclude sample
+intent summary | review concluded sample
+intent summary | review flagged sample
+intent summary | review raised sample
+intent summary | review noted sample
+intent summary | review report sample
+intent summary | review reports sample
+intent summary | review reported sample
+intent summary | review identified sample
+intent summary | review raise sample
+intent summary | review raises sample
+intent summary | review rate sample
+intent summary | review rates sample
+intent summary | review rating sample
+intent summary | review decide sample
+intent summary | review decided sample
+intent summary | review flag sample
+intent summary | review flags sample
+intent summary | review decision sample
+intent summary | review mention sample
+intent summary | review mentions sample
+intent summary | review note sample
+intent summary | review notes sample
+intent summary | review judge sample
+intent summary | review judged sample
+intent summary | review look sample
+intent summary | review looks sample
+intent summary | review give sample
+intent summary | review gives sample
+intent summary | review think sample
+intent summary | review thinks sample
+intent summary | review um um um find sample
+not-intent summary | review um um um um find sample
+intent summary | what was found sample
+intent summary | what were found sample
+intent summary | what was raised sample
+intent summary | what was flagged sample
+intent summary | what was identified sample
+intent summary | what was noted sample
+not-intent summary | what um was found sample
+intent summary | where stand sample
+intent summary | where stands sample
+intent summary | where standing sample
+intent summary | where um um um um stand sample
+not-intent summary | where um um um um um stand sample
+intent summary | came out review sample
+intent summary | come out review sample
+intent summary | comes out review sample
+intent summary | came out report sample
+intent summary | came out experiment sample
+not-intent summary | came um out review sample
+intent summary | came out um um um review sample
+not-intent summary | came out um um um um review sample
+intent summary | brief me sample
+intent summary | brief us sample
+not-intent summary | brief um me sample
+intent summary | tell review sample
+intent summary | give review sample
+intent summary | tell report sample
+intent summary | tell experiment sample
+intent summary | tell um um um um um review sample
+not-intent summary | tell um um um um um um review sample
+intent summary | key result sample
+intent summary | main result sample
+intent summary | top result sample
+intent summary | biggest result sample
+intent summary | worst result sample
+intent summary | key point sample
+intent summary | key um um um result sample
+not-intent summary | key um um um um result sample
+intent summary | explain review sample
+intent summary | describe review sample
+intent summary | interpret review sample
+intent summary | walk review sample
+intent summary | go review sample
+intent summary | explain report sample
+intent summary | explain experiment sample
+intent summary | explain result sample
+intent summary | explain um um um review sample
+not-intent summary | explain um um um um review sample
+intent summary | state experiment sample
+intent summary | status experiment sample
+intent summary | condition experiment sample
+intent summary | health experiment sample
+intent summary | state review sample
+intent summary | state report sample
+intent summary | state test sample
+intent summary | state um um um um experiment sample
+not-intent summary | state um um um um um experiment sample
+intent summary | according to review sample
+intent summary | according to report sample
+not-intent summary | according um to review sample
+intent summary | according to um review sample
+not-intent summary | according to um um review sample
+intent summary | red flag sample
+not-intent summary | red um flag sample
+intent summary | stand out sample
+intent summary | stands out sample
+intent summary | stood out sample
+not-intent summary | stand um out sample
+intent summary | anything know sample
+intent summary | something know sample
+intent summary | anything noting sample
+intent summary | anything notable sample
+intent summary | anything important sample
+intent summary | anything worrying sample
+intent summary | anything worried sample
+intent summary | anything worry sample
+intent summary | anything um um um um um um um um know sample
+not-intent summary | anything um um um um um um um um um know sample
+intent summary | should i know sample
+intent summary | must i know sample
+intent summary | should we know sample
+intent summary | should i aware sample
+not-intent summary | should um i know sample
+intent summary | aware of sample
+not-intent summary | aware um of sample
+intent summary | why is important sample
+intent summary | why are important sample
+intent summary | why does important sample
+intent summary | why do important sample
+intent summary | why is matter sample
+intent summary | why is matters sample
+not-intent summary | why um is important sample
+intent summary | why is um um um important sample
+not-intent summary | why is um um um um important sample
+intent summary | check reveal sample
+intent summary | rule reveal sample
+intent summary | test reveal sample
+intent summary | analys reveal sample
+intent summary | check show sample
+intent summary | check produc sample
+intent summary | check yield sample
+intent summary | check come sample
+intent summary | check came sample
+intent summary | check found sample
+intent summary | check find sample
+intent summary | check um um um reveal sample
+not-intent summary | check um um um um reveal sample
+intent summary | worth knowing sample
+intent summary | worth noting sample
+intent summary | worth mentioning sample
+intent summary | worth flagging sample
+not-intent summary | worth um knowing sample
+intent summary | how bad sample
+not-intent summary | how um bad sample
+intent summary | valid or invalid sample
+not-intent summary | valid um or invalid sample
+intent summary | bottom line sample
+not-intent summary | bottom um line sample
+intent summary | review pass sample
+intent summary | experiment pass sample
+intent summary | report pass sample
+intent summary | test pass sample
+intent summary | review fail sample
+intent summary | review um um um pass sample
+not-intent summary | review um um um um pass sample
 explain explain_finding | why um um um um um res-001 ship
 explain explain_finding | explain res-001 ship
 explain explain_finding | mean res-001 ship
@@ -6612,6 +6562,56 @@ not-target RES-012 | exposed um after
 target RES-013 | config
 target RES-013 | changed during
 not-target RES-013 | changed um during
+gated effect_numbers | how big
+gated effect_numbers | how larg
+gated effect_numbers | how strong
+gated effect_numbers | how high
+not-gated effect_numbers | how um big
+gated effect_numbers | give lift
+gated effect_numbers | um um, give lift
+gated effect_numbers | um um and give lift
+gated effect_numbers | um um then give lift
+gated effect_numbers | um um also give lift
+gated effect_numbers | um um but give lift
+gated effect_numbers | um um plus give lift
+gated effect_numbers | um um so give lift
+gated effect_numbers | um um please give lift
+gated effect_numbers | um um just give lift
+gated effect_numbers | um um now give lift
+gated effect_numbers | um um kindly give lift
+gated effect_numbers | um um you give lift
+gated effect_numbers | show lift
+gated effect_numbers | tell lift
+gated effect_numbers | report lift
+gated effect_numbers | print lift
+gated effect_numbers | state lift
+gated effect_numbers | provide lift
+gated effect_numbers | quote lift
+gated effect_numbers | read lift
+gated effect_numbers | list lift
+gated effect_numbers | send lift
+gated effect_numbers | quantify lift
+gated effect_numbers | give uplift
+gated effect_numbers | give effect
+gated effect_numbers | give difference
+gated effect_numbers | give delta
+gated effect_numbers | give gain
+gated effect_numbers | give improvement
+gated effect_numbers | give number
+gated effect_numbers | give figure
+gated effect_numbers | give revenue
+gated effect_numbers | give conversion
+gated effect_numbers | give retention
+gated effect_numbers | give spend
+gated effect_numbers | give arpu
+gated effect_numbers | give sessions
+gated effect_numbers | give mean
+gated effect_numbers | give average
+gated effect_numbers | give median
+gated effect_numbers | um give lift
+not-gated effect_numbers | um um give lift
+gated effect_numbers | give um um um um lift
+not-gated effect_numbers | give um um um um um lift
 gated effect_numbers | what estimat
 gated effect_numbers | whats estimat
 gated effect_numbers | how estimat
@@ -6804,6 +6804,19 @@ gated causal | how did affect
 not-gated causal | how um did increas
 gated causal | how did um um um um um um increas
 not-gated causal | how did um um um um um um um increas
+gated forecast | expect
+gated forecast | expected
+gated forecast | expecting
+gated forecast | expects
+gated other_analysis | confidence level
+gated other_analysis | significance level
+not-gated other_analysis | confidence um level
+gated other_analysis | t test
+gated other_analysis | z test
+gated other_analysis | chi test
+gated other_analysis | t squared
+gated other_analysis | t square
+not-gated other_analysis | t um test
 unless subgroup RES-007 | returning
 not-unless subgroup RES-007 | returning res-007
 unless subgroup RES-007 | new players
@@ -6822,8 +6835,6 @@ not-unless subgroup RES-007 | first time buyers res-007
 unless subgroup RES-007 | first time customers
 not-unless subgroup RES-007 | first time customers res-007
 not-unless subgroup RES-007 | first um time players
-quiet quiet | before ship
-quiet quiet | until ship
 quiet quiet | did review check ship
 quiet quiet | um, did review check ship
 quiet quiet | um or did review check ship
@@ -6870,8 +6881,49 @@ not-quiet quiet | which check um um um check ship
 quiet quiet | why res-001 ship
 quiet quiet | why um um um res-001 ship
 not-quiet quiet | why um um um um res-001 ship
+quiet quiet | before ship
+quiet quiet | until ship
 quiet quiet | anything ship
 quiet quiet | something ship
+domain finding | overview finding
+domain block | overview block
+domain warning | overview warning
+domain review | overview review
+domain report | overview report
+domain experiment | overview experiment
+domain test | overview test
+domain rule | overview rule
+domain check | overview check
+domain arm | overview arm
+domain arms | overview arms
+domain variant | overview variant
+domain control | overview control
+domain player | overview player
+domain sample | overview sample
+domain verdict | overview verdict
+domain result | overview result
+domain problem | overview problem
+domain issue | overview issue
+domain fix | overview fix
+domain data | overview data
+domain metric | overview metric
+domain effect | overview effect
+domain risk | overview risk
+domain concern | overview concern
+domain flag | overview flag
+domain run | overview run
+domain runs | overview runs
+domain ran | overview ran
+domain severity | overview severity
+domain evaluat | overview evaluat
+domain next | overview next
+domain step | overview step
+domain first | overview first
+domain anything | overview anything
+domain something | overview something
+target RES-001 | srm's
+target RES-001 | res-001's
+not-domain summary | overview um
 trigger data_access | um um ids
 not-trigger data_access | um rule ids
 not-trigger data_access | um findings ids
