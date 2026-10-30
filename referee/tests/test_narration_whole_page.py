@@ -26,6 +26,7 @@ from narration_reports import report
 
 from referee.cli import main
 from referee.narration import refusals
+from referee.narration.facts import fact_list
 from referee.narration.refusals import PARAGRAPHS
 from referee.narration.render import Understanding
 from referee.narration.router import route
@@ -152,10 +153,15 @@ def test_the_check_for_runs_of_the_question_finds_a_leak_and_forgives_the_layers
     assert runs_of_the_question(canonical.upper(), "this layer does not say", "") != []
 
 
-def test_the_fixed_sentences_of_the_refusals_are_the_ones_that_were_read() -> None:
+def test_the_fixed_sentences_of_the_refusals_are_the_ones_that_were_read(raw_spec: dict) -> None:
     """The classifier takes the lines of a refusal from `refusals.py`, so it follows a change of
     them; these sentences are what a refusal says, so a change is made on purpose: read the pages
-    of the twelve categories, then update the digest."""
+    of the twelve categories, then update the digest. The label of the effect table is a line of a
+    function and not a constant, so the digest holds it as written for the committed report."""
+    golden = report("golden", raw_spec)
+    label = refusals.refusal_body(
+        golden, fact_list(golden), U("refusal", categories=("effect_reality",))
+    )
     fixed = [
         *refusals.PARAGRAPHS.values(),
         refusals.DEFAULT_PARAGRAPH,
@@ -168,8 +174,9 @@ def test_the_fixed_sentences_of_the_refusals_are_the_ones_that_were_read() -> No
         *(note for notes in refusals.NOTES.values() for note in notes),
         refusals.NO_SINGLE_RULE,
         *(lead for quotes in refusals.QUOTES.values() for lead, _, _ in quotes),
+        *label,
     ]
 
     digest = hashlib.sha256("\n".join(fixed).encode("utf-8")).hexdigest()
 
-    assert digest == "a73fb5ea53d90d0a742a030344e9c92866436cbac7da149271ecc650374828ac"
+    assert digest == "b1aa0300cb52e3a55692b213e649de380060a3ad91f5c9a0ff73fe66f1acd2be"
