@@ -402,7 +402,7 @@ class FakeGit:
             commit, _, path = args[1].partition(":./")
             assert commit == self.freeze
             return (0, self.files[path]) if path in self.files else (128, b"")
-        if args == ("status", "--porcelain"):
+        if args == ("status", "--porcelain", "--untracked-files=all"):
             if self.dirty == "fails":
                 return 128, b""
             return 0, b" M tests/narration_evaluation.py\n" if self.dirty else b""
@@ -547,6 +547,20 @@ def test_each_check_of_the_first_score_refuses_alone_and_writes_nothing(
         assert git.calls == []  # it did not even ask git
 
 
+def test_a_score_file_that_appears_while_the_checks_run_is_not_overwritten(tree):
+    root, files = tree
+
+    class Racing(FakeGit):
+        def __call__(self, root, *args):
+            if args[0] == "status":  # the last check: another process takes the score now
+                put(root, ev.FIRST_SCORE, "{}")
+            return super().__call__(root, *args)
+
+    with pytest.raises(ev.Refusal, match="a first score is taken once"):
+        ev.first_score(root, Racing(files), good_loaded(root))
+    assert (root / ev.FIRST_SCORE).read_text(encoding="utf-8") == "{}"
+
+
 def test_a_narration_module_that_the_freeze_does_not_list_is_refused(tmp_path):
     files = build(tmp_path, parseable=False)
     put(tmp_path, "src/referee/narration/refusals.py", b"words\n")
@@ -628,6 +642,21 @@ def test_current_prints_the_first_score_beside_a_fresh_run_and_no_question(tree,
     assert "Misses: first 1; now 3" in lines
 
 
+@pytest.mark.parametrize("content", [b"", b"\xff"], ids=["empty", "not UTF-8"])
+def test_an_unreadable_score_file_is_refused_with_a_message_not_a_traceback(
+    tmp_path, capsys, content
+):
+    build(tmp_path, parseable=False)  # the half is not read before the score file is
+    put(tmp_path, ev.FIRST_SCORE, content)
+    for argv in ([], ["--write"]):
+        assert ev.main(argv, root=tmp_path) == 2
+        assert "is not valid JSON: delete it only if no score was committed" in (
+            capsys.readouterr().err
+        )
+    with pytest.raises(ev.Refusal, match="not valid JSON"):  # as the drift test calls it
+        ev.documents(tmp_path)
+
+
 def test_a_first_score_of_another_schema_is_refused(tree, capsys):
     root, _ = tree
     put(root, ev.FIRST_SCORE, json.dumps({"schema": "referee-narration-first-score/2"}))
@@ -676,10 +705,17 @@ def test_the_seam_runs_git_in_the_tree_and_returns_its_status_and_output(tmp_pat
         return subprocess.CompletedProcess(argv, 1, stdout=b"out", stderr=b"err")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
+    for name in ev.GIT_LOCATION:  # a hook or a wrapper may have set these for another tree
+        monkeypatch.setenv(name, "/elsewhere")
+    monkeypatch.setenv("REFEREE_MARKER", "kept")
     assert ev.run_git(tmp_path, "status", "--porcelain") == (1, b"out")
     [(argv, kwargs)] = calls
     assert argv == ["git", "status", "--porcelain"]
     assert kwargs["cwd"] == tmp_path and kwargs["capture_output"] is True
+    assert kwargs["check"] is False  # a failing command is a status for `first_score`, not a trace
+    assert set(ev.GIT_LOCATION) == {"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"}
+    assert set(kwargs["env"]) & set(ev.GIT_LOCATION) == set()
+    assert kwargs["env"]["REFEREE_MARKER"] == "kept"
 
 
 # ---------------------------------------------------------------- the report

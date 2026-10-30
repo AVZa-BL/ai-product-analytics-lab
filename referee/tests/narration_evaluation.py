@@ -9,13 +9,24 @@ standard error: a refusal to run, or unusable arguments.
 
 The default mode refuses until `tests/data/narration_eval/heldout_first_score.json` exists. Only
 `--first-score` calls `git`, through `run_git`, the one function of this module that starts a
-process, so that a test can pass a fake. It checks that the last commit reachable from HEAD that
-changed `router_freeze.json` is an ancestor of HEAD, that each frozen file equals its content at
-that commit (the held-out files: their pins), that every `referee.narration` module this process
-loaded is a frozen file under this tree, and that the worktree is clean; it refuses when the score
-file exists; then it routes the half and writes the file. It prints counts and the path, never a
-question. Routing uses the files of this tree only if `src` leads `PYTHONPATH`: the loaded
-modules are checked by the file they came from, so another checkout's router is refused.
+process, so that a test can pass a fake. What it enforces, exactly:
+
+- The freeze commit is the last commit reachable from HEAD that changed `router_freeze.json`.
+  It must be an ancestor of HEAD, which is true by construction on a real repository (it is
+  looked up from HEAD): that test guards a malformed answer only. That the commit is on main is
+  not asked of git; it is checked by hand, and the report says how.
+- Each frozen file but the held-out files equals its content at that commit (`git show`). The
+  held-out files equal their pins in `pins.json` in the working tree: not a git comparison.
+- The digests inside `router_freeze.json` are not compared with the files (N5's freeze test does
+  that), and `router_sha256` of the score is copied from it.
+- Every `referee.narration` module this process loaded is a frozen file under this tree, and the
+  worktree is clean (untracked files included).
+- It refuses when the score file exists; then it routes the half and creates the file, which
+  fails if the file has appeared meanwhile.
+
+It prints counts and the path, never a question. Routing uses the files of this tree only if `src`
+leads `PYTHONPATH`: the loaded modules are checked by the file they came from, so another
+checkout's router is refused.
 
 The closure of `route()` is read from `sys.modules`, not from a child process (the freeze test
 uses one): this module imports `referee.narration.router` and no other narration module, so what
@@ -29,6 +40,7 @@ under `root`, so a test points it at a tree of synthetic questions.
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from collections.abc import Callable, Collection, Sequence
@@ -61,12 +73,14 @@ DOCUMENTS = ("docs/narration-evaluation.md", "docs/narration-evaluation.json")
 ROUTER = "src/referee/narration/router.py"
 SCHEMA = "referee-narration-first-score/1"
 FIRST_KEYS = ("schema", "freeze_sha", "head_sha", "router_sha256")  # the rest is `measure`'s
+TAKEN = f"{FIRST_SCORE} exists: a first score is taken once"
+GIT_LOCATION = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")  # would point git at another tree
 
 PROVENANCE = (
     "Language-model agents wrote the code, tests, labels and reviews and every question except "
     "the three quoted from the design document; no human labelled a question."
 )
-# The budget of 24.11, timed by hand on Linux when the report was written (the command and the
+# The budget of 24.11, timed by hand on Linux while the scorer was built (the command and the
 # seconds of separate runs); the macOS figure comes from CI. Edit it with a new measurement, then
 # run --write.
 BUDGET = {
@@ -263,7 +277,8 @@ def measure(root: Path = ROOT) -> dict[str, Any]:
 
 def run_git(root: Path, *args: str) -> tuple[int, bytes]:
     """The one place that starts a process: `git ARGS` in `root`; its status and standard output."""
-    done = subprocess.run(["git", *args], cwd=root, capture_output=True, check=False)
+    env = {name: value for name, value in os.environ.items() if name not in GIT_LOCATION}
+    done = subprocess.run(["git", *args], cwd=root, env=env, capture_output=True, check=False)
     return done.returncode, done.stdout
 
 
@@ -283,9 +298,12 @@ def _digest(path: Path) -> str | None:
 def first_score(root: Path, git: Git, loaded: Collection[Path]) -> dict[str, Any]:
     """Check the freeze with `git`, route the held-out half once and write the first score."""
     if (root / FIRST_SCORE).exists():
-        raise Refusal(f"{FIRST_SCORE} exists: a first score is taken once")
+        raise Refusal(TAKEN)
     code, out = git(root, "rev-parse", "HEAD")  # with no commit it prints HEAD and fails
     head = out.decode().strip() if code == 0 else ""
+    # The last commit reachable from HEAD that changed the freeze file, so the ancestor test below
+    # is true on a real repository and guards a malformed answer only. That it is on main is not
+    # asked of git here.
     freeze_sha = git(root, "log", "-1", "--format=%H", "HEAD", "--", FREEZE)[1].decode().strip()
     if not head or not freeze_sha:
         raise Refusal(f"git gave no HEAD or no commit that changed {FREEZE}")
@@ -297,7 +315,7 @@ def first_score(root: Path, git: Git, loaded: Collection[Path]) -> dict[str, Any
     for path in sorted(frozen):
         now = _digest(root / path)
         pin = pins.get(path.removeprefix(f"{EVAL}/"))
-        if pin is not None:  # a held-out file: its pin, not git
+        if pin is not None:  # a held-out file: compared with its pin in the working tree, not git
             if now != pin:
                 raise Refusal(f"{path} differs from its pin in {PINS}")
             continue
@@ -311,7 +329,7 @@ def first_score(root: Path, git: Git, loaded: Collection[Path]) -> dict[str, Any
             raise Refusal(f"route() loads {file}, which is outside {root}") from None
         if relative not in frozen:
             raise Refusal(f"route() loads {relative}, which the freeze does not list")
-    code, out = git(root, "status", "--porcelain")
+    code, out = git(root, "status", "--porcelain", "--untracked-files=all")
     if code != 0 or out.strip():
         raise Refusal("the worktree is not clean: commit or remove what git status lists")
 
@@ -322,7 +340,11 @@ def first_score(root: Path, git: Git, loaded: Collection[Path]) -> dict[str, Any
         "router_sha256": frozen[ROUTER],
         **measure(root),
     }
-    (root / FIRST_SCORE).write_bytes(canonical(first).encode("utf-8"))
+    try:  # exclusive: a score file that has appeared since the check above is not overwritten
+        with (root / FIRST_SCORE).open("xb") as file:
+            file.write(canonical(first).encode("utf-8"))
+    except FileExistsError:
+        raise Refusal(TAKEN) from None
     return first
 
 
@@ -333,7 +355,12 @@ def load_first(root: Path) -> dict[str, Any]:
             f"no first score: {FIRST_SCORE} does not exist. It is taken once, by "
             "`python tests/narration_evaluation.py --first-score` (design 24.10)"
         )
-    first = _json(path)
+    try:
+        first = _json(path)
+    except ValueError:  # empty, truncated or not UTF-8
+        raise Refusal(
+            f"{FIRST_SCORE} is not valid JSON: delete it only if no score was committed"
+        ) from None
     if first.get("schema") != SCHEMA:
         raise Refusal(f"{FIRST_SCORE} is not of schema {SCHEMA}")
     return first
