@@ -122,6 +122,6 @@ assigned before a registered start, `population.ignored_before_start`: 24 bytes 
 lab's ids (`player_0002757`), and 28 more when RES-003 raises a finding, because its evidence holds
 the list again. Of a report the size of the committed one, (5,242,880 - 80,422) / 24 is about
 215,000 such players, and (5,242,880 - 80,422) / 52 about 99,000 with the second copy. The bytes a
-player were measured on the committed report and on one fixture, not on every report, and a report
-with more arms or findings starts larger. A larger report is refused with `the report is longer
-than 5,242,880 bytes`.
+player were measured by adding 1,000 ids to the committed report and to one fixture, not to every
+report, and a report with more arms or findings starts larger. A larger report is refused with `the
+report is longer than 5,242,880 bytes`.
