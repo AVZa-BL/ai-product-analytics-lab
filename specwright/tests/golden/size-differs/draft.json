@@ -27,7 +27,7 @@
           "code": "RULE:DES-008",
           "severity": "warning",
           "path": null,
-          "message": "No pre-period covariate declared. Declare design.pre_period_covariate, for example the primary metric measured for each unit before exposure."
+          "message": "No pre-period covariate declared. Declare design.pre_period_covariate: the name of a column of the experiment's outcomes file that holds, for each player, a measure taken before the player's first exposure, for example the primary metric over the week before. The results review then shows the adjusted estimate, which is the registered analysis, beside the unadjusted one, and checks that the covariate is balanced across the arms. A measure taken after the treatment can act would remove part of the real effect."
         },
         {
           "code": "RULE:HYP-002",

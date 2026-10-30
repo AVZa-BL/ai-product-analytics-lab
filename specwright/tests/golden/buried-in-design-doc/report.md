@@ -67,7 +67,7 @@ Documents: `05-buried-in-design-doc.md`. Attempts: 1 (0 repair round(s)).
 
 ## Design review (Referee's HYP, DES and PRO rules)
 
-- warning: `DES-008` `No pre-period covariate declared`. What to do: `Declare design.pre_period_covariate, for example the primary metric measured for each unit before exposure.`
+- warning: `DES-008` `No pre-period covariate declared`. What to do: `Declare design.pre_period_covariate: the name of a column of the experiment's outcomes file that holds, for each player, a measure taken before the player's first exposure, for example the primary metric over the week before. The results review then shows the adjusted estimate, which is the registered analysis, beside the unadjusted one, and checks that the covariate is balanced across the arms. A measure taken after the treatment can act would remove part of the real effect.`
 - warning: `HYP-002` `Primary metric has no governed reference`. What to do: `Define the metric in docs/metrics/ and set primary_metric.governed_reference to that file.`
 - info: `PRO-004` `Bucketing salt not declared`. What to do: `Set procedure.bucketing_salt to a value unique to this experiment, for example its id.`
 
@@ -76,7 +76,7 @@ Documents: `05-buried-in-design-doc.md`. Attempts: 1 (0 repair round(s)).
 ### Attempt 1 (`replay`)
 
 0 blocker(s), 2 warning(s), 0 question(s).
-- warning: `[RULE:DES-008] No pre-period covariate declared. Declare design.pre_period_covariate, for example the primary metric measured for each unit before exposure.`
+- warning: `[RULE:DES-008] No pre-period covariate declared. Declare design.pre_period_covariate: the name of a column of the experiment's outcomes file that holds, for each player, a measure taken before the player's first exposure, for example the primary metric over the week before. The results review then shows the adjusted estimate, which is the registered analysis, beside the unadjusted one, and checks that the covariate is balanced across the arms. A measure taken after the treatment can act would remove part of the real effect.`
 - warning: `[RULE:HYP-002] Primary metric has no governed reference. Define the metric in docs/metrics/ and set primary_metric.governed_reference to that file.`
 
 Nothing sent back.
