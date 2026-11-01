@@ -17,7 +17,8 @@ store page. Existing players only. Players do not influence each other's store p
 relative lift in either variant. Alpha 0.05, power 80%, two-sided, with a Bonferroni correction
 for the two comparisons against control.
 
-**Guardrails.** Refund rate of bundle purchases (1.5% today) must not rise by more than 10%
+**Guardrails.** Refund rate of bundle purchases (1.5% today, standard deviation 0.15 per player)
+must not rise by more than 10%
 relative. Average session length (18 minutes today, standard deviation 11) must not fall by more
 than 5% relative. We also want to watch items bought per player (a count), with no tolerance.
 We use the player's spend in the 28 days before they first see the page as a pre-period covariate.

@@ -46,8 +46,9 @@ arms:
   is_control: false
 guardrails:
 - name: bundle_refund_rate
-  kind: binary
+  kind: ratio
   baseline: 0.015
+  baseline_std: 0.15
   harmful_direction: increase
   tolerance_relative: 0.1
 - name: session_minutes

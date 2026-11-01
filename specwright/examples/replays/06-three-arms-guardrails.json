@@ -262,12 +262,12 @@
   },
   {
    "path": "guardrails[0].kind",
-   "value": "binary",
+   "value": "ratio",
    "evidence": {
-    "kind": "document",
-    "document": "06-three-arms-guardrails.md",
-    "quote": "Refund rate of bundle purchases (1.5% today)",
-    "note": ""
+    "kind": "inferred",
+    "document": "",
+    "quote": "",
+    "note": "Refunds per bundle purchase: the denominator is purchases, not players, so it is analysed as a ratio."
    }
   },
   {
@@ -276,7 +276,17 @@
    "evidence": {
     "kind": "document",
     "document": "06-three-arms-guardrails.md",
-    "quote": "Refund rate of bundle purchases (1.5% today)",
+    "quote": "Refund rate of bundle purchases (1.5% today, standard deviation 0.15 per player)",
+    "note": ""
+   }
+  },
+  {
+   "path": "guardrails[0].baseline_std",
+   "value": 0.15,
+   "evidence": {
+    "kind": "document",
+    "document": "06-three-arms-guardrails.md",
+    "quote": "Refund rate of bundle purchases (1.5% today, standard deviation 0.15 per player)",
     "note": ""
    }
   },
