@@ -42,9 +42,9 @@ ROW5 = (
     "catalogue sentences contain none of the study's loaded words under its full list and {G} "
     "under the digits-only ablation, and the checker admitted {H} of {P} hand-written harmful "
     "probes under the full list ({H2} and {H3} of {P} under the qualifiers-and-digits and "
-    "digits-only ablations) (docs/grounding-study.md). The catalogue is frozen as of `{as_of}`. "
-    "The model-written channel is not shipped because the user decided that the model path "
-    "selects and never writes."
+    "digits-only ablations) (docs/grounding-study.md). The catalogue is frozen as of commit "
+    "`{as_of}`; the rules' current wording may differ. The model-written channel is not shipped "
+    "because the user decided that the model path selects and never writes."
 )
 ROW5_STATUS = "Built and tested offline; not counted as done"
 WARNING = (  # the egress warning of narration.md, which the block repeats before its examples
