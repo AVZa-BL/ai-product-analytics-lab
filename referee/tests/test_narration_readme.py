@@ -42,8 +42,9 @@ ROW5 = (
     "catalogue sentences contain none of the study's loaded words under its full list and {G} "
     "under the digits-only ablation, and the checker admitted {H} of {P} hand-written harmful "
     "probes under the full list ({H2} and {H3} of {P} under the qualifiers-and-digits and "
-    "digits-only ablations) (docs/grounding-study.md). The model-written channel is not shipped "
-    "because the user decided that the model path selects and never writes."
+    "digits-only ablations) (docs/grounding-study.md). The catalogue is frozen as of `{as_of}`. "
+    "The model-written channel is not shipped because the user decided that the model path "
+    "selects and never writes."
 )
 ROW5_STATUS = "Built and tested offline; not counted as done"
 WARNING = (  # the egress warning of narration.md, which the block repeats before its examples
@@ -96,12 +97,13 @@ def fenced(block: str) -> list[tuple[str, str]]:
     return re.findall(r"```(\w+)\n(.*?)\n```", block, re.DOTALL)
 
 
-def study() -> dict[str, int]:
+def study() -> dict[str, int | str]:
     """N9's figures, as the structured fields of its JSON hold them."""
     data = json.loads((gen.ROOT / "docs/grounding-study.json").read_text(encoding="utf-8"))
     admitted = data["probes"]["admitted"]
     return {
         "N": data["catalogue"]["sentences"],
+        "as_of": data["catalogue"]["as_of"],
         "F": data["free"]["full"]["count"],
         "G": data["free"]["digits"]["count"],
         "H": admitted["full"],
