@@ -1,11 +1,12 @@
 ---
 name: run-referee
-description: Build, run, test and drive Referee, the deterministic A/B experiment reviewer (`python -m referee review-design` and `review-results`). Use when asked to run or start Referee, review an experiment spec or a results export, smoke-test the CLI, check an exit status or a report, run its tests or lint, or set up its Python environment.
+description: Build, run, test and drive Referee, the deterministic A/B experiment reviewer (`python -m referee review-design`, `review-results` and `narrate`). Use when asked to run or start Referee, review an experiment spec or a results export, print a page about a saved report, smoke-test the CLI, check an exit status or a report, run its tests or lint, or set up its Python environment.
 ---
 
 Referee is a Python 3.12 command-line tool and library (no server, no GUI). The agent path is
-`.claude/skills/run-referee/smoke.py`: it runs the real command line against the committed examples
-and the committed lab export and checks exit statuses, key lines and JSON fields.
+`.claude/skills/run-referee/smoke.py`: it runs the real command line against the committed examples,
+the committed lab export and the committed report of that review, and checks exit statuses, key lines
+and JSON fields.
 
 All paths are relative to `referee/` (the folder with `pyproject.toml`); run everything from there.
 
@@ -18,7 +19,8 @@ uv venv --python 3.12 .venv
 uv pip install -p .venv/bin/python -q -e '.[dev]'
 ```
 
-About 6 s with a warm uv cache. Without uv (about 70 s):
+About 6 to 10 s with uv (10 s measured on a tree of 2026-11-04). Without uv (about 70 s, timed on an
+earlier tree and not timed again):
 
 ```bash
 python3.12 -m venv .venv
@@ -34,13 +36,12 @@ The commands below call `.venv/bin/python` directly, so nothing needs activating
 .venv/bin/python .claude/skills/run-referee/smoke.py
 ```
 
-Fourteen steps, each the real `python -m referee ...` in a subprocess (one calls `referee.cli.main`
-in process), ending `14/14 steps passed`. It took 52 to 61 s on a busy container (each start of Python
-costs 1 to 3 s there, and a results review about 4 s idle). Groups: `design`, `results`, `errors`,
-`inprocess`.
+Each step is the real `python -m referee ...` in a subprocess (one calls `referee.cli.main` in
+process), ending `<n>/<n> steps passed` (`17/17 steps passed in 56.6 s` on 2026-11-04). Each start of Python
+costs about 1 s here and a results review 8 to 9 s. Groups: `design`, `results`, `narrate`, `errors`, `inprocess`.
 
 ```bash
-.venv/bin/python .claude/skills/run-referee/smoke.py --only design          # 5 steps, about 10 s
+.venv/bin/python .claude/skills/run-referee/smoke.py --only design          # about 8 s
 .venv/bin/python .claude/skills/run-referee/smoke.py --only errors --keep /tmp/referee-out
 ```
 
@@ -49,7 +50,7 @@ Exit status 0 only if every selected step passed; a failing step prints the comm
 600 characters of what it got. The driver finds `referee/` from its own location, so it can be
 started from any directory.
 
-To drive Referee by hand, the two commands are:
+To drive Referee by hand, the three commands are:
 
 ```bash
 .venv/bin/python -m referee review-design examples/offer-page-underpowered.yaml   # REVISE, exit 1
@@ -57,11 +58,17 @@ To drive Referee by hand, the two commands are:
 .venv/bin/python -m referee review-results examples/offer-page-results.yaml \
     tests/data/hybrid_offer_page_5000 --experiment-id hybrid_offer_page \
     --as-of 2026-06-30T00:00:00Z --format memo                                    # exit 1
+.venv/bin/python -m referee narrate tests/golden/offer-page-results.json                  # a summary page, exit 0
+.venv/bin/python -m referee narrate tests/golden/offer-page-results.json \
+    --question "can we call it on day 3?"                                          # refused by code, exit 0
 ```
 
 `review-results --format` takes `text` (default), `json` or `memo`; `review-design` takes `text` or
 `json`. A spec is a YAML file (`examples/` has three, commented); the data is a folder of the lab's
-three CSV files (`tests/data/hybrid_offer_page_5000` is the committed one).
+three CSV files (`tests/data/hybrid_offer_page_5000` is the committed one). `narrate` reads the JSON
+of `review-results --format json` (`tests/golden/offer-page-results.json` is the committed one) and
+prints one page: it answers four kinds of question by code and refuses the rest (README,
+`docs/narration.md`).
 
 | Exit status | Meaning |
 | --- | --- |
@@ -69,6 +76,11 @@ three CSV files (`tests/data/hybrid_offer_page_5000` is the committed one).
 | 1 | At least one blocker: a finding, not a crash |
 | 2 | The spec or the data cannot be read or is invalid (reasons on stderr) |
 | 3 | A failure inside Referee |
+
+`narrate` has its own statuses: 0 a page was printed (an answer or a refusal, whatever the verdict),
+1 the output of `--llm-command` failed a check, 2 the report cannot be read or checked or the arguments
+are unusable, 3 an internal error, 4 the `--llm-command` failed. Status 0 does not say the experiment
+is valid.
 
 ## Direct invocation (internals)
 
@@ -94,12 +106,13 @@ the helpers that build reports are `tests/results_helpers.py` and `tests/narrati
 
 ```bash
 .venv/bin/ruff check src tests                 # All checks passed!
-.venv/bin/python -m pytest -q                  # 2461 passed, 398 deselected in 62 to 66 s
-.venv/bin/python -m pytest -q -m study         # 398 passed, 2461 deselected in about 137 s
+.venv/bin/python -m pytest -q                  # 3062 passed, 400 deselected, 2.5 to 4 min
+.venv/bin/python -m pytest -q -m study         # 400 passed, 3062 deselected, about 3.5 min
 ```
 
 The default run leaves the simulation studies out (`addopts = -m 'not study'`). Naming a study file
-without `-m study` selects nothing. The counts grow as the project does; the point is no failures.
+without `-m study` selects nothing. The counts are those of 2026-11-04 and grow as the project does; the point is no failures. The
+times are for a container that was also doing other work.
 
 ## Gotchas
 
@@ -112,9 +125,13 @@ without `-m study` selects nothing. The counts grow as the project does; the poi
   and says so (exit 2).
 - **Same input, same bytes.** The driver checks two runs for identical output; between machines a
   float may differ in its last digits (README).
-- **`review-results` takes about 4 s** on the example because the report includes a sensitivity
-  check on the origin of the weeks (README: it reviews the data six more times unless the spec
-  registers `design.start_utc`; I timed the 4 s, not the mechanism).
+- **`review-results` takes 8 to 9 s here** on the example because the report includes a sensitivity
+  check on the origin of the weeks (README: six more reviews unless the spec registers
+  `design.start_utc`, about 4 s on the development machine and about twice that on a slower one; I
+  timed the seconds, not the mechanism).
+- **Do not give `narrate` an `--llm-command` in a smoke test.** It starts the command you name and
+  sends it the report's counts, p values, rates and allocations (`docs/narration.md`); the driver
+  never uses it. `--show-request` prints what would be sent and starts nothing.
 - **CI lints `src tests` only**, so `ruff check src tests` is the gate; the skill folder is not in it.
 
 ## Troubleshooting
@@ -125,5 +142,7 @@ without `-m study` selects nothing. The counts grow as the project does; the poi
   `--experiment-id hybrid_offer_page`.
 - **`referee: error: ...: key 'null' is read by YAML as null, not as text`**: quote the key,
   `"null":`.
+- **`referee: error: ...: cannot be used as a results report`** from `narrate`: give it the JSON of
+  `review-results --format json`, not the YAML spec or the CSV folder.
 - **`cannot import referee (No module named 'referee'); run this with the venv's python`** from
   the driver: run it as `.venv/bin/python .claude/skills/run-referee/smoke.py`, not with the system `python3`.

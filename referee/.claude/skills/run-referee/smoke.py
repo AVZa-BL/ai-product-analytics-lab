@@ -9,10 +9,12 @@ Run it with the interpreter that has Referee installed (the venv's). It can be s
 directory: every command runs in the referee/ folder, the unit this skill belongs to.
 
 Each step is the real command line, `python -m referee ...`, in a subprocess, against the committed
-examples (examples/) and the committed lab export (tests/data/hybrid_offer_page_5000). A step checks
+examples (examples/), the committed lab export (tests/data/hybrid_offer_page_5000) and the
+committed report of that review (tests/golden/offer-page-results.json). A step checks
 the exit status, the lines that matter on stdout or stderr, and for the JSON formats the fields
 that matter. One step calls `referee.cli.main` in the same process, the direct path: it never
-raises and returns the exit status. The groups are: design, results, errors, inprocess.
+raises and returns the exit status. The groups are: design, results, narrate, errors,
+inprocess.
 
 Exit status 0 when every selected step passed, 1 otherwise (the failing step is printed with the
 output it got).
@@ -37,6 +39,7 @@ from pathlib import Path
 UNIT = Path(__file__).resolve().parents[3]  # referee/
 EXAMPLES = UNIT / "examples"
 EXPORT = UNIT / "tests" / "data" / "hybrid_offer_page_5000"
+GOLDEN = UNIT / "tests" / "golden" / "offer-page-results.json"
 RESULTS = [
     "review-results",
     str(EXAMPLES / "offer-page-results.yaml"),
@@ -46,6 +49,7 @@ RESULTS = [
     "--as-of",
     "2026-06-30T00:00:00Z",
 ]
+NOT_A_GATE = "its exit status does not mean the experiment is valid."  # ends every narrate page
 MEMO_SECTIONS = [
     "Decision",
     "Observed facts",
@@ -211,6 +215,40 @@ def results_needs_experiment_id() -> None:
     expect(run, 2, err=["--experiment-id is required; the export holds: hybrid_offer_page"])
 
 
+# --- narrate -----------------------------------------------------------------------------------
+
+
+def narrate_summary() -> None:
+    run = referee("narrate", str(GOLDEN))
+    expect(
+        run,
+        0,  # a page was printed, whatever the verdict
+        out=[
+            "Report of experiment hybrid_offer_page",
+            "Verdict: invalid. Blocking rules: RES-001, RES-002.",
+            "Question understood as: a summary of the review.",
+            NOT_A_GATE,
+        ],
+    )
+    if run.err:
+        raise Failed(f"stderr should be empty: {run.err[:200]!r}")
+
+
+def narrate_refusal_same_bytes() -> None:
+    argv = ("narrate", str(GOLDEN), "--question", "can we call it on day 3?")
+    first, second = referee(*argv), referee(*argv)
+    expect(
+        first, 0, out=["Question understood as: a question this layer does not answer", NOT_A_GATE]
+    )
+    if digest(first.out) != digest(second.out):
+        raise Failed("two runs of the same report and question gave different bytes")
+
+
+def narrate_missing_report() -> None:
+    run = referee("narrate", "/nonexistent/report.json")
+    expect(run, 2, err=["cannot be used as a results report"])
+
+
 # --- errors ------------------------------------------------------------------------------------
 
 
@@ -258,6 +296,13 @@ STEPS = [
     Step("results", "review-results --format json", results_json),
     Step("results", "review-results --format memo: five sections", results_memo),
     Step("results", "review-results twice gives the same bytes", results_same_bytes),
+    Step("narrate", "narrate, summary page of the committed report: exit 0", narrate_summary),
+    Step(
+        "narrate",
+        "narrate, a question refused by code, twice: same bytes",
+        narrate_refusal_same_bytes,
+    ),
+    Step("narrate", "narrate, a missing report: exit 2", narrate_missing_report),
     Step("errors", "review-results without --experiment-id: exit 2", results_needs_experiment_id),
     Step("errors", "unreadable YAML: exit 2 with file:line:column", error_unreadable_yaml),
     Step("errors", "missing spec file: exit 2", error_missing_file),
