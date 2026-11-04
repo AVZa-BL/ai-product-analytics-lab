@@ -144,6 +144,12 @@ repairs 0; values agreeing 158 of 162; gaps left as gaps 4 of 4; **values invent
 again 0.333 against 1/3. Cases 01-03 and 08 repeated their first-pass results; case 04 needed no
 repair this time.
 
+**Allocation wording.** The brief's "33.3% of the players each" invited the model to copy 0.333,
+which is rejected (the shares sum to 0.999). It now reads "in equal thirds: one third of the
+players each", so 1/3 is an inference, as the reference has it. Three live runs of case 06 on this
+wording gave `ok`, 35 of 35 values agreeing, 1 repair each: again a small sample, on an edited
+brief.
+
 **Direction wording.** Case 05's brief gave no direction and said "a two-sided test", which the
 model twice put into `hypothesis.direction` (that field is the expected direction; the test's
 sidedness is `design.sided`). The brief now adds "We expect the lower price to raise the Season
