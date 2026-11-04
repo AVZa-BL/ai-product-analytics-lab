@@ -42,8 +42,9 @@ Documents: `06-three-arms-guardrails.md`. Attempts: 1 (0 repair round(s)).
 - `primary_metric.kind` = `binary` - quoted from `06-three-arms-guardrails.md`: `Bundle purchase rate within 7 days`
 - `primary_metric.baseline` = `0.03` - quoted from `06-three-arms-guardrails.md`: `3.0% today`
 - `guardrails[0].name` = `bundle_refund_rate` - inferred
-- `guardrails[0].kind` = `binary` - quoted from `06-three-arms-guardrails.md`: `Refund rate of bundle purchases (1.5% today)`
-- `guardrails[0].baseline` = `0.015` - quoted from `06-three-arms-guardrails.md`: `Refund rate of bundle purchases (1.5% today)`
+- `guardrails[0].kind` = `ratio` - inferred (note: `Refunds per bundle purchase: the denominator is purchases, not players, so it is analysed as a ratio.`)
+- `guardrails[0].baseline` = `0.015` - quoted from `06-three-arms-guardrails.md`: `Refund rate of bundle purchases (1.5% today, standard deviation 0.15 per player)`
+- `guardrails[0].baseline_std` = `0.15` - quoted from `06-three-arms-guardrails.md`: `Refund rate of bundle purchases (1.5% today, standard deviation 0.15 per player)`
 - `guardrails[0].harmful_direction` = `increase` - quoted from `06-three-arms-guardrails.md`: `must not rise by more than 10%`
 - `guardrails[0].tolerance_relative` = `0.1` - quoted from `06-three-arms-guardrails.md`: `must not rise by more than 10%`
 - `guardrails[1].name` = `session_minutes` - inferred
@@ -81,6 +82,7 @@ Documents: `06-three-arms-guardrails.md`. Attempts: 1 (0 repair round(s)).
 - `arms[2].is_control` = `False`
 - `primary_metric.name` = `bundle_purchase_7d`
 - `guardrails[0].name` = `bundle_refund_rate`
+- `guardrails[0].kind` = `ratio`
 - `guardrails[1].name` = `session_minutes`
 - `secondary_metrics[0].kind` = `continuous`
 
@@ -106,6 +108,6 @@ Nothing sent back.
 
 ## Provenance
 
-- `06-three-arms-guardrails.md`: sha256 551d8ec39132ba237b0171b199b7378df03551ceafa53caa27008c02caef76d8, 1,666 bytes
+- `06-three-arms-guardrails.md`: sha256 dccd0fb058ef98e5d02c7faa4a75832e42b5782045a7f84548ee5b8ed1882ee1, 1,702 bytes
 - Specwright 0.1.0, Referee 0.1.0
-- spec fingerprint: sha256:91851d7db29eb98a1c7183150e1bffc2869800f84af97e8314979b90829d36a9
+- spec fingerprint: sha256:07aa3b3c870e570a314656b19fb5789f53051d2e216babe09a7bcfe6a3171f25

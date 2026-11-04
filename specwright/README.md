@@ -10,9 +10,8 @@ customer or employer data.
 
 ## Status
 
-Built and tested **offline only**. The model call is written and tested against a mocked HTTP
-transport, and the examples run from replays that were written by hand. It has **never run against
-a live model**, and nothing has been tried on a real plan. See *What is verified*.
+Built and tested offline, then run once against a live model (`claude-opus-5-5`) on the seven
+synthetic briefs: see *Live results so far*. Nothing has been tried on a real plan.
 
 ## What it does
 
@@ -110,10 +109,35 @@ that need no reference (status, quotes not found, repairs, tokens). The self-tes
 construction and only tests the scorer. The briefs and references are written by an agent, so
 agreement with them is not accuracy on real plans.
 
+### Live results so far
+
+Model `claude-opus-5-5`, effort `high`, one run per case, evaluator defaults.
+
+**First pass, original briefs:** status as expected 6 of 7; quotes not found after the repairs 0;
+values agreeing with the reference 156 of 161; gaps left as gaps 4 of 4; **values invented for a
+gap 0**; 6 repairs; 76,210 input and 57,462 output tokens. The five disagreeing values:
+
+| case | field | reference / model | what it was |
+| --- | --- | --- | --- |
+| 05 | `hypothesis.direction` | `increase` / `two_sided` | Model error. The brief says "a two-sided test", which is `design.sided`; it gives no direction, and "we care about an 8% relative lift" for a lower price reads as an increase. The model put the test's sidedness into the direction field. |
+| 06 | `arms[0..2].allocation` | 1/3 / 0.333 | Ambiguous brief. It says "in thirds: 33.3% of the players each"; the model copied the written figure, the reference read it as exact thirds. Both are defensible. The draft was never built (see next row), so the sum check (0.999) did not run. |
+| 06 | `guardrails[0].kind` | `binary` / `ratio` | Ambiguous brief, and the reference was the less careful reading (below). |
+
+**Case 06 history.** With the original brief, case 06 gave `needs_answers` (expected `ok`) in 6 of
+7 live runs: the evaluation run and five repeats, against one `ok`. The brief gave "refund rate
+of bundle purchases (1.5% today)" and no standard deviation. The model read it as a ratio (refunds
+per purchase, so the denominator is not players) and asked for the standard deviation; the one
+`ok` run labelled it `binary`. The model's reading may well have been reasonable: a per-player
+refund rate can be a ratio. The brief then gained "standard deviation 0.15 per player" (an invented
+figure), and the reference became `ratio` with that value quoted. Three further runs on the edited
+brief gave `ok`, 35 of 35 values agreeing. **That pass is on an edited brief and a changed
+reference; it does not show the model improved.** No case now tests a missing standard deviation
+on a ratio metric.
+
 ## What is verified, and what is not
 
 - **Verified by tests:** the claim table against Referee's spec (every option of every field is one Referee accepts, and the powered example assembles back to its fingerprint), the number and approximate-wording rules on reference cases, every check, the repair loop (what goes back, the limit of repairs, when it stops), the command, its exit statuses and the golden outputs, the escaping, and the **real Anthropic SDK against a mocked HTTP transport** (request body, streaming parse, a refusal, truncation, HTTP errors, a dropped connection, missing credentials). 21 deliberate faults in the code were each caught by a test.
-- **Not verified:** a live call to a model. That the API accepts the request, above all the output schema, is untested. Whether a model drafts well is unknown: the replays are hand-written, so nothing here measures the model.
+- **Not verified:** whether a model drafts well on real plans. The API accepts the request and the output schema (see *Live results so far*), but the briefs and references are written by an agent, and the replays are hand-written.
 - **Not detectable:** a vague phrase the model chose not to quote, or labelled `inferred`, looks like a judgement; it is listed for confirmation and nothing more. A found quote proves the words are in the document, not that the model read them correctly.
 - **Not a judgement of the design.** Passing the checks proves the draft is consistent with the documents and with Referee's rules. It does not prove the experiment is well designed, worth running, or sized for the right effect; the report says so.
 - **Limits:** one alpha adjustment as Referee plans it; ratio metrics and secondary metrics are drafted but Referee's results review does not analyse the latter; documents are read as Tracewright reads them (text and PDF; a PDF's quotes cannot be searched).

@@ -6,8 +6,8 @@
   "documents": [
     {
       "name": "06-three-arms-guardrails.md",
-      "sha256": "551d8ec39132ba237b0171b199b7378df03551ceafa53caa27008c02caef76d8",
-      "bytes": 1666
+      "sha256": "dccd0fb058ef98e5d02c7faa4a75832e42b5782045a7f84548ee5b8ed1882ee1",
+      "bytes": 1702
     }
   ],
   "attempts": [
@@ -290,12 +290,12 @@
     },
     {
       "path": "guardrails[0].kind",
-      "value": "binary",
+      "value": "ratio",
       "evidence": {
-        "kind": "document",
-        "document": "06-three-arms-guardrails.md",
-        "quote": "Refund rate of bundle purchases (1.5% today)",
-        "note": ""
+        "kind": "inferred",
+        "document": "",
+        "quote": "",
+        "note": "Refunds per bundle purchase: the denominator is purchases, not players, so it is analysed as a ratio."
       }
     },
     {
@@ -304,7 +304,17 @@
       "evidence": {
         "kind": "document",
         "document": "06-three-arms-guardrails.md",
-        "quote": "Refund rate of bundle purchases (1.5% today)",
+        "quote": "Refund rate of bundle purchases (1.5% today, standard deviation 0.15 per player)",
+        "note": ""
+      }
+    },
+    {
+      "path": "guardrails[0].baseline_std",
+      "value": 0.15,
+      "evidence": {
+        "kind": "document",
+        "document": "06-three-arms-guardrails.md",
+        "quote": "Refund rate of bundle purchases (1.5% today, standard deviation 0.15 per player)",
         "note": ""
       }
     },
@@ -618,8 +628,9 @@
     "guardrails": [
       {
         "name": "bundle_refund_rate",
-        "kind": "binary",
+        "kind": "ratio",
         "baseline": 0.015,
+        "baseline_std": 0.15,
         "harmful_direction": "increase",
         "tolerance_relative": 0.1
       },
@@ -640,5 +651,5 @@
       }
     ]
   },
-  "spec_sha256": "91851d7db29eb98a1c7183150e1bffc2869800f84af97e8314979b90829d36a9"
+  "spec_sha256": "07aa3b3c870e570a314656b19fb5789f53051d2e216babe09a7bcfe6a3171f25"
 }
