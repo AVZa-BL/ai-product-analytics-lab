@@ -130,9 +130,19 @@ per purchase, so the denominator is not players) and asked for the standard devi
 `ok` run labelled it `binary`. The model's reading may well have been reasonable: a per-player
 refund rate can be a ratio. The brief then gained "standard deviation 0.15 per player" (an invented
 figure), and the reference became `ratio` with that value quoted. Three further runs on the edited
-brief gave `ok`, 35 of 35 values agreeing. **That pass is on an edited brief and a changed
-reference; it does not show the model improved.** No case now tests a missing standard deviation
-on a ratio metric.
+brief gave `ok`, 35 of 35 values agreeing; a fourth run, in the second full pass below, ended
+`unresolved`: after 2 repairs the three allocations were still 0.333, which sum to 0.999 and are
+rejected, so the brief's "33.3% of the players each" is a second weak point. **These runs are on
+an edited brief and a changed reference; they do not show the model improved.** No case now tests
+a missing standard deviation on a ratio metric.
+
+**Second pass, edited briefs** (case 06 changed as above; the other briefs and references are the
+same): status as expected 6 of 7 (case 06 `unresolved`, expected `ok`); quotes not found after the
+repairs 0; values agreeing 158 of 162; gaps left as gaps 4 of 4; **values invented for a gap 0**;
+6 repairs; 79,189 input and 61,667 output tokens. The four disagreeing values: case 05
+`hypothesis.direction` again `two_sided` (model error, as above), and case 06's three allocations
+again 0.333 against 1/3. Cases 01-03 and 08 repeated their first-pass results; case 04 needed no
+repair this time.
 
 ## What is verified, and what is not
 
