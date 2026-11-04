@@ -336,7 +336,7 @@ def main() -> int:
         begin = time.perf_counter()
         try:
             step.check()
-        except (Failed, json.JSONDecodeError, KeyError) as error:
+        except (Failed, json.JSONDecodeError, KeyError, subprocess.TimeoutExpired) as error:
             failed += 1
             print(f"FAIL {step.name}\n  {error}")
         else:
