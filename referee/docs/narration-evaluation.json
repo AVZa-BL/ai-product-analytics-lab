@@ -595,6 +595,6 @@
    "first": "ce5fe2bfd23d6517fb8e693467764e8eda560a3b518d2393499131723ff7f43d"
   }
  },
- "grounding_study": "0 of the 81 catalogue sentences contain none of the study's loaded words under its full list and 69 under the digits-only ablation, and the checker admitted 0 of 28 hand-written harmful probes under the full list (9 and 26 of 28 under the qualifiers-and-digits and digits-only ablations) (docs/grounding-study.md).",
+ "grounding_study": "0 of the 82 catalogue sentences contain none of the study's loaded words under its full list and 70 under the digits-only ablation, and the checker admitted 0 of 28 hand-written harmful probes under the full list (9 and 26 of 28 under the qualifiers-and-digits and digits-only ablations) (docs/grounding-study.md).",
  "provenance": "Language-model agents wrote the code, tests, labels and reviews and every question except the three quoted from the design document; no human labelled a question."
 }

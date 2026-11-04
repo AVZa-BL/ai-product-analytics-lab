@@ -4,9 +4,9 @@
  "no_model": "No model was run through Referee or for this study; the figures describe a checker's acceptance space, not what a model can or cannot do; harm is not computed.",
  "command": "python tests/grounding_study/run.py",
  "catalogue": {
-  "as_of": "8a7119b",
-  "sha256": "2f8689de5634620d51d0330cbceda78479299e8ece32465346abb7b9083b98be",
-  "sentences": 81
+  "as_of": "3365903",
+  "sha256": "a251c7e0124b090d5906a2578d020165ebee3f6e4a7856c397b897b35a3c901c",
+  "sentences": 82
  },
  "lexicon": {
   "sha256": "6efa9f81dbb72fbb1af7574ce3b2edd6b1eadfc40b2a0bf1b9f5ed9b08717095",
@@ -524,7 +524,7 @@
    ]
   },
   "digits": {
-   "count": 69,
+   "count": 70,
    "ids": [
     "RES-001.title",
     "RES-001.why.1",
@@ -586,6 +586,7 @@
     "RES-012.title",
     "RES-012.why.1",
     "RES-012.why.2",
+    "RES-012.why.4",
     "RES-012.do.1",
     "RES-012.do.2",
     "RES-012.do.3",
@@ -2002,7 +2003,6 @@
     "so",
     "different",
     "share",
-    "exposed",
     "late",
     "mean",
     "change"
@@ -2019,6 +2019,40 @@
     "007"
    ],
    "free_under": []
+  },
+  {
+   "id": "RES-012.why.4",
+   "loaded": [
+    "share",
+    "all",
+    "exposed",
+    "player",
+    "not",
+    "because",
+    "purchase",
+    "rate",
+    "time",
+    "late",
+    "so",
+    "arm",
+    "in",
+    "change",
+    "more",
+    "show",
+    "exposure",
+    "evidence",
+    "second",
+    "from",
+    "assignment",
+    "to",
+    "first",
+    "each",
+    "as",
+    "only"
+   ],
+   "free_under": [
+    "digits"
+   ]
   },
   {
    "id": "RES-012.do.1",
@@ -2078,7 +2112,13 @@
     "out",
     "why",
     "before",
-    "effect"
+    "effect",
+    "only",
+    "to",
+    "first",
+    "exposure",
+    "trigger",
+    "each"
    ],
    "free_under": [
     "digits"
@@ -2313,6 +2353,7 @@
     "RES-012.title",
     "RES-012.why.1",
     "RES-012.why.2",
+    "RES-012.why.4",
     "RES-012.do.1",
     "RES-012.do.2",
     "RES-012.do.3",
@@ -2323,9 +2364,9 @@
     "RES-013.do.2",
     "RES-013.do.3"
    ],
-   "vocabulary": 435,
+   "vocabulary": 442,
    "max_length": 2,
-   "texts": 189660,
+   "texts": 195806,
    "function_words_only": [
     36,
     1296
@@ -2571,6 +2612,10 @@
      17,
      1513
     ],
+    "RES-012.why.4": [
+     33,
+     3465
+    ],
     "RES-012.do.1": [
      4,
      304
@@ -2584,8 +2629,8 @@
      913
     ],
     "RES-012.do.4": [
-     12,
-     1008
+     21,
+     1953
     ],
     "RES-013.title": [
      5,
@@ -2609,8 +2654,8 @@
     ]
    },
    "any": [
-    399,
-    187929
+    406,
+    194068
    ]
   }
  },
@@ -2961,5 +3006,5 @@
    }
   ]
  },
- "row5": "0 of the 81 catalogue sentences contain none of the study's loaded words under its full list and 69 under the digits-only ablation, and the checker admitted 0 of 28 hand-written harmful probes under the full list (9 and 26 of 28 under the qualifiers-and-digits and digits-only ablations) (docs/grounding-study.md)."
+ "row5": "0 of the 82 catalogue sentences contain none of the study's loaded words under its full list and 70 under the digits-only ablation, and the checker admitted 0 of 28 hand-written harmful probes under the full list (9 and 26 of 28 under the qualifiers-and-digits and digits-only ablations) (docs/grounding-study.md)."
 }

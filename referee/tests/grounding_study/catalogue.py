@@ -1,4 +1,5 @@
-"""The 81 sentences of the nine results rules, frozen "as of 8a7119b" and pinned by SHA-256.
+"""The sentences of the nine results rules, frozen "as of" the commit `catalogue.json` names and
+pinned by SHA-256.
 
 The study reads only `catalogue.json`. `live_catalogue` rebuilds the same dictionary from the rules
 now in `src/` so that a test can say when they have moved apart; it is also what
@@ -15,7 +16,7 @@ from pathlib import Path
 from referee.rules import RESULTS_RULES
 
 FROZEN = Path(__file__).resolve().parent / "catalogue.json"
-FROZEN_SHA256 = "2f8689de5634620d51d0330cbceda78479299e8ece32465346abb7b9083b98be"
+FROZEN_SHA256 = "a251c7e0124b090d5906a2578d020165ebee3f6e4a7856c397b897b35a3c901c"
 SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
 
 
