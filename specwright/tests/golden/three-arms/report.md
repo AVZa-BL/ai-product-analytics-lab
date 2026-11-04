@@ -30,7 +30,7 @@ Documents: `06-three-arms-guardrails.md`. Attempts: 1 (0 repair round(s)).
 - `population.kind` = `existing_users` - quoted from `06-three-arms-guardrails.md`: `Existing players only.`
 - `population.daily_eligible_units` = `9000` - quoted from `06-three-arms-guardrails.md`: `9,000 players a day open the store page`
 - `arms[0].name` = `control` - quoted from `06-three-arms-guardrails.md`: `control (the plain listing)`
-- `arms[0].allocation` = `0.3333333333333333` - inferred (note: `The brief says thirds (33.3% each); Referee needs the three shares to sum to 1.`)
+- `arms[0].allocation` = `0.3333333333333333` - inferred (note: `The brief says equal thirds, one third each; Referee needs the three shares to sum to 1.`)
 - `arms[0].is_control` = `True` - quoted from `06-three-arms-guardrails.md`: `control (the plain listing)`
 - `arms[1].name` = `variant_b` - quoted from `06-three-arms-guardrails.md`: `variant_b (20% discount)`
 - `arms[1].allocation` = `0.3333333333333333` - inferred (note: `thirds`)
@@ -108,6 +108,6 @@ Nothing sent back.
 
 ## Provenance
 
-- `06-three-arms-guardrails.md`: sha256 dccd0fb058ef98e5d02c7faa4a75832e42b5782045a7f84548ee5b8ed1882ee1, 1,702 bytes
+- `06-three-arms-guardrails.md`: sha256 e7c6e3fb390f042b32d6f076867aefb02d5f5543150eeda879c6927a4c7cc3d3, 1,712 bytes
 - Specwright 0.1.0, Referee 0.1.0
 - spec fingerprint: sha256:07aa3b3c870e570a314656b19fb5789f53051d2e216babe09a7bcfe6a3171f25
