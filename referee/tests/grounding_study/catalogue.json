@@ -1,5 +1,5 @@
 {
- "as_of": "8a7119b",
+ "as_of": "3365903",
  "sentences": {
   "RES-001.title": "Sample ratio mismatch: the arms are not the size the allocation promised",
   "RES-001.why.1": "Random assignment gives arms of the registered sizes, up to chance.",
@@ -70,12 +70,13 @@
   "RES-011.do.2": "Decide what to do with those weeks from the cause, never because leaving them out changes the result.",
   "RES-012.title": "Players first exposed after their first purchase",
   "RES-012.why.1": "A purchase made before the player first saw the change cannot be an effect of it.",
-  "RES-012.why.2": "These players are left out of the effect analysis, but they are in the arms, so a different share of the exposed players being late in different arms means the change reached the arms differently.",
+  "RES-012.why.2": "These players are left out of the effect analysis, but they are in the arms, so a different share of the players who bought being late in different arms means the change reached the arms differently.",
   "RES-012.why.3": "It is the results-time counterpart of DES-007.",
+  "RES-012.why.4": "The share of all exposed players is not the test, because it is the purchase rate times the late share of those who bought, so an arm in which the change makes players buy more shows more late players whatever the exposure did; the evidence gives it, and the seconds from assignment to first exposure in each arm, as description only.",
   "RES-012.do.1": "Check how exposure is triggered.",
   "RES-012.do.2": "If it can follow a purchase, say so in the design and analyse from first exposure.",
   "RES-012.do.3": "Compare the estimates with and without these players in the evidence, and say which one the conclusion rests on.",
-  "RES-012.do.4": "If the late share differs between arms, find out why before reading the effect.",
+  "RES-012.do.4": "If the late share of the purchasers differs between arms, find out why before reading the effect; if only the delay to first exposure differs, check the exposure trigger of each arm.",
   "RES-013.title": "An arm's configuration changed during the test",
   "RES-013.why.1": "A change of configuration part-way through is a second treatment inside the arm.",
   "RES-013.why.2": "Players before and after it saw different things, so the arm's effect is an average of two experiences, and a change of that effect over time (RES-007) cannot be told from the effect of the change itself.",

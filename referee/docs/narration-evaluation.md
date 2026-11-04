@@ -128,7 +128,7 @@ The narration tests (`pytest -q tests/test_narration_*.py tests/test_repository_
 
 ## The checker study
 
-`docs/grounding-study.md` measures what a closed-vocabulary checker accepts over enumerations of short texts: a checker's acceptance space, not what a model can or cannot do. No model was run for it or through Referee. Its figures, as `docs/grounding-study.json` states them: 0 of the 81 catalogue sentences contain none of the study's loaded words under its full list and 69 under the digits-only ablation, and the checker admitted 0 of 28 hand-written harmful probes under the full list (9 and 26 of 28 under the qualifiers-and-digits and digits-only ablations) (docs/grounding-study.md).
+`docs/grounding-study.md` measures what a closed-vocabulary checker accepts over enumerations of short texts: a checker's acceptance space, not what a model can or cannot do. No model was run for it or through Referee. Its figures, as `docs/grounding-study.json` states them: 0 of the 82 catalogue sentences contain none of the study's loaded words under its full list and 70 under the digits-only ablation, and the checker admitted 0 of 28 hand-written harmful probes under the full list (9 and 26 of 28 under the qualifiers-and-digits and digits-only ablations) (docs/grounding-study.md).
 
 ## Known gaps, and what is not verified
 

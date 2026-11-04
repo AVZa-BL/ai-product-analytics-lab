@@ -301,8 +301,8 @@ def render_markdown(result: dict, sentences: dict[str, str]) -> str:
         "of words in any order.",
         "- That the list is right: another list gives other counts, and no one but its author has "
         "read it. The probes are one author's too.",
-        "- That the 81 sentences are the catalogue of today: they are frozen, and a test says "
-        "when the rules have moved on without failing.",
+        f"- That the {len(sentences)} sentences are the catalogue of today: they are frozen, and "
+        "a test says when the rules have moved on without failing.",
         "",
     ]
     return "\n".join(out)
