@@ -54,6 +54,8 @@ called variant_a, lowers it to 7.99 USD. Players are assigned individually, 50/5
 they see the pass screen, and the price is shown after assignment, so assignment cannot depend on
 it. Only existing players are included, and players do not interact over the price.
 
+We expect the lower price to raise the Season Pass purchase rate.
+
 The goal metric is the Season Pass purchase rate: the share of players who buy the pass within 14
 days of first seeing the pass screen. In the last season it was 6.5%. We care about an 8%
 relative lift. We use alpha 0.05, power 80% and a two-sided test. 6,000 players a day see

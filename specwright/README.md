@@ -144,6 +144,13 @@ repairs 0; values agreeing 158 of 162; gaps left as gaps 4 of 4; **values invent
 again 0.333 against 1/3. Cases 01-03 and 08 repeated their first-pass results; case 04 needed no
 repair this time.
 
+**Direction wording.** Case 05's brief gave no direction and said "a two-sided test", which the
+model twice put into `hypothesis.direction` (that field is the expected direction; the test's
+sidedness is `design.sided`). The brief now adds "We expect the lower price to raise the Season
+Pass purchase rate.", and the reference quotes it. Three live runs of case 05 gave `ok`, 26 of 26
+values agreeing, 1 repair each. This is a small sample on an edited brief. The earlier error was a
+confusion of two fields, so a brief that does not state the direction may still be mis-drafted.
+
 ## What is verified, and what is not
 
 - **Verified by tests:** the claim table against Referee's spec (every option of every field is one Referee accepts, and the powered example assembles back to its fingerprint), the number and approximate-wording rules on reference cases, every check, the repair loop (what goes back, the limit of repairs, when it stops), the command, its exit statuses and the golden outputs, the escaping, and the **real Anthropic SDK against a mocked HTTP transport** (request body, streaming parse, a refusal, truncation, HTTP errors, a dropped connection, missing credentials). 21 deliberate faults in the code were each caught by a test.

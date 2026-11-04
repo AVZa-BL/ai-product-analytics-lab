@@ -54,9 +54,9 @@
    "path": "hypothesis.direction",
    "value": "increase",
    "evidence": {
-    "kind": "inferred",
-    "document": "",
-    "quote": "",
+    "kind": "document",
+    "document": "05-buried-in-design-doc.md",
+    "quote": "We expect the lower price to raise the Season Pass purchase rate.",
     "note": ""
    }
   },
