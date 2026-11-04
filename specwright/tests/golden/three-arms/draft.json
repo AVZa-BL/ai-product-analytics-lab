@@ -6,8 +6,8 @@
   "documents": [
     {
       "name": "06-three-arms-guardrails.md",
-      "sha256": "dccd0fb058ef98e5d02c7faa4a75832e42b5782045a7f84548ee5b8ed1882ee1",
-      "bytes": 1702
+      "sha256": "e7c6e3fb390f042b32d6f076867aefb02d5f5543150eeda879c6927a4c7cc3d3",
+      "bytes": 1712
     }
   ],
   "attempts": [
@@ -175,7 +175,7 @@
         "kind": "inferred",
         "document": "",
         "quote": "",
-        "note": "The brief says thirds (33.3% each); Referee needs the three shares to sum to 1."
+        "note": "The brief says equal thirds, one third each; Referee needs the three shares to sum to 1."
       }
     },
     {

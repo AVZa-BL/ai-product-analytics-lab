@@ -8,7 +8,7 @@ two ways to sell the Ember Bundle: a 20% discount, or a three-item bundle at the
 of seeing it, compared with the current plain listing.
 
 **Arms.** control (the plain listing), variant_b (20% discount) and variant_c (three-item bundle),
-in thirds: 33.3% of the players each. Players are assigned individually when they first open the
+in equal thirds: one third of the players each. Players are assigned individually when they first open the
 store page. Existing players only. Players do not influence each other's store pages.
 
 **Traffic.** 9,000 players a day open the store page for the first time.
