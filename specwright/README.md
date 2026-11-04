@@ -144,6 +144,12 @@ repairs 0; values agreeing 158 of 162; gaps left as gaps 4 of 4; **values invent
 again 0.333 against 1/3. Cases 01-03 and 08 repeated their first-pass results; case 04 needed no
 repair this time.
 
+**Allocation wording.** The brief's "33.3% of the players each" invited the model to copy 0.333,
+which is rejected (the shares sum to 0.999). It now reads "in equal thirds: one third of the
+players each", so 1/3 is an inference, as the reference has it. Three live runs of case 06 on this
+wording gave `ok`, 35 of 35 values agreeing, 1 repair each: again a small sample, on an edited
+brief.
+
 ## What is verified, and what is not
 
 - **Verified by tests:** the claim table against Referee's spec (every option of every field is one Referee accepts, and the powered example assembles back to its fingerprint), the number and approximate-wording rules on reference cases, every check, the repair loop (what goes back, the limit of repairs, when it stops), the command, its exit statuses and the golden outputs, the escaping, and the **real Anthropic SDK against a mocked HTTP transport** (request body, streaming parse, a refusal, truncation, HTTP errors, a dropped connection, missing credentials). 21 deliberate faults in the code were each caught by a test.
