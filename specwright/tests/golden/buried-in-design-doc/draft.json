@@ -6,8 +6,8 @@
   "documents": [
     {
       "name": "05-buried-in-design-doc.md",
-      "sha256": "595a1009eddcf91564356bf0b1613f18759ca74768c134bf1443b4ee4eec697c",
-      "bytes": 3620
+      "sha256": "113d99d0141d0f5e4e07eedfef63203f3711a8e92fe5f87646bce2fd0e0b956e",
+      "bytes": 3687
     }
   ],
   "attempts": [
@@ -94,9 +94,9 @@
       "path": "hypothesis.direction",
       "value": "increase",
       "evidence": {
-        "kind": "inferred",
-        "document": "",
-        "quote": "",
+        "kind": "document",
+        "document": "05-buried-in-design-doc.md",
+        "quote": "We expect the lower price to raise the Season Pass purchase rate.",
         "note": ""
       }
     },

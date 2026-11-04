@@ -21,7 +21,7 @@ Documents: `05-buried-in-design-doc.md`. Attempts: 1 (0 repair round(s)).
 - `owner` = `live-ops` - quoted from `05-buried-in-design-doc.md`: `Owner: live-ops.`
 - `hypothesis.null` = `Lowering the Season Pass price to 7.99 USD does not change the share of players who buy it within 14 days of first seeing the pass screen.` - inferred
 - `hypothesis.alternative` = `The lower price raises the pass purchase rate.` - quoted from `05-buried-in-design-doc.md`: `The goal metric is the Season Pass purchase rate`
-- `hypothesis.direction` = `increase` - inferred
+- `hypothesis.direction` = `increase` - quoted from `05-buried-in-design-doc.md`: `We expect the lower price to raise the Season Pass purchase rate.`
 - `population.randomization_unit` = `player` - quoted from `05-buried-in-design-doc.md`: `Players are assigned individually, 50/50`
 - `population.analysis_unit` = `player` - inferred
 - `population.eligibility` = `Existing players who see the pass screen.` - quoted from `05-buried-in-design-doc.md`: `Only existing players are included`
@@ -59,7 +59,6 @@ Documents: `05-buried-in-design-doc.md`. Attempts: 1 (0 repair round(s)).
 - `id` = `skyharbor_pass_price`
 - `title` = `Season Pass price test`
 - `hypothesis.null` = `Lowering the Season Pass price to 7.99 USD does not change the share of players who buy it within 14 days of first seeing the pass screen.`
-- `hypothesis.direction` = `increase`
 - `population.analysis_unit` = `player`
 - `arms[1].is_control` = `False`
 - `primary_metric.name` = `season_pass_purchase_14d`
@@ -90,6 +89,6 @@ Nothing sent back.
 
 ## Provenance
 
-- `05-buried-in-design-doc.md`: sha256 595a1009eddcf91564356bf0b1613f18759ca74768c134bf1443b4ee4eec697c, 3,620 bytes
+- `05-buried-in-design-doc.md`: sha256 113d99d0141d0f5e4e07eedfef63203f3711a8e92fe5f87646bce2fd0e0b956e, 3,687 bytes
 - Specwright 0.1.0, Referee 0.1.0
 - spec fingerprint: sha256:359ff3e516580b90bb32acebe88a87e4cca25e7f5426d318a360a28847ae922f
