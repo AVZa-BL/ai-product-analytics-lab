@@ -145,6 +145,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.referee == 'true' && github.event_name == 'push'
     runs-on: macos-latest
+    # The job takes about 2 minutes once it has a runner (2 m 13 s on 2026-11-06).
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: referee
