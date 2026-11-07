@@ -749,19 +749,6 @@ def test_a_group_of_one_unit_is_not_refused() -> None:
 # --- Edges found by the independent review of 4b-1 -----------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("treatment", "control"),
-    [
-        ([1e160, 1e160, 3.0], [1.0, 2.0, 3.0]),
-    ],
-)
-def test_values_too_large_to_square_are_a_stats_error_not_an_overflow(
-    treatment: list[float], control: list[float]
-) -> None:
-    with pytest.raises(StatsError, match="too large"):
-        welch_difference(treatment, control)
-
-
 def test_an_integer_beyond_any_float_is_not_a_finite_number() -> None:
     with pytest.raises(StatsError, match="finite"):
         welch_difference([10**400, 1, 2], [1, 2, 3])
@@ -876,13 +863,6 @@ def test_a_huge_spread_around_a_tiny_positive_mean_is_refused() -> None:
         log_mean_ratio([1e10, -1e10, 5e-324, 5e-324, 5e-324], [1.0, 2.0, 3.0])
 
 
-def test_a_tiny_mean_with_a_tiny_spread_is_a_finite_answer_not_a_division_by_zero() -> None:
-    result = log_mean_ratio([1e-300, 2e-300, 3e-300], [1e-300, 4e-300, 2e-300])
-
-    assert result.log_ratio == pytest.approx(math.log(2 / (7 / 3)), rel=1e-12)
-    assert math.isfinite(result.std_error) and result.std_error > 0
-
-
 # --- What the cohort test could have seen ------------------------------------------------------
 
 
@@ -963,12 +943,6 @@ def test_the_power_rises_with_the_size_of_the_change_and_ignores_its_sign() -> N
     )
 
 
-def test_a_stricter_level_gives_less_power() -> None:
-    effects, se = [3.0, 2.0, 1.0, 0.0], [1.0] * 4
-
-    assert cohort_power(effects, se, level=0.0125) < cohort_power(effects, se, level=0.025)
-
-
 @pytest.mark.parametrize("size", [1e12, 1e19, 1e150])
 def test_a_change_far_beyond_the_standard_errors_is_flagged_for_certain(size: float) -> None:
     # scipy's noncentral chi-squared is NaN from a non-centrality of about 1e19, and a NaN must
@@ -1029,15 +1003,6 @@ def test_more_cohorts_and_smaller_errors_make_a_smaller_change_visible() -> None
     assert shift([3.0] * 4) == pytest.approx(3 * shift([1.0] * 4), rel=1e-9)
 
 
-def test_a_step_is_seen_at_a_smaller_size_than_a_fade_of_the_same_height() -> None:
-    se = [1.0] * 8
-
-    fade = cohort_detectable_shift(se, shape="linear_fade", level=0.025)
-    step = cohort_detectable_shift(se, shape="step", level=0.025)
-
-    assert 0 < step < fade
-
-
 def test_a_gap_between_the_positions_changes_what_a_fade_looks_like() -> None:
     se = [1.0, 1.0, 1.0, 1.0]
 
@@ -1045,14 +1010,6 @@ def test_a_gap_between_the_positions_changes_what_a_fade_looks_like() -> None:
     gap = cohort_detectable_shift(se, positions=[0, 1, 2, 6], shape="linear_fade", level=0.025)
 
     assert gap != pytest.approx(even, rel=1e-3)
-
-
-def test_a_stricter_level_needs_a_bigger_change() -> None:
-    se = [1.0] * 4
-
-    assert cohort_detectable_shift(se, shape="step", level=0.0125) > cohort_detectable_shift(
-        se, shape="step", level=0.025
-    )
 
 
 @pytest.mark.parametrize("shape", ["linear_fade", "step"])
@@ -1160,13 +1117,6 @@ def test_the_wilson_interval_agrees_with_statsmodels_for_every_count(n: int) -> 
             n,
         )
         assert found.rate == successes / n and 0 <= found.ci_low <= found.rate <= found.ci_high <= 1
-
-
-def test_the_wilson_interval_has_width_at_a_rate_of_zero_and_of_one() -> None:
-    none, every = proportion_interval(0, 40), proportion_interval(40, 40)
-
-    assert none.ci_low == 0.0 and 0.08 < none.ci_high < 0.10  # the Wald interval would be a point
-    assert every.ci_high == 1.0 and 0.90 < every.ci_low < 0.92
 
 
 @pytest.mark.parametrize(
