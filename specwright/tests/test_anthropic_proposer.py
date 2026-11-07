@@ -1,9 +1,9 @@
 """The real Anthropic SDK, against a mocked HTTP transport: no network, no credentials.
 
 These tests run the SDK's own request building, streaming parser and error classes, so what is
-checked is how Specwright uses the SDK, not how it uses a stand-in for it. The model path has
-never been run against the real API: that the API accepts the request (above all the output
-schema) is not verified.
+checked is how Specwright uses the SDK, not how it uses a stand-in for it. These tests never
+reach the real API; a live run of `specwright.evaluate --live` is what shows that it accepts
+the request.
 """
 
 from __future__ import annotations

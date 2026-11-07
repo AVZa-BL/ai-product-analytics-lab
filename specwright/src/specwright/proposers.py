@@ -3,7 +3,7 @@
 Both implement `propose(request, feedback) -> ProposerResponse` and nothing else, so the checks and
 the repair loop never depend on which one produced the text. The model call follows Tracewright's
 (`tracewright.propose.proposers`): streaming, a JSON-schema output, no tools, credentials only from
-the environment the SDK reads. It has never been run against the real API.
+the environment the SDK reads. It has been run against the real API on the example briefs only.
 """
 
 from __future__ import annotations
