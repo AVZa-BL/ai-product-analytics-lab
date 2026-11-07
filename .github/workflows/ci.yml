@@ -191,10 +191,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - uses: actions/cache@v4
-        with:
-          path: .uv-cache
-          key: uv-${{ runner.os }}-${{ hashFiles('specwright/pyproject.toml', 'referee/pyproject.toml', 'tracewright/pyproject.toml') }}
       - name: Install projects
         run: python -m pip install uv && uv pip install --system -e ../referee -e ../tracewright -e '.[dev]'
       - name: Lint
