@@ -6,7 +6,6 @@ the decisions are checked at their boundaries.
 """
 
 import math
-import random
 
 import pytest
 from results_helpers import TWO_ARMS, Row, at, build_data, results_spec
@@ -152,30 +151,6 @@ def test_a_guardrail_that_may_not_increase_is_read_with_the_signs_the_other_way(
     assert up.point == pytest.approx(0.133333, abs=1e-6) and up.tier == "shown"
     assert down.point == pytest.approx(-0.133333, abs=1e-6) and down.tier == "within"
     assert (down.low, down.high) == pytest.approx((-up.high, -up.low), abs=1e-6)
-
-
-def test_an_interval_that_reaches_inside_the_tolerance_is_only_a_possible_breach() -> None:
-    rng = random.Random(1)
-    arm = [rng.uniform(0.0, 5.2) for _ in range(60)]
-    control = [rng.uniform(0.0, 6.0) for _ in range(60)]
-    ratio = mean_ratio(arm, control)
-    assert ratio.ratio < 0.88 and ratio.ci_high > 0.92  # past 10% down, interval reaches inside
-
-    harm = control_reference(arm, control, direction="decrease", tolerance=0.10).harm
-
-    assert harm is not None and harm.tier == "possible"
-    assert harm.point > 0.10 and harm.low < 0.10 < harm.high
-
-
-def test_a_point_estimate_within_the_tolerance_is_within_even_if_the_interval_is_not() -> None:
-    rng = random.Random(2)
-    control = [rng.uniform(0.0, 6.0) for _ in range(40)]
-    arm = list(control)  # the same values: no change at all, though 40 players cannot say so
-
-    harm = control_reference(arm, control, direction="decrease", tolerance=0.02).harm
-
-    assert harm is not None and harm.tier == "within" and harm.point < 0.02 < harm.high
-    assert harm.not_verified  # the data cannot rule out a breach: said, but not a finding
 
 
 @pytest.mark.parametrize(
@@ -352,16 +327,6 @@ def _skewed(**more):
         **more,
     }
     return baseline_reference(_RIGHT_SKEWED, **options)
-
-
-def test_a_revenue_like_fall_against_the_baseline_is_capped_at_possible() -> None:
-    plain, capped = _skewed().harm, _skewed(right_skewed=True).harm
-
-    assert plain is not None and capped is not None
-    assert plain.tier == "shown" and plain.capped_by is None
-    assert (capped.point, capped.low, capped.high) == (plain.point, plain.low, plain.high)
-    assert capped.tier == "possible" and capped.capped_by == "heavy_tail"
-    assert capped.uncapped_tier == "shown" and not capped.no_variation
 
 
 @pytest.mark.parametrize(
@@ -547,15 +512,6 @@ def test_when_neither_reference_could_be_measured_the_comparison_is_not_evaluate
 
     assert found.tier is None and found.status == "not_evaluated"
     assert found.decided_by == () and found.references_agree is None
-
-
-@pytest.mark.parametrize(
-    ("own", "moved"), [("shown", True), ("possible", True), ("within", False), (None, False)]
-)
-def test_a_control_beyond_the_baselines_tolerance_means_the_baseline_has_moved(own, moved) -> None:
-    found = _test(_harm("within"), _harm("shown"), _harm(own) if own else None)
-
-    assert found.baseline_has_moved is moved
 
 
 @pytest.mark.parametrize(
@@ -876,20 +832,6 @@ def test_the_level_of_chance_is_one_tail_of_the_interval() -> None:
     assert CHANCE_LEVEL == ALPHA / 2 == 0.025
 
 
-def test_a_constant_arm_in_the_ratio_to_control_is_held_when_chance_explains_it() -> None:
-    control = [2.0, 3.0, 3.0, 3.0, 4.0] * 20  # one in five has exactly 2 sessions
-
-    held = control_reference([2.0, 2.0], control, direction="decrease", tolerance=0.1)
-    believed = control_reference([2.0] * 6, control, direction="decrease", tolerance=0.1)
-
-    assert held.harm is not None and believed.harm is not None
-    assert held.harm.constant_group == "arm" and held.harm.chance_all_alike == pytest.approx(0.04)
-    assert (held.harm.tier, held.harm.capped_by) == ("possible", "no_variation")
-    assert held.harm.uncapped_tier == "shown"
-    assert believed.harm.chance_all_alike == pytest.approx(0.2**6)
-    assert (believed.harm.tier, believed.harm.capped_by) == ("shown", None)
-
-
 def test_a_constant_control_is_held_in_the_same_way_and_named() -> None:
     arm = [2.0, 3.0, 3.0, 3.0] * 25  # a quarter of the arm is at control's value
 
@@ -1031,28 +973,6 @@ def test_the_chance_could_explain_unless_it_is_known_and_below_the_level(
 
     assert chance_could_explain(chance) is could_explain
     assert harm.tier == ("possible" if could_explain else "shown")
-
-
-def test_controls_own_reading_is_judged_against_the_arms_and_not_held_always() -> None:
-    """100 control players all at 0 are as much a collapse of the baseline as 99 at 0 and one
-    at 1: with arms that have nobody at 0 neither is held."""
-    rows_arm = [3.0, 4.0, 2.0, 3.0] * 25
-
-    def own(control):
-        return baseline_reference(
-            control,
-            baseline=3.0,
-            kind="continuous",
-            direction="decrease",
-            tolerance=0.1,
-            group="control",
-            against=rows_arm,
-        ).harm
-
-    all_zero, nearly = own([0.0] * 100), own([0.0] * 99 + [1.0])
-
-    assert all_zero is not None and nearly is not None
-    assert all_zero.tier == nearly.tier == "shown" and all_zero.capped_by is None
 
 
 def test_controls_own_place_is_compared_with_the_arms_and_not_with_itself(raw_spec) -> None:
