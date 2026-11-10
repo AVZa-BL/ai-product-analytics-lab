@@ -97,24 +97,32 @@ class ReleaseSpec:
         root = Node(data, "", violations)
 
         version = root.integer("referee_release_spec_version", ge=1)
-        if not root.failed("referee_release_spec_version") and version != RELEASE_SPEC_VERSION:
+        supported = RELEASE_SPEC_VERSION
+        if not root.failed("referee_release_spec_version") and version != supported:
             root.fail(
                 "referee_release_spec_version",
-                f"unsupported version {version}; this Referee reads version "
-                f"{RELEASE_SPEC_VERSION}",
+                f"unsupported version {version}; this Referee reads version {supported}",
             )
 
-        # Keyword arguments evaluate top to bottom, so violations come out in schema order.
-        kpis_node = None
+        # The fields are read in schema order, so violations come out in that order; the KPI
+        # selection comes before the guardrails and the expectation, which are checked against it.
+        id_ = root.text("id", pattern=ID_PATTERN)
+        title = root.text("title")
+        owner = root.text("owner")
+        release = _release(root.mapping("release"))
+        pre_period_days = _pre_period_days(root)
+        post_period_days = root.integer("post_period_days", ge=MIN_POST_PERIOD_DAYS)
+        kpis_node = root.mapping("kpis", required=False)
+        selection = _selection(kpis_node)
         spec = cls(
             referee_release_spec_version=version,
-            id=root.text("id", pattern=ID_PATTERN),
-            title=root.text("title"),
-            owner=root.text("owner"),
-            release=_release(root.mapping("release")),
-            pre_period_days=_pre_period_days(root),
-            post_period_days=root.integer("post_period_days", ge=MIN_POST_PERIOD_DAYS),
-            kpis=(selection := _selection(kpis_node := root.mapping("kpis", required=False))),
+            id=id_,
+            title=title,
+            owner=owner,
+            release=release,
+            pre_period_days=pre_period_days,
+            post_period_days=post_period_days,
+            kpis=selection,
             guardrails=_guardrails(root, kpis_node, selection),
             expectation=_expectation(root, kpis_node, selection),
             segments=_segments(root),
@@ -128,8 +136,8 @@ class ReleaseSpec:
     def to_dict(self) -> dict[str, Any]:
         """The spec as plain data that `from_dict` accepts, in schema order.
 
-        What was not given is left out, as for an experiment spec: an absent optional field, an
-        explicit null and an empty `include` or `exclude` read the same, so none is written. A
+        What was not given is left out, as for an experiment spec: an absent optional section or
+        list, a null one and an empty `include` or `exclude` read the same, so none is written. A
         spec with no `kpis` section and one that spells out `defaults: true` have one canonical
         form, and with it one fingerprint.
         """
@@ -216,7 +224,6 @@ def _guardrail(node: Node, kpis: Node, selection: KpiSelection) -> ReleaseGuardr
 
 def _expectation(root: Node, kpis: Node, selection: KpiSelection) -> Expectation | None:
     if not root.given("expectation"):
-        root.mapping("expectation", required=False)  # an explicit null is read, and allowed
         return None
     node = root.mapping("expectation")
     expectation = Expectation(
@@ -238,7 +245,6 @@ def _size_relative(node: Node) -> float | None:
 
 def _segments(root: Node) -> tuple[str, ...] | None:
     if not root.given("segments"):
-        root.texts("segments")  # an explicit null is read, and allowed
         return None
     segments = root.texts("segments", pattern=COLUMN_PATTERN)
     if not root.failed("segments") and not segments:

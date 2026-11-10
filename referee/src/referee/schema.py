@@ -31,8 +31,8 @@ class SpecError(ValueError):
 
     def __init__(self, violations: Sequence[str], kind: str = "experiment spec") -> None:
         self.violations = tuple(violations)
-        self.kind = kind
-        super().__init__(self.violations, kind)
+        self.kind = kind  # survives pickling as instance state, so `args` stays the violations
+        super().__init__(self.violations)
 
     def __str__(self) -> str:
         noun = "violation" if len(self.violations) == 1 else "violations"
@@ -117,7 +117,9 @@ class Node:
         return self._silent or any(key in self._failed for key in keys)
 
     def given(self, key: str) -> bool:
-        """True when `key` is present and not null: an optional section that must then be read."""
+        """True when `key` is present and not null: an optional section that must then be read.
+        An absent or null one counts as seen, so `reject_unknown` does not report it."""
+        self._seen.add(key)
         return self._raw.get(key) is not None
 
     def _lookup(self, key: str, *, required: bool) -> Any:

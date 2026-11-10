@@ -452,4 +452,3 @@ def _reject_duplicate_names(
             if len(group) > 1:
                 listed = ", ".join(map(repr, group))
                 root.fail(key, f"names {listed} are written the same in a report, as {text}")
-

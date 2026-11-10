@@ -124,8 +124,10 @@ def test_the_selection_is_the_defaults_then_include_without_exclude_each_once(ra
         ("guardrails.0.tolerance_relative", 1),
         ("guardrails.0.kpi", "event_participation_rate "),
         ("expectation.direction", "two_sided"),
+        ("expectation.size_relative", 0),
         ("expectation.size_relative", 1),
         ("expectation.size_relative", True),
+        ("kpis.exclude", ["Bad KPI"]),
         ("segments", []),
         ("segments", ["platform", "platform"]),
         ("segments", ["bad name"]),
@@ -139,6 +141,26 @@ def test_a_value_outside_its_bound_is_a_violation_at_its_own_path(
     found = violations(raw)
 
     assert len(found) == 1 and found[0].startswith(f"{path.replace('.0.', '[0].')}")
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        ("pre_period_days", 28),  # the shortest baseline, and whole weeks
+        ("pre_period_days", 35),
+        ("post_period_days", 7),
+        ("guardrails.0.tolerance_relative", 0.999),
+        ("expectation.size_relative", 0.001),
+    ],
+)
+def test_a_value_at_its_bound_is_accepted_and_survives_a_round_trip(
+    raw: dict, path: str, value: object
+) -> None:
+    _put(raw, path, value)
+
+    spec = ReleaseSpec.from_dict(raw)
+
+    assert ReleaseSpec.from_dict(spec.to_dict()) == spec
 
 
 @pytest.mark.parametrize(
@@ -164,8 +186,9 @@ def test_a_kpi_the_review_would_not_read_cannot_be_registered(
 
 
 def test_a_kpi_check_waits_for_a_readable_selection(raw: dict) -> None:
-    """With `include` itself invalid, which KPIs are read is unknown, so the guardrails and
-    the expectation are not also reported against it."""
+    """With `include` itself invalid, or in conflict with `exclude`, which KPIs are read is
+    unknown, so the guardrails and the expectation are not also reported against it: one
+    mistake, one message."""
     _put(raw, "kpis.defaults", False)
     _put(raw, "kpis.include", ["Bad KPI"])
 
