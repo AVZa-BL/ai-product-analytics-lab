@@ -180,9 +180,10 @@ Not selected by the narrator:
 
 Referee ships no wrapper for a provider, no default command, no environment variable that names one
 and no `--model` option: a command that calls a model is yours to write and to run, with your
-credentials in your environment. The model path has never been run with a model. It has met only
-fake narrators and a stub command, a Python script, so whether a model returns a valid selection is
-not known.
+credentials in your environment. The model path has been run with a model once (2026-11-10), on the
+committed synthetic report: 24 of 24 calls returned a selection that passed the checks. The tests
+use fake narrators and a stub command, a Python script, and the run does not show how other reports,
+other models or more repeats behave, or whether a selection is relevant.
 
 What is not covered: what `CMD` does with files or the network; a process it starts that leaves its
 process group (`setsid`, `setpgid`); a command that changes its user id, which Referee cannot kill
