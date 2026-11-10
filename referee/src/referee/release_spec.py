@@ -184,7 +184,8 @@ def _selection(node: Node) -> KpiSelection:
         for kpi in selection.include:
             if kpi in selection.exclude:
                 node.fail("include", f"{kpi!r} is also in exclude")
-    if not node.failed("defaults", "include") and not (selection.defaults or selection.include):
+    # A bad `defaults` reads as true (the placeholder), so this check needs no guard on it.
+    if not node.failed("include") and not (selection.defaults or selection.include):
         node.fail("include", "must name at least one KPI when defaults is false")
     node.reject_unknown()
     return selection

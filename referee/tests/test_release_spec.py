@@ -185,16 +185,54 @@ def test_a_kpi_the_review_would_not_read_cannot_be_registered(
     assert any(v.startswith(f"{path}:") and fragment in v for v in found), found
 
 
-def test_a_kpi_check_waits_for_a_readable_selection(raw: dict) -> None:
-    """With `include` itself invalid, or in conflict with `exclude`, which KPIs are read is
-    unknown, so the guardrails and the expectation are not also reported against it: one
-    mistake, one message."""
-    _put(raw, "kpis.defaults", False)
-    _put(raw, "kpis.include", ["Bad KPI"])
+@pytest.mark.parametrize(
+    ("changes", "reported"),
+    [
+        ({"kpis.defaults": False, "kpis.include": ["Bad KPI"]}, "kpis.include[0]:"),
+        ({"kpis.exclude": ["Bad KPI", "event_participation_rate"]}, "kpis.exclude[0]:"),
+    ],
+)
+def test_a_kpi_check_waits_for_a_readable_selection(
+    raw: dict, changes: dict, reported: str
+) -> None:
+    """With `include` or `exclude` itself invalid, or the two in conflict, which KPIs are read
+    is unknown, so neither the conflict nor the guardrails and the expectation are also
+    reported against it: one mistake, one message."""
+    for dotted, value in changes.items():
+        _put(raw, dotted, value)
 
     found = violations(raw)
 
-    assert len(found) == 1 and found[0].startswith("kpis.include[0]:")
+    assert len(found) == 1 and found[0].startswith(reported)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "id",
+        "release.release_id",
+        "pre_period_days",
+        "guardrails.0.tolerance_relative",
+        "expectation.direction",
+    ],
+)
+def test_a_required_field_left_out_is_reported_as_required(raw: dict, path: str) -> None:
+    *parents, last = path.split(".")
+    node = raw
+    for part in parents:
+        node = node[int(part)] if part.isdigit() else node[part]
+    del node[last]
+
+    assert violations(raw) == (f"{path.replace('.0.', '[0].')}: is required",)
+
+
+@pytest.mark.parametrize("section", ["release", "kpis", "guardrails.0", "expectation"])
+def test_an_unknown_key_is_refused_in_every_section(raw: dict, section: str) -> None:
+    _put(raw, f"{section}.unexpected", 1)
+
+    found = violations(raw)
+
+    assert found == (f"{section.replace('.0', '[0]')}: unknown key 'unexpected'",)
 
 
 # --- Every violation at once, in schema order, under the release header --------------------
