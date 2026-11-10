@@ -605,7 +605,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         "It reports what was built and tested offline: the router of the narration layer "
         f"(`{ROUTER}`) on {first['questions']} agent-authored questions that were held out from "
         "the router's construction by procedure, not by a technical barrier "
-        "(`tests/data/narration_eval/PROVENANCE.md`). No model was run through Referee. The "
+        "(`tests/data/narration_eval/PROVENANCE.md`). No model was involved in these counts. The "
         "counts are agreement with the agent-authored taxonomy "
         "(`tests/data/narration_eval/taxonomy.json`); they say nothing about usefulness, "
         "readability, a model's behaviour or real users' phrasing, none of which was measured.",
@@ -698,7 +698,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         "`docs/grounding-study.md` measures what a closed-vocabulary checker accepts over "
         "enumerations of short texts: a checker's acceptance space, not what a model can or "
-        "cannot do. No model was run for it or through Referee. Its figures, as "
+        "cannot do. No model was run for it. Its figures, as "
         f"`docs/grounding-study.json` states them: {report['grounding_study']}",
         "",
         "## Known gaps, and what is not verified",
@@ -715,8 +715,13 @@ def render_markdown(report: dict[str, Any]) -> str:
         "question answered when it should have been refused gets the fixed page, which prints "
         "every finding.",
         "",
-        "Not verified: the model path has never been run with a model. Nothing here was run on "
-        "macOS. That a page is byte-identical between machines is not checked until CI runs it.",
+        "Verified once, live: on 2026-11-10 `referee narrate --llm-command` ran with a model on the "
+        "committed golden report (synthetic data): 24 of 24 calls returned a selection that passed the checks, "
+        "none returned a violation, and the pages differed from the fixed-rule pages only in the "
+        "`Selected:` and `Not selected by the narrator:` labels and the `Chosen by` lines. Not "
+        "verified: other reports, other models, more than three repeats, whether a selection is "
+        "relevant or helpful, a real analyst's use. Nothing here was run on macOS. That a page is "
+        "byte-identical between machines is not checked until CI runs it.",
         "",
         "## Reproduce",
         "",

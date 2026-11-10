@@ -27,9 +27,9 @@ PROVENANCE = (
 STATUS = (
     "Under development, in milestones. 100% by milestone count: all five milestones in the "
     "design are built. Milestone 5 is built and tested offline and is counted as done by the "
-    "user's decision, although its model path has never been run with a model; that run is "
-    "postponed until other parts of the project are done. The figure counts milestones, not "
-    "effort or quality, and the hardening of milestone 4 that is still going (see the pull "
+    "user's decision; its model path has been run with a model once, on one synthetic report "
+    "(24 of 24 calls returned a selection that passed the checks; whether a selection is relevant is not "
+    "measured). The figure counts milestones, not effort or quality, and the hardening of milestone 4 that is still going (see the pull "
     "requests) is inside milestone 4:"
 )
 ROW5 = (
@@ -37,8 +37,9 @@ ROW5 = (
     "report with the engine's own sentences and numbers rounded to six significant digits, and "
     "refuses by code what its router recognises as another kind of question; an optional path "
     "lets a command of the user's choice select what to show, by identifier. Built and tested "
-    "offline with fake narrators and a stub subprocess; the model path has never been run with a "
-    "model. A checker for model-written restatements was probed by language-model agents and a "
+    "offline with fake narrators and a stub subprocess; the model path has been run live once with a "
+    "model, on one synthetic report: 24 of 24 calls returned a selection that passed the checks, and whether a "
+    "selection is relevant is not measured. A checker for model-written restatements was probed by language-model agents and a "
     "program, not through Referee, and no model was run through Referee: {F} of the {N} "
     "catalogue sentences contain none of the study's loaded words under its full list and {G} "
     "under the digits-only ablation, and the checker admitted {H} of {P} hand-written harmful "
@@ -47,7 +48,7 @@ ROW5 = (
     "`{as_of}`. The model-written channel is not shipped because the user decided that the model "
     "path selects and never writes."
 )
-ROW5_STATUS = "Done: built and tested offline; the run with a model is postponed"
+ROW5_STATUS = "Done: built and tested offline; run once with a model on one synthetic report"
 WARNING = (  # the egress warning of narration.md, which the block repeats before its examples
     "**`--llm-command` sends the report's counts, p values, rates and allocations to whatever "
     "the command contacts.**",
@@ -75,8 +76,7 @@ REQUIRED = (  # what 24.14 binds the block to say, as the block words it
     "`--show-request` prints the exact request the command would receive, one line of JSON, "
     "and starts nothing",
     "`selection.json` holds one reason for each finding of the report",
-    "**The model path has never been run with a model.** It has met only fake narrators and a "
-    "stub command",
+    "**The model path has been run with a model once, on one synthetic report.**",
 )
 DENIAL = (
     "This layer does not agree that the experiment, its data, a result, a finding or a number is "
