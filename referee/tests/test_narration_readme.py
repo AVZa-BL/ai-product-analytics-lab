@@ -41,7 +41,7 @@ ROW5 = (
     "model, on one synthetic report: 24 of 24 calls returned a selection that passed the checks, "
     "and whether a selection is relevant is not measured. A checker for model-written restatements "
     "was probed by language-model agents and a program, not through Referee, and no model was run "
-    "through Referee: {F} of the {N} catalogue sentences contain none of the study's loaded words "
+    "for it: {F} of the {N} catalogue sentences contain none of the study's loaded words "
     "under its full list and {G} under the digits-only ablation, and the checker admitted {H} of "
     "{P} hand-written harmful probes under the full list ({H2} and {H3} of {P} under the "
     "qualifiers-and-digits and digits-only ablations) (docs/grounding-study.md). The catalogue is "
