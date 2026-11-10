@@ -43,6 +43,7 @@
   },
   {
    "id": "06-three-arms-guardrails",
+   "note": "Known disagreement, kept on purpose. The reference reads the refund-rate guardrail as binary; a live model (2 runs) read it as a ratio (refunds per purchase) and asked for its standard deviation, so it ends needs_answers. The brief does not say which. The 0.333 vs 1/3 allocation mismatches come from the brief writing 33.3%.",
    "expected_status": "ok",
    "documents": [
     "briefs/06-three-arms-guardrails.md"
