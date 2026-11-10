@@ -1,0 +1,44 @@
+# A release review: the lab's season update, registered before its daily KPIs are read.
+#
+# The live-strategy scenario ships config_002 at day 90 (2026-04-01 for the generated data):
+# upgrade costs rise by 28% and event rewards fall by 20%, for every player, with no holdout.
+# A release review is a before/after comparison, not an experiment: it says what moved against
+# the weeks before the release, whether that is beyond a registered tolerance, and what else
+# happened in the window. It never says the release caused anything.
+#
+# The spec registers what is read: the release (a row of the export's calendar), the whole
+# weeks before it that form the baseline, the horizon after it, the KPIs (`defaults: true`
+# takes every KPI the export's catalogue marks default; `include` adds one), the tolerance
+# each guardrail may not exceed (never defaulted: a KPI without a line here is monitored but
+# can never be a breach), what the release was meant to do, and the segments the mix check
+# reads.
+#
+# The command, `review-release`, is step R6 of docs/design/2026-10-29-review-release-handoff.md
+# and is not built yet; until then this file is read by the tests, which pin its fingerprint.
+referee_release_spec_version: 1
+id: season_11_update_2026_04
+title: Season 11 update (upgrade costs +28%, event rewards -20%)
+owner: live_ops_analytics
+
+release:
+  release_id: config_002 # a row of release_calendar.csv
+
+pre_period_days: 56 # whole weeks before day 0; at least 28
+post_period_days: 28 # the horizon of this review
+
+kpis:
+  defaults: true
+  include: [event_participation_rate]
+  exclude: []
+
+guardrails: # the registered tolerances, as a share of the baseline level
+  - {kpi: d7_retention, tolerance_relative: 0.03}
+  - {kpi: dau, tolerance_relative: 0.05}
+  - {kpi: session_frequency, tolerance_relative: 0.05}
+
+expectation: # what the release was meant to do; read by REL-014 and REL-015
+  kpi: arpdau
+  direction: increase
+  size_relative: 0.05
+
+segments: [platform, acquisition_channel] # read by the mix check; a subset of the catalogue's
