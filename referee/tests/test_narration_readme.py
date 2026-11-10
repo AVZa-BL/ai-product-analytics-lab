@@ -25,11 +25,12 @@ PROVENANCE = (
     "question."
 )
 STATUS = (
-    "Under development, in milestones. About 80% by milestone count, give or take 10 points: "
-    "milestones 1 to 4 of the five in the design are built; milestone 5 is built and tested "
-    "offline and is not counted as done, because its model path has never been run with a model. "
-    "The figure counts milestones, not effort or quality, and the hardening of milestone 4 that "
-    "is still going (see the pull requests) is inside milestone 4:"
+    "Under development, in milestones. 100% by milestone count: all five milestones in the "
+    "design are built. Milestone 5 is built and tested offline and is counted as done by the "
+    "user's decision, although its model path has never been run with a model; that run is "
+    "postponed until other parts of the project are done. The figure counts milestones, not "
+    "effort or quality, and the hardening of milestone 4 that is still going (see the pull "
+    "requests) is inside milestone 4:"
 )
 ROW5 = (
     "Narration layer: `referee narrate` answers four kinds of question about a saved results "
@@ -46,7 +47,7 @@ ROW5 = (
     "`{as_of}`. The model-written channel is not shipped because the user decided that the model "
     "path selects and never writes."
 )
-ROW5_STATUS = "Built and tested offline; not counted as done"
+ROW5_STATUS = "Done: built and tested offline; the run with a model is postponed"
 WARNING = (  # the egress warning of narration.md, which the block repeats before its examples
     "**`--llm-command` sends the report's counts, p values, rates and allocations to whatever "
     "the command contacts.**",
