@@ -111,13 +111,13 @@ REPLAY = (
     "{lines} lines):"
 )
 NEVER = (
-    "**The model path has been run with a model once, on one synthetic report.** On 2026-11-10 "
-    "a command that calls a model ran on the committed golden report: 24 of 24 calls returned a "
-    "selection that passed the checks, and the pages differed from the fixed-rule pages only in the `Selected:` "
-    "and `Not selected by the narrator:` labels and the `Chosen by` lines. This does not show "
-    "how other reports, other models or more repeats behave, whether a selection is relevant or "
-    "helpful, or how an analyst would use it. Referee ships no wrapper for a model provider, no "
-    "default command and no `--model` option."
+    "**The model path has been run with a model once, on one synthetic report.** On 2026-11-10 a "
+    "command that calls a model ran on the committed golden report: 24 of 24 calls returned a "
+    "selection that passed the checks, and the pages differed from the fixed-rule pages only in "
+    "the `Selected:` and `Not selected by the narrator:` labels and the `Chosen by` lines. This "
+    "does not show how other reports, other models or more repeats behave, whether a selection is "
+    "relevant or helpful, or how an analyst would use it. Referee ships no wrapper for a model "
+    "provider, no default command and no `--model` option."
 )
 
 

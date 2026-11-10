@@ -715,13 +715,13 @@ def render_markdown(report: dict[str, Any]) -> str:
         "question answered when it should have been refused gets the fixed page, which prints "
         "every finding.",
         "",
-        "Verified once, live: on 2026-11-10 `referee narrate --llm-command` ran with a model on the "
-        "committed golden report (synthetic data): 24 of 24 calls returned a selection that passed the checks, "
-        "none returned a violation, and the pages differed from the fixed-rule pages only in the "
-        "`Selected:` and `Not selected by the narrator:` labels and the `Chosen by` lines. Not "
-        "verified: other reports, other models, more than three repeats, whether a selection is "
-        "relevant or helpful, a real analyst's use. Nothing here was run on macOS. That a page is "
-        "byte-identical between machines is not checked until CI runs it.",
+        "Verified once, live: on 2026-11-10 `referee narrate --llm-command` ran with a model on "
+        "the committed golden report (synthetic data): 24 of 24 calls returned a selection that "
+        "passed the checks, none returned a violation, and the pages differed from the fixed-rule "
+        "pages only in the `Selected:` and `Not selected by the narrator:` labels and the `Chosen "
+        "by` lines. Not verified: other reports, other models, more than three repeats, whether a "
+        "selection is relevant or helpful, a real analyst's use. Nothing here was run on macOS. "
+        "That a page is byte-identical between machines is not checked until CI runs it.",
         "",
         "## Reproduce",
         "",
