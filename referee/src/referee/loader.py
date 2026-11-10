@@ -1,11 +1,11 @@
-"""Read an experiment spec from a YAML file.
+"""Read a spec from a YAML file: an experiment spec, or a release spec.
 
 PyYAML on its own is too forgiving for a pre-registered spec. A repeated key silently keeps
 its last value, an unquoted `null:` (the name of a hypothesis field) becomes a null key,
 `on:` and `yes:` become booleans, and aliases and merge keys copy values around unseen. This
 module reads with `SafeLoader` (no arbitrary objects) and refuses each of those with a
 message that names the file, the line and what to write instead. Whether the result is a valid
-spec is `ExperimentSpec.from_dict`'s question, not this module's.
+spec is the spec's own `from_dict`'s question, not this module's.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from typing import Any
 
 import yaml
 
+from referee.release_spec import ReleaseSpec
 from referee.spec import ExperimentSpec
 
 
@@ -91,13 +92,8 @@ def _problem(source: str, error: yaml.YAMLError) -> str:
     return f"{source}: {str(error).splitlines()[0]}"
 
 
-def parse_spec(text: str, *, source: str = "<string>") -> ExperimentSpec:
-    """Parse YAML text and validate it as a spec.
-
-    Raises LoadError for text YAML or this module rejects (including a timestamp that cannot
-    exist), and SpecError, listing every violation, for a mapping that is not a valid spec.
-    """
-
+def _read_yaml(text: str, source: str) -> Any:
+    """The one document of `text`, as plain data, or a LoadError naming what was refused."""
     try:
         # Building the loader already checks the text for control characters.
         data = _SpecLoader(text, source).get_single_data()
@@ -109,16 +105,38 @@ def parse_spec(text: str, *, source: str = "<string>") -> ExperimentSpec:
         # PyYAML builds a timestamp while it constructs the document and raises a bare
         # ValueError for one that cannot exist (2026-02-30, hour 24, an offset of 24 hours).
         raise LoadError(f"{source}: {error}; if this is meant as text, quote it") from error
-    return ExperimentSpec.from_dict(data)
+    return data
 
 
-def load_spec(path: str | Path) -> ExperimentSpec:
-    """Read, parse and validate the spec file at `path`."""
+def parse_spec(text: str, *, source: str = "<string>") -> ExperimentSpec:
+    """Parse YAML text and validate it as an experiment spec.
+
+    Raises LoadError for text YAML or this module rejects (including a timestamp that cannot
+    exist), and SpecError, listing every violation, for a mapping that is not a valid spec.
+    """
+    return ExperimentSpec.from_dict(_read_yaml(text, source))
+
+
+def parse_release_spec(text: str, *, source: str = "<string>") -> ReleaseSpec:
+    """Parse YAML text and validate it as a release spec; the errors are `parse_spec`'s."""
+    return ReleaseSpec.from_dict(_read_yaml(text, source))
+
+
+def _read_file(path: str | Path) -> str:
     source = str(path)
     try:
-        text = Path(path).read_text(encoding="utf-8")
+        return Path(path).read_text(encoding="utf-8")
     except UnicodeDecodeError as error:
         raise LoadError(f"{source}: not valid UTF-8 (at byte offset {error.start})") from error
     except OSError as error:
         raise LoadError(f"{source}: cannot be read: {error.strerror or error}") from error
-    return parse_spec(text, source=source)
+
+
+def load_spec(path: str | Path) -> ExperimentSpec:
+    """Read, parse and validate the experiment spec file at `path`."""
+    return parse_spec(_read_file(path), source=str(path))
+
+
+def load_release_spec(path: str | Path) -> ReleaseSpec:
+    """Read, parse and validate the release spec file at `path`."""
+    return parse_release_spec(_read_file(path), source=str(path))

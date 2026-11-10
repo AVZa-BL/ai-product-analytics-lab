@@ -61,15 +61,17 @@ kpis:
   include: [event_participation_rate]
   exclude: []
 guardrails:                        # a tolerance is registered here or the KPI has none
-  - {kpi: arpdau, tolerance_relative: 0.05}
   - {kpi: d7_retention, tolerance_relative: 0.03}
   - {kpi: dau, tolerance_relative: 0.05}
+  - {kpi: session_frequency, tolerance_relative: 0.05}
 expectation:                       # optional: what the release was meant to do
-  kpi: progression_velocity
-  direction: decrease
-  size_relative: 0.10
+  kpi: arpdau
+  direction: increase
+  size_relative: 0.05
 segments: [platform, acquisition_channel]   # read by the mix check; a subset of the catalogue's
 ```
+
+(R1 changed the expectation from `progression_velocity`, which section 10 leaves out of the export as non-additive, to `arpdau`; the file is `examples/season-11-update.yaml`.)
 
 Validation, in `release_spec.py` with the pattern of `spec.py` (every violation listed, unknown keys refused, `SpecError`): `pre_period_days` a multiple of 7 and at least 28; `post_period_days` at least 7; `tolerance_relative` in (0, 1); a guardrail's or the expectation's KPI among the selected KPIs; `direction` `increase` or `decrease`; `size_relative` in (0, 1); `segments` non-empty if given. No threshold is defaulted: a KPI without a line under `guardrails` is monitored (band, persistence, mix, trend) but can never be a breach, and the report says which KPIs have no registered tolerance. The judgement constants of the method (coverage, block length, draws, seed, `m` of `n`) are not spec fields (section 5.8). The spec's fingerprint is computed as today (18.1).
 

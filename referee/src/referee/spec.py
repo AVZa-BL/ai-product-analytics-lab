@@ -7,18 +7,24 @@ question for the review rules, which read a valid spec and never repair an inval
 
 from __future__ import annotations
 
-import difflib
-import hashlib
 import json
 import math
-import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, get_args
 
 from referee.display import for_line
+from referee.schema import (
+    COLUMN_PATTERN,
+    ID_PATTERN,
+    Node,
+    SpecError,
+    canonical_json,
+    drop_unset,
+    fingerprint,
+    show,
+)
 
 SPEC_VERSION = 1
 ALLOCATION_TOLERANCE = 1e-9
@@ -36,25 +42,12 @@ AlphaCorrection = Literal["none", "bonferroni", "dunnett"]
 StoppingRule = Literal["fixed_horizon", "sequential"]
 SrmCadence = Literal["daily", "weekly", "none"]
 
-_ID_PATTERN = re.compile(r"^[a-z0-9_]+$")
-_COLUMN_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# SpecError is defined in referee.schema; the CLI and the tests import it from here, as before.
+
 # Columns of the outcomes file that mean something to the loader and cannot hold a metric.
 RESERVED_COLUMNS = frozenset(
     {"experiment_id", "player_id", "first_purchase_at_utc", "window_end_utc"}
 )
-
-
-class SpecError(ValueError):
-    """The spec is malformed. Carries every violation found, not just the first."""
-
-    def __init__(self, violations: Sequence[str]) -> None:
-        self.violations = tuple(violations)
-        super().__init__(self.violations)
-
-    def __str__(self) -> str:
-        noun = "violation" if len(self.violations) == 1 else "violations"
-        header = f"invalid experiment spec: {len(self.violations)} {noun}"
-        return "\n".join([header, *(f"  - {violation}" for violation in self.violations)])
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -165,10 +158,10 @@ class ExperimentSpec:
     def from_dict(cls, data: Mapping[str, Any]) -> ExperimentSpec:
         """Validate `data` and return the spec, or raise SpecError listing every violation."""
         if not isinstance(data, Mapping):
-            raise SpecError([f"spec: must be a mapping, got {_show(data)}"])
+            raise SpecError([f"spec: must be a mapping, got {show(data)}"])
 
         violations: list[str] = []
-        root = _Node(data, "", violations)
+        root = Node(data, "", violations)
 
         version = root.integer("referee_spec_version", ge=1)
         if not root.failed("referee_spec_version") and version != SPEC_VERSION:
@@ -180,7 +173,7 @@ class ExperimentSpec:
         # Keyword arguments evaluate top to bottom, so violations come out in schema order.
         spec = cls(
             referee_spec_version=version,
-            id=root.text("id", pattern=_ID_PATTERN),
+            id=root.text("id", pattern=ID_PATTERN),
             title=root.text("title"),
             owner=root.text("owner"),
             hypothesis=_hypothesis(root.mapping("hypothesis")),
@@ -207,45 +200,24 @@ class ExperimentSpec:
         keeps the canonical form, and with it the fingerprint, unchanged when a later schema
         version adds an optional field.
         """
-        return _drop_unset(asdict(self))
+        return drop_unset(asdict(self))
 
     def canonical_json(self) -> str:
-        """One fixed text for this spec: sorted keys, no spaces, non-ASCII written as is.
-
-        The same experiment gives the same text however the input file was laid out, ordered
-        or commented. The order of `arms` is kept, because it is part of the spec.
-        """
-        return json.dumps(
-            self.to_dict(),
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-            allow_nan=False,
-        )
+        """One fixed text for this spec: sorted keys, no spaces, non-ASCII written as is
+        (`referee.schema.canonical_json`). The order of `arms` is kept, because it is part
+        of the spec."""
+        return canonical_json(self.to_dict())
 
     def sha256(self) -> str:
-        """The hex SHA-256 of the canonical JSON as UTF-8: this spec's fingerprint.
-
-        A lone surrogate, which a YAML escape such as "\\ud800" can put in a string, is
-        written as the three bytes that UTF-8 would give it, so that it has a fingerprint too.
-        """
-        return hashlib.sha256(self.canonical_json().encode("utf-8", "surrogatepass")).hexdigest()
-
-
-def _drop_unset(value: Any) -> Any:
-    """Plain lists and dicts from `asdict`'s output, without None values or empty mappings."""
-    if isinstance(value, dict):
-        kept = {key: _drop_unset(item) for key, item in value.items()}
-        return {key: item for key, item in kept.items() if item is not None and item != {}}
-    if isinstance(value, list | tuple):
-        return [_drop_unset(item) for item in value]
-    return value
+        """The hex SHA-256 of the canonical JSON as UTF-8: this spec's fingerprint
+        (`referee.schema.fingerprint`)."""
+        return fingerprint(self.to_dict())
 
 
 # --- Section parsers: each one reads like the schema it validates -------------------------
 
 
-def _hypothesis(node: _Node) -> Hypothesis:
+def _hypothesis(node: Node) -> Hypothesis:
     hypothesis = Hypothesis(
         null=node.text("null"),
         alternative=node.text("alternative"),
@@ -255,7 +227,7 @@ def _hypothesis(node: _Node) -> Hypothesis:
     return hypothesis
 
 
-def _population(node: _Node) -> Population:
+def _population(node: Node) -> Population:
     randomization_unit = node.choice("randomization_unit", get_args(RandomizationUnit))
     population = Population(
         randomization_unit=randomization_unit,
@@ -273,7 +245,7 @@ def _population(node: _Node) -> Population:
     return population
 
 
-def _arms(root: _Node) -> tuple[Arm, ...]:
+def _arms(root: Node) -> tuple[Arm, ...]:
     nodes = root.sequence("arms")
     arms = tuple(_arm(node) for node in nodes)
     if root.failed("arms"):
@@ -296,7 +268,7 @@ def _arms(root: _Node) -> tuple[Arm, ...]:
     return arms
 
 
-def _arm(node: _Node) -> Arm:
+def _arm(node: Node) -> Arm:
     arm = Arm(
         name=node.text("name"),
         allocation=node.number("allocation", gt=0),
@@ -306,7 +278,7 @@ def _arm(node: _Node) -> Arm:
     return arm
 
 
-def _read_metric(node: _Node) -> Metric:
+def _read_metric(node: Node) -> Metric:
     """Read the fields primary metrics and guardrails share, with their kind-specific rules."""
     kind = node.choice("kind", get_args(MetricKind))
     metric = Metric(
@@ -339,7 +311,7 @@ def _read_metric(node: _Node) -> Metric:
     return metric
 
 
-def _primary_metric(node: _Node) -> PrimaryMetric:
+def _primary_metric(node: Node) -> PrimaryMetric:
     metric = _read_metric(node)
     primary = PrimaryMetric(
         name=metric.name,
@@ -354,14 +326,14 @@ def _primary_metric(node: _Node) -> PrimaryMetric:
     return primary
 
 
-def _guardrails(root: _Node) -> tuple[Guardrail, ...]:
+def _guardrails(root: Node) -> tuple[Guardrail, ...]:
     nodes = root.sequence("guardrails", required=False)
     guardrails = tuple(_guardrail(node) for node in nodes)
     _reject_duplicate_names(root, "guardrails", nodes, guardrails)
     return guardrails
 
 
-def _guardrail(node: _Node) -> Guardrail:
+def _guardrail(node: Node) -> Guardrail:
     metric = _read_metric(node)
     guardrail = Guardrail(
         name=metric.name,
@@ -377,7 +349,7 @@ def _guardrail(node: _Node) -> Guardrail:
     return guardrail
 
 
-def _design(node: _Node) -> Design:
+def _design(node: Node) -> Design:
     design = Design(
         mde_relative=node.number("mde_relative", gt=0),
         alpha=node.number("alpha", gt=0, lt=1),
@@ -402,7 +374,7 @@ def _design(node: _Node) -> Design:
     return design
 
 
-def _procedure(node: _Node) -> Procedure:
+def _procedure(node: Node) -> Procedure:
     procedure = Procedure(
         stopping_rule=node.optional_choice("stopping_rule", get_args(StoppingRule)),
         srm_check_cadence=node.optional_choice("srm_check_cadence", get_args(SrmCadence)),
@@ -412,12 +384,12 @@ def _procedure(node: _Node) -> Procedure:
     return procedure
 
 
-def _column(node: _Node) -> str | None:
+def _column(node: Node) -> str | None:
     """The optional `column` of a metric: a name the outcomes file can hold, not a reserved one."""
     column = node.optional_text("column")
     if column is None:
         return None
-    if not _COLUMN_PATTERN.match(column):
+    if not COLUMN_PATTERN.match(column):
         node.fail(
             "column", f"must be a column name (letters, digits and underscores), got {column!r}"
         )
@@ -426,7 +398,7 @@ def _column(node: _Node) -> str | None:
     return column
 
 
-def _secondary_metrics(root: _Node) -> tuple[SecondaryMetric, ...] | None:
+def _secondary_metrics(root: Node) -> tuple[SecondaryMetric, ...] | None:
     nodes = root.sequence("secondary_metrics", required=False)
     if not nodes:
         return None
@@ -435,7 +407,7 @@ def _secondary_metrics(root: _Node) -> tuple[SecondaryMetric, ...] | None:
     return metrics
 
 
-def _secondary_metric(node: _Node) -> SecondaryMetric:
+def _secondary_metric(node: Node) -> SecondaryMetric:
     metric = SecondaryMetric(
         name=node.text("name"),
         kind=node.choice("kind", get_args(MetricKind)),
@@ -446,7 +418,7 @@ def _secondary_metric(node: _Node) -> SecondaryMetric:
     return metric
 
 
-def _reject_reused_metric_names(root: _Node, spec: ExperimentSpec) -> None:
+def _reject_reused_metric_names(root: Node, spec: ExperimentSpec) -> None:
     """A metric is declared once: a secondary metric may not repeat the primary metric's name
     or a guardrail's."""
     taken = {spec.primary_metric.name, *(g.name for g in spec.guardrails)}
@@ -459,9 +431,9 @@ def _reject_reused_metric_names(root: _Node, spec: ExperimentSpec) -> None:
 
 
 def _reject_duplicate_names(
-    root: _Node,
+    root: Node,
     key: str,
-    nodes: Sequence[_Node],
+    nodes: Sequence[Node],
     items: Sequence[Arm | Guardrail | SecondaryMetric],
 ) -> None:
     """Names must differ, and must still differ as a report writes them: the text and memo
@@ -481,224 +453,3 @@ def _reject_duplicate_names(
                 listed = ", ".join(map(repr, group))
                 root.fail(key, f"names {listed} are written the same in a report, as {text}")
 
-
-# --- Machinery: typed getters that record violations instead of raising -------------------
-
-_ABSENT: Any = object()
-
-
-def _show(value: object) -> str:
-    text = repr(value)
-    return text if len(text) <= 40 else f"{text[:37]}..."
-
-
-class _Node:
-    """One mapping of the spec, read through getters that record violations.
-
-    A getter never raises on bad input. It appends a message to the list shared by the
-    whole parse and returns a placeholder of the right type, so parsing carries on and the
-    author sees every problem at once. Placeholders never escape: `from_dict` raises
-    before it returns anything if even one violation was recorded.
-
-    The keys a parser asks for are the keys the schema allows, so unknown-key detection
-    cannot drift out of step with the parsers.
-
-    A node built with raw=None stands for a section that is missing or not a mapping. That
-    is reported once, where it was looked up; its own fields stay silent.
-    """
-
-    def __init__(self, raw: Mapping[Any, Any] | None, path: str, violations: list[str]) -> None:
-        self.path = path
-        self._raw: Mapping[Any, Any] = {} if raw is None else raw
-        self._silent = raw is None
-        self._violations = violations
-        self._seen: set[str] = set()
-        self._failed: set[str] = set()
-
-    # -- bookkeeping
-
-    def _at(self, key: str) -> str:
-        return f"{self.path}.{key}" if self.path else key
-
-    def fail(self, key: str, problem: str) -> None:
-        self._failed.add(key)
-        self._violations.append(f"{self._at(key)}: {problem}")
-
-    def failed(self, *keys: str) -> bool:
-        """True if any of `keys` was missing or invalid, so a cross-field check must skip."""
-        return self._silent or any(key in self._failed for key in keys)
-
-    def _lookup(self, key: str, *, required: bool) -> Any:
-        self._seen.add(key)
-        if key in self._raw:
-            return self._raw[key]
-        if required and not self._silent:
-            self.fail(key, "is required")
-        return _ABSENT
-
-    def reject_unknown(self) -> None:
-        for key in self._raw:
-            if key in self._seen:
-                continue
-            close = difflib.get_close_matches(str(key), sorted(self._seen), n=1)
-            hint = f" (did you mean {close[0]!r}?)" if close else ""
-            self._violations.append(f"{self.path or 'spec'}: unknown key {key!r}{hint}")
-
-    # -- text, choices, booleans
-
-    def text(self, key: str, *, pattern: re.Pattern[str] | None = None) -> str:
-        value = self._lookup(key, required=True)
-        return "" if value is _ABSENT else self._check_text(key, value, pattern)
-
-    def optional_text(self, key: str) -> str | None:
-        value = self._lookup(key, required=False)
-        return None if value is _ABSENT or value is None else self._check_text(key, value, None)
-
-    def _check_text(self, key: str, value: Any, pattern: re.Pattern[str] | None) -> str:
-        if not isinstance(value, str) or not value.strip():
-            self.fail(key, f"must be a non-empty string, got {_show(value)}")
-            return ""
-        if pattern is not None and not pattern.fullmatch(value):
-            self.fail(key, f"must match {pattern.pattern}, got {_show(value)}")
-            return ""
-        return value
-
-    def choice[T](self, key: str, options: tuple[T, ...], *, default: T | None = None) -> T:
-        value = self._lookup(key, required=default is None)
-        if value is _ABSENT:
-            return options[0] if default is None else default
-        if value not in options:
-            allowed = ", ".join(str(option) for option in options)
-            self.fail(key, f"must be one of {allowed}; got {_show(value)}")
-            return options[0]
-        return value
-
-    def optional_choice[T](self, key: str, options: tuple[T, ...]) -> T | None:
-        value = self._lookup(key, required=False)
-        if value is _ABSENT or value is None:
-            return None
-        if value not in options:
-            allowed = ", ".join(str(option) for option in options)
-            self.fail(key, f"must be one of {allowed}; got {_show(value)}")
-            return None
-        return value
-
-    def optional_utc_timestamp(self, key: str) -> str | None:
-        """An instant given in UTC, returned as one fixed text: ISO 8601 ending in Z.
-
-        Text such as `2026-11-02T00:00:00Z` or `2026-11-02T00:00:00+00:00` is accepted, and so
-        is a datetime, because YAML reads an unquoted timestamp as one. A date alone, a time
-        with no offset or an offset other than zero is refused, since which instant it meant
-        would be a guess. Spellings of one instant give one text, so they give one fingerprint.
-        """
-        value = self._lookup(key, required=False)
-        if value is _ABSENT or value is None:
-            return None
-        moment = value
-        if isinstance(value, str):
-            try:
-                moment = datetime.fromisoformat(value)
-            except ValueError:
-                moment = None
-        if not isinstance(moment, datetime):
-            self.fail(
-                key,
-                f"must be an ISO 8601 timestamp such as 2026-11-02T00:00:00Z, got {_show(value)}",
-            )
-            return None
-        if moment.utcoffset() is None:
-            self.fail(
-                key,
-                f"must carry a UTC offset (Z, +00 or +00:00), got {_show(value)}",
-            )
-            return None
-        if moment.utcoffset() != timedelta(0):
-            self.fail(key, f"must be in UTC (offset 0), got {_show(value)}")
-            return None
-        return moment.astimezone(UTC).isoformat().removesuffix("+00:00") + "Z"
-
-    def boolean(self, key: str, *, default: bool) -> bool:
-        value = self._lookup(key, required=False)
-        if value is _ABSENT:
-            return default
-        if not isinstance(value, bool):
-            self.fail(key, f"must be true or false, got {_show(value)}")
-            return default
-        return value
-
-    # -- numbers (bool is an int in Python and NaN defeats comparisons, so both are handled)
-
-    def integer(self, key: str, *, ge: int) -> int:
-        value = self._lookup(key, required=True)
-        if value is _ABSENT:
-            return ge
-        if isinstance(value, bool) or not isinstance(value, int):
-            self.fail(key, f"must be an integer, got {_show(value)}")
-            return ge
-        if value < ge:
-            self.fail(key, f"must be >= {ge}, got {value}")
-            return ge
-        return value
-
-    def number(self, key: str, *, gt: float | None = None, lt: float | None = None) -> float:
-        value = self._lookup(key, required=True)
-        if value is _ABSENT:
-            return 0.0
-        number = self._check_finite(key, value)
-        if number is None:
-            return 0.0
-        # Written as a positive test so NaN, which fails every comparison, is rejected.
-        if not ((gt is None or number > gt) and (lt is None or number < lt)):
-            bounds = " and ".join(
-                part
-                for part in (
-                    f"> {gt:g}" if gt is not None else "",
-                    f"< {lt:g}" if lt is not None else "",
-                )
-                if part
-            )
-            self.fail(key, f"must be {bounds}, got {_show(value)}")
-            return 0.0
-        return number
-
-    def optional_number(self, key: str) -> float | None:
-        value = self._lookup(key, required=False)
-        return None if value is _ABSENT or value is None else self._check_finite(key, value)
-
-    def _check_finite(self, key: str, value: Any) -> float | None:
-        if isinstance(value, bool) or not isinstance(value, int | float):
-            self.fail(key, f"must be a finite number, got {_show(value)}")
-            return None
-        try:
-            number = float(value)
-        except OverflowError:  # an int too large for a float
-            number = math.inf
-        if not math.isfinite(number):
-            self.fail(key, f"must be a finite number, got {_show(value)}")
-            return None
-        return number
-
-    # -- nested structure
-
-    def mapping(self, key: str, *, required: bool = True) -> _Node:
-        value = self._lookup(key, required=required)
-        if not required and (value is _ABSENT or value is None):
-            return _Node({}, self._at(key), self._violations)
-        return self._child(key, value)
-
-    def sequence(self, key: str, *, required: bool = True) -> list[_Node]:
-        value = self._lookup(key, required=required)
-        if value is _ABSENT or (value is None and not required):
-            return []
-        if not isinstance(value, list | tuple):
-            self.fail(key, f"must be a list, got {_show(value)}")
-            return []
-        return [self._child(f"{key}[{index}]", item) for index, item in enumerate(value)]
-
-    def _child(self, key: str, value: Any) -> _Node:
-        if value is _ABSENT:
-            return _Node(None, self._at(key), self._violations)
-        if not isinstance(value, Mapping):
-            self.fail(key, f"must be a mapping, got {_show(value)}")
-            return _Node(None, self._at(key), self._violations)
-        return _Node(value, self._at(key), self._violations)
